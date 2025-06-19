@@ -1,33 +1,33 @@
 name: "New Task"
-description: "Propose a new task or feature."
+description: "(FOR DEVELOPERS) Create a new development task for ThesisFlow."
 title: "short description"
 labels: [task]
 body:
   - type: markdown
     attributes:
-      value: "Thank you for suggesting a new task or feature! Please fill out the form below."
+      value: "Please complete the form below to create a new development task."
   - type: input
     id: task-summary
     attributes:
       label: "Task summary"
-      description: "Briefly describe the new task or feature."
-      placeholder: "A short summary of the task or feature."
+      description: "Briefly describe the new task."
+      placeholder: "A short summary of the task."
     validations:
       required: true
   - type: textarea
-    id: motivation
+    id: task-details
     attributes:
-      label: "Motivation"
-      description: "Why is this task or feature needed?"
-      placeholder: "Explain the motivation or problem this task addresses."
+      label: "Task details"
+      description: "Provide a detailed description of the task to be completed."
+      placeholder: "Describe the specific actions or steps required for this task."
     validations:
       required: true
   - type: textarea
-    id: proposed-solution
+    id: task-how
     attributes:
-      label: "Proposed solution"
-      description: "Describe your proposed solution or approach."
-      placeholder: "How do you suggest implementing this?"
+      label: "Proposed approach or solution"
+      description: "Describe possible approaches, methods, or steps to accomplish this task."
+      placeholder: "Explain how this task could be completed or suggest ways to tackle it."
     validations:
       required: false
   - type: textarea
@@ -37,3 +37,6 @@ body:
       description: "Add any other context or screenshots here."
     validations:
       required: false
+  - type: markdown
+    attributes:
+      value: "Please add a label that best describes the task (`bug`, `feat`, `test`, `docs`)."
