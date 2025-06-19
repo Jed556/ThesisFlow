@@ -2,6 +2,7 @@ name: "Bug Report"
 description: "Report a bug to help us improve."
 title: "short description"
 labels: [bug]
+projects: [Jed556/7]
 body:
   - type: markdown
     attributes:
@@ -12,6 +13,22 @@ body:
       label: "What happened?"
       description: "Describe the bug in detail."
       placeholder: "A clear and concise description of what the bug is."
+    validations:
+      required: true
+  - type: dropdown
+    id: browsers
+    attributes:
+      label: "Browsers"
+      description: "Select the browsers where you observed the bug."
+      multiple: true
+      options:
+        - Firefox
+        - Chrome
+        - Safari
+        - Microsoft Edge
+        - Opera
+        - Brave
+        - Other
     validations:
       required: true
   - type: textarea
@@ -34,8 +51,8 @@ body:
     id: environment
     attributes:
       label: "Environment"
-      description: "Please provide information about your environment."
-      placeholder: "OS, browser, version, etc."
+      description: "Additional information about your environment."
+      placeholder: "OS, other browsers, app version, etc."
     validations:
       required: false
   - type: textarea

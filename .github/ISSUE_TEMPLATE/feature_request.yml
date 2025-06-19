@@ -1,7 +1,8 @@
 name: "Feature Request"
 description: "Suggest a new feature for ThesisFlow."
 title: "short description"
-labels: [feature]
+labels: [feat]
+projects: [Jed556/7]
 body:
   - type: markdown
     attributes:
