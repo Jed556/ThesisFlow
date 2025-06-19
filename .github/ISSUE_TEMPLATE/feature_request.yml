@@ -6,7 +6,7 @@ projects: [Jed556/7]
 body:
   - type: markdown
     attributes:
-      value: "Thank you for suggesting a new feature! Please fill out the form below.
+      value: "Thank you for suggesting a new feature! Please fill out the form below."
   - type: input
     id: feature-summary
     attributes:
@@ -29,12 +29,5 @@ body:
       label: "Proposed solution"
       description: "Describe your proposed solution or approach."
       placeholder: "How do you suggest implementing this?"
-    validations:
-      required: false
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: "Additional context"
-      description: "Add any other context or screenshots here."
     validations:
       required: false
