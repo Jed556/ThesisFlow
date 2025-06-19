@@ -1,0 +1,39 @@
+name: "New Task"
+description: "Propose a new task or feature."
+title: "short description"
+labels: [task]
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you for suggesting a new task or feature! Please fill out the form below."
+  - type: input
+    id: task-summary
+    attributes:
+      label: "Task summary"
+      description: "Briefly describe the new task or feature."
+      placeholder: "A short summary of the task or feature."
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Motivation"
+      description: "Why is this task or feature needed?"
+      placeholder: "Explain the motivation or problem this task addresses."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: "Proposed solution"
+      description: "Describe your proposed solution or approach."
+      placeholder: "How do you suggest implementing this?"
+    validations:
+      required: false
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: "Additional context"
+      description: "Add any other context or screenshots here."
+    validations:
+      required: false
