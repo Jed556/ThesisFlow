@@ -5,6 +5,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 
 export const metadata: NavigationItem = {
   group: 'main',
+  index: 0,
   title: 'Dashboard',
   segment: 'dashboard',
   icon: <DashboardIcon />,

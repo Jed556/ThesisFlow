@@ -6,6 +6,7 @@ import { Article } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {
   group: 'thesis',
+  index: 2,
   title: 'Chapters',
   segment: 'thesis-submission-chapters',
   icon: <Article />,
