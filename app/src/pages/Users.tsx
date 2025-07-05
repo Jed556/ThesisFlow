@@ -10,8 +10,8 @@ export const metadata: NavigationItem = {
     segment: 'users',
     icon: <People />,
     children: [],
-    roles: ['admin'], // Only admins can see this
-    hidden: false, // This child should be hidden from navigation
+    roles: ['admin'],
+    hidden: false,
 };
 
 export default function UsersPage() {

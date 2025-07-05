@@ -14,7 +14,9 @@ function AppWithRouter() {
     async function initializeRouter() {
       try {
         const routes = await buildRoutes();
-        console.log('Built routes:', routes); // Debug log
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Built routes:', routes); // Debug log
+        }
         const createdRouter = createBrowserRouter([
           {
             path: '/',

@@ -10,8 +10,8 @@ export const metadata: NavigationItem = {
     segment: 'test',
     icon: <Analytics />,
     children: [],
-    roles: ['admin'], // Only admins can see this
-    hidden: false, // This child should be hidden from navigation
+    roles: ['admin'],
+    hidden: false,
 };
 
 export default function TestPage() {
