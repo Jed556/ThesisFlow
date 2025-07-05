@@ -5,6 +5,7 @@ import { People } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {
     group: 'user-management',
+    index: 0,
     title: 'Users',
     segment: 'users',
     icon: <People />,

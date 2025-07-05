@@ -5,6 +5,7 @@ import { Analytics } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {
     // group: 'main',
+    index: 99,
     title: 'Test Page',
     segment: 'test',
     icon: <Analytics />,

@@ -13,7 +13,7 @@ export interface NavigationItem {
 
 // Represents a group of related navigation items
 export interface NavigationGroup {
-    index: number; // Index for ordering the group
+    index?: number; // Index for ordering the group
     header?: boolean; // Indicates if title is shown as a header
     divider?: boolean; // Indicates if a divider is shown before the group
     title: string; // Title of the group

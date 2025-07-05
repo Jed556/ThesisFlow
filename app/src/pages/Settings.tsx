@@ -5,6 +5,7 @@ import { Settings } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {
     // group: 'settings',
+    index: 100,
     title: 'Settings',
     segment: 'settings',
     icon: <Settings />,
@@ -16,7 +17,7 @@ export default function SettingsPage() {
     return (
         <div>
             <Typography>
-                This is the settings page - automatically discovered by the dynamic navigation system!
+                This is the settings page
             </Typography>
         </div>
     );

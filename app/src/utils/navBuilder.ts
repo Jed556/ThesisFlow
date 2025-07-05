@@ -172,8 +172,26 @@ export async function buildNavigation(navigationGroups: NavigationGroup[]): Prom
     // Group pages by their group property
     const groupedPages = groupNavigationItems(topLevelPages, navigationGroups);
 
-    // Sort navigation groups by index
-    const sortedGroups = [...navigationGroups].sort((a, b) => a.index - b.index);
+    // Sort navigation groups by index, with undefined indexes sorted alphabetically at the end
+    const sortedGroups = [...navigationGroups].sort((a, b) => {
+        // If both have indexes, sort by index
+        if (a.index !== undefined && b.index !== undefined) {
+            return a.index - b.index;
+        }
+        
+        // If only a has an index, a comes first
+        if (a.index !== undefined && b.index === undefined) {
+            return -1;
+        }
+        
+        // If only b has an index, b comes first
+        if (a.index === undefined && b.index !== undefined) {
+            return 1;
+        }
+        
+        // If neither has an index, sort alphabetically by segment
+        return a.segment.localeCompare(b.segment);
+    });
 
     sortedGroups.forEach((group, index) => {
         // Use segment for grouping, fallback to title if segment not provided
@@ -201,8 +219,29 @@ export async function buildNavigation(navigationGroups: NavigationGroup[]): Prom
             });
         }
 
-        // Add pages belonging to this group
-        pagesInGroup.forEach(page => {
+        // Sort pages within this group by index, then alphabetically by segment
+        const sortedPagesInGroup = pagesInGroup.sort((a, b) => {
+            // If both have indexes, sort by index
+            if (a.index !== undefined && b.index !== undefined) {
+                return a.index - b.index;
+            }
+            
+            // If only a has an index, a comes first
+            if (a.index !== undefined && b.index === undefined) {
+                return -1;
+            }
+            
+            // If only b has an index, b comes first
+            if (a.index === undefined && b.index !== undefined) {
+                return 1;
+            }
+            
+            // If neither has an index, sort alphabetically by segment
+            return (a.segment || '').localeCompare(b.segment || '');
+        });
+
+        // Add sorted pages belonging to this group
+        sortedPagesInGroup.forEach(page => {
             navigation.push(convertToToolpadNavigation(page));
         });
     });
@@ -217,7 +256,29 @@ export async function buildNavigation(navigationGroups: NavigationGroup[]): Prom
         //     kind: 'header',
         //     title: 'Other',
         // });
-        ungroupedPages.forEach(page => {
+        
+        // Sort ungrouped pages by index, then alphabetically by segment
+        const sortedUngroupedPages = ungroupedPages.sort((a, b) => {
+            // If both have indexes, sort by index
+            if (a.index !== undefined && b.index !== undefined) {
+                return a.index - b.index;
+            }
+            
+            // If only a has an index, a comes first
+            if (a.index !== undefined && b.index === undefined) {
+                return -1;
+            }
+            
+            // If only b has an index, b comes first
+            if (a.index === undefined && b.index !== undefined) {
+                return 1;
+            }
+            
+            // If neither has an index, sort alphabetically by segment
+            return (a.segment || '').localeCompare(b.segment || '');
+        });
+
+        sortedUngroupedPages.forEach(page => {
             navigation.push(convertToToolpadNavigation(page));
         });
     }

@@ -6,6 +6,7 @@ import { UploadFile } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {
   group: 'thesis',
+  index: 0,
   title: 'Submissions',
   segment: 'thesis-submission',
   icon: <UploadFile />,
