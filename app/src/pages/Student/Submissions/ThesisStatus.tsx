@@ -1,0 +1,455 @@
+import * as React from 'react';
+import {
+  Typography,
+  Paper,
+  Box,
+  Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Divider,
+  Card,
+  CardContent,
+  LinearProgress,
+  Avatar,
+  Stack,
+  Button,
+  IconButton,
+} from '@mui/material';
+import {
+  BubbleChart,
+  ExpandMore,
+  CheckCircle,
+  Pending,
+  Cancel,
+  Comment,
+  Person,
+  Schedule,
+  Edit,
+  AttachFile,
+  Visibility,
+  PictureAsPdf,
+  Description,
+  Output,
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router';
+import type { NavigationItem } from '../../../types/navigation';
+import type {
+  ThesisData,
+  StatusColor,
+  FileType,
+  ThesisChapter,
+  ThesisComment,
+  FileAttachment
+} from '../../../types/thesis';
+
+export const metadata: NavigationItem = {
+  group: 'thesis',
+  index: 1,
+  title: 'Status',
+  segment: 'thesis-status',
+  icon: <BubbleChart />,
+  children: [],
+  // path: '/thesis',
+  roles: ['student', 'admin'],
+  // hidden: false,
+};
+
+// Mock data - replace with actual data from your backend
+const thesisData: ThesisData = {
+  title: "Machine Learning Applications in Educational Technology: A Comprehensive Study",
+  student: "John Doe",
+  adviser: "Dr. Jane Smith",
+  editor: "Prof. Michael Johnson",
+  submissionDate: "2024-01-15",
+  lastUpdated: "2024-08-20",
+  overallStatus: "In Progress",
+  chapters: [
+    {
+      id: 1,
+      title: "Introduction",
+      status: "approved",
+      submissionDate: "2024-02-01",
+      lastModified: "2024-02-15",
+      comments: [
+        {
+          author: "Dr. Jane Smith",
+          role: "adviser",
+          date: "2024-02-10",
+          comment: "Excellent introduction. Clear problem statement and well-defined objectives.",
+          attachments: [
+            {
+              name: "introduction_feedback.pdf",
+              type: "pdf",
+              size: "245 KB",
+              url: "/files/introduction_feedback.pdf"
+            }
+          ]
+        },
+        {
+          author: "Prof. Michael Johnson",
+          role: "editor",
+          date: "2024-02-12",
+          comment: "Minor grammatical corrections needed. Overall structure is good.",
+          attachments: [
+            {
+              name: "grammar_corrections.docx",
+              type: "docx",
+              size: "128 KB",
+              url: "/files/grammar_corrections.docx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: 2,
+      title: "Literature Review",
+      status: "under_review",
+      submissionDate: "2024-03-01",
+      lastModified: "2024-03-15",
+      comments: [
+        {
+          author: "Dr. Jane Smith",
+          role: "adviser",
+          date: "2024-03-10",
+          comment: "Good coverage of existing research. Consider adding more recent studies from 2023-2024.",
+          attachments: []
+        }
+      ]
+    },
+    {
+      id: 3,
+      title: "Methodology",
+      status: "revision_required",
+      submissionDate: "2024-04-01",
+      lastModified: "2024-04-20",
+      comments: [
+        {
+          author: "Dr. Jane Smith",
+          role: "adviser",
+          date: "2024-04-15",
+          comment: "The research design needs clarification. Please provide more details on data collection methods.",
+          attachments: [
+            {
+              name: "methodology_suggestions.pdf",
+              type: "pdf",
+              size: "512 KB",
+              url: "/files/methodology_suggestions.pdf"
+            },
+            {
+              name: "data_collection_template.xlsx",
+              type: "xlsx",
+              size: "89 KB",
+              url: "/files/data_collection_template.xlsx"
+            }
+          ]
+        },
+        {
+          author: "Prof. Michael Johnson",
+          role: "editor",
+          date: "2024-04-18",
+          comment: "Statistical analysis section requires more explanation of chosen methods.",
+          attachments: [
+            {
+              name: "statistical_analysis_guide.pdf",
+              type: "pdf",
+              size: "1.2 MB",
+              url: "/files/statistical_analysis_guide.pdf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: 4,
+      title: "Results and Analysis",
+      status: "not_submitted",
+      submissionDate: null,
+      lastModified: null,
+      comments: []
+    },
+    {
+      id: 5,
+      title: "Conclusion",
+      status: "not_submitted",
+      submissionDate: null,
+      lastModified: null,
+      comments: []
+    }
+  ]
+};
+
+const getStatusColor = (status: string): StatusColor => {
+  switch (status) {
+    case 'approved':
+      return 'success';
+    case 'under_review':
+      return 'warning';
+    case 'revision_required':
+      return 'error';
+    case 'not_submitted':
+      return 'default';
+    default:
+      return 'default';
+  }
+};
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'approved':
+      return <CheckCircle color="success" />;
+    case 'under_review':
+      return <Pending color="warning" />;
+    case 'revision_required':
+      return <Cancel color="error" />;
+    case 'not_submitted':
+      return <Schedule color="disabled" />;
+    default:
+      return <Schedule color="disabled" />;
+  }
+};
+
+const getFileIcon = (fileType: FileType) => {
+  switch (fileType.toLowerCase()) {
+    case 'pdf':
+      return <PictureAsPdf color="error" />;
+    case 'docx':
+    case 'doc':
+      return <Description color="primary" />;
+    case 'xlsx':
+    case 'xls':
+      return <Description color="success" />;
+    default:
+      return <AttachFile color="action" />;
+  }
+};
+
+const calculateProgress = () => {
+  const total = thesisData.chapters.length;
+  const approved = thesisData.chapters.filter(ch => ch.status === 'approved').length;
+  return (approved / total) * 100;
+};
+
+// Helper function to convert snake_case to display text
+const getStatusDisplayText = (status: string): string => {
+  switch (status) {
+    case 'approved':
+      return 'Approved';
+    case 'under_review':
+      return 'Under Review';
+    case 'revision_required':
+      return 'Revision Required';
+    case 'not_submitted':
+      return 'Not Submitted';
+    default:
+      return status;
+  }
+};
+
+const getRoleDisplayText = (role: string): string => {
+  switch (role) {
+    case 'adviser':
+      return 'Adviser';
+    case 'editor':
+      return 'Editor';
+    case 'student':
+      return 'Student';
+    default:
+      return role;
+  }
+};
+
+export default function ThesisStatusPage() {
+  const progress = calculateProgress();
+  const navigate = useNavigate();
+
+  const handleViewFullFeedback = (chapterId: number) => {
+    // Navigate to the feedbacks page with chapter ID
+    navigate(`/feedbacks/${chapterId}`);
+  };
+
+  const handleFileClick = (chapterId: number, fileName: string) => {
+    // Navigate to feedbacks page and highlight the specific file
+    navigate(`/feedbacks/${chapterId}?file=${encodeURIComponent(fileName)}`);
+  };
+
+  return (
+    <Box sx={{ p: 3 }}>
+      {/* Thesis Header */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          {thesisData.title}
+        </Typography>
+
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, mt: 2 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body1">
+              <strong>Student:</strong> {thesisData.student}
+            </Typography>
+            <Typography variant="body1">
+              <strong>Adviser:</strong> {thesisData.adviser}
+            </Typography>
+            <Typography variant="body1">
+              <strong>Editor:</strong> {thesisData.editor}
+            </Typography>
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body1">
+              <strong>Submission Date:</strong> {thesisData.submissionDate}
+            </Typography>
+            <Typography variant="body1">
+              <strong>Last Updated:</strong> {thesisData.lastUpdated}
+            </Typography>
+            <Typography variant="body1">
+              <strong>Overall Status:</strong>
+              <Chip
+                label={thesisData.overallStatus}
+                color="primary"
+                size="small"
+                sx={{ ml: 1 }}
+              />
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Progress Bar */}
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Overall Progress: {Math.round(progress)}% Complete
+          </Typography>
+          <LinearProgress
+            variant="determinate"
+            value={progress}
+            sx={{ height: 8, borderRadius: 4 }}
+          />
+        </Box>
+      </Paper>
+
+
+
+      {thesisData.chapters.map((chapter) => (
+        <Accordion key={chapter.id} sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<ExpandMore />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Box sx={{ mr: 2 }}>
+                {getStatusIcon(chapter.status)}
+              </Box>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="h6">
+                  Chapter {chapter.id}: {chapter.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {chapter.submissionDate ? `Submitted: ${chapter.submissionDate}` : 'Not yet submitted'}
+                  {chapter.lastModified && ` • Last modified: ${chapter.lastModified}`}
+                </Typography>
+              </Box>
+              <Chip
+                label={getStatusDisplayText(chapter.status)}
+                color={getStatusColor(chapter.status) as any}
+                size="small"
+              />
+            </Box>
+          </AccordionSummary>
+
+          <AccordionDetails>
+            {chapter.comments.length > 0 ? (
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Comment sx={{ mr: 1 }} />
+                    Feedback & Comments
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Visibility />}
+                    onClick={() => handleViewFullFeedback(chapter.id)}
+                  >
+                    View Feedback
+                  </Button>
+                </Box>
+
+                <Stack spacing={2}>
+                  {chapter.comments.map((comment, index) => (
+                    <Card key={index} variant="outlined">
+                      <CardContent sx={{ pb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <Avatar sx={{ width: 32, height: 32, mr: 2, bgcolor: 'primary.main' }}>
+                            {comment.role === 'adviser' ? <Person /> : <Edit />}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="subtitle2">
+                              {comment.author}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {getRoleDisplayText(comment.role)} • {comment.date}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography variant="body2" sx={{ mb: 2 }}>
+                          {comment.comment}
+                        </Typography>
+
+                        {/* File Attachments */}
+                        {comment.attachments && comment.attachments.length > 0 && (
+                          <Box sx={{ mt: 2 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <AttachFile sx={{ fontSize: 16, mr: 0.5 }} />
+                              Attachments:
+                            </Typography>
+                            <Stack spacing={1}>
+                              {comment.attachments.map((file, fileIndex) => (
+                                <Box
+                                  key={fileIndex}
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    p: 1,
+                                    border: 1,
+                                    borderColor: 'divider',
+                                    borderRadius: 1,
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                      bgcolor: 'action.hover'
+                                    }
+                                  }}
+                                  onClick={() => handleFileClick(chapter.id, file.name)}
+                                >
+                                  <Box sx={{ mr: 1 }}>
+                                    {getFileIcon(file.type)}
+                                  </Box>
+                                  <Box sx={{ flexGrow: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                      {file.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {file.size}
+                                    </Typography>
+                                  </Box>
+                                  <Output sx={{ fontSize: 20, color: 'action.active', mr: 1 }} />
+                                </Box>
+                              ))}
+                            </Stack>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                No feedback available yet.
+              </Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+      ))}
+    </Box>
+  );
+}
