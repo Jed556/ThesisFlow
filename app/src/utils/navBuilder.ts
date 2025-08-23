@@ -20,6 +20,7 @@ let PAGE_REGISTRY: Record<string, PageModule> = {};
  */
 async function importPageModule(pageName: string): Promise<PageModule | null> {
     try {
+        // Handle both flat and nested page paths
         const module = await import(`../pages/${pageName}.tsx`);
         if (module.default && module.metadata) {
             return {
@@ -39,11 +40,12 @@ async function importPageModule(pageName: string): Promise<PageModule | null> {
  * Discover and load all pages from the pages directory
  */
 async function discoverPages(): Promise<void> {
-    // Get all page files from the pages directory
+    // Get all page files from the pages directory and subdirectories
     // Using import.meta.glob for dynamic imports with Vite
-    const pageModules = import.meta.glob('../pages/*.tsx', { eager: false });
+    const pageModules = import.meta.glob('../pages/**/*.tsx', { eager: false });
 
     const loadPromises = Object.keys(pageModules).map(async (path) => {
+        // Extract the page name from the full path, preserving folder structure
         const pageName = path.replace('../pages/', '').replace('.tsx', '');
 
         try {
