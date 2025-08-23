@@ -138,5 +138,10 @@ dist
 # package manager lock files
 package-lock.json
 
-# old files
+# Backup files
 **.old
+**.backup
+
+# Instruction and Prompt files
+**.instructions.md
+**.prompt.md
