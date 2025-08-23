@@ -10,7 +10,7 @@ export const metadata: NavigationItem = {
     segment: 'settings',
     icon: <Settings />,
     children: [],
-    roles: ['admin'],
+    roles: ['admin', 'user', 'editor'],
 };
 
 export default function SettingsPage() {

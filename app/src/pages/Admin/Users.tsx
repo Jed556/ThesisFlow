@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Typography from '@mui/material/Typography';
-import type { NavigationItem } from '../types/navigation';
+import type { NavigationItem } from '../../types/navigation';
 import { People } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {
