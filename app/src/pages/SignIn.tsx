@@ -11,7 +11,7 @@ import type { NavigationItem } from '../types/navigation';
 export const metadata: NavigationItem = {
   // group: 'main',
   title: 'Sign In',
-  segment: 'signin',
+  segment: 'sign-in',
   // icon: <DashboardIcon />,
   // children: [],
   // path: '/dashboard',
@@ -19,12 +19,14 @@ export const metadata: NavigationItem = {
   hidden: true,
 };
 
-function DemoInfo() {
+function Info() {
   return (
-    <Alert severity="info">
-      You can use <strong>toolpad-demo@mui.com</strong> with the password <strong>@demo1</strong> to
-      test
-    </Alert>
+    <>
+      <Alert severity="info">
+        You can use <strong>toolpad-demo@mui.com</strong> with the password <strong>@demo1</strong> to
+        test
+      </Alert>
+    </>
   );
 }
 
@@ -33,7 +35,11 @@ export default function SignIn() {
   const navigate = useNavigate();
 
   if (loading) {
-    return <LinearProgress />;
+    return (
+      <div style={{ width: '100%' }}>
+        <LinearProgress />
+      </div>
+    );
   }
 
   if (session) {
@@ -43,25 +49,33 @@ export default function SignIn() {
   return (
     <SignInPage
       providers={[
-        { id: 'google', name: 'Google' },
-        { id: 'github', name: 'GitHub' },
+        // { id: 'google', name: 'Google' },
+        // { id: 'github', name: 'GitHub' },
         { id: 'credentials', name: 'Credentials' },
       ]}
       signIn={async (provider, formData, callbackUrl) => {
         let result;
         try {
-          if (provider.id === 'google') {
-            result = await signInWithGoogle();
-          }
-          if (provider.id === 'github') {
-            result = await signInWithGithub();
-          }
+          // if (provider.id === 'google') {
+          //   result = await signInWithGoogle();
+          // }
+          // if (provider.id === 'github') {
+          //   result = await signInWithGithub();
+          // }
           if (provider.id === 'credentials') {
             const email = formData?.get('email') as string;
             const password = formData?.get('password') as string;
 
-            if (!email || !password) {
+            if (!email && !password) {
               return { error: 'Email and password are required' };
+            }
+
+            if (!email) {
+              return { error: 'Email is required' };
+            }
+
+            if (!password) {
+              return { error: 'Password is required' };
             }
 
             result = await signInWithCredentials(email, password);
@@ -82,16 +96,21 @@ export default function SignIn() {
           }
           return { error: result?.error || 'Failed to sign in' };
         } catch (error) {
+          console.error('Sign-in error:', error.code);
+          if (error.code === 'auth/invalid-credential') {
+            return { error: 'Invalid Credentials' };
+          }
+
           return { error: error instanceof Error ? error.message : 'An error occurred' };
         }
       }}
-      slots={{ subtitle: DemoInfo }}
+      slots={{ subtitle: Info }}
       slotProps={{
         emailField: {
-          defaultValue: 'toolpad-demo@mui.com',
+          defaultValue: '',
         },
         passwordField: {
-          defaultValue: '@demo1',
+          defaultValue: '',
         },
       }}
     />
