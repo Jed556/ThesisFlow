@@ -137,3 +137,6 @@ dist
 
 # package manager lock files
 package-lock.json
+
+# old files
+**.old
