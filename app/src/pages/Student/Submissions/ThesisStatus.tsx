@@ -1,51 +1,10 @@
 import * as React from 'react';
-import {
-  Typography,
-  Paper,
-  Box,
-  Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
-  Card,
-  CardContent,
-  LinearProgress,
-  Avatar,
-  Stack,
-  Button,
-  IconButton,
-} from '@mui/material';
-import {
-  BubbleChart,
-  ExpandMore,
-  CheckCircle,
-  Pending,
-  Cancel,
-  Comment,
-  Person,
-  Schedule,
-  Edit,
-  AttachFile,
-  Visibility,
-  PictureAsPdf,
-  Description,
-  Output,
-} from '@mui/icons-material';
+import { Typography, Paper, Box, Chip, Accordion, AccordionSummary, AccordionDetails, List, ListItem, ListItemText, ListItemIcon, Divider, Card, CardContent, LinearProgress, Avatar, Stack, Button, IconButton, } from '@mui/material';
+import { BubbleChart, ExpandMore, CheckCircle, Pending, Cancel, Comment, Person, Schedule, Edit, AttachFile, Visibility, PictureAsPdf, Description, Output, } from '@mui/icons-material';
 import { useNavigate } from 'react-router';
 import type { NavigationItem } from '../../../types/navigation';
-import type {
-  ThesisData,
-  StatusColor,
-  FileType,
-  ThesisChapter,
-  ThesisComment,
-  FileAttachment
-} from '../../../types/thesis';
+import type { StatusColor, FileType, ThesisChapter, ThesisComment, FileAttachment } from '../../../types/thesis';
+import { mockThesisData, calculateProgress } from '../../../data/mockData';
 
 export const metadata: NavigationItem = {
   group: 'thesis',
@@ -59,130 +18,7 @@ export const metadata: NavigationItem = {
   // hidden: false,
 };
 
-// Mock data - replace with actual data from your backend
-const thesisData: ThesisData = {
-  title: "Machine Learning Applications in Educational Technology: A Comprehensive Study",
-  student: "John Doe",
-  adviser: "Dr. Jane Smith",
-  editor: "Prof. Michael Johnson",
-  submissionDate: "2024-01-15",
-  lastUpdated: "2024-08-20",
-  overallStatus: "In Progress",
-  chapters: [
-    {
-      id: 1,
-      title: "Introduction",
-      status: "approved",
-      submissionDate: "2024-02-01",
-      lastModified: "2024-02-15",
-      comments: [
-        {
-          author: "Dr. Jane Smith",
-          role: "adviser",
-          date: "2024-02-10",
-          comment: "Excellent introduction. Clear problem statement and well-defined objectives.",
-          attachments: [
-            {
-              name: "introduction_feedback.pdf",
-              type: "pdf",
-              size: "245 KB",
-              url: "/files/introduction_feedback.pdf"
-            }
-          ]
-        },
-        {
-          author: "Prof. Michael Johnson",
-          role: "editor",
-          date: "2024-02-12",
-          comment: "Minor grammatical corrections needed. Overall structure is good.",
-          attachments: [
-            {
-              name: "grammar_corrections.docx",
-              type: "docx",
-              size: "128 KB",
-              url: "/files/grammar_corrections.docx"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      id: 2,
-      title: "Literature Review",
-      status: "under_review",
-      submissionDate: "2024-03-01",
-      lastModified: "2024-03-15",
-      comments: [
-        {
-          author: "Dr. Jane Smith",
-          role: "adviser",
-          date: "2024-03-10",
-          comment: "Good coverage of existing research. Consider adding more recent studies from 2023-2024.",
-          attachments: []
-        }
-      ]
-    },
-    {
-      id: 3,
-      title: "Methodology",
-      status: "revision_required",
-      submissionDate: "2024-04-01",
-      lastModified: "2024-04-20",
-      comments: [
-        {
-          author: "Dr. Jane Smith",
-          role: "adviser",
-          date: "2024-04-15",
-          comment: "The research design needs clarification. Please provide more details on data collection methods.",
-          attachments: [
-            {
-              name: "methodology_suggestions.pdf",
-              type: "pdf",
-              size: "512 KB",
-              url: "/files/methodology_suggestions.pdf"
-            },
-            {
-              name: "data_collection_template.xlsx",
-              type: "xlsx",
-              size: "89 KB",
-              url: "/files/data_collection_template.xlsx"
-            }
-          ]
-        },
-        {
-          author: "Prof. Michael Johnson",
-          role: "editor",
-          date: "2024-04-18",
-          comment: "Statistical analysis section requires more explanation of chosen methods.",
-          attachments: [
-            {
-              name: "statistical_analysis_guide.pdf",
-              type: "pdf",
-              size: "1.2 MB",
-              url: "/files/statistical_analysis_guide.pdf"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      id: 4,
-      title: "Results and Analysis",
-      status: "not_submitted",
-      submissionDate: null,
-      lastModified: null,
-      comments: []
-    },
-    {
-      id: 5,
-      title: "Conclusion",
-      status: "not_submitted",
-      submissionDate: null,
-      lastModified: null,
-      comments: []
-    }
-  ]
-};
+// All data now imported from centralized mockData.ts
 
 const getStatusColor = (status: string): StatusColor => {
   switch (status) {
@@ -223,16 +59,10 @@ const getFileIcon = (fileType: FileType) => {
       return <Description color="primary" />;
     case 'xlsx':
     case 'xls':
-      return <Description color="success" />;
+      return <Output color="success" />;
     default:
       return <AttachFile color="action" />;
   }
-};
-
-const calculateProgress = () => {
-  const total = thesisData.chapters.length;
-  const approved = thesisData.chapters.filter(ch => ch.status === 'approved').length;
-  return (approved / total) * 100;
 };
 
 // Helper function to convert snake_case to display text
@@ -251,64 +81,41 @@ const getStatusDisplayText = (status: string): string => {
   }
 };
 
-const getRoleDisplayText = (role: string): string => {
-  switch (role) {
-    case 'adviser':
-      return 'Adviser';
-    case 'editor':
-      return 'Editor';
-    case 'student':
-      return 'Student';
-    default:
-      return role;
-  }
-};
-
 export default function ThesisStatusPage() {
   const progress = calculateProgress();
   const navigate = useNavigate();
-
-  const handleViewFullFeedback = (chapterId: number) => {
-    // Navigate to the feedbacks page with chapter ID
-    navigate(`/feedbacks/${chapterId}`);
-  };
-
-  const handleFileClick = (chapterId: number, fileName: string) => {
-    // Navigate to feedbacks page and highlight the specific file
-    navigate(`/feedbacks/${chapterId}?file=${encodeURIComponent(fileName)}`);
-  };
 
   return (
     <Box sx={{ p: 3 }}>
       {/* Thesis Header */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h4" gutterBottom>
-          {thesisData.title}
+          {mockThesisData.title}
         </Typography>
 
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, mt: 2 }}>
           <Box sx={{ flex: 1 }}>
             <Typography variant="body1">
-              <strong>Student:</strong> {thesisData.student}
+              <strong>Student:</strong> {mockThesisData.student}
             </Typography>
             <Typography variant="body1">
-              <strong>Adviser:</strong> {thesisData.adviser}
+              <strong>Adviser:</strong> {mockThesisData.adviser}
             </Typography>
             <Typography variant="body1">
-              <strong>Editor:</strong> {thesisData.editor}
+              <strong>Editor:</strong> {mockThesisData.editor}
             </Typography>
           </Box>
           <Box sx={{ flex: 1 }}>
             <Typography variant="body1">
-              <strong>Submission Date:</strong> {thesisData.submissionDate}
+              <strong>Submission Date:</strong> {mockThesisData.submissionDate}
             </Typography>
             <Typography variant="body1">
-              <strong>Last Updated:</strong> {thesisData.lastUpdated}
+              <strong>Last Updated:</strong> {mockThesisData.lastUpdated}
             </Typography>
             <Typography variant="body1">
               <strong>Overall Status:</strong>
               <Chip
-                label={thesisData.overallStatus}
+                label={mockThesisData.overallStatus}
                 color="primary"
                 size="small"
                 sx={{ ml: 1 }}
@@ -330,9 +137,12 @@ export default function ThesisStatusPage() {
         </Box>
       </Paper>
 
+      {/* Chapter Status */}
+      <Typography variant="h5" gutterBottom>
+        Chapter Submission Status
+      </Typography>
 
-
-      {thesisData.chapters.map((chapter) => (
+      {mockThesisData.chapters.map((chapter: ThesisChapter) => (
         <Accordion key={chapter.id} sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' } }}>
           <AccordionSummary expandIcon={<ExpandMore />}>
             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -357,96 +167,110 @@ export default function ThesisStatusPage() {
           </AccordionSummary>
 
           <AccordionDetails>
-            {chapter.comments.length > 0 ? (
-              <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Comment sx={{ mr: 1 }} />
-                    Feedback & Comments
+            <Box>
+              {/* Files Section */}
+              {chapter.status !== 'not_submitted' && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+                    <AttachFile sx={{ mr: 1 }} />
+                    Submitted Files
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<Visibility />}
-                    onClick={() => handleViewFullFeedback(chapter.id)}
-                  >
-                    View Feedback
-                  </Button>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Description fontSize="small" color="primary" />
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      Chapter_{chapter.id}_{chapter.title.replace(/\s+/g, '_')}_v1.pdf
+                    </Typography>
+                    <Chip
+                      label="v1"
+                      size="small"
+                      color="primary"
+                      sx={{ height: 18, fontSize: '0.65rem' }}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                      Currently being reviewed by {chapter.status === 'under_review' ? 'Editor' : 'Adviser'}
+                    </Typography>
+                  </Box>
                 </Box>
+              )}
 
-                <Stack spacing={2}>
-                  {chapter.comments.map((comment, index) => (
-                    <Card key={index} variant="outlined">
-                      <CardContent sx={{ pb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                          <Avatar sx={{ width: 32, height: 32, mr: 2, bgcolor: 'primary.main' }}>
-                            {comment.role === 'adviser' ? <Person /> : <Edit />}
-                          </Avatar>
-                          <Box>
-                            <Typography variant="subtitle2">
-                              {comment.author}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {getRoleDisplayText(comment.role)} • {comment.date}
-                            </Typography>
+              {/* Comments Section */}
+              {chapter.comments.length > 0 && (
+                <Box>
+                  <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+                    <Comment sx={{ mr: 1 }} />
+                    Feedback & Comments ({chapter.comments.length})
+                  </Typography>
+                  <Stack spacing={2}>
+                    {chapter.comments.map((comment: ThesisComment, index: number) => (
+                      <Card key={index} variant="outlined">
+                        <CardContent sx={{ pb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                            <Avatar sx={{ width: 32, height: 32, mr: 2, bgcolor: 'primary.main' }}>
+                              {comment.role === 'adviser' ? <Person /> : <Edit />}
+                            </Avatar>
+                            <Box sx={{ flexGrow: 1 }}>
+                              <Typography variant="subtitle2">
+                                {comment.author}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {comment.role === 'adviser' ? 'Adviser' : 'Editor'} • {comment.date}
+                              </Typography>
+                              {comment.documentVersion && comment.documentName && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                  <Description fontSize="small" color="primary" />
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                                    {comment.documentName}
+                                  </Typography>
+                                  <Chip
+                                    label={`v${comment.documentVersion}`}
+                                    size="small"
+                                    color="primary"
+                                    sx={{ height: 18, fontSize: '0.65rem' }}
+                                  />
+                                </Box>
+                              )}
+                            </Box>
                           </Box>
-                        </Box>
-                        <Typography variant="body2" sx={{ mb: 2 }}>
-                          {comment.comment}
-                        </Typography>
+                          <Typography variant="body2">
+                            {comment.comment}
+                          </Typography>
 
-                        {/* File Attachments */}
-                        {comment.attachments && comment.attachments.length > 0 && (
-                          <Box sx={{ mt: 2 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                              <AttachFile sx={{ fontSize: 16, mr: 0.5 }} />
-                              Attachments:
-                            </Typography>
-                            <Stack spacing={1}>
-                              {comment.attachments.map((file, fileIndex) => (
-                                <Box
-                                  key={fileIndex}
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    p: 1,
-                                    border: 1,
-                                    borderColor: 'divider',
-                                    borderRadius: 1,
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                      bgcolor: 'action.hover'
-                                    }
-                                  }}
-                                  onClick={() => handleFileClick(chapter.id, file.name)}
-                                >
-                                  <Box sx={{ mr: 1 }}>
-                                    {getFileIcon(file.type)}
-                                  </Box>
-                                  <Box sx={{ flexGrow: 1 }}>
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                      {file.name}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {file.size}
-                                    </Typography>
-                                  </Box>
-                                  <Output sx={{ fontSize: 20, color: 'action.active', mr: 1 }} />
+                          {/* Attachments */}
+                          {comment.attachments && comment.attachments.length > 0 && (
+                            <Box sx={{ mt: 2 }}>
+                              <Divider sx={{ mb: 1 }} />
+                              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                                Attachments:
+                              </Typography>
+                              {comment.attachments.map((attachment: FileAttachment, attachIndex: number) => (
+                                <Box key={attachIndex} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                  {getFileIcon(attachment.type)}
+                                  <Typography variant="body2" color="primary" sx={{ cursor: 'pointer', textDecoration: 'underline' }}>
+                                    {attachment.name}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    ({attachment.size})
+                                  </Typography>
+                                  <IconButton size="small" color="primary">
+                                    <Visibility fontSize="small" />
+                                  </IconButton>
                                 </Box>
                               ))}
-                            </Stack>
-                          </Box>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Stack>
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                No feedback available yet.
-              </Typography>
-            )}
+                            </Box>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              {chapter.comments.length === 0 && chapter.status !== 'not_submitted' && (
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  No feedback received yet.
+                </Typography>
+              )}
+            </Box>
           </AccordionDetails>
         </Accordion>
       ))}

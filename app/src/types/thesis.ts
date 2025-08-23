@@ -18,6 +18,8 @@ export interface ThesisComment {
     date: string;
     comment: string;
     attachments: FileAttachment[];
+    documentVersion?: number; // Version of the document this comment refers to
+    documentName?: string; // Name of the document this comment refers to
 }
 
 // Chapter interface

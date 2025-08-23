@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Typography from '@mui/material/Typography';
+import { Outlet } from 'react-router';
 import type { NavigationItem } from '../../../types/navigation';
 import { UploadFile } from '@mui/icons-material';
 
@@ -17,5 +18,6 @@ export const metadata: NavigationItem = {
 };
 
 export default function ThesisSubmissionPage() {
-  return <Typography>Welcome to the thesis submission tab!</Typography>;
+  // Render child routes through Outlet
+  return <Outlet />;
 }
