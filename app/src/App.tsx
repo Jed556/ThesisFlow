@@ -7,6 +7,7 @@ import type { Authentication, Navigation } from '@toolpad/core/AppProvider';
 import { firebaseSignOut, signInWithGoogle, onAuthStateChanged } from './firebase/auth';
 import SessionContext, { type Session } from './SessionContext';
 import { buildNavigation } from './utils/navBuilder';
+import { getUserRole } from './utils/roleUtils';
 import { navigationGroups } from './config/groups';
 import theme from './theme';
 
@@ -37,7 +38,9 @@ export default function App() {
   React.useEffect(() => {
     async function initializeNavigation() {
       try {
-        const nav = await buildNavigation(navigationGroups);
+        // Get user role from session
+        const userRole = session?.user?.role as any; // Type assertion for role
+        const nav = await buildNavigation(navigationGroups, userRole);
         setNavigation(nav);
       } catch (error) {
         console.error('Failed to build navigation:', error);
@@ -46,17 +49,21 @@ export default function App() {
     }
     
     initializeNavigation();
-  }, []);
+  }, [session]); // Rebuild navigation when session changes
 
   React.useEffect(() => {
     // Returns an `unsubscribe` function to be called during teardown
     const unsubscribe = onAuthStateChanged((user: User | null) => {
       if (user) {
+        const email = user.email || '';
+        const userRole = getUserRole(email);
+        
         setSession({
           user: {
             name: user.displayName || '',
-            email: user.email || '',
+            email: email,
             image: user.photoURL || '',
+            role: userRole,
           },
         });
       } else {
