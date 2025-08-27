@@ -168,31 +168,6 @@ export default function ThesisStatusPage() {
 
           <AccordionDetails>
             <Box>
-              {/* Files Section */}
-              {chapter.status !== 'not_submitted' && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                    <AttachFile sx={{ mr: 1 }} />
-                    Submitted Files
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <Description fontSize="small" color="primary" />
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      Chapter_{chapter.id}_{chapter.title.replace(/\s+/g, '_')}_v1.pdf
-                    </Typography>
-                    <Chip
-                      label="v1"
-                      size="small"
-                      color="primary"
-                      sx={{ height: 18, fontSize: '0.65rem' }}
-                    />
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                      Currently being reviewed by {chapter.status === 'under_review' ? 'Editor' : 'Adviser'}
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-
               {/* Comments Section */}
               {chapter.comments.length > 0 && (
                 <Box>
