@@ -1,15 +1,19 @@
 /**
  * Utility functions for user role management
+ * Handles both system-wide authentication roles and thesis-specific contextual roles
  */
 
-export type UserRole = 'admin' | 'student' | 'editor' | 'adviser';
+import type { SystemUserRole, ThesisRole } from '../types/thesis';
+import { mockThesisData } from '../data/mockData';
+
+export type UserRole = SystemUserRole; // Use the centralized system role type
 
 /**
- * Determines user role based on email domain or specific email addresses
+ * Determines system-wide user role based on email domain or specific email addresses
  * This is a simple implementation - in a real application, you would
  * fetch this from your backend/database or JWT token
  */
-export function getUserRole(email: string): UserRole {
+export function getUserRole(email: string): SystemUserRole {
   // Admin users - you can add specific admin emails here
   const adminEmails = [
     'admin@thesisflow.com',
@@ -57,7 +61,7 @@ export function getUserRole(email: string): UserRole {
 /**
  * Checks if a user has access to a specific role requirement
  */
-export function hasRoleAccess(userRole: UserRole, requiredRoles: string[]): boolean {
+export function hasRoleAccess(userRole: SystemUserRole, requiredRoles: string[]): boolean {
   if (!requiredRoles || requiredRoles.length === 0) {
     return true; // No role requirement means accessible to all
   }
@@ -69,7 +73,7 @@ export function hasRoleAccess(userRole: UserRole, requiredRoles: string[]): bool
  * Gets role hierarchy for permission checking
  * Higher numbers indicate higher privileges
  */
-export function getRoleHierarchy(role: UserRole): number {
+export function getRoleHierarchy(role: SystemUserRole): number {
   switch (role) {
     case 'admin':
       return 4;
@@ -87,6 +91,43 @@ export function getRoleHierarchy(role: UserRole): number {
 /**
  * Checks if user role has at least the minimum required role level
  */
-export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boolean {
+export function hasMinimumRole(userRole: SystemUserRole, minimumRole: SystemUserRole): boolean {
   return getRoleHierarchy(userRole) >= getRoleHierarchy(minimumRole);
+}
+
+// ==================================================
+// THESIS-SPECIFIC ROLE FUNCTIONS
+// ==================================================
+
+/**
+ * Get user's thesis-specific role by email from thesis data context
+ */
+export function getThesisRole(email: string): ThesisRole {
+    if (email === mockThesisData.leader) return 'leader';
+    if (mockThesisData.members.includes(email)) return 'member';
+    if (email === mockThesisData.adviser) return 'adviser';
+    if (email === mockThesisData.editor) return 'editor';
+    return 'unknown';
+}
+
+/**
+ * Get thesis role display text
+ */
+export function getThesisRoleDisplayText(email: string): string {
+    const role = getThesisRole(email);
+    switch (role) {
+        case 'leader': return 'Student (Leader)';
+        case 'member': return 'Student (Member)';
+        case 'adviser': return 'Adviser';
+        case 'editor': return 'Editor';
+        default: return 'Unknown';
+    }
+}
+
+/**
+ * Check if user is a student in thesis context (leader or member)
+ */
+export function isThesisStudent(email: string): boolean {
+    const role = getThesisRole(email);
+    return role === 'leader' || role === 'member';
 }
