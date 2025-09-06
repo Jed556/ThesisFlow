@@ -121,11 +121,11 @@ export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: Cha
                                                 {file.size}
                                             </Typography>
                                         </Box>
-                                        <IconButton size="small" color="primary">
+                                        <IconButton size="small" color="primary" aria-label="Download">
                                             <Download fontSize="small" />
                                         </IconButton>
                                         {isCurrentVersion && (
-                                            <IconButton size="small" color="error">
+                                            <IconButton size="small" color="error" aria-label="Delete">
                                                 <Delete fontSize="small" />
                                             </IconButton>
                                         )}
