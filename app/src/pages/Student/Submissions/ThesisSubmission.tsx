@@ -11,7 +11,7 @@ export const metadata: NavigationItem = {
   title: 'Submissions',
   segment: 'thesis-submission',
   icon: <UploadFile />,
-  children: ['thesis-status', 'thesis-chapters'],
+  children: ['thesis-chapters'],
   // path: '/thesis',
   roles: ['student', 'admin'],
   // hidden: false,

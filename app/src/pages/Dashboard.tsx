@@ -22,7 +22,7 @@ export default function DashboardPage() {
   const userRole = session?.user?.role || 'guest';
 
   return (
-    <Box>
+    <>
       <Typography variant="h4" gutterBottom>Welcome to the dashboard!</Typography>
       <Box sx={{ mt: 2 }}>
         <Typography variant="body1" sx={{ mb: 1 }}>
@@ -44,6 +44,6 @@ export default function DashboardPage() {
           />
         </Typography>
       </Box>
-    </Box>
+    </>
   );
 }

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router';
-import LinearProgress from '@mui/material/LinearProgress';
 import App from './App';
 import ErrorBoundary from './layouts/ErrorBoundary';
 import { buildRoutes } from './utils/navBuilder';
@@ -36,9 +35,7 @@ function AppWithRouter() {
 
   if (!router) {
     return (
-      <div style={{ width: '100%', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <LinearProgress style={{ width: '50%' }} />
-      </div>
+      <></>
     );
   }
 

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { ThemeProvider } from '@mui/material/styles';
+import GlobalStyles from '@mui/material/GlobalStyles';
 import { Outlet } from 'react-router';
 import type { User } from 'firebase/auth';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
@@ -47,7 +48,7 @@ export default function App() {
         setNavigation([]);
       }
     }
-    
+
     initializeNavigation();
   }, [session]); // Rebuild navigation when session changes
 
@@ -57,7 +58,7 @@ export default function App() {
       if (user) {
         const email = user.email || '';
         const userRole = getUserRole(email);
-        
+
         setSession({
           user: {
             name: user.displayName || '',
@@ -84,6 +85,22 @@ export default function App() {
     >
       <SessionContext.Provider value={sessionContextValue}>
         <ThemeProvider theme={theme}>
+          {/* Hide outer scrollbars so only the inner page container scrolls */}
+          <GlobalStyles
+            styles={{
+              html: { height: '100%' },
+              body: { height: '100%', overflow: 'hidden' },
+              '#root': { height: '100%' },
+              // Prevent text cursor on normal text (Typography) and all Chip content
+              '.MuiTypography-root': {
+                cursor: 'default',
+              },
+              // Restore pointer cursor for clickable AccordionSummary
+              '.MuiAccordionSummary-root, .MuiAccordionSummary-root *': {
+                cursor: 'pointer',
+              },
+            }}
+          />
           <Outlet />
         </ThemeProvider>
       </SessionContext.Provider>

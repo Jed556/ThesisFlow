@@ -24,9 +24,8 @@ import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisChapter } from '../../../types/thesis';
 import {
   mockThesisData,
-  mockGroupMembers,
-  calculateProgress,
 } from '../../../data/mockData';
+import { calculateProgress } from '../../../utils/dbUtils';
 import { ChapterAccordion } from '../../../components';
 
 export const metadata: NavigationItem = {
@@ -114,80 +113,8 @@ export default function ThesisChaptersPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Thesis Header */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          {mockThesisData.title}
-        </Typography>
-
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, mt: 2 }}>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="body1">
-              <strong>Student:</strong> {mockThesisData.student}
-            </Typography>
-            <Typography variant="body1">
-              <strong>Adviser:</strong> {mockThesisData.adviser}
-            </Typography>
-            <Typography variant="body1">
-              <strong>Editor:</strong> {mockThesisData.editor}
-            </Typography>
-          </Box>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="body1">
-              <strong>Submission Date:</strong> {mockThesisData.submissionDate}
-            </Typography>
-            <Typography variant="body1">
-              <strong>Last Updated:</strong> {mockThesisData.lastUpdated}
-            </Typography>
-            <Typography variant="body1">
-              <strong>Overall Status:</strong>
-              <Chip
-                label={mockThesisData.overallStatus}
-                color="primary"
-                size="small"
-                sx={{ ml: 1 }}
-              />
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Progress Bar */}
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Overall Progress: {Math.round(progress)}% Complete
-          </Typography>
-          <LinearProgress
-            variant="determinate"
-            value={progress}
-            sx={{ height: 8, borderRadius: 4 }}
-          />
-        </Box>
-
-        {/* Group Members */}
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Research Group Members
-          </Typography>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            {mockGroupMembers.map((member) => (
-              <Chip
-                key={member.id}
-                avatar={<Avatar sx={{ width: 24, height: 24 }}>{member.name.charAt(0)}</Avatar>}
-                label={`${member.name} (${member.role})`}
-                variant="outlined"
-                size="small"
-              />
-            ))}
-          </Stack>
-        </Box>
-      </Paper>
-
+    <>
       {/* Chapter Submissions */}
-      <Typography variant="h5" gutterBottom>
-        Chapter Document Submissions
-      </Typography>
-
       {mockThesisData.chapters.map((chapter: ThesisChapter) => (
         <ChapterAccordion
           key={chapter.id}
@@ -257,6 +184,6 @@ export default function ThesisChaptersPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </>
   );
 }

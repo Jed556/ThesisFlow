@@ -18,9 +18,8 @@ import {
     CloudUpload,
 } from '@mui/icons-material';
 import type { StatusColor, ThesisChapter } from '../types/thesis';
-import { mockChapterFiles } from '../data/mockData';
-import { FileDisplay } from './FileDisplay';
-import { FeedbackSection } from './FeedbackSection';
+import { getChapterSubmissions } from '../utils/dbUtils';
+import { ChapterItem } from './ChapterItem';
 
 interface ChapterAccordionProps {
     chapter: ThesisChapter;
@@ -73,14 +72,17 @@ const getStatusDisplayText = (status: string): string => {
 };
 
 export function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
+    // Check if chapter has any submissions
+    const hasSubmissions = getChapterSubmissions(chapter.id).length > 0;
+    
     return (
-        <Accordion sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' } }}>
-            <AccordionSummary expandIcon={<ExpandMore />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+        <Accordion sx={{ my: 2, borderRadius: 2, '&:before, &:after': { display: 'none' }, boxShadow: 3 }}>
+            <AccordionSummary expandIcon={<ExpandMore />} sx={{ position: 'sticky', top: 0, zIndex: 1, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
                     <Box sx={{ mr: 2 }}>
                         {getStatusIcon(chapter.status)}
                     </Box>
-                    <Box sx={{ flexGrow: 1 }}>
+                    <Box sx={{ flexGrow: 1, cursor: 'pointer' }}>
                         <Typography variant="h6">
                             Chapter {chapter.id}: {chapter.title}
                         </Typography>
@@ -90,6 +92,7 @@ export function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionPro
                         </Typography>
                     </Box>
                     <Chip
+                        sx={{ m: 2 }}
                         label={getStatusDisplayText(chapter.status)}
                         color={getStatusColor(chapter.status) as any}
                         size="small"
@@ -113,16 +116,12 @@ export function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionPro
                                 onClick={() => onUploadClick(chapter.id, chapter.title)}
                                 disabled={chapter.status === 'approved'}
                             >
-                                {mockChapterFiles[chapter.id] ? 'Replace Document' : 'Upload Document'}
+                                {hasSubmissions ? 'Replace Document' : 'Upload Document'}
                             </Button>
                         </Box>
 
-                        {/* File Display Component */}
-                        <FileDisplay chapterId={chapter.id} />
+                        <ChapterItem chapterId={chapter.id} comments={chapter.comments} />
                     </Box>
-
-                    {/* Feedback Section Component */}
-                    <FeedbackSection comments={chapter.comments} />
                 </Box>
             </AccordionDetails>
         </Accordion>

@@ -1,20 +1,35 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="initial-scale=1, width=device-width" />
-    <!-- Fonts to support Material Design -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
-    />
-    <title>ThesisFlow</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="initial-scale=1, width=device-width" />
+  <!-- Fonts to support Material Design -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" />
+  <!-- Initialize color scheme early to prevent flicker (must match theme.ts cssVariables.colorSchemeSelector) -->
+  <script>
+    (function () {
+      try {
+        var attr = 'data-toolpad-color-scheme';
+        var stored = localStorage.getItem('mui-mode') || localStorage.getItem('theme-mode');
+        var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var mode = stored === 'light' || stored === 'dark' ? stored : (systemDark ? 'dark' : 'light');
+        document.documentElement.setAttribute(attr, mode);
+        document.documentElement.style.colorScheme = mode;
+      } catch (e) {
+        // no-op
+      }
+    })();
+  </script>
+  <title>ThesisFlow</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

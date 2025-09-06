@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisChapter } from '../../types/thesis';
 import { mockThesisData } from '../../data/mockData';
+import { getDisplayName, getThesisTeamMembers } from '../../utils/dbUtils';
 
 export const metadata: NavigationItem = {
   group: 'thesis',
@@ -27,55 +28,55 @@ const calculateProgress = () => {
 export default function ThesisPage() {
   const progress = calculateProgress();
   const navigate = useNavigate();
+  const teamMembers = getThesisTeamMembers();
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Thesis Header */}
+    <>
+      {/* Thesis Header (with members section) */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h4" gutterBottom>
           {mockThesisData.title}
         </Typography>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-          <Typography variant="body2">
-            <strong>Student:</strong> {mockThesisData.student}
+        {/* Group Members Section - moved below title */}
+        <Box sx={{ mt: 2, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Research Group Members
           </Typography>
-          <Typography variant="body2">
-            <strong>Adviser:</strong> {mockThesisData.adviser}
-          </Typography>
-          <Typography variant="body2">
-            <strong>Editor:</strong> {mockThesisData.editor}
-          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {teamMembers.map((member) => (
+              <Chip
+                key={member.id}
+                avatar={<Avatar sx={{ width: 24, height: 24 }}>{member.name.charAt(0)}</Avatar>}
+                label={`${member.name} (${member.role})`}
+                variant="outlined"
+                size="small"
+              />
+            ))}
+          </Stack>
         </Box>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-          <Typography variant="body2">
-            <strong>Submission Date:</strong> {mockThesisData.submissionDate}
-          </Typography>
-          <Typography variant="body2">
-            <strong>Last Updated:</strong> {mockThesisData.lastUpdated}
-          </Typography>
-          <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <strong>Status:</strong>
-            <Chip
-              label={mockThesisData.overallStatus}
-              color="warning"
-              size="small"
-            />
-          </Typography>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, mt: 2 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body1">
+              <strong>Submission Date:</strong> {mockThesisData.submissionDate}
+            </Typography>
+            <Typography variant="body1">
+              <strong>Last Updated:</strong> {mockThesisData.lastUpdated}
+            </Typography>
+          </Box>
         </Box>
 
-        {/* Progress Overview */}
+        {/* Progress Bar */}
         <Box sx={{ mt: 3 }}>
-          <Typography variant="h6" gutterBottom>Progress Overview</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Overall Progress: {Math.round(progress)}% Complete
+          </Typography>
           <LinearProgress
             variant="determinate"
             value={progress}
-            sx={{ height: 8, borderRadius: 1, mb: 1 }}
+            sx={{ height: 8, borderRadius: 4 }}
           />
-          <Typography variant="body2" color="text.secondary">
-            {Math.round(progress)}% Complete
-          </Typography>
         </Box>
       </Paper>
 
@@ -113,6 +114,6 @@ export default function ThesisPage() {
           </CardContent>
         </Card>
       ))}
-    </Box>
+    </>
   );
 }

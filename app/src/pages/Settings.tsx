@@ -15,10 +15,10 @@ export const metadata: NavigationItem = {
 
 export default function SettingsPage() {
     return (
-        <div>
+        <>
             <Typography>
                 This is the settings page
             </Typography>
-        </div>
+        </>
     );
 }

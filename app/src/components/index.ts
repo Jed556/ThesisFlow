@@ -1,3 +1,5 @@
 export { ChapterAccordion } from './ChapterAccordion';
-export { FileDisplay } from './FileDisplay';
-export { FeedbackSection } from './FeedbackSection';
+export { ChapterFile } from './ChapterFile';
+export { ChapterComment } from './ChapterComment';
+export { ChapterItem } from './ChapterItem';
+export { SortButton } from './SortButton';

@@ -16,10 +16,10 @@ export const metadata: NavigationItem = {
 
 export default function UsersPage() {
     return (
-        <div>
+        <>
             <Typography>
                 This is the Users Page
             </Typography>
-        </div>
+        </>
     );
 }
