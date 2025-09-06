@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { LinearProgress, TextField, Button, Link, Alert, FormControl, IconButton, InputAdornment, InputLabel, OutlinedInput } from '@mui/material';
+import { TextField, Button, Link, FormControl, IconButton, InputAdornment, InputLabel, OutlinedInput } from '@mui/material';
 import { Visibility, VisibilityOff, AccountCircle } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
 import { Navigate, useNavigate } from 'react-router';
@@ -99,6 +99,8 @@ function CustomPasswordField() {
 }
 
 function CustomButton() {
+    const { loading } = useSession();
+
     return (
         <Button
             type="submit"
@@ -107,6 +109,7 @@ function CustomButton() {
             variant="contained"
             disableElevation
             color="primary"
+            disabled={loading}
             sx={{
                 mt: 3,
                 mb: 2,
@@ -137,14 +140,6 @@ function SignUpLink() {
 export default function SignIn() {
     const { session, setSession, loading } = useSession();
     const navigate = useNavigate();
-
-    if (loading) {
-        return (
-            <div style={{ width: '100%' }}>
-                <LinearProgress />
-            </div>
-        );
-    }
 
     if (session) {
         return <Navigate to="/" />;
