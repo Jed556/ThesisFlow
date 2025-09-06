@@ -74,7 +74,7 @@ const getStatusDisplayText = (status: string): string => {
 export function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
     // Check if chapter has any submissions
     const hasSubmissions = getChapterSubmissions(chapter.id).length > 0;
-    
+
     return (
         <Accordion sx={{ my: 2, borderRadius: 2, '&:before, &:after': { display: 'none' }, boxShadow: 3 }}>
             <AccordionSummary expandIcon={<ExpandMore />} sx={{ position: 'sticky', top: 0, zIndex: 1, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}>

@@ -86,7 +86,7 @@ export function getDocumentNameByVersion(chapterId: number, version: number): st
     if (!chapter || !chapter.submissions[version - 1]) {
         return `Document v${version}`;
     }
-    
+
     const fileHash = chapter.submissions[version - 1];
     const file = mockFileRegistry[fileHash];
     return file ? file.name : `Document v${version}`;
@@ -98,7 +98,7 @@ export function getDocumentNameByVersion(chapterId: number, version: number): st
 export function getVersionFromHash(chapterId: number, hash: string): number {
     const chapter = mockThesisData.chapters.find(ch => ch.id === chapterId);
     if (!chapter) return 1;
-    
+
     const index = chapter.submissions.indexOf(hash);
     return index >= 0 ? index + 1 : 1;
 }

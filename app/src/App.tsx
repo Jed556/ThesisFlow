@@ -13,97 +13,97 @@ import { navigationGroups } from './config/groups';
 import theme from './theme';
 
 const BRANDING = {
-  title: 'ThesisFlow',
+    title: 'ThesisFlow',
 };
 
 const AUTHENTICATION: Authentication = {
-  signIn: signInWithGoogle,
-  signOut: firebaseSignOut,
+    signIn: signInWithGoogle,
+    signOut: firebaseSignOut,
 };
 
 export default function App() {
-  const [session, setSession] = React.useState<Session | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [navigation, setNavigation] = React.useState<Navigation>([]);
+    const [session, setSession] = React.useState<Session | null>(null);
+    const [loading, setLoading] = React.useState(true);
+    const [navigation, setNavigation] = React.useState<Navigation>([]);
 
-  const sessionContextValue = React.useMemo(
-    () => ({
-      session,
-      setSession,
-      loading,
-    }),
-    [session, loading],
-  );
+    const sessionContextValue = React.useMemo(
+        () => ({
+            session,
+            setSession,
+            loading,
+        }),
+        [session, loading],
+    );
 
-  // Initialize navigation
-  React.useEffect(() => {
-    async function initializeNavigation() {
-      try {
-        // Get user role from session
-        const userRole = session?.user?.role as any; // Type assertion for role
-        const nav = await buildNavigation(navigationGroups, userRole);
-        setNavigation(nav);
-      } catch (error) {
-        console.error('Failed to build navigation:', error);
-        setNavigation([]);
-      }
-    }
+    // Initialize navigation
+    React.useEffect(() => {
+        async function initializeNavigation() {
+            try {
+                // Get user role from session
+                const userRole = session?.user?.role as any; // Type assertion for role
+                const nav = await buildNavigation(navigationGroups, userRole);
+                setNavigation(nav);
+            } catch (error) {
+                console.error('Failed to build navigation:', error);
+                setNavigation([]);
+            }
+        }
 
-    initializeNavigation();
-  }, [session]); // Rebuild navigation when session changes
+        initializeNavigation();
+    }, [session]); // Rebuild navigation when session changes
 
-  React.useEffect(() => {
-    // Returns an `unsubscribe` function to be called during teardown
-    const unsubscribe = onAuthStateChanged((user: User | null) => {
-      if (user) {
-        const email = user.email || '';
-        const userRole = getUserRole(email);
+    React.useEffect(() => {
+        // Returns an `unsubscribe` function to be called during teardown
+        const unsubscribe = onAuthStateChanged((user: User | null) => {
+            if (user) {
+                const email = user.email || '';
+                const userRole = getUserRole(email);
 
-        setSession({
-          user: {
-            name: user.displayName || '',
-            email: email,
-            image: user.photoURL || '',
-            role: userRole,
-          },
+                setSession({
+                    user: {
+                        name: user.displayName || '',
+                        email: email,
+                        image: user.photoURL || '',
+                        role: userRole,
+                    },
+                });
+            } else {
+                setSession(null);
+            }
+            setLoading(false);
         });
-      } else {
-        setSession(null);
-      }
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
-  }, []);
+        return () => unsubscribe();
+    }, []);
 
-  return (
-    <ReactRouterAppProvider
-      navigation={navigation}
-      branding={BRANDING}
-      session={session}
-      authentication={AUTHENTICATION}
-    >
-      <SessionContext.Provider value={sessionContextValue}>
-        <ThemeProvider theme={theme}>
-          {/* Hide outer scrollbars so only the inner page container scrolls */}
-          <GlobalStyles
-            styles={{
-              html: { height: '100%' },
-              body: { height: '100%', overflow: 'hidden' },
-              '#root': { height: '100%' },
-              // Prevent text cursor on normal text (Typography) and all Chip content
-              '.MuiTypography-root': {
-                cursor: 'default',
-              },
-              // Restore pointer cursor for clickable AccordionSummary
-              '.MuiAccordionSummary-root, .MuiAccordionSummary-root *': {
-                cursor: 'pointer',
-              },
-            }}
-          />
-          <Outlet />
-        </ThemeProvider>
-      </SessionContext.Provider>
-    </ReactRouterAppProvider>
-  );
+    return (
+        <ReactRouterAppProvider
+            navigation={navigation}
+            branding={BRANDING}
+            session={session}
+            authentication={AUTHENTICATION}
+        >
+            <SessionContext.Provider value={sessionContextValue}>
+                <ThemeProvider theme={theme}>
+                    {/* Hide outer scrollbars so only the inner page container scrolls */}
+                    <GlobalStyles
+                        styles={{
+                            html: { height: '100%' },
+                            body: { height: '100%', overflow: 'hidden' },
+                            '#root': { height: '100%' },
+                            // Prevent text cursor on normal text (Typography) and all Chip content
+                            '.MuiTypography-root': {
+                                cursor: 'default',
+                            },
+                            // Restore pointer cursor for clickable AccordionSummary
+                            '.MuiAccordionSummary-root, .MuiAccordionSummary-root *': {
+                                cursor: 'pointer',
+                            },
+                        }}
+                    />
+                    <Outlet />
+                </ThemeProvider>
+            </SessionContext.Provider>
+        </ReactRouterAppProvider>
+    );
 }

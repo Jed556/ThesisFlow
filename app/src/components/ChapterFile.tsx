@@ -44,7 +44,7 @@ const getFileIcon = (fileType: FileType) => {
 export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: ChapterFileProps) {
     // Get all submission files for this chapter
     const submissionFiles = getChapterSubmissions(chapterId);
-    
+
     if (submissionFiles.length === 0) {
         return (
             <Alert severity="info" sx={{ mb: 2 }}>

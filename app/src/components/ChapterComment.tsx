@@ -21,11 +21,11 @@ import {
 import type { ThesisComment, FileAttachment } from '../types/thesis';
 import { parseThesisDate } from '../utils/dateUtils';
 import { getThesisRole, getThesisRoleDisplayText, isThesisStudent } from '../utils/roleUtils';
-import { 
-    getProfile, 
-    getDisplayName, 
+import {
+    getProfile,
+    getDisplayName,
     getAttachmentFiles,
-    getDocumentNameByVersion 
+    getDocumentNameByVersion
 } from '../utils/dbUtils';
 
 interface ChapterCommentProps {

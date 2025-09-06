@@ -7,43 +7,43 @@ import { buildRoutes } from './utils/navBuilder';
 
 // Create a component to handle async router creation
 function AppWithRouter() {
-  const [router, setRouter] = React.useState<ReturnType<typeof createBrowserRouter> | null>(null);
+    const [router, setRouter] = React.useState<ReturnType<typeof createBrowserRouter> | null>(null);
 
-  React.useEffect(() => {
-    async function initializeRouter() {
-      try {
-        const routes = await buildRoutes();
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Built routes:', routes); // Debug log
+    React.useEffect(() => {
+        async function initializeRouter() {
+            try {
+                const routes = await buildRoutes();
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('Built routes:', routes); // Debug log
+                }
+                const createdRouter = createBrowserRouter([
+                    {
+                        path: '/',
+                        Component: App,
+                        errorElement: <ErrorBoundary />,
+                        children: routes,
+                    },
+                ]);
+                setRouter(createdRouter);
+            } catch (error) {
+                console.error('Failed to build routes:', error);
+            }
         }
-        const createdRouter = createBrowserRouter([
-          {
-            path: '/',
-            Component: App,
-            errorElement: <ErrorBoundary />,
-            children: routes,
-          },
-        ]);
-        setRouter(createdRouter);
-      } catch (error) {
-        console.error('Failed to build routes:', error);
-      }
+
+        initializeRouter();
+    }, []);
+
+    if (!router) {
+        return (
+            <></>
+        );
     }
 
-    initializeRouter();
-  }, []);
-
-  if (!router) {
-    return (
-      <></>
-    );
-  }
-
-  return <RouterProvider router={router} />;
+    return <RouterProvider router={router} />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AppWithRouter />
-  </React.StrictMode>,
+    <React.StrictMode>
+        <AppWithRouter />
+    </React.StrictMode>,
 );

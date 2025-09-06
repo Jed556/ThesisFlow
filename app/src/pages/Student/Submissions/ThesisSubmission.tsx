@@ -6,18 +6,18 @@ import { UploadFile } from '@mui/icons-material';
 
 
 export const metadata: NavigationItem = {
-  group: 'thesis',
-  index: 1,
-  title: 'Submissions',
-  segment: 'thesis-submission',
-  icon: <UploadFile />,
-  children: ['thesis-chapters'],
-  // path: '/thesis',
-  roles: ['student', 'admin'],
-  // hidden: false,
+    group: 'thesis',
+    index: 1,
+    title: 'Submissions',
+    segment: 'thesis-submission',
+    icon: <UploadFile />,
+    children: ['thesis-chapters'],
+    // path: '/thesis',
+    roles: ['student', 'admin'],
+    // hidden: false,
 };
 
 export default function ThesisSubmissionPage() {
-  // Render child routes through Outlet
-  return <Outlet />;
+    // Render child routes through Outlet
+    return <Outlet />;
 }
