@@ -35,12 +35,10 @@ export default function App() {
         [session, loading],
     );
 
-    // Initialize navigation
     React.useEffect(() => {
         async function initializeNavigation() {
             try {
-                // Get user role from session
-                const userRole = session?.user?.role as any; // Type assertion for role
+                const userRole = session?.user?.role as any;
                 const nav = await buildNavigation(navigationGroups, userRole);
                 setNavigation(nav);
             } catch (error) {
@@ -50,10 +48,9 @@ export default function App() {
         }
 
         initializeNavigation();
-    }, [session]); // Rebuild navigation when session changes
+    }, [session]);
 
     React.useEffect(() => {
-        // Returns an `unsubscribe` function to be called during teardown
         const unsubscribe = onAuthStateChanged((user: User | null) => {
             if (user) {
                 const email = user.email || '';
@@ -85,17 +82,14 @@ export default function App() {
         >
             <SessionContext.Provider value={sessionContextValue}>
                 <ThemeProvider theme={theme}>
-                    {/* Hide outer scrollbars so only the inner page container scrolls */}
                     <GlobalStyles
                         styles={{
                             html: { height: '100%' },
                             body: { height: '100%', overflow: 'hidden' },
                             '#root': { height: '100%' },
-                            // Prevent text cursor on normal text (Typography) and all Chip content
                             '.MuiTypography-root': {
                                 cursor: 'default',
                             },
-                            // Restore pointer cursor for clickable AccordionSummary
                             '.MuiAccordionSummary-root, .MuiAccordionSummary-root *': {
                                 cursor: 'pointer',
                             },

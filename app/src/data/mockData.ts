@@ -1,4 +1,4 @@
-import type { ThesisData, FileAttachment, FileRegistryEntry, SystemUserRole } from '../types/thesis';
+import type { ThesisData, FileRegistryEntry, SystemUserRole } from '../types/thesis';
 
 /**
  * Centralized mock data for the ThesisFlow application

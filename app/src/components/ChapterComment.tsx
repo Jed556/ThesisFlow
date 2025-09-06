@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
     Typography,
     Box,
@@ -18,26 +17,23 @@ import {
     AttachFile,
     Visibility,
 } from '@mui/icons-material';
-import type { ThesisComment, FileAttachment } from '../types/thesis';
+import type { ThesisComment } from '../types/thesis';
 import { parseThesisDate } from '../utils/dateUtils';
-import { getThesisRole, getThesisRoleDisplayText, isThesisStudent } from '../utils/roleUtils';
+import { getThesisRole, getThesisRoleDisplayText } from '../utils/roleUtils';
 import {
-    getProfile,
     getDisplayName,
     getAttachmentFiles,
     getDocumentNameByVersion
-} from '../utils/dbUtils';
-
-interface ChapterCommentProps {
+} from '../utils/dbUtils'; interface ChapterCommentProps {
     comments: ThesisComment[];
-    chapterId: number; // Add chapterId for getting document names
+    chapterId: number;
     groupByVersion?: boolean;
     versionSort?: SortOrder;
     versionSelected?: number;
     commentSort?: SortOrder;
     onVersionSelect?: (version: number) => void;
-    currentUserEmail?: string; // Email of the current user for message alignment
-    showVersionDividers?: boolean; // Control whether to show version dividers
+    currentUserEmail?: string;
+    showVersionDividers?: boolean;
 }
 
 type SortOrder = 'asc' | 'desc';
@@ -70,14 +66,11 @@ export function ChapterComment({
 }: ChapterCommentProps) {
 
     if (comments.length === 0) {
-        return null; // Let parent handle the empty state
+        return null;
     }
 
-    // Check if a comment is from the current user
     const isCurrentUserComment = (comment: ThesisComment): boolean => {
         if (!currentUserEmail) return false;
-
-        // Comments now use email directly as the author field
         return comment.author === currentUserEmail;
     };
 
@@ -87,9 +80,9 @@ export function ChapterComment({
             const dateB = parseThesisDate(b.date);
 
             if (commentSort === 'asc') {
-                return dateA.getTime() - dateB.getTime(); // Oldest first, latest at bottom
+                return dateA.getTime() - dateB.getTime();
             } else {
-                return dateB.getTime() - dateA.getTime(); // Latest first, oldest at bottom
+                return dateB.getTime() - dateA.getTime();
             }
         });
 
@@ -99,12 +92,10 @@ export function ChapterComment({
     // Comment Card Component
     const CommentCard = ({ comment, index }: { comment: ThesisComment; index: number }) => {
         const isCurrentUser = isCurrentUserComment(comment);
-        const authorProfile = getProfile(comment.author);
         const authorDisplayName = getDisplayName(comment.author);
         const userRole = getThesisRole(comment.author);
         const userRoleDisplay = getThesisRoleDisplayText(comment.author);
 
-        // Get attachment files from hashes
         const attachmentFiles = getAttachmentFiles(comment.attachments);
 
         return (
@@ -243,7 +234,7 @@ export function ChapterComment({
         return (
             <Box>
                 <Stack spacing={3}>
-                    {filteredVersions.map((version, versionIndex) => {
+                    {filteredVersions.map((version) => {
                         const versionComments = groupedComments[version];
                         const documentName = getDocumentNameByVersion(chapterId, version);
 

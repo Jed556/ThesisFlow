@@ -1,11 +1,9 @@
-import * as React from 'react';
-import { Typography, Paper, Box, Chip, Accordion, AccordionSummary, AccordionDetails, List, ListItem, ListItemText, ListItemIcon, Divider, Card, CardContent, LinearProgress, Avatar, Stack, Button, IconButton, } from '@mui/material';
-import { School, } from '@mui/icons-material';
-import { useNavigate } from 'react-router';
+import { Typography, Paper, Box, Chip, Card, CardContent, LinearProgress, Avatar, Stack } from '@mui/material';
+import { School } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisChapter } from '../../types/thesis';
 import { mockThesisData } from '../../data/mockData';
-import { getDisplayName, getThesisTeamMembers } from '../../utils/dbUtils';
+import { getThesisTeamMembers } from '../../utils/dbUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -13,13 +11,8 @@ export const metadata: NavigationItem = {
     title: 'My Thesis',
     segment: 'thesis',
     icon: <School />,
-    // children: [],
-    // path: '/thesis',
     roles: ['student', 'admin'],
-    // hidden: false,
-};
-
-const calculateProgress = () => {
+}; const calculateProgress = () => {
     const total = mockThesisData.chapters.length;
     const approved = mockThesisData.chapters.filter((ch: ThesisChapter) => ch.status === 'approved').length;
     return (approved / total) * 100;
@@ -27,10 +20,7 @@ const calculateProgress = () => {
 
 export default function ThesisPage() {
     const progress = calculateProgress();
-    const navigate = useNavigate();
-    const teamMembers = getThesisTeamMembers();
-
-    return (
+    const teamMembers = getThesisTeamMembers(); return (
         <>
             {/* Thesis Header (with members section) */}
             <Paper sx={{ p: 3, mb: 3 }}>

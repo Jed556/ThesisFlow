@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { useRouteError, isRouteErrorResponse } from 'react-router';
 import { Box, Typography, Button, Paper, Container } from '@mui/material';
 import { Home, Refresh, BugReport } from '@mui/icons-material';

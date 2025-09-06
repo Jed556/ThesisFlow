@@ -5,7 +5,6 @@ import App from './App';
 import ErrorBoundary from './layouts/ErrorBoundary';
 import { buildRoutes } from './utils/navBuilder';
 
-// Create a component to handle async router creation
 function AppWithRouter() {
     const [router, setRouter] = React.useState<ReturnType<typeof createBrowserRouter> | null>(null);
 
@@ -14,7 +13,7 @@ function AppWithRouter() {
             try {
                 const routes = await buildRoutes();
                 if (process.env.NODE_ENV === 'development') {
-                    console.log('Built routes:', routes); // Debug log
+                    console.log('Built routes:', routes);
                 }
                 const createdRouter = createBrowserRouter([
                     {
@@ -34,9 +33,7 @@ function AppWithRouter() {
     }, []);
 
     if (!router) {
-        return (
-            <></>
-        );
+        return <></>;
     }
 
     return <RouterProvider router={router} />;

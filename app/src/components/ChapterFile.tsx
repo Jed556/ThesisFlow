@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
     Typography,
     Box,
@@ -19,8 +18,6 @@ import {
 import type { FileType } from '../types/thesis';
 import {
     getChapterSubmissions,
-    getCurrentVersion,
-    getVersionHistory as getPreviousVersions
 } from '../utils/dbUtils';
 
 interface ChapterFileProps {

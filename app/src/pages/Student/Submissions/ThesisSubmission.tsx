@@ -1,5 +1,3 @@
-import * as React from 'react';
-import Typography from '@mui/material/Typography';
 import { Outlet } from 'react-router';
 import type { NavigationItem } from '../../../types/navigation';
 import { UploadFile } from '@mui/icons-material';

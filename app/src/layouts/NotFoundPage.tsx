@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { Box, Typography, Button, Paper, Container } from '@mui/material';
 import { Home, ArrowBack, Search } from '@mui/icons-material';
 import { useNavigate } from 'react-router';

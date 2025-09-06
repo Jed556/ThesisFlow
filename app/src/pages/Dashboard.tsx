@@ -1,4 +1,3 @@
-import * as React from 'react';
 import Typography from '@mui/material/Typography';
 import { Box, Chip } from '@mui/material';
 import type { NavigationItem } from '../types/navigation';
@@ -12,9 +11,7 @@ export const metadata: NavigationItem = {
 	segment: 'dashboard',
 	icon: <DashboardIcon />,
 	children: [],
-	// path: '/dashboard',
 	roles: ['student', 'admin'],
-	// hidden: false,
 };
 
 export default function DashboardPage() {

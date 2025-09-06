@@ -1,12 +1,7 @@
-import * as React from 'react';
+import { useState } from 'react';
 import {
   Typography,
-  Paper,
   Box,
-  Chip,
-  LinearProgress,
-  Avatar,
-  Stack,
   Button,
   Dialog,
   DialogTitle,
@@ -19,13 +14,11 @@ import {
   Upload,
   CloudUpload,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisChapter } from '../../../types/thesis';
 import {
   mockThesisData,
 } from '../../../data/mockData';
-import { calculateProgress } from '../../../utils/dbUtils';
 import { ChapterAccordion } from '../../../components';
 
 export const metadata: NavigationItem = {
@@ -43,13 +36,11 @@ export const metadata: NavigationItem = {
 // Mock data - all data now imported from centralized mockData.ts
 
 export default function ThesisChaptersPage() {
-  const progress = calculateProgress();
-  const navigate = useNavigate();
-  const [uploadDialog, setUploadDialog] = React.useState(false);
-  const [selectedChapter, setSelectedChapter] = React.useState<number | null>(null);
-  const [uploadedFile, setUploadedFile] = React.useState<File | null>(null);
-  const [uploadError, setUploadError] = React.useState<string>('');
-  const [chapterTitle, setChapterTitle] = React.useState('');
+  const [uploadDialog, setUploadDialog] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string>('');
+  const [chapterTitle, setChapterTitle] = useState('');
 
   const handleUploadClick = (chapterId: number, chapterTitle: string) => {
     setSelectedChapter(chapterId);

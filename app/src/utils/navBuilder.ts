@@ -206,17 +206,17 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
         if (a.index !== undefined && b.index !== undefined) {
             return a.index - b.index;
         }
-        
+
         // If only a has an index, a comes first
         if (a.index !== undefined && b.index === undefined) {
             return -1;
         }
-        
+
         // If only b has an index, b comes first
         if (a.index === undefined && b.index !== undefined) {
             return 1;
         }
-        
+
         // If neither has an index, sort alphabetically by segment
         return a.segment.localeCompare(b.segment);
     });
@@ -253,17 +253,17 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
             if (a.index !== undefined && b.index !== undefined) {
                 return a.index - b.index;
             }
-            
+
             // If only a has an index, a comes first
             if (a.index !== undefined && b.index === undefined) {
                 return -1;
             }
-            
+
             // If only b has an index, b comes first
             if (a.index === undefined && b.index !== undefined) {
                 return 1;
             }
-            
+
             // If neither has an index, sort alphabetically by segment
             return (a.segment || '').localeCompare(b.segment || '');
         });
@@ -284,24 +284,24 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
         //     kind: 'header',
         //     title: 'Other',
         // });
-        
+
         // Sort ungrouped pages by index, then alphabetically by segment
         const sortedUngroupedPages = ungroupedPages.sort((a, b) => {
             // If both have indexes, sort by index
             if (a.index !== undefined && b.index !== undefined) {
                 return a.index - b.index;
             }
-            
+
             // If only a has an index, a comes first
             if (a.index !== undefined && b.index === undefined) {
                 return -1;
             }
-            
+
             // If only b has an index, b comes first
             if (a.index === undefined && b.index !== undefined) {
                 return 1;
             }
-            
+
             // If neither has an index, sort alphabetically by segment
             return (a.segment || '').localeCompare(b.segment || '');
         });
