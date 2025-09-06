@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { Navigation } from '@toolpad/core/AppProvider';
 import type { RouteObject } from 'react-router';
 import type { NavigationItem, NavigationGroup } from '../types/navigation';
+import { hasRoleAccess, type UserRole } from './roleUtils';
 import Layout from '../layouts/Layout';
 import ErrorBoundary from '../layouts/ErrorBoundary';
 import NotFoundPage from '../layouts/NotFoundPage';
@@ -20,6 +21,7 @@ let PAGE_REGISTRY: Record<string, PageModule> = {};
  */
 async function importPageModule(pageName: string): Promise<PageModule | null> {
     try {
+        // Handle both flat and nested page paths
         const module = await import(`../pages/${pageName}.tsx`);
         if (module.default && module.metadata) {
             return {
@@ -39,11 +41,12 @@ async function importPageModule(pageName: string): Promise<PageModule | null> {
  * Discover and load all pages from the pages directory
  */
 async function discoverPages(): Promise<void> {
-    // Get all page files from the pages directory
+    // Get all page files from the pages directory and subdirectories
     // Using import.meta.glob for dynamic imports with Vite
-    const pageModules = import.meta.glob('../pages/*.tsx', { eager: false });
+    const pageModules = import.meta.glob('../pages/**/*.tsx', { eager: false });
 
     const loadPromises = Object.keys(pageModules).map(async (path) => {
+        // Extract the page name from the full path, preserving folder structure
         const pageName = path.replace('../pages/', '').replace('.tsx', '');
 
         try {
@@ -108,7 +111,7 @@ function groupNavigationItems(pages: NavigationItem[], navigationGroups: Navigat
 /**
  * Converts NavigationItem to Toolpad Navigation format
  */
-function convertToToolpadNavigation(item: NavigationItem): Navigation[0] {
+function convertToToolpadNavigation(item: NavigationItem, userRole?: UserRole): Navigation[0] {
     const baseItem: any = {
         segment: item.segment,
         title: item.title,
@@ -124,8 +127,17 @@ function convertToToolpadNavigation(item: NavigationItem): Navigation[0] {
                 );
                 return childPage;
             })
-            .filter(childPage => childPage && !childPage.metadata.hidden) // Filter out hidden children
-            .map(childPage => convertToToolpadNavigation(childPage!.metadata));
+            .filter(childPage => {
+                if (!childPage || childPage.metadata.hidden) {
+                    return false;
+                }
+                // Filter by role access
+                if (userRole && childPage.metadata.roles) {
+                    return hasRoleAccess(userRole, childPage.metadata.roles);
+                }
+                return true;
+            })
+            .map(childPage => convertToToolpadNavigation(childPage!.metadata, userRole));
 
         // Only add children if there are visible ones
         if (visibleChildren.length > 0) {
@@ -139,7 +151,7 @@ function convertToToolpadNavigation(item: NavigationItem): Navigation[0] {
 /**
  * Builds navigation structure from page metadata and navigation groups
  */
-export async function buildNavigation(navigationGroups: NavigationGroup[]): Promise<Navigation> {
+export async function buildNavigation(navigationGroups: NavigationGroup[], userRole?: UserRole): Promise<Navigation> {
     // Ensure registry is initialized
     await initializeRegistry();
 
@@ -148,17 +160,33 @@ export async function buildNavigation(navigationGroups: NavigationGroup[]): Prom
     // Get all visible pages (not hidden)
     const visiblePages = Object.values(PAGE_REGISTRY)
         .map(page => page.metadata)
-        .filter(metadata => !metadata.hidden);
+        .filter(metadata => {
+            if (metadata.hidden) {
+                return false;
+            }
+            // Filter by role access
+            if (userRole && metadata.roles) {
+                return hasRoleAccess(userRole, metadata.roles);
+            }
+            return true;
+        });
 
     // Get all child segments to exclude from group navigation
     const childSegments = new Set<string>();
     visiblePages.forEach(page => {
         if (page.children && page.children.length > 0) {
             page.children.forEach(child => {
-                // Also check if the child page itself is hidden
+                // Also check if the child page itself is hidden or role-restricted
                 const childPage = Object.values(PAGE_REGISTRY).find(p => p.metadata.segment === child);
-                if (!childPage?.metadata.hidden) {
-                    childSegments.add(child);
+                if (childPage && !childPage.metadata.hidden) {
+                    // Check role access for child pages
+                    if (userRole && childPage.metadata.roles) {
+                        if (hasRoleAccess(userRole, childPage.metadata.roles)) {
+                            childSegments.add(child);
+                        }
+                    } else {
+                        childSegments.add(child);
+                    }
                 }
             });
         }
@@ -242,7 +270,7 @@ export async function buildNavigation(navigationGroups: NavigationGroup[]): Prom
 
         // Add sorted pages belonging to this group
         sortedPagesInGroup.forEach(page => {
-            navigation.push(convertToToolpadNavigation(page));
+            navigation.push(convertToToolpadNavigation(page, userRole));
         });
     });
 
@@ -279,7 +307,7 @@ export async function buildNavigation(navigationGroups: NavigationGroup[]): Prom
         });
 
         sortedUngroupedPages.forEach(page => {
-            navigation.push(convertToToolpadNavigation(page));
+            navigation.push(convertToToolpadNavigation(page, userRole));
         });
     }
 

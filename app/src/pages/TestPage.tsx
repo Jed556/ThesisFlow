@@ -10,16 +10,16 @@ export const metadata: NavigationItem = {
     segment: 'test',
     icon: <Analytics />,
     children: [],
-    roles: ['admin'],
+    roles: ['admin', 'student', 'editor', 'adviser'],
     hidden: false,
 };
 
 export default function TestPage() {
     return (
-        <div>
+        <>
             <Typography>
                 This is a Test Page
             </Typography>
-        </div>
+        </>
     );
 }

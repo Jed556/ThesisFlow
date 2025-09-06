@@ -1,0 +1,185 @@
+/**
+ * Database utility functions for data access and manipulation
+ * These functions handle data retrieval, formatting, and calculations
+ */
+
+import type { FileRegistryEntry } from '../types/thesis';
+import { mockFileRegistry, mockThesisData, mockUserProfiles, type UserProfile } from '../data/mockData';
+
+/**
+ * Get user profile by email
+ */
+export function getProfile(email: string): UserProfile | undefined {
+    return mockUserProfiles.find(profile => profile.email === email);
+}
+
+/**
+ * Get formatted display name for user
+ */
+export function getDisplayName(email: string): string {
+    const profile = getProfile(email);
+    if (!profile) return email; // Fallback to email if profile not found
+
+    return profile.title ? `${profile.title} ${profile.name}` : profile.name;
+}
+
+/**
+ * Get all thesis team members from thesis data
+ */
+export function getThesisTeamMembers() {
+    const teamMembers = [];
+
+    // Add leader (student)
+    const leader = getProfile(mockThesisData.leader);
+    if (leader) {
+        teamMembers.push({
+            id: leader.id,
+            name: leader.name,
+            email: leader.email,
+            role: 'Leader'
+        });
+    }
+
+    // Add other members (student)
+    mockThesisData.members.forEach(memberEmail => {
+        const member = getProfile(memberEmail);
+        if (member) {
+            teamMembers.push({
+                id: member.id,
+                name: member.name,
+                email: member.email,
+                role: 'Member'
+            });
+        }
+    });
+
+    // Add adviser
+    const adviser = getProfile(mockThesisData.adviser);
+    if (adviser) {
+        teamMembers.push({
+            id: adviser.id,
+            name: adviser.name,
+            email: adviser.email,
+            role: 'Adviser'
+        });
+    }
+
+    // Add editor
+    const editor = getProfile(mockThesisData.editor);
+    if (editor) {
+        teamMembers.push({
+            id: editor.id,
+            name: editor.name,
+            email: editor.email,
+            role: 'Editor'
+        });
+    }
+
+    return teamMembers;
+}
+
+/**
+ * Get document name from chapter submissions by version index
+ */
+export function getDocumentNameByVersion(chapterId: number, version: number): string {
+    const chapter = mockThesisData.chapters.find(ch => ch.id === chapterId);
+    if (!chapter || !chapter.submissions[version - 1]) {
+        return `Document v${version}`;
+    }
+
+    const fileHash = chapter.submissions[version - 1];
+    const file = mockFileRegistry[fileHash];
+    return file ? file.name : `Document v${version}`;
+}
+
+/**
+ * Get version number from submission hash in chapter
+ */
+export function getVersionFromHash(chapterId: number, hash: string): number {
+    const chapter = mockThesisData.chapters.find(ch => ch.id === chapterId);
+    if (!chapter) return 1;
+
+    const index = chapter.submissions.indexOf(hash);
+    return index >= 0 ? index + 1 : 1;
+}
+
+/**
+ * Helper functions for working with the hash-based file system
+ */
+
+/**
+ * Get file by hash from the registry
+ */
+export function getFileByHash(hash: string): FileRegistryEntry | undefined {
+    return mockFileRegistry[hash];
+}
+
+/**
+ * Get all submission files for a specific chapter
+ */
+export function getChapterSubmissions(chapterId: number): FileRegistryEntry[] {
+    const chapter = mockThesisData.chapters.find(ch => ch.id === chapterId);
+    if (!chapter) return [];
+
+    return chapter.submissions.map(hash => mockFileRegistry[hash]).filter(Boolean);
+}
+
+/**
+ * Get attachment files by hash array
+ */
+export function getAttachmentFiles(hashes: string[]): FileRegistryEntry[] {
+    return hashes.map(hash => mockFileRegistry[hash]).filter(Boolean);
+}
+
+/**
+ * Get version history for a specific chapter
+ */
+export function getVersionHistory(chapterId: number): FileRegistryEntry[] {
+    const submissions = getChapterSubmissions(chapterId);
+    return submissions
+        .filter(file => file.category === 'submission')
+        .sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
+}
+
+/**
+ * Get current version for a specific chapter
+ */
+export function getCurrentVersion(chapterId: number): FileRegistryEntry | null {
+    const submissions = getChapterSubmissions(chapterId);
+    const versions = submissions.filter(file => file.category === 'submission');
+    if (versions.length === 0) return null;
+
+    // Return the most recently submitted file
+    return versions.sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime())[0] || null;
+}
+
+/**
+ * Get all versions for a specific chapter
+ */
+export function getAllVersions(chapterId: number): FileRegistryEntry[] {
+    return getVersionHistory(chapterId);
+}
+
+/**
+ * Helper function to get group member by name
+ */
+export function getGroupMember(name: string) {
+    const teamMembers = getThesisTeamMembers();
+    return teamMembers.find(member => member.name === name);
+}
+
+/**
+ * Helper function to calculate thesis progress
+ */
+export function calculateProgress(): number {
+    const total = mockThesisData.chapters.length;
+    const approved = mockThesisData.chapters.filter(ch => ch.status === 'approved').length;
+    return (approved / total) * 100;
+}
+
+/**
+ * Get all users (for backwards compatibility)
+ */
+export function getUsers(): UserProfile[] {
+    return mockUserProfiles;
+}
