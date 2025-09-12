@@ -6,7 +6,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { useSession, type Session } from '../SessionContext';
 import { signInWithCredentials } from '../firebase/auth';
 import { getUserRole } from '../utils/roleUtils';
-import { isDevelopmentEnvironment } from '../utils/developmentUtils';
+import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 
 export const metadata: NavigationItem = {
