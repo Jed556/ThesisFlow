@@ -6,6 +6,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { useSession, type Session } from '../SessionContext';
 import { signInWithCredentials } from '../firebase/auth';
 import { getUserRole } from '../utils/roleUtils';
+import { isDevelopmentEnvironment } from '../utils/developmentUtils';
 import type { NavigationItem } from '../types/navigation';
 
 export const metadata: NavigationItem = {
@@ -22,11 +23,7 @@ const FormContext = React.createContext<{
 } | null>(null);
 
 function Info() {
-    const isDevelopment = import.meta.env.DEV &&
-        import.meta.env.MODE === 'development' &&
-        !import.meta.env.PROD;
-
-    if (!isDevelopment) {
+    if (!isDevelopmentEnvironment()) {
         return null;
     }
 
@@ -39,8 +36,8 @@ function Info() {
         { role: 'Admin', email: 'admin@test.com', color: 'error' as const },
     ];
 
-    const handleEmailClick = (email: string) => {
-        if (formContext && isDevelopment) {
+    const handleDevClick = (email: string) => {
+        if (formContext && isDevelopmentEnvironment()) {
             formContext.setEmailValue(email);
             formContext.setPasswordValue('Password_123');
         }
@@ -60,7 +57,7 @@ function Info() {
                         variant="outlined"
                         clickable
                         size="small"
-                        onClick={() => handleEmailClick(account.email)}
+                        onClick={() => handleDevClick(account.email)}
                         sx={{
                             cursor: 'pointer',
                             '&:hover': {
