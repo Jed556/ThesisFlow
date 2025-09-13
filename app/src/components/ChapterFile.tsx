@@ -15,7 +15,7 @@ import {
     Delete,
     Download,
 } from '@mui/icons-material';
-import type { FileType } from '../types/thesis';
+import type { FileType } from '../types/file';
 import {
     getChapterSubmissions,
 } from '../utils/dbUtils';
