@@ -208,16 +208,16 @@ function EventCard({ event }: { event: ScheduleEvent }) {
                         </Typography>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                             {event.participants.slice(0, 5).map((participant, index) => (
-                                <Tooltip key={index} title={`${participant.name} (${participant.role})`}>
-                                    <Avatar
-                                        name={participant.name}
-                                        initials={[Name.FIRST]}
-                                        size="medium"
-                                        sx={{
-                                            ...(participant.status === 'declined' && { opacity: 0.5 })
-                                        }}
-                                    />
-                                </Tooltip>
+                                <Avatar
+                                    key={index}
+                                    name={participant.name}
+                                    initials={[Name.FIRST]}
+                                    size="medium"
+                                    tooltipText={`${participant.name} (${participant.role})`}
+                                    sx={{
+                                        ...(participant.status === 'declined' && { opacity: 0.5 })
+                                    }}
+                                />
                             ))}
                             {event.participants.length > 5 && (
                                 <Avatar

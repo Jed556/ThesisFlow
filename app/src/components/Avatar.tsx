@@ -1,4 +1,4 @@
-import { Avatar as MuiAvatar, Chip, type AvatarProps as MuiAvatarProps } from '@mui/material';
+import { Avatar as MuiAvatar, Chip, type AvatarProps as MuiAvatarProps, Tooltip } from '@mui/material';
 import React from 'react';
 import type { UserProfile } from '../types/profile';
 import { getAvatarInitials, getInitialsFromFullName, findProfileByEmail, getDisplayName } from '../utils/avatarUtils';
@@ -71,6 +71,8 @@ export interface AvatarProps {
     // Customization options
     initials?: InitialsConfig;       // Which name parts to use
     mode?: AvatarMode;               // Display mode
+    // Quick tooltip selection: 'email' shows profile email, 'full' shows full display name
+    tooltip?: 'email' | 'full' | 'none';
 
     // Chip mode specific props
     label?: string;                  // Chip label text
@@ -86,6 +88,8 @@ export interface AvatarProps {
 
     // Event handlers
     onClick?: () => void;
+    // Optional custom tooltip text to show on hover (takes precedence over `tooltip`)
+    tooltipText?: string;
 }
 
 // Size mappings for predefined sizes
@@ -153,6 +157,8 @@ export default function Avatar({
     sx,
     size = 'medium',
     onClick,
+    tooltip = 'none',
+    tooltipText,
 }: AvatarProps) {
     // Resolve profile from email if needed
     const resolvedProfile = profile || (email ? findProfileByEmail(mockUserProfiles, email) : null);
@@ -167,7 +173,7 @@ export default function Avatar({
         : sizeMap[size];
 
     // Create the avatar element
-    const avatarElement = (
+    const avatarCore = (
         <MuiAvatar
             sx={{
                 ...avatarSize,
@@ -180,11 +186,29 @@ export default function Avatar({
         </MuiAvatar>
     );
 
+    // Tooltip logic: `tooltipText` takes precedence. Otherwise compute from `tooltip`.
+    let finalTooltip: string | undefined = undefined;
+    if (tooltipText) {
+        finalTooltip = tooltipText;
+    } else if (tooltip === 'email') {
+        finalTooltip = resolvedProfile?.email ?? name ?? undefined;
+    } else if (tooltip === 'full') {
+        finalTooltip = displayName || undefined;
+    }
+
+    const avatarElement = finalTooltip
+        ? (
+            <Tooltip title={finalTooltip} arrow>
+                {avatarCore}
+            </Tooltip>
+        )
+        : avatarCore;
+
     // Return chip mode if requested
     if (mode === 'chip') {
-        return (
+        const chipCore = (
             <Chip
-                avatar={avatarElement}
+                avatar={avatarCore}
                 label={label || displayName}
                 variant={chipProps?.variant || 'outlined'}
                 size={chipProps?.size || 'small'}
@@ -195,6 +219,9 @@ export default function Avatar({
                 }}
             />
         );
+        return finalTooltip
+            ? <Tooltip title={finalTooltip} arrow>{chipCore}</Tooltip>
+            : chipCore;
     }
 
     // Return default avatar

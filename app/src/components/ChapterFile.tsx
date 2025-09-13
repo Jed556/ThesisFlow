@@ -2,7 +2,7 @@ import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, } f
 import { PictureAsPdf, Description, Delete, Download, } from '@mui/icons-material';
 import Avatar, { Name } from './Avatar';
 import type { FileType } from '../types/file';
-import { getChapterSubmissions } from '../utils/dbUtils';
+import { getChapterSubmissions, getDisplayName } from '../utils/dbUtils';
 
 interface ChapterFileProps {
     chapterId: number;
@@ -47,6 +47,8 @@ export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: Cha
                         const isCurrentVersion = index === 0; // Most recent file is current
                         const version = sortedFiles.length - index; // Calculate version number
                         const isSelected = selectedVersion === version;
+
+                        const authorName = getDisplayName(file.author);
 
                         return (
                             <Box key={file.url}>
@@ -120,7 +122,7 @@ export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: Cha
                                             size="small"
                                         />
                                         <Typography variant="body2" color="text.secondary">
-                                            Submitted by <strong>{file.author}</strong> on {file.submissionDate}
+                                            Submitted by <strong>{authorName}</strong> on {file.submissionDate}
                                         </Typography>
                                     </Box>
                                 </Box>
