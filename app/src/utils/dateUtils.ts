@@ -4,6 +4,34 @@
  */
 
 /**
+ * Creates a date relative to today with specified offset and time
+ * @param daysFromNow - Number of days from today (can be negative for past dates)
+ * @param hour - Hour of the day (0-23), defaults to 9
+ * @param minute - Minute of the hour (0-59), defaults to 0
+ * @returns ISO string representation of the date
+ */
+export function createRelativeDate(daysFromNow: number, hour: number = 9, minute: number = 0): string {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromNow);
+    date.setHours(hour, minute, 0, 0);
+    return date.toISOString();
+}
+
+/**
+ * Creates a date for a specific date and time
+ * @param year - Full year (e.g., 2025)
+ * @param month - Month (1-12)
+ * @param day - Day of month (1-31)
+ * @param hour - Hour (0-23), defaults to 0
+ * @param minute - Minute (0-59), defaults to 0
+ * @returns ISO string representation of the date
+ */
+export function createSpecificDate(year: number, month: number, day: number, hour: number = 0, minute: number = 0): string {
+    const date = new Date(year, month - 1, day, hour, minute, 0, 0);
+    return date.toISOString();
+}
+
+/**
  * Parses date strings in the ThesisFlow format: "2024-04-15 at 11:30 AM"
  * @param dateString - The date string to parse
  * @returns Date object
