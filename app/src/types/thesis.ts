@@ -1,7 +1,3 @@
-import type { FileAttachment, FileRegistryEntry, MediaMetadata } from './file';
-
-// User role types - System-wide roles
-export type SystemUserRole = 'student' | 'editor' | 'adviser' | 'admin';
 
 // Thesis-specific role types - Based on thesis data context  
 export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'unknown';

@@ -1,30 +1,12 @@
-import {
-    Typography,
-    Box,
-    Chip,
-    Card,
-    CardContent,
-    Avatar,
-    Stack,
-    Divider,
-    IconButton,
-} from '@mui/material';
-import {
-    Person,
-    Edit,
-    PictureAsPdf,
-    Description,
-    AttachFile,
-    Visibility,
-} from '@mui/icons-material';
+import { Typography, Box, Chip, Card, CardContent, Stack, Divider, IconButton, } from '@mui/material';
+import { Person, Edit, PictureAsPdf, Description, AttachFile, Visibility, } from '@mui/icons-material';
+import Avatar, { Name } from './Avatar';
 import type { ThesisComment } from '../types/thesis';
 import { parseThesisDate } from '../utils/dateUtils';
 import { getThesisRole, getThesisRoleDisplayText } from '../utils/roleUtils';
-import {
-    getDisplayName,
-    getAttachmentFiles,
-    getDocumentNameByVersion
-} from '../utils/dbUtils'; interface ChapterCommentProps {
+import { getDisplayName, getAttachmentFiles, getDocumentNameByVersion } from '../utils/dbUtils';
+
+interface ChapterCommentProps {
     comments: ThesisComment[];
     chapterId: number;
     groupByVersion?: boolean;
@@ -119,14 +101,17 @@ export function ChapterComment({
                     <CardContent sx={{ p: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                             {!isCurrentUser && (
-                                <Avatar sx={{
-                                    width: 28,
-                                    height: 28,
-                                    mr: 1.5,
-                                    bgcolor: userRole === 'adviser' ? 'primary.main' : 'secondary.main'
-                                }}>
-                                    {userRole === 'adviser' ? <Person fontSize="small" /> : <Edit fontSize="small" />}
-                                </Avatar>
+                                <Avatar
+                                    email={comment.author}
+                                    initials={[Name.FIRST]}
+                                    size="small"
+                                    sx={{
+                                        width: 28,
+                                        height: 28,
+                                        mr: 1.5,
+                                        bgcolor: userRole === 'adviser' ? 'primary.main' : 'secondary.main'
+                                    }}
+                                />
                             )}
                             <Box sx={{ flexGrow: 1, textAlign: isCurrentUser ? 'right' : 'left' }}>
                                 <Typography variant="subtitle2" sx={{ fontSize: '0.875rem' }}>
@@ -137,14 +122,16 @@ export function ChapterComment({
                                 </Typography>
                             </Box>
                             {isCurrentUser && (
-                                <Avatar sx={{
-                                    width: 28,
-                                    height: 28,
-                                    ml: 1.5,
-                                    bgcolor: 'primary.main'
-                                }}>
-                                    <Person fontSize="small" />
-                                </Avatar>
+                                <Avatar
+                                    email={comment.author}
+                                    size="small"
+                                    sx={{
+                                        width: 28,
+                                        height: 28,
+                                        ml: 1.5,
+                                        bgcolor: 'primary.main'
+                                    }}
+                                />
                             )}
                         </Box>
 

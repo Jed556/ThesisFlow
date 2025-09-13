@@ -3,8 +3,9 @@
  * These functions handle data retrieval, formatting, and calculations
  */
 
-import type { FileRegistryEntry } from '../types/thesis';
-import { mockFileRegistry, mockThesisData, mockUserProfiles, type UserProfile } from '../data/mockData';
+import type { FileRegistryEntry } from '../types/file';
+import { mockFileRegistry, mockThesisData, mockUserProfiles } from '../data/mockData';
+import type { UserProfile } from '../types/profile';
 
 /**
  * Get user profile by email
@@ -20,7 +21,25 @@ export function getDisplayName(email: string): string {
     const profile = getProfile(email);
     if (!profile) return email; // Fallback to email if profile not found
 
-    return profile.title ? `${profile.title} ${profile.name}` : profile.name;
+    const parts: string[] = [];
+
+    if (profile.prefix) {
+        parts.push(profile.prefix);
+    }
+
+    parts.push(profile.firstName);
+
+    if (profile.middleName) {
+        parts.push(profile.middleName);
+    }
+
+    parts.push(profile.lastName);
+
+    if (profile.suffix) {
+        parts.push(profile.suffix);
+    }
+
+    return parts.join(' ');
 }
 
 /**
@@ -33,10 +52,8 @@ export function getThesisTeamMembers() {
     const leader = getProfile(mockThesisData.leader);
     if (leader) {
         teamMembers.push({
-            id: leader.id,
-            name: leader.name,
-            email: leader.email,
-            role: 'Leader'
+            ...leader,
+            thesisRole: 'Leader' // Using different property name to avoid conflict
         });
     }
 
@@ -45,10 +62,8 @@ export function getThesisTeamMembers() {
         const member = getProfile(memberEmail);
         if (member) {
             teamMembers.push({
-                id: member.id,
-                name: member.name,
-                email: member.email,
-                role: 'Member'
+                ...member,
+                thesisRole: 'Member' // Using different property name to avoid conflict
             });
         }
     });
@@ -57,10 +72,8 @@ export function getThesisTeamMembers() {
     const adviser = getProfile(mockThesisData.adviser);
     if (adviser) {
         teamMembers.push({
-            id: adviser.id,
-            name: adviser.name,
-            email: adviser.email,
-            role: 'Adviser'
+            ...adviser,
+            thesisRole: 'Adviser' // Using different property name to avoid conflict
         });
     }
 
@@ -68,10 +81,8 @@ export function getThesisTeamMembers() {
     const editor = getProfile(mockThesisData.editor);
     if (editor) {
         teamMembers.push({
-            id: editor.id,
-            name: editor.name,
-            email: editor.email,
-            role: 'Editor'
+            ...editor,
+            thesisRole: 'Editor' // Using different property name to avoid conflict
         });
     }
 
@@ -165,7 +176,10 @@ export function getAllVersions(chapterId: number): FileRegistryEntry[] {
  */
 export function getGroupMember(name: string) {
     const teamMembers = getThesisTeamMembers();
-    return teamMembers.find(member => member.name === name);
+    return teamMembers.find(member => {
+        const displayName = getDisplayName(member.email);
+        return displayName === name;
+    });
 }
 
 /**

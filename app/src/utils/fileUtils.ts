@@ -339,7 +339,7 @@ function calculateThumbnailSize(originalWidth: number, originalHeight: number, m
 /**
  * Prepare file for database upload with all necessary metadata
  */
-export async function prepareFileForUpload(file: File, submittedBy: string, submittedByEmail: string): Promise<{
+export async function prepareFileForUpload(file: File, author: string): Promise<{
     hash: string;
     base64Data: string;
     fileInfo: FileAttachment;
@@ -430,8 +430,7 @@ export function createUploadProgressTracker(): {
  */
 export async function batchUploadFiles(
     files: File[],
-    submittedBy: string,
-    submittedByEmail: string,
+    author: string,
     onProgress?: (progress: FileUploadProgress[]) => void
 ): Promise<{ hash: string; base64Data: string; fileInfo: FileAttachment }[]> {
     const tracker = createUploadProgressTracker();
@@ -449,7 +448,7 @@ export async function batchUploadFiles(
             tracker.updateProgress(file.name, 25);
             onProgress?.(tracker.getProgress());
 
-            const result = await prepareFileForUpload(file, submittedBy, submittedByEmail);
+            const result = await prepareFileForUpload(file, author);
 
             tracker.updateProgress(file.name, 75);
             onProgress?.(tracker.getProgress());

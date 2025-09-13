@@ -62,8 +62,7 @@ export interface FileAttachment {
 
 // Extended file attachment with submission metadata
 export interface FileRegistryEntry extends FileAttachment {
-    submittedBy: string;
-    submittedByEmail: string;
+    author: string; // email
     submissionDate: string;
     category: 'submission' | 'attachment';
 }
@@ -92,8 +91,7 @@ export interface BatchUploadConfig {
 
 // File upload context interface
 export interface FileUploadContext {
-    submittedBy: string;
-    submittedByEmail: string;
+    author: string; // email
     category: 'submission' | 'attachment';
     chapterId?: number;
     commentId?: string;

@@ -1,58 +1,18 @@
 import * as React from 'react';
 import {
-    Box,
-    Card,
-    CardContent,
-    Typography,
-    Chip,
-    Grid,
-    Button,
-    IconButton,
-    Tabs,
-    Tab,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    TextField,
-    Stack,
-    Avatar,
-    Tooltip,
-    Badge,
-    Divider,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemAvatar
+    Box, Card, CardContent, Typography, Chip, Grid, Button, IconButton, Tabs, Tab,
+    FormControl, InputLabel, Select, MenuItem, TextField, Stack, Tooltip, Badge, Divider, List,
+    ListItem, ListItemText, ListItemAvatar
 } from '@mui/material';
 import {
-    CalendarToday,
-    Event,
-    Schedule,
-    FilterList,
-    ViewModule,
-    ViewList,
-    ViewWeek,
-    AccessTime,
-    LocationOn,
-    People,
-    PriorityHigh,
-    Visibility,
-    NotificationImportant,
-    CheckCircle,
-    Cancel,
-    Warning,
-    School,
-    Book,
-    Slideshow,
-    Assignment,
-    Groups,
-    BeachAccess
+    CalendarToday, Event, Schedule, FilterList, ViewModule, ViewList, ViewWeek, AccessTime, LocationOn, People,
+    PriorityHigh, Visibility, NotificationImportant, CheckCircle, Cancel, Warning, School, Book, Slideshow, Assignment,
+    Groups, BeachAccess
 } from '@mui/icons-material';
+import Avatar, { Name } from '../components/Avatar';
 import type { NavigationItem } from '../types/navigation';
 import type { ScheduleEvent, EventType, EventPriority, EventStatus, CalendarView } from '../types/schedule';
 import { mockScheduleEvents, mockAcademicCalendar } from '../data/mockScheduleData';
-import AvatarComponent from '../components/Avatar';
 
 export const metadata: NavigationItem = {
     title: 'Schedules',
@@ -249,8 +209,9 @@ function EventCard({ event }: { event: ScheduleEvent }) {
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                             {event.participants.slice(0, 5).map((participant, index) => (
                                 <Tooltip key={index} title={`${participant.name} (${participant.role})`}>
-                                    <AvatarComponent
+                                    <Avatar
                                         name={participant.name}
+                                        initials={[Name.FIRST]}
                                         size="medium"
                                         sx={{
                                             ...(participant.status === 'declined' && { opacity: 0.5 })
@@ -259,9 +220,11 @@ function EventCard({ event }: { event: ScheduleEvent }) {
                                 </Tooltip>
                             ))}
                             {event.participants.length > 5 && (
-                                <Avatar sx={{ width: 32, height: 32, fontSize: '0.75rem' }}>
-                                    +{event.participants.length - 5}
-                                </Avatar>
+                                <Avatar
+                                    name={`+${event.participants.length - 5}`}
+                                    size="medium"
+                                    sx={{ fontSize: '0.75rem' }}
+                                />
                             )}
                         </Box>
                     </Box>
@@ -298,9 +261,11 @@ function UpcomingEvents({ events }: { events: ScheduleEvent[] }) {
                                 }
                             >
                                 <ListItemAvatar>
-                                    <Avatar sx={{ bgcolor: event.color || priorityColors[event.priority] }}>
-                                        {eventTypeIcons[event.type]}
-                                    </Avatar>
+                                    <Avatar
+                                        name={event.type}
+                                        size="medium"
+                                        sx={{ bgcolor: event.color || priorityColors[event.priority] }}
+                                    />
                                 </ListItemAvatar>
                                 <ListItemText
                                     primary={event.title}

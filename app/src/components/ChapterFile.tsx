@@ -1,24 +1,8 @@
-import {
-    Typography,
-    Box,
-    Chip,
-    Card,
-    CardContent,
-    IconButton,
-    Avatar,
-    Alert,
-    Stack,
-} from '@mui/material';
-import {
-    PictureAsPdf,
-    Description,
-    Delete,
-    Download,
-} from '@mui/icons-material';
+import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, } from '@mui/material';
+import { PictureAsPdf, Description, Delete, Download, } from '@mui/icons-material';
+import Avatar, { Name } from './Avatar';
 import type { FileType } from '../types/file';
-import {
-    getChapterSubmissions,
-} from '../utils/dbUtils';
+import { getChapterSubmissions } from '../utils/dbUtils';
 
 interface ChapterFileProps {
     chapterId: number;
@@ -130,11 +114,13 @@ export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: Cha
 
                                     {/* Submission info */}
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
-                                            {file.submittedBy.charAt(0)}
-                                        </Avatar>
+                                        <Avatar
+                                            email={file.author}
+                                            initials={[Name.FIRST]}
+                                            size="small"
+                                        />
                                         <Typography variant="body2" color="text.secondary">
-                                            Submitted by <strong>{file.submittedBy}</strong> on {file.submissionDate}
+                                            Submitted by <strong>{file.author}</strong> on {file.submissionDate}
                                         </Typography>
                                     </Box>
                                 </Box>

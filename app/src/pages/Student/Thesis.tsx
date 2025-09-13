@@ -1,9 +1,10 @@
-import { Typography, Paper, Box, Chip, Card, CardContent, LinearProgress, Avatar, Stack } from '@mui/material';
+import { Typography, Paper, Box, Chip, Card, CardContent, LinearProgress, Stack } from '@mui/material';
 import { School } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisChapter } from '../../types/thesis';
 import { mockThesisData } from '../../data/mockData';
-import { getThesisTeamMembers } from '../../utils/dbUtils';
+import { getThesisTeamMembers, getDisplayName } from '../../utils/dbUtils';
+import Avatar, { Name } from '../../components/Avatar';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -35,12 +36,14 @@ export default function ThesisPage() {
                     </Typography>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                         {teamMembers.map((member) => (
-                            <Chip
+                            <Avatar
                                 key={member.id}
-                                avatar={<Avatar sx={{ width: 24, height: 24 }}>{member.name.charAt(0)}</Avatar>}
-                                label={`${member.name} (${member.role})`}
-                                variant="outlined"
+                                email={member.email}
+                                initials={[Name.FIRST]}
+                                mode="chip"
+                                label={`${getDisplayName(member.email)} (${member.thesisRole})`}
                                 size="small"
+                                chipProps={{ variant: 'outlined', size: 'small' }}
                             />
                         ))}
                     </Stack>
