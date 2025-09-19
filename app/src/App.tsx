@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ThemeProvider } from '@mui/material/styles';
-import GlobalStyles from '@mui/material/GlobalStyles';
+import CssBaseline from '@mui/material/CssBaseline';
 import { Outlet } from 'react-router';
 import type { User } from 'firebase/auth';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
@@ -79,24 +79,11 @@ export default function App() {
             branding={BRANDING}
             session={session}
             authentication={AUTHENTICATION}
+            theme={theme}
         >
+            <CssBaseline />
             <SessionContext.Provider value={sessionContextValue}>
-                <ThemeProvider theme={theme}>
-                    <GlobalStyles
-                        styles={{
-                            html: { height: '100%' },
-                            body: { height: '100%', overflow: 'hidden' },
-                            '#root': { height: '100%' },
-                            '.MuiTypography-root': {
-                                cursor: 'default',
-                            },
-                            '.MuiAccordionSummary-root, .MuiAccordionSummary-root *': {
-                                cursor: 'pointer',
-                            },
-                        }}
-                    />
-                    <Outlet />
-                </ThemeProvider>
+                <Outlet />
             </SessionContext.Provider>
         </ReactRouterAppProvider>
     );

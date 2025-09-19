@@ -4,7 +4,6 @@ import {
     Box,
     Card,
     CardContent,
-    Tooltip,
 } from '@mui/material';
 import type { ThesisComment } from '../types/thesis';
 import { ChapterFile } from './ChapterFile';
@@ -52,24 +51,18 @@ export function ChapterItem({ chapterId, comments }: ChapterItemProps) {
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, gap: 3 }}>
                 {/* File Versions Column */}
                 <Box sx={{ flex: 1 }}>
-                    <Tooltip
-                        title={!selectedVersion ? "Click on a document version to view its specific feedback. Click again to deselect and view all feedback." : ""}
-                        placement="top"
-                        arrow
-                    >
-                        <Card variant="outlined">
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                                    Document Versions
-                                </Typography>
-                                <ChapterFile
-                                    chapterId={chapterId}
-                                    onVersionSelect={handleVersionSelect}
-                                    selectedVersion={selectedVersion}
-                                />
-                            </CardContent>
-                        </Card>
-                    </Tooltip>
+                    <Card variant="outlined">
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                                Document Versions
+                            </Typography>
+                            <ChapterFile
+                                chapterId={chapterId}
+                                onVersionSelect={handleVersionSelect}
+                                selectedVersion={selectedVersion}
+                            />
+                        </CardContent>
+                    </Card>
                 </Box>
 
                 {/* Comments Column */}

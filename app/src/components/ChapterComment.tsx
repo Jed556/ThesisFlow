@@ -95,7 +95,7 @@ export function ChapterComment({
                         maxWidth: '80%',
                         ml: isCurrentUser ? 2 : 1,
                         mr: isCurrentUser ? 1 : 2,
-                        bgcolor: isCurrentUser ? 'primary.50' : 'background.paper'
+                        bgcolor: isCurrentUser ? 'primary' : 'background.paper'
                     }}
                 >
                     <CardContent sx={{ p: 2 }}>

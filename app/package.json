@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "1.8.4",
+    "version": "1.9.5",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -16,7 +16,8 @@
         "react": "^19.0.0",
         "react-day-picker": "^9.10.0",
         "react-dom": "^19.0.0",
-        "react-router": "^7"
+        "react-router": "^7",
+        "react-router-dom": "^7.9.1"
     },
     "devDependencies": {
         "@types/react": "^19.0.0",

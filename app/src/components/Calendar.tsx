@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, Typography, List, ListItem, ListItemText, Chip } from '@mui/material';
+import { Box, Typography, List, ListItem, ListItemText } from '@mui/material';
 import type { ScheduleEvent } from '../types/schedule';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
@@ -16,10 +16,10 @@ function DayPickerWrapper({ selected, onSelect, modifiers }: { selected?: Date; 
             const key = date.toDateString();
             const has = eventDaysSet.has(key);
             return (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div>{date.getDate()}</div>
-                    {has && <div style={{ width: 6, height: 6, borderRadius: 6, background: '#1976d2', marginTop: 4 }} />}
-                </div>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Box component="span">{date.getDate()}</Box>
+                    {has && <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'primary.main', mt: '4px' }} />}
+                </Box>
             );
         }
     };
@@ -85,7 +85,7 @@ export default function Calendar({ events, selected, onSelect, onEventClick }: C
                             {todaysEvents.map(ev => (
                                 <ListItem key={ev.id} component="div" sx={{ cursor: 'pointer' }} onClick={() => onEventClick?.(ev)}>
                                     <ListItemText primary={ev.title} secondary={new Date(ev.startDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} />
-                                    <div style={{ width: 12, height: 12, borderRadius: 6, background: ev.color || '#bdbdbd', marginLeft: 8 }} />
+                                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: ev.color || 'grey.400', ml: 1 }} />
                                 </ListItem>
                             ))}
                         </List>

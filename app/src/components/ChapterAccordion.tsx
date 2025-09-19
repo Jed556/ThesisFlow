@@ -75,54 +75,54 @@ export function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionPro
     const hasSubmissions = getChapterSubmissions(chapter.id).length > 0;
 
     return (
-        <Accordion sx={{ my: 2, borderRadius: 2, '&:before, &:after': { display: 'none' }, boxShadow: 3 }}>
-            <AccordionSummary expandIcon={<ExpandMore />} sx={{ position: 'sticky', top: 0, zIndex: 1, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
-                    <Box sx={{ mr: 2 }}>
-                        {getStatusIcon(chapter.status)}
-                    </Box>
-                    <Box sx={{ flexGrow: 1, cursor: 'pointer' }}>
-                        <Typography variant="h6">
-                            Chapter {chapter.id}: {chapter.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {chapter.submissionDate ? `Submitted: ${chapter.submissionDate}` : 'Not yet submitted'}
-                            {chapter.lastModified && ` • Last modified: ${chapter.lastModified}`}
-                        </Typography>
-                    </Box>
-                    <Chip
-                        sx={{ m: 2 }}
-                        label={getStatusDisplayText(chapter.status)}
-                        color={getStatusColor(chapter.status) as any}
-                        size="small"
-                    />
-                </Box>
-            </AccordionSummary>
-
-            <AccordionDetails>
-                <Box>
-                    {/* Upload Section */}
-                    <Box sx={{ mb: 3 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-                                <CloudUpload sx={{ mr: 1 }} />
-                                Document Upload
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                size="small"
-                                startIcon={<Upload />}
-                                onClick={() => onUploadClick(chapter.id, chapter.title)}
-                                disabled={chapter.status === 'approved'}
-                            >
-                                {hasSubmissions ? 'Replace Document' : 'Upload Document'}
-                            </Button>
+            <Accordion>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
+                        <Box sx={{ mr: 2 }}>
+                            {getStatusIcon(chapter.status)}
                         </Box>
-
-                        <ChapterItem chapterId={chapter.id} comments={chapter.comments} />
+                        <Box sx={{ flexGrow: 1, cursor: 'pointer' }}>
+                            <Typography variant="h6">
+                                Chapter {chapter.id}: {chapter.title}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {chapter.submissionDate ? `Submitted: ${chapter.submissionDate}` : 'Not yet submitted'}
+                                {chapter.lastModified && ` • Last modified: ${chapter.lastModified}`}
+                            </Typography>
+                        </Box>
+                        <Chip
+                            sx={{ m: 2 }}
+                            label={getStatusDisplayText(chapter.status)}
+                            color={getStatusColor(chapter.status) as any}
+                            size="small"
+                        />
                     </Box>
-                </Box>
-            </AccordionDetails>
-        </Accordion>
+                </AccordionSummary>
+
+                <AccordionDetails>
+                    <Box>
+                        {/* Upload Section */}
+                        <Box sx={{ mb: 3 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <CloudUpload sx={{ mr: 1 }} />
+                                    Document Upload
+                                </Typography>
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<Upload />}
+                                    onClick={() => onUploadClick(chapter.id, chapter.title)}
+                                    disabled={chapter.status === 'approved'}
+                                >
+                                    {hasSubmissions ? 'Replace Document' : 'Upload Document'}
+                                </Button>
+                            </Box>
+
+                            <ChapterItem chapterId={chapter.id} comments={chapter.comments} />
+                        </Box>
+                    </Box>
+                </AccordionDetails>
+            </Accordion>
     );
 }
