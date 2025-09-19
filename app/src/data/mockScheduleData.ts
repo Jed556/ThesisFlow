@@ -65,7 +65,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "John's Thesis Defense",
         description: "Final thesis defense presentation for 'Machine Learning Applications in Educational Technology'",
         type: "defense",
-        priority: "critical",
         status: "confirmed",
         visibility: "department",
         startDate: "2025-09-27T14:00:00.000Z", // 2 weeks from now at 2 PM
@@ -106,7 +105,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "Weekly Thesis Progress Meeting",
         description: "Regular check-in to discuss research progress, challenges, and next steps",
         type: "meeting",
-        priority: "high",
         status: "scheduled",
         visibility: "group",
         startDate: "2025-09-15T10:00:00.000Z", // 2 days from now at 10 AM
@@ -150,7 +148,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "Chapter 4 Submission Deadline",
         description: "Final deadline for submitting Chapter 4: Results and Analysis",
         type: "deadline",
-        priority: "high",
         status: "scheduled",
         visibility: "group",
         startDate: "2025-09-20T23:59:00.000Z", // 1 week from now at 11:59 PM
@@ -183,7 +180,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "Research Methodology Workshop",
         description: "Advanced workshop on quantitative research methods and statistical analysis",
         type: "lecture",
-        priority: "medium",
         status: "confirmed",
         visibility: "public",
         startDate: "2025-09-18T09:00:00.000Z", // 5 days from now at 9 AM
@@ -221,7 +217,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "Statistical Analysis Consultation",
         description: "One-on-one consultation for data analysis and interpretation of research results",
         type: "consultation",
-        priority: "medium",
         status: "scheduled",
         visibility: "private",
         startDate: "2025-09-14T14:00:00.000Z", // Tomorrow at 2 PM
@@ -257,7 +252,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "Literature Review Submission",
         description: "Final submission of Chapter 2: Literature Review",
         type: "submission",
-        priority: "high",
         status: "completed",
         visibility: "group",
         startDate: "2025-09-06T23:59:00.000Z", // 1 week ago
@@ -285,7 +279,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "Research Progress Presentation",
         description: "Mid-semester presentation of research progress to department committee",
         type: "presentation",
-        priority: "high",
         status: "confirmed",
         visibility: "department",
         startDate: "2025-10-04T13:00:00.000Z", // 3 weeks from now at 1 PM
@@ -324,7 +317,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "Spring Break",
         description: "University spring break - no classes or meetings scheduled",
         type: "holiday",
-        priority: "low",
         status: "scheduled",
         visibility: "public",
         startDate: "2025-10-13T00:00:00.000Z", // 30 days from now
@@ -346,7 +338,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "AI Research Group Meeting",
         description: "Monthly meeting of the AI research group to share progress and collaborate",
         type: "meeting",
-        priority: "medium",
         status: "scheduled",
         visibility: "group",
         startDate: "2025-09-23T15:00:00.000Z", // 10 days from now at 3 PM
@@ -390,7 +381,6 @@ export const mockScheduleEvents: ScheduleEvent[] = [
         title: "IRB Ethics Review Submission",
         description: "Deadline for submitting Institutional Review Board ethics review documentation",
         type: "deadline",
-        priority: "critical",
         status: "scheduled",
         visibility: "group",
         startDate: "2025-09-16T17:00:00.000Z", // 3 days from now at 5 PM
@@ -401,7 +391,7 @@ export const mockScheduleEvents: ScheduleEvent[] = [
             commonParticipants.johnDoe,
             commonParticipants.janeSmith
         ],
-        tags: ["deadline", "ethics", "irb", "review", "critical"],
+        tags: ["ethics", "irb", "review"],
         color: "#e91e63", // Pink for critical deadlines
         reminders: [
             { type: "email", timing: 2880, message: "IRB submission due in 2 days" }, // 2 days
@@ -428,7 +418,6 @@ export const mockAcademicCalendar: AcademicCalendar = {
             title: "Labor Day",
             description: "Federal holiday - university closed",
             type: "holiday",
-            priority: "low",
             status: "scheduled",
             visibility: "public",
             startDate: "2025-09-01T00:00:00.000Z",
@@ -448,7 +437,6 @@ export const mockAcademicCalendar: AcademicCalendar = {
             title: "Thanksgiving Break",
             description: "Thanksgiving holiday - university closed",
             type: "holiday",
-            priority: "low",
             status: "scheduled",
             visibility: "public",
             startDate: "2025-11-28T00:00:00.000Z",
@@ -468,7 +456,6 @@ export const mockAcademicCalendar: AcademicCalendar = {
             title: "Winter Break",
             description: "Winter holiday break - university closed",
             type: "holiday",
-            priority: "low",
             status: "scheduled",
             visibility: "public",
             startDate: "2025-12-23T00:00:00.000Z",
@@ -488,7 +475,6 @@ export const mockAcademicCalendar: AcademicCalendar = {
             title: "Spring Break",
             description: "Spring break - university closed",
             type: "holiday",
-            priority: "low",
             status: "scheduled",
             visibility: "public",
             startDate: "2026-03-16T00:00:00.000Z",
@@ -510,7 +496,6 @@ export const mockAcademicCalendar: AcademicCalendar = {
             title: "Fall Semester Registration Deadline",
             description: "Last day to register for fall semester courses",
             type: "deadline",
-            priority: "medium",
             status: "scheduled",
             visibility: "public",
             startDate: "2025-08-25T23:59:00.000Z",
@@ -530,7 +515,6 @@ export const mockAcademicCalendar: AcademicCalendar = {
             title: "Thesis Proposal Deadline",
             description: "Deadline for submitting thesis proposals for fall semester",
             type: "deadline",
-            priority: "high",
             status: "scheduled",
             visibility: "department",
             startDate: "2025-10-15T23:59:00.000Z",
@@ -550,7 +534,6 @@ export const mockAcademicCalendar: AcademicCalendar = {
             title: "Spring Semester Registration",
             description: "Registration opens for spring semester courses",
             type: "deadline",
-            priority: "medium",
             status: "scheduled",
             visibility: "public",
             startDate: "2025-11-15T23:59:00.000Z",

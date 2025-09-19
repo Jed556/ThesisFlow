@@ -18,8 +18,6 @@ export type EventType =
     | 'holiday'
     | 'other';
 
-// Event priority levels
-export type EventPriority = 'low' | 'medium' | 'high' | 'critical';
 
 // Event status
 export type EventStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'completed' | 'rescheduled';
@@ -76,7 +74,6 @@ export interface ScheduleEvent {
     title: string;
     description?: string;
     type: EventType;
-    priority: EventPriority;
     status: EventStatus;
     visibility: EventVisibility;
 
@@ -119,7 +116,6 @@ export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year';
 // Filter options for schedule display
 export interface ScheduleFilter {
     eventTypes?: EventType[];
-    priorities?: EventPriority[];
     statuses?: EventStatus[];
     participants?: string[]; // email addresses
     dateRange?: {
@@ -136,7 +132,6 @@ export interface ScheduleStats {
     upcomingEvents: number;
     overdueEvents: number;
     eventsByType: Record<EventType, number>;
-    eventsByPriority: Record<EventPriority, number>;
     eventsByStatus: Record<EventStatus, number>;
 }
 
@@ -159,7 +154,6 @@ export interface EventPayload {
     title: string;
     description?: string;
     type: EventType;
-    priority: EventPriority;
     startDate: string;
     endDate: string;
     isAllDay: boolean;
