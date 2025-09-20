@@ -10,7 +10,8 @@ import SessionContext, { type Session } from './SessionContext';
 import { buildNavigation } from './utils/navBuilder';
 import { getUserRole } from './utils/roleUtils';
 import { navigationGroups } from './config/groups';
-import theme from './theme';
+import { setCurrentAppTheme } from './utils/devUtils';
+import appTheme from './theme';
 
 const BRANDING = {
     title: 'ThesisFlow',
@@ -73,13 +74,15 @@ export default function App() {
         return () => unsubscribe();
     }, []);
 
+    setCurrentAppTheme(appTheme); // Store theme for dev utils
+
     return (
         <ReactRouterAppProvider
             navigation={navigation}
             branding={BRANDING}
             session={session}
             authentication={AUTHENTICATION}
-            theme={theme}
+            theme={appTheme}
         >
             <CssBaseline />
             <SessionContext.Provider value={sessionContextValue}>
