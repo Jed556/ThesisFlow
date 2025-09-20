@@ -3,6 +3,7 @@ import { buildRoutes } from './navBuilder';
 // Store the current routes for dev access
 let currentRoutes: any[] = [];
 let currentRouter: any = null;
+let currentAppTheme: any = null;
 
 /**
  * Store the current routes for development access
@@ -16,6 +17,13 @@ export function setCurrentRoutes(routes: any[]) {
  */
 export function setCurrentRouter(router: any) {
     currentRouter = router;
+}
+
+/**
+ * Store the current AppTheme for development access
+ */
+export function setCurrentAppTheme(theme: any) {
+    currentAppTheme = theme;
 }
 
 /**
@@ -85,6 +93,17 @@ export function getCurrentRouter() {
     return currentRouter;
 }
 
+/**
+ * Get current AppTheme
+ */
+export function getCurrentAppTheme() {
+    if (!currentAppTheme) {
+        return console.warn('No AppTheme instance cached. It may not have been initialized yet.');
+    }
+    console.log('Current AppTheme:', currentAppTheme);
+    return currentAppTheme;
+}
+
 
 /**
  * Make dev utilities globally accessible in the browser console
@@ -97,6 +116,7 @@ export function attachDevUtilsToWindow() {
         getEnvironmentInfo,
         getCurrentRoutes,
         getCurrentRouter,
+        getCurrentAppTheme,
     };
 
     const devOnlyUtils = isDevelopmentEnvironment() ? {
