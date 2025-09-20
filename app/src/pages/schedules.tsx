@@ -348,11 +348,7 @@ export default function Schedules() {
                                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
                                     <Box sx={{ width: { xs: '100%', md: '33%' } }}>
                                         <Calendar events={mockScheduleEvents} selected={selectedDate} onSelect={(d) => setSelectedDate(d)} onEventClick={(ev) => setSelectedDate(new Date(ev.startDate))} />
-                                        <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                                            <Button size="small" variant={calendarView === 'month' ? 'contained' : 'outlined'} onClick={() => setCalendarView('month')}>Month</Button>
-                                            <Button size="small" variant={calendarView === 'week' ? 'contained' : 'outlined'} onClick={() => setCalendarView('week')}>Week</Button>
-                                            <Button size="small" variant={calendarView === 'day' ? 'contained' : 'outlined'} onClick={() => setCalendarView('day')}>Day</Button>
-                                        </Box>
+                                        {/* internal view buttons removed to avoid duplication with header controls */}
                                     </Box>
                                     <Box sx={{ width: { xs: '100%', md: '67%' } }}>
                                         <Typography variant="subtitle1" gutterBottom>

@@ -4,6 +4,68 @@
  */
 
 /**
+ * Returns the start of the day (midnight) for a given date
+ * @param date - Date object
+ * @returns - Timestamp of the start of the day
+ */
+export function dayTime(date: Date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+/**
+ * Checks if a date is within a specified range
+ * @param date - Date to check
+ * @param range - Date range with optional from/to dates
+ * @returns - True if the date is within the range, false otherwise
+ */
+export function isInRange(date: Date, range: { from?: Date; to?: Date }) {
+    if (!range.from || !range.to) return false;
+    const a = dayTime(range.from);
+    const b = dayTime(range.to);
+    const t = dayTime(date);
+    return t >= Math.min(a, b) && t <= Math.max(a, b);
+}
+
+/**
+ * Checks if two dates are the same day
+ * @param a - First date
+ * @param b - Second date
+ * @returns - True if the dates are the same day, false otherwise
+ */
+export function isSameDay(a?: Date, b?: Date) {
+    if (!a || !b) return false;
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/**
+ * Returns the start of the month for a given date
+ * @param date - Date object
+ * @returns - Date object representing the start of the month
+ */
+export function startOfMonth(date: Date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+/**
+ * Returns the end of the month for a given date
+ * @param date - Date object
+ * @returns - Date object representing the end of the month
+ */
+export function endOfMonth(date: Date) {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+/**
+ * Adds a specified number of days to a date
+ * @param date - Date object
+ * @param days - Number of days to add
+ * @returns - New Date object with the added days
+ */
+export function addDays(date: Date, days: number) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+/**
  * Creates a date relative to today with specified offset and time
  * @param daysFromNow - Number of days from today (can be negative for past dates)
  * @param hour - Hour of the day (0-23), defaults to 9

@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "1.9.5",
+    "version": "1.12.5",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -12,6 +12,7 @@
         "@mui/icons-material": "^7",
         "@mui/material": "^7",
         "@toolpad/core": "^0.14.0",
+        "date-fns": "^4.1.0",
         "firebase": "^11",
         "react": "^19.0.0",
         "react-day-picker": "^9.10.0",

@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Outlet } from 'react-router';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import type { User } from 'firebase/auth';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
 import type { Authentication, Navigation } from '@toolpad/core/AppProvider';
@@ -77,17 +78,19 @@ export default function App() {
     setCurrentAppTheme(appTheme); // Store theme for dev utils
 
     return (
-        <ReactRouterAppProvider
-            navigation={navigation}
-            branding={BRANDING}
-            session={session}
-            authentication={AUTHENTICATION}
-            theme={appTheme}
-        >
-            <CssBaseline />
-            <SessionContext.Provider value={sessionContextValue}>
-                <Outlet />
-            </SessionContext.Provider>
-        </ReactRouterAppProvider>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <ReactRouterAppProvider
+                navigation={navigation}
+                branding={BRANDING}
+                session={session}
+                authentication={AUTHENTICATION}
+                theme={appTheme}
+            >
+                <CssBaseline />
+                <SessionContext.Provider value={sessionContextValue}>
+                    <Outlet />
+                </SessionContext.Provider>
+            </ReactRouterAppProvider>
+        </LocalizationProvider>
     );
 }
