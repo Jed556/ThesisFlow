@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Box, Card, CardContent, Typography, Chip, Stack } from '@mui/material';
 import { AccessTime, LocationOn, Visibility, NotificationImportant, School, Book, Slideshow, Assignment, Groups, Event } from '@mui/icons-material';
-import Avatar, { Name } from './Avatar';
-import { getDisplayName, getProfile } from '../utils/dbUtils';
-import type { ScheduleEvent, EventType, EventStatus } from '../types/schedule';
+import Avatar, { Name } from '../Avatar/Avatar';
+import { getDisplayName, getProfile } from '../../utils/dbUtils';
+import type { ScheduleEvent, EventType, EventStatus } from '../../types/schedule';
 
 const defaultEventColor = '#bdbdbd';
 const statusColors: Record<EventStatus, string> = {

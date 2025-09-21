@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Typography, Box, Card, CardContent, } from '@mui/material';
 import type { ThesisComment } from '../../types/thesis';
-import { ChapterFile } from './ChapterFile';
-import { ChapterComment } from './ChapterComment';
-import { SortButton } from '../SortButton';
+import ChapterFile from './ChapterFile';
+import ChapterComment from './ChapterComment';
+import SortButton from '../SortButton/SortButton';
 
 /**
  * Props for the ChapterItem component
@@ -24,7 +24,7 @@ interface ChapterItemProps {
  * @param chapterId - ID of the chapter
  * @param comments - Array of comments related to the chapter
  */
-export function ChapterItem({ chapterId, comments }: ChapterItemProps) {
+export default function ChapterItem({ chapterId, comments }: ChapterItemProps) {
     const [selectedVersion, setSelectedVersion] = React.useState<number | undefined>();
     const [commentSortOrder, setCommentSortOrder] = React.useState<'asc' | 'desc'>('asc'); // Default: latest at bottom
 

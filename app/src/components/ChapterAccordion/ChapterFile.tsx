@@ -1,6 +1,6 @@
 import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, Tooltip } from '@mui/material';
 import { PictureAsPdf, Description, Delete, Download, } from '@mui/icons-material';
-import Avatar, { Name } from '../Avatar';
+import Avatar, { Name } from '../Avatar/Avatar';
 import type { FileType } from '../../types/file';
 import { getChapterSubmissions, getDisplayName } from '../../utils/dbUtils';
 
@@ -46,7 +46,7 @@ const getFileIcon = (fileType: FileType) => {
  * @param onVersionSelect - Optional callback when a version is selected
  * @param selectedVersion - Currently selected version number
  */
-export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: ChapterFileProps) {
+export default function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: ChapterFileProps) {
     // Get all submission files for this chapter
     const submissionFiles = getChapterSubmissions(chapterId);
 

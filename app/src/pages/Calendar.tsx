@@ -10,9 +10,9 @@ import {
     Groups, BeachAccess
 } from '@mui/icons-material';
 import { getDisplayName, getProfile } from '../utils/dbUtils';
-import Avatar, { Name } from '../components/Avatar';
-import EventCard from '../components/EventCard';
-import Calendar from '../components/Calendar';
+import { Avatar, Name } from '../components';
+import { EventCard } from '../components';
+import { Calendar } from '../components';
 import type { NavigationItem } from '../types/navigation';
 import type { ScheduleEvent, EventType, EventStatus, CalendarView } from '../types/schedule';
 import { mockScheduleEvents, mockAcademicCalendar } from '../data/mockScheduleData';

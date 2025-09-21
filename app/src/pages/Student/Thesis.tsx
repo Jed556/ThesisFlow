@@ -4,7 +4,7 @@ import type { NavigationItem } from '../../types/navigation';
 import type { ThesisChapter } from '../../types/thesis';
 import { mockThesisData } from '../../data/mockData';
 import { getThesisTeamMembers, getDisplayName } from '../../utils/dbUtils';
-import Avatar, { Name } from '../../components/Avatar';
+import Avatar, { Name } from '../../components/Avatar/Avatar';
 
 export const metadata: NavigationItem = {
     group: 'thesis',

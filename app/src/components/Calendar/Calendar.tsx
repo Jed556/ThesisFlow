@@ -2,8 +2,8 @@ import * as React from 'react';
 import { Box, IconButton, Button, ToggleButton, ToggleButtonGroup, Typography, Paper } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
-import type { ScheduleEvent } from '../types/schedule';
-import { isSameDay, isInRange, startOfMonth, endOfMonth, addDays } from '../utils/dateUtils';
+import type { ScheduleEvent } from '../../types/schedule';
+import { isSameDay, isInRange, startOfMonth, endOfMonth, addDays } from '../../utils/dateUtils';
 
 /**
  * Props for the Calendar component

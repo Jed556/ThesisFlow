@@ -2,7 +2,7 @@ import { Typography, Box, Chip, Accordion, AccordionSummary, AccordionDetails, B
 import { ExpandMore, CheckCircle, Pending, Cancel, Schedule, Upload, CloudUpload, } from '@mui/icons-material';
 import type { StatusColor, ThesisChapter } from '../../types/thesis';
 import { getChapterSubmissions } from '../../utils/dbUtils';
-import { ChapterItem } from '../ChapterItem';
+import  ChapterItem  from './ChapterItem';
 
 /**
  * Props for the ChapterAccordion component
@@ -85,7 +85,7 @@ const getStatusDisplayText = (status: string): string => {
  * @param chapter - Chapter object
  * @param onUploadClick - Callback function for upload button click
  */
-export function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
+export default function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
     // Check if chapter has any submissions
     const hasSubmissions = getChapterSubmissions(chapter.id).length > 0;
 

@@ -1,24 +1,9 @@
 import { useState } from 'react';
-import {
-    Typography,
-    Box,
-    Button,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Alert,
-} from '@mui/material';
-import {
-    Article,
-    Upload,
-    CloudUpload,
-} from '@mui/icons-material';
+import { Typography, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Alert } from '@mui/material';
+import { Article, Upload, CloudUpload } from '@mui/icons-material';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisChapter } from '../../../types/thesis';
-import {
-    mockThesisData,
-} from '../../../data/mockData';
+import { mockThesisData } from '../../../data/mockData';
 import { ChapterAccordion } from '../../../components';
 export const metadata: NavigationItem = {
     group: 'thesis',

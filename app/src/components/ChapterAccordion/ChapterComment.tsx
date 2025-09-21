@@ -1,6 +1,6 @@
 import { Typography, Box, Chip, Card, CardContent, Stack, Divider, IconButton, } from '@mui/material';
 import { Person, Edit, PictureAsPdf, Description, AttachFile, Visibility, } from '@mui/icons-material';
-import Avatar, { Name } from '../Avatar';
+import Avatar, { Name } from '../Avatar/Avatar';
 import type { ThesisComment } from '../../types/thesis';
 import { parseThesisDate } from '../../utils/dateUtils';
 import { getThesisRole, getThesisRoleDisplayText } from '../../utils/roleUtils';
@@ -91,7 +91,7 @@ const getAttachmentIcon = (fileType: string) => {
  * @param currentUserEmail - Email of the current user
  * @param showVersionDividers - Whether to show dividers between versions
  */
-export function ChapterComment({ comments, chapterId, groupByVersion = false, versionSort = 'asc', versionSelected = -1,
+export default function ChapterComment({ comments, chapterId, groupByVersion = false, versionSort = 'asc', versionSelected = -1,
     commentSort = 'asc', onVersionSelect, currentUserEmail, showVersionDividers = true }: ChapterCommentProps) {
 
     if (comments.length === 0) {

@@ -65,7 +65,7 @@ interface SortButtonProps {
  * @param size - Size of the button
  * @param variant - Button variant
  */
-export function SortButton({
+export default function SortButton({
     sortOrder,
     onToggle,
     showIcon = true,
