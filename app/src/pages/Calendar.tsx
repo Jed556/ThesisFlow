@@ -18,8 +18,8 @@ import type { ScheduleEvent, EventType, EventStatus, CalendarView } from '../typ
 import { mockScheduleEvents, mockAcademicCalendar } from '../data/mockScheduleData';
 
 export const metadata: NavigationItem = {
-    title: 'Schedules',
-    segment: 'schedules',
+    title: 'Calendar',
+    segment: 'calendar',
     icon: <CalendarToday />,
     group: 'main',
     index: 2,
@@ -116,9 +116,9 @@ function UpcomingEvents({ events }: { events: ScheduleEvent[] }) {
 }
 
 /**
- * Schedules page with calendar and list views, filtering, and upcoming events
+ * Calendar page for viewing events
  */
-export default function Schedules() {
+export default function CalendarPage() {
     const [tabValue, setTabValue] = React.useState(0);
     const [calendarView, setCalendarView] = React.useState<CalendarView>('month');
     const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(new Date());
