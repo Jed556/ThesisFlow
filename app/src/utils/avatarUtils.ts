@@ -1,4 +1,5 @@
 import type { UserProfile } from '../types/profile';
+import { getProfile } from './dbUtils';
 
 /**
  * Utility functions for avatar generation and user name handling
@@ -57,6 +58,8 @@ export const getInitialsFromFullName = (fullName: string): string => {
  * Generates a full display name from UserProfile components
  * @param profile - UserProfile object
  * @returns Formatted full name with prefix and suffix if present
+ * 
+ * @internal
  */
 export const getDisplayName = (profile: UserProfile): string => {
     const parts: string[] = [];
@@ -82,10 +85,11 @@ export const getDisplayName = (profile: UserProfile): string => {
 
 /**
  * Helper function to find a user profile by email
- * @param profiles - Array of UserProfile objects
  * @param email - Email address to search for
  * @returns UserProfile object or null if not found
+ * 
+ * @internal
  */
-export const findProfileByEmail = (profiles: UserProfile[], email: string): UserProfile | null => {
-    return profiles.find(profile => profile.email === email) || null;
+export const findProfileByEmail = (email: string): UserProfile | null => {
+    return getProfile(email) || null;
 };

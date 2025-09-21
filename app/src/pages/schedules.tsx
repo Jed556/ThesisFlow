@@ -9,6 +9,7 @@ import {
     PriorityHigh, Visibility, NotificationImportant, CheckCircle, Cancel, Warning, School, Book, Slideshow, Assignment,
     Groups, BeachAccess
 } from '@mui/icons-material';
+import { getDisplayName, getProfile } from '../utils/dbUtils';
 import Avatar, { Name } from '../components/Avatar';
 import Calendar from '../components/Calendar';
 import type { NavigationItem } from '../types/navigation';
@@ -184,10 +185,10 @@ function EventCard({ event }: { event: ScheduleEvent }) {
                             {event.participants.slice(0, 5).map((participant, index) => (
                                 <Avatar
                                     key={index}
-                                    name={participant.name}
+                                    profile={getProfile(participant.email)}
                                     initials={[Name.FIRST]}
                                     size="medium"
-                                    tooltipText={`${participant.name} (${participant.role})`}
+                                    tooltipText={`${getDisplayName(participant.email)} (${participant.role})`}
                                     sx={{
                                         ...(participant.status === 'declined' && { opacity: 0.5 })
                                     }}

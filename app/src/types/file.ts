@@ -68,17 +68,10 @@ export interface FileAttachment {
     mimeType?: string; // e.g., 'image/jpeg', 'video/mp4', 'audio/wav'
     thumbnail?: string; // URL for thumbnail/preview (for images/videos)
     duration?: string; // For audio/video files (e.g., "3:45")
-    uploadDate?: string;
+    uploadDate: string;
     metadata?: MediaMetadata; // Additional metadata for media files
-}
-
-/**
- * Extended file attachment with submission metadata
- */
-export interface FileRegistryEntry extends FileAttachment {
     author: string; // email
-    submissionDate: string;
-    category: 'submission' | 'attachment';
+    category?: 'submission' | 'attachment';
 }
 
 /**

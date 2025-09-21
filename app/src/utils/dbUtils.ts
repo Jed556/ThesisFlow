@@ -3,9 +3,10 @@
  * These functions handle data retrieval, formatting, and calculations
  */
 
-import type { FileRegistryEntry } from '../types/file';
+import type { FileAttachment } from '../types/file';
 import { mockFileRegistry, mockThesisData, mockUserProfiles } from '../data/mockData';
 import type { UserProfile } from '../types/profile';
+import { parseThesisDate } from './dateUtils';
 
 /**
  * Get user profile by email
@@ -122,14 +123,14 @@ export function getVersionFromHash(chapterId: number, hash: string): number {
 /**
  * Get file by hash from the registry
  */
-export function getFileByHash(hash: string): FileRegistryEntry | undefined {
+export function getFileByHash(hash: string): FileAttachment | undefined {
     return mockFileRegistry[hash];
 }
 
 /**
  * Get all submission files for a specific chapter
  */
-export function getChapterSubmissions(chapterId: number): FileRegistryEntry[] {
+export function getChapterSubmissions(chapterId: number): FileAttachment[] {
     const chapter = mockThesisData.chapters.find(ch => ch.id === chapterId);
     if (!chapter) return [];
 
@@ -139,36 +140,36 @@ export function getChapterSubmissions(chapterId: number): FileRegistryEntry[] {
 /**
  * Get attachment files by hash array
  */
-export function getAttachmentFiles(hashes: string[]): FileRegistryEntry[] {
+export function getAttachmentFiles(hashes: string[]): FileAttachment[] {
     return hashes.map(hash => mockFileRegistry[hash]).filter(Boolean);
 }
 
 /**
  * Get version history for a specific chapter
  */
-export function getVersionHistory(chapterId: number): FileRegistryEntry[] {
+export function getVersionHistory(chapterId: number): FileAttachment[] {
     const submissions = getChapterSubmissions(chapterId);
     return submissions
         .filter(file => file.category === 'submission')
-        .sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
+        .sort((a, b) => parseThesisDate(b.uploadDate).getTime() - parseThesisDate(a.uploadDate).getTime());
 }
 
 /**
  * Get current version for a specific chapter
  */
-export function getCurrentVersion(chapterId: number): FileRegistryEntry | null {
+export function getCurrentVersion(chapterId: number): FileAttachment | null {
     const submissions = getChapterSubmissions(chapterId);
     const versions = submissions.filter(file => file.category === 'submission');
     if (versions.length === 0) return null;
 
     // Return the most recently submitted file
-    return versions.sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime())[0] || null;
+    return versions.sort((a, b) => parseThesisDate(b.uploadDate).getTime() - parseThesisDate(a.uploadDate).getTime())[0] || null;
 }
 
 /**
  * Get all versions for a specific chapter
  */
-export function getAllVersions(chapterId: number): FileRegistryEntry[] {
+export function getAllVersions(chapterId: number): FileAttachment[] {
     return getVersionHistory(chapterId);
 }
 

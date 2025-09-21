@@ -1,5 +1,5 @@
 import type { ThesisData } from '../types/thesis';
-import type { FileRegistryEntry } from '../types/file';
+import type { FileAttachment } from '../types/file';
 import type { UserProfile } from '../types/profile';
 
 /**
@@ -12,7 +12,7 @@ import type { UserProfile } from '../types/profile';
  * Centralized file registry with unique hashes
  * All files in the system are stored here with hash-based references
  */
-export const mockFileRegistry: Record<string, FileRegistryEntry> = {
+export const mockFileRegistry: Record<string, FileAttachment> = {
     // Chapter 1 - Introduction files
     "f1a2b3c4": {
         name: "Chapter_1_Introduction.pdf",
@@ -20,7 +20,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "2.1 MB",
         url: "/uploads/chapter_1_introduction.pdf",
         author: "john.doe@university.edu",
-        submissionDate: "2024-02-01 at 2:30 PM",
+        uploadDate: "2024-02-01 at 2:30 PM",
         category: "submission"
     },
     "a5b6c7d8": {
@@ -29,7 +29,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "245 KB",
         url: "/files/introduction_feedback.pdf",
         author: "jane.smith@university.edu",
-        submissionDate: "2024-02-10 at 3:20 PM",
+        uploadDate: "2024-02-10 at 3:20 PM",
         category: "attachment"
     },
 
@@ -40,7 +40,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "1.6 MB",
         url: "/uploads/chapter_2_literature_review_v1.docx",
         author: "john.doe@university.edu",
-        submissionDate: "2024-02-28 at 3:45 PM",
+        uploadDate: "2024-02-28 at 3:45 PM",
         category: "submission"
     },
     "i3j4k5l6": {
@@ -49,7 +49,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "1.8 MB",
         url: "/uploads/chapter_2_literature_review_v2.docx",
         author: "jane.smith@university.edu",
-        submissionDate: "2024-03-01 at 9:15 AM",
+        uploadDate: "2024-03-01 at 9:15 AM",
         category: "submission"
     },
     "m7n8o9p0": {
@@ -58,7 +58,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "2.2 MB",
         url: "/uploads/chapter_2_literature_review_v3.docx",
         author: "sarah.wilson@university.edu",
-        submissionDate: "2024-03-15 at 4:20 PM",
+        uploadDate: "2024-03-15 at 4:20 PM",
         category: "submission"
     },
     "q1r2s3t4": {
@@ -67,7 +67,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "150 KB",
         url: "/files/recent_papers_list.pdf",
         author: "sarah.wilson@university.edu",
-        submissionDate: "2024-03-11 at 9:30 AM",
+        uploadDate: "2024-03-11 at 9:30 AM",
         category: "attachment"
     },
 
@@ -78,7 +78,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "1.2 MB",
         url: "/uploads/chapter_3_methodology_v1.pdf",
         author: "sarah.wilson@university.edu",
-        submissionDate: "2024-03-20 at 2:15 PM",
+        uploadDate: "2024-03-20 at 2:15 PM",
         category: "submission"
     },
     "y9z0a1b2": {
@@ -87,7 +87,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "1.4 MB",
         url: "/uploads/chapter_3_methodology_v2.pdf",
         author: "mike.johnson@university.edu",
-        submissionDate: "2024-03-25 at 11:20 AM",
+        uploadDate: "2024-03-25 at 11:20 AM",
         category: "submission"
     },
     "c3d4e5f6": {
@@ -96,7 +96,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "1.5 MB",
         url: "/uploads/chapter_3_methodology_v3.pdf",
         author: "mike.johnson@university.edu",
-        submissionDate: "2024-04-01 at 4:45 PM",
+        uploadDate: "2024-04-01 at 4:45 PM",
         category: "submission"
     },
     "g7h8i9j0": {
@@ -105,7 +105,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "890 KB",
         url: "/files/methodology_guidelines.pdf",
         author: "david.kim@university.edu",
-        submissionDate: "2024-04-18 at 1:20 PM",
+        uploadDate: "2024-04-18 at 1:20 PM",
         category: "attachment"
     },
 
@@ -116,7 +116,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "800 KB",
         url: "/uploads/chapter_4_results_analysis_draft.pdf",
         author: "alex.chen@university.edu",
-        submissionDate: "2024-05-03 at 2:15 PM",
+        uploadDate: "2024-05-03 at 2:15 PM",
         category: "submission"
     },
 
@@ -127,7 +127,7 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         size: "350 KB",
         url: "/uploads/chapter_5_conclusion_outline.pdf",
         author: "maria.garcia@university.edu",
-        submissionDate: "2024-05-06 at 10:30 AM",
+        uploadDate: "2024-05-06 at 10:30 AM",
         category: "submission"
     }
 };

@@ -61,7 +61,7 @@ export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: Cha
     // Sort files by submission date (newest first)
     const sortedFiles = submissionFiles
         .filter(file => file.category === 'submission')
-        .sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
+        .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
 
     return (
         <Card variant="outlined" sx={{ mb: 2 }}>
@@ -187,7 +187,7 @@ export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: Cha
                                         size="small"
                                     />
                                     <Typography variant="body2" color="text.secondary">
-                                        Submitted by <strong>{authorName}</strong> on {file.submissionDate}
+                                        Submitted by <strong>{authorName}</strong> on {file.uploadDate}
                                     </Typography>
                                 </Box>
                             </Box>

@@ -28,16 +28,17 @@ export type RecurrencePattern = 'none' | 'daily' | 'weekly' | 'biweekly' | 'mont
 // Participant role in events
 export type ParticipantRole = 'organizer' | 'required' | 'optional' | 'observer';
 
+export type ParticipantStatus = 'pending' | 'accepted' | 'declined' | 'tentative';
+
 // Event visibility/privacy level
 export type EventVisibility = 'public' | 'private' | 'group' | 'department';
 
 // Participant interface
 export interface EventParticipant {
     email: string;
-    name: string;
     role: ParticipantRole;
-    status: 'pending' | 'accepted' | 'declined' | 'tentative';
-    responseDate?: string;
+    status: ParticipantStatus
+    responseDate?: Date;
 }
 
 // Location interface for events

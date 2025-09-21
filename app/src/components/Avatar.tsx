@@ -207,7 +207,7 @@ function generateInitials(profile: UserProfile | null, name: string | null, conf
 export default function Avatar({ profile, email, name, initials = NAME_PRESETS.firstLast, mode = 'default',
     label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, }: AvatarProps) {
     // Resolve profile from email if needed
-    const resolvedProfile = profile || (email ? findProfileByEmail(mockUserProfiles, email) : null);
+    const resolvedProfile = profile || (email ? findProfileByEmail(email) : null);
 
     // Generate display name and initials
     const displayName = resolvedProfile ? getDisplayName(resolvedProfile) : (name || 'Unknown');

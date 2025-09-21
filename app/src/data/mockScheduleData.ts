@@ -9,49 +9,41 @@ import type { ScheduleEvent, AcademicCalendar, EventParticipant, AcademicSemeste
 const commonParticipants: Record<string, EventParticipant> = {
     johnDoe: {
         email: "john.doe@university.edu",
-        name: "John Doe",
         role: "required",
         status: "accepted"
     },
     janeSmith: {
         email: "jane.smith@university.edu",
-        name: "Dr. Jane Smith",
         role: "organizer",
         status: "accepted"
     },
     mikeJohnson: {
         email: "mike.johnson@university.edu",
-        name: "Prof. Michael Johnson",
         role: "required",
         status: "accepted"
     },
     sarahWilson: {
         email: "sarah.wilson@university.edu",
-        name: "Sarah Wilson",
         role: "optional",
         status: "tentative"
     },
     alexChen: {
         email: "alex.chen@university.edu",
-        name: "Alex Chen",
         role: "required",
         status: "accepted"
     },
     mariaGarcia: {
         email: "maria.garcia@university.edu",
-        name: "Maria Garcia",
         role: "optional",
         status: "pending"
     },
     davidKim: {
         email: "david.kim@university.edu",
-        name: "Dr. David Kim",
         role: "required",
         status: "accepted"
     },
     emilyBrown: {
         email: "emily.brown@university.edu",
-        name: "Prof. Emily Brown",
         role: "observer",
         status: "accepted"
     }
