@@ -1,8 +1,8 @@
 import { Typography, Box, Chip, Accordion, AccordionSummary, AccordionDetails, Button, } from '@mui/material';
 import { ExpandMore, CheckCircle, Pending, Cancel, Schedule, Upload, CloudUpload, } from '@mui/icons-material';
-import type { StatusColor, ThesisChapter } from '../types/thesis';
-import { getChapterSubmissions } from '../utils/dbUtils';
-import { ChapterItem } from './ChapterItem';
+import type { StatusColor, ThesisChapter } from '../../types/thesis';
+import { getChapterSubmissions } from '../../utils/dbUtils';
+import { ChapterItem } from '../ChapterItem';
 
 /**
  * Props for the ChapterAccordion component

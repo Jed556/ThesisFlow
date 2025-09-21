@@ -1,8 +1,8 @@
 import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, Tooltip } from '@mui/material';
 import { PictureAsPdf, Description, Delete, Download, } from '@mui/icons-material';
-import Avatar, { Name } from './Avatar';
-import type { FileType } from '../types/file';
-import { getChapterSubmissions, getDisplayName } from '../utils/dbUtils';
+import Avatar, { Name } from '../Avatar';
+import type { FileType } from '../../types/file';
+import { getChapterSubmissions, getDisplayName } from '../../utils/dbUtils';
 
 /**
  * Props for the ChapterFile component

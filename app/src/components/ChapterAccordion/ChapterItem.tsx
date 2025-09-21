@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Typography, Box, Card, CardContent, } from '@mui/material';
-import type { ThesisComment } from '../types/thesis';
+import type { ThesisComment } from '../../types/thesis';
 import { ChapterFile } from './ChapterFile';
 import { ChapterComment } from './ChapterComment';
-import { SortButton } from './SortButton';
+import { SortButton } from '../SortButton';
 
 /**
  * Props for the ChapterItem component

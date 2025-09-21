@@ -1,10 +1,10 @@
 import { Typography, Box, Chip, Card, CardContent, Stack, Divider, IconButton, } from '@mui/material';
 import { Person, Edit, PictureAsPdf, Description, AttachFile, Visibility, } from '@mui/icons-material';
-import Avatar, { Name } from './Avatar';
-import type { ThesisComment } from '../types/thesis';
-import { parseThesisDate } from '../utils/dateUtils';
-import { getThesisRole, getThesisRoleDisplayText } from '../utils/roleUtils';
-import { getDisplayName, getAttachmentFiles, getDocumentNameByVersion } from '../utils/dbUtils';
+import Avatar, { Name } from '../Avatar';
+import type { ThesisComment } from '../../types/thesis';
+import { parseThesisDate } from '../../utils/dateUtils';
+import { getThesisRole, getThesisRoleDisplayText } from '../../utils/roleUtils';
+import { getDisplayName, getAttachmentFiles, getDocumentNameByVersion } from '../../utils/dbUtils';
 
 /**
  * Props for the ChapterComment component
