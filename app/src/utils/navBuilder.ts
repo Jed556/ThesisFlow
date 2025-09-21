@@ -442,6 +442,7 @@ export async function refreshPageRegistry(): Promise<void> {
 
 /**
  * Utility to get all page segments
+ * @returns Array of all page segments
  */
 export async function getPageSegments(): Promise<string[]> {
     await initializeRegistry();

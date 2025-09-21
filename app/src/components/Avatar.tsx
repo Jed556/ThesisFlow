@@ -4,7 +4,9 @@ import type { UserProfile } from '../types/profile';
 import { getAvatarInitials, getInitialsFromFullName, findProfileByEmail, getDisplayName } from '../utils/avatarUtils';
 import { mockUserProfiles } from '../data/mockData';
 
-// Define which name parts to include for initials generation
+/**
+ * Define which name parts to include for initials generation
+ */
 export enum Name {
     PREFIX = 'prefix',
     FIRST = 'first',
@@ -16,7 +18,9 @@ export enum Name {
 // Configuration for which name parts to use for initials
 export type InitialsConfig = Name[] | 'auto';
 
-// Common predefined configurations for convenience
+/**
+ * Common predefined name configurations for convenience 
+ */
 export const NAME_PRESETS = {
     firstLast: [Name.FIRST, Name.LAST] as Name[],
     firstMiddle: [Name.FIRST, Name.MIDDLE] as Name[],
@@ -25,70 +29,103 @@ export const NAME_PRESETS = {
     academic: [Name.PREFIX, Name.FIRST, Name.LAST] as Name[], // e.g., "Dr. John Doe" → "DJD"
 };
 
-// Avatar display modes
+/**
+ * Avatar display modes
+ */
 export type AvatarMode = 'default' | 'chip';
 
 /**
  * Flexible Avatar component that can handle different data sources and display modes
- * 
- * @example
- * // Basic usage with profile object (chip mode - like in Thesis page)
- * <Avatar 
- *   profile={userProfile} 
- *   mode="chip" 
- *   label="John Doe (Leader)" 
- *   chipProps={{ variant: 'outlined' }}
- * />
- * 
- * @example
- * // Default avatar with name string (like in ChapterFile)
- * <Avatar 
- *   name="Dr. Jane Smith" 
- *   size="small"
- * />
- * 
- * @example
- * // Avatar with custom initials configuration
- * <Avatar 
- *   profile={userProfile}
- *   initials={[Name.FIRST, Name.LAST]}
- *   size="large"
- * />
- * 
- * @example
- * // Using preset configurations
- * <Avatar 
- *   profile={userProfile}
- *   initials={INITIALS_PRESETS.academic} // Dr. John Doe → "DJD"
- * />
  */
 export interface AvatarProps {
     // Data sources (use one of these)
-    profile?: UserProfile;           // Full profile object
-    email?: string;                  // Email to lookup profile
-    name?: string;                   // Full name string (fallback)
+    /**
+     * User profile object to derive avatar from
+     * If not provided, `email` or `name` can be used as fallbacks
+     * If multiple are provided, `profile` takes precedence over `email`, which takes precedence over `name`
+     */
+    profile?: UserProfile;
+
+    /**
+     * User email string to lookup profile
+     * If `profile` is not provided, this will be used to find the profile
+     * If neither `profile` nor `email` is provided, `name` will be used as a fallback
+     */
+    email?: string;
+
+    /**
+     * Full name string to derive initials from
+     * Used as a fallback if neither `profile` nor `email` is provided
+     * Note: This does not support detailed initials configuration like `profile` does
+     * and will simply use the first letters of the first and last words in the name
+     * If you need more control over initials, provide a `profile` or `email` instead
+     */
+    name?: string;
 
     // Customization options
-    initials?: InitialsConfig;       // Which name parts to use
-    mode?: AvatarMode;               // Display mode
-    // Quick tooltip selection: 'email' shows profile email, 'full' shows full display name
+    /**
+     * Which name parts to use for initials generation
+     * Can be an array of `Name` enum values or 'auto' to default to first + last
+     * Defaults to `NAME_PRESETS.firstLast`
+     */
+    initials?: InitialsConfig;
+    /**
+     * Display mode of the avatar
+     * - 'default': Standard avatar display
+     * - 'chip': Avatar within a Chip component with optional label
+     * @default 'default'
+     */
+    mode?: AvatarMode;
+    /**
+     * Tooltip display options
+     * - 'email': Show email in tooltip (if available)
+     * - 'full': Show full name in tooltip
+     * - 'none': No tooltip
+     * @default 'none'
+     */
     tooltip?: 'email' | 'full' | 'none';
 
     // Chip mode specific props
-    label?: string;                  // Chip label text
+    /**
+     * Chip label text (for chip mode)
+     */
+    label?: string;
+    /**
+     * Additional props to pass to the MUI Chip component when in 'chip' mode
+     * Allows customization of variant, size, color, etc.
+     * @see {@link https://mui.com/material-ui/api/chip/#props}
+     */
     chipProps?: {
         variant?: 'filled' | 'outlined';
         size?: 'small' | 'medium';
         color?: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
     };
 
-    // Avatar styling props
+    /**
+     * Avatar styling props
+     * @see {@link https://mui.com/material-ui/api/avatar/#props}
+     */
     sx?: MuiAvatarProps['sx'];
+
+    /**
+     * Avatar size  
+     * - Predefined sizes: 'small' (24px), 'medium' (32px), 'large' (40px)
+     * @default 'medium'        
+     */
     size?: 'small' | 'medium' | 'large' | number; // Predefined sizes or custom
 
     // Event handlers
+    /**
+     * Click event handler
+     */
     onClick?: () => void;
     // Optional custom tooltip text to show on hover (takes precedence over `tooltip`)
+
+    /**
+     * Custom tooltip text to show on hover (overrides `tooltip` option)
+     * If provided, this text will be shown in the tooltip regardless of the `tooltip` setting
+     * If not provided, the `tooltip` setting will determine what text (if any) to show
+     */
     tooltipText?: string;
 }
 
@@ -99,7 +136,13 @@ const sizeMap = {
     large: { width: 40, height: 40, fontSize: '1rem' }
 };
 
-// Generate initials based on configuration
+/**
+ * Generate initials based on configuration
+ * @param profile - User profile object
+ * @param name - Fallback name string
+ * @param config - Initials configuration
+ * @returns Generated initials
+ */
 function generateInitials(profile: UserProfile | null, name: string | null, config: InitialsConfig): string {
     if (profile) {
         // Handle 'auto' mode - defaults to first + last
@@ -146,20 +189,23 @@ function generateInitials(profile: UserProfile | null, name: string | null, conf
     return '';
 }
 
-export default function Avatar({
-    profile,
-    email,
-    name,
-    initials = NAME_PRESETS.firstLast,
-    mode = 'default',
-    label,
-    chipProps,
-    sx,
-    size = 'medium',
-    onClick,
-    tooltip = 'none',
-    tooltipText,
-}: AvatarProps) {
+/**
+ * Display for user profile pictures or initials
+ * @param profile - User profile object
+ * @param email - User email string
+ * @param name - Full name string
+ * @param initials - Initials configuration
+ * @param mode - Display mode ('default' or 'chip')
+ * @param label - Chip label text (for chip mode)
+ * @param chipProps - Additional props for Chip component
+ * @param sx - Custom styles for Avatar
+ * @param size - Predefined sizes ('small', 'medium', 'large') or custom number
+ * @param onClick - Click event handler
+ * @param tooltip - Quick tooltip selection ('email', 'full', 'none')
+ * @param tooltipText - Optional custom tooltip text (overrides `tooltip`)
+ */
+export default function Avatar({ profile, email, name, initials = NAME_PRESETS.firstLast, mode = 'default',
+    label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, }: AvatarProps) {
     // Resolve profile from email if needed
     const resolvedProfile = profile || (email ? findProfileByEmail(mockUserProfiles, email) : null);
 
@@ -229,18 +275,42 @@ export default function Avatar({
 }
 
 // Convenience components for common use cases
+
+/**
+ * ProfileAvatar component for displaying user profile pictures or initials
+ * @param profile - User profile object
+ * @param AvatarProps - Avatar props
+ */
 export function ProfileAvatar({ profile, ...props }: Omit<AvatarProps, 'profile'> & { profile: UserProfile }) {
     return <Avatar profile={profile} {...props} />;
 }
 
+/**
+ * EmailAvatar component for displaying user email initials
+ * @param email - User email string
+ * @param AvatarProps - Avatar props
+ * @returns EmailAvatar element
+ */
 export function EmailAvatar({ email, ...props }: Omit<AvatarProps, 'email'> & { email: string }) {
     return <Avatar email={email} {...props} />;
 }
 
+/**
+ * NameAvatar component for displaying user name initials
+ * @param name - Full name string
+ * @param AvatarProps - Avatar props
+ * @returns NameAvatar element
+ */
 export function NameAvatar({ name, ...props }: Omit<AvatarProps, 'name'> & { name: string }) {
     return <Avatar name={name} {...props} />;
 }
 
+/**
+ * ChipAvatar component for displaying user initials in a chip
+ * @param label - Optional label for the chip
+ * @param AvatarProps - Avatar props
+ * @returns ChipAvatar element
+ */
 export function ChipAvatar({ label, ...props }: AvatarProps & { label?: string }) {
     return <Avatar mode="chip" label={label} {...props} />;
 }

@@ -15,6 +15,9 @@ export const metadata: NavigationItem = {
     hidden: true,
 };
 
+/**
+ * Context for managing form state in the sign-in page
+ */
 const FormContext = React.createContext<{
     emailValue: string;
     passwordValue: string;
@@ -22,6 +25,9 @@ const FormContext = React.createContext<{
     setPasswordValue: (value: string) => void;
 } | null>(null);
 
+/**
+ * Info alert with test account buttons for development environment
+ */
 function Info() {
     if (!isDevelopmentEnvironment()) {
         return null;
@@ -71,6 +77,9 @@ function Info() {
     );
 }
 
+/**
+ * Email input field component
+ */
 function CustomEmailField() {
     const formContext = React.useContext(FormContext);
 
@@ -89,6 +98,9 @@ function CustomEmailField() {
     );
 }
 
+/**
+ * Password input field component
+ */
 function CustomPasswordField() {
     const [showPassword, setShowPassword] = React.useState(false);
     const formContext = React.useContext(FormContext);
@@ -125,6 +137,9 @@ function CustomPasswordField() {
     );
 }
 
+/**
+ * Button component for submitting the sign-in form
+ */
 function CustomButton() {
     return (
         <Button
@@ -145,6 +160,9 @@ function CustomButton() {
     );
 }
 
+/**
+ * Forgot password link component
+ */
 function ForgotPasswordLink() {
     return (
         <Link href="/" variant="body2">
@@ -153,6 +171,9 @@ function ForgotPasswordLink() {
     );
 }
 
+/**
+ * Sign-in page
+ */
 export default function SignIn() {
     const { session, setSession } = useSession();
     const navigate = useNavigate();

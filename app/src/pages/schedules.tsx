@@ -23,7 +23,9 @@ export const metadata: NavigationItem = {
     index: 2,
 };
 
-// Event type icons mapping
+/**
+ * Mapping of event types to their corresponding icons
+ */
 const eventTypeIcons: Record<EventType, React.ReactElement> = {
     meeting: <Groups fontSize="small" />,
     deadline: <Assignment fontSize="small" />,
@@ -50,6 +52,10 @@ const statusColors: Record<EventStatus, string> = {
 
 // Calendar/List toggle and upcoming column are handled in the main component render
 
+/**
+ * Event card component displaying event details
+ * @param event - The schedule event to display
+ */
 function EventCard({ event }: { event: ScheduleEvent }) {
     const startDate = new Date(event.startDate);
     const endDate = new Date(event.endDate);
@@ -202,6 +208,10 @@ function EventCard({ event }: { event: ScheduleEvent }) {
     );
 }
 
+/**
+ * Upcoming events list component
+ * @param events - Array of schedule events
+ */
 function UpcomingEvents({ events }: { events: ScheduleEvent[] }) {
     const upcomingEvents = events
         .filter(event => new Date(event.startDate) > new Date())
@@ -258,6 +268,9 @@ function UpcomingEvents({ events }: { events: ScheduleEvent[] }) {
     );
 }
 
+/**
+ * Schedules page with calendar and list views, filtering, and upcoming events
+ */
 export default function Schedules() {
     const [tabValue, setTabValue] = React.useState(0);
     const [calendarView, setCalendarView] = React.useState<CalendarView>('month');

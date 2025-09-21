@@ -2,6 +2,9 @@ import Typography from '@mui/material/Typography';
 import type { NavigationItem } from '../../types/navigation';
 import { People } from '@mui/icons-material';
 
+/**
+ * Metadata for the Users admin page
+ */
 export const metadata: NavigationItem = {
     group: 'user-management',
     index: 0,
@@ -13,6 +16,9 @@ export const metadata: NavigationItem = {
     hidden: false,
 };
 
+/**
+ * User management page for administrators
+ */
 export default function UsersPage() {
     return (
         <>

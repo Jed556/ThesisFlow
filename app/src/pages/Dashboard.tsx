@@ -14,6 +14,9 @@ export const metadata: NavigationItem = {
 	roles: ['student', 'admin'],
 };
 
+/**
+ * Home dashboard page displaying user info, quick links and stats
+ */
 export default function DashboardPage() {
 	const { session } = useSession();
 	const userRole = session?.user?.role || 'guest';

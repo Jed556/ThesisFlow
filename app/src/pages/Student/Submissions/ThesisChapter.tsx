@@ -20,7 +20,6 @@ import {
     mockThesisData,
 } from '../../../data/mockData';
 import { ChapterAccordion } from '../../../components';
-
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 2,
@@ -33,8 +32,9 @@ export const metadata: NavigationItem = {
     // hidden: false,
 };
 
-// Mock data - all data now imported from centralized mockData.ts
-
+/**
+ * Page for managing and uploading thesis chapter submissions and feedback
+ */
 export default function ThesisChaptersPage() {
     const [uploadDialog, setUploadDialog] = useState(false);
     const [selectedChapter, setSelectedChapter] = useState<number | null>(null);

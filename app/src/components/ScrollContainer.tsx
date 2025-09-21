@@ -4,22 +4,27 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { alpha } from '@mui/material/styles';
 
 export interface ScrollContainerProps {
+    /**
+     * Content to be wrapped in the scrollable container
+     */
     children: React.ReactNode;
-    /** CSS calc offset from 100vh, e.g., '140px'. Controls vertical height of the scroll box. */
+    /**
+     * CSS calc offset from 100vh, e.g., '140px'. Controls vertical height of the scroll box.
+     */
     heightOffset?: string;
-    /** Additional sx styles to merge in. */
+    /**
+     * Additional sx styles to merge in.
+     */
     sx?: SxProps<Theme>;
 }
 
 /**
  * ScrollContainer confines scrolling to an inner Box with a custom scrollbar.
- * It prevents the outer window from scrolling when used with a global overflow hidden.
+ * @param children - Content to be wrapped in the scrollable container
+ * @param heightOffset - CSS calc offset from 100vh, e.g., '140px'. Controls vertical height of the scroll box.
+ * @param sx - Additional sx styles to merge in.
  */
-export default function ScrollContainer({
-    children,
-    heightOffset = '140px',
-    sx,
-}: ScrollContainerProps) {
+export default function ScrollContainer({ children, heightOffset = '140px', sx, }: ScrollContainerProps) {
     return (
         <Box
             sx={(theme) => ({

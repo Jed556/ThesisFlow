@@ -6,21 +6,21 @@ let currentRouter: any = null;
 let currentAppTheme: any = null;
 
 /**
- * Store the current routes for development access
+ * Stores the current routes for development access
  */
 export function setCurrentRoutes(routes: any[]) {
     currentRoutes = routes;
 }
 
 /**
- * Store the current router for development access
+ * Stores the current router for development access
  */
 export function setCurrentRouter(router: any) {
     currentRouter = router;
 }
 
 /**
- * Store the current AppTheme for development access
+ * Stores the current AppTheme for development access
  */
 export function setCurrentAppTheme(theme: any) {
     currentAppTheme = theme;
@@ -28,7 +28,6 @@ export function setCurrentAppTheme(theme: any) {
 
 /**
  * Check if the current environment should be treated as development
- * 
  * @returns {boolean} True if in development environment
  */
 export function isDevelopmentEnvironment(): boolean {
@@ -38,7 +37,6 @@ export function isDevelopmentEnvironment(): boolean {
 
 /**
  * Get environment info for debugging
- * 
  * @returns {object} Object containing environment detection details
  */
 export function getEnvironmentInfo() {
@@ -56,6 +54,10 @@ export function getEnvironmentInfo() {
     return info;
 }
 
+/**
+ * Rebuild the application routes and update the cached routes
+ * @remarks Only works in development mode
+ */
 export async function rebuildRoutes() {
     if (!isDevelopmentEnvironment()) {
         return console.warn('Rebuilding routes is only available in development mode.');
@@ -72,7 +74,8 @@ export async function rebuildRoutes() {
 }
 
 /**
- * Get the current routes without rebuilding
+ * Get the current cached routes
+ * @returns The current cached routes
  */
 export function getCurrentRoutes() {
     if (currentRoutes.length === 0) {
@@ -84,6 +87,7 @@ export function getCurrentRoutes() {
 
 /**
  * Get the current router instance
+ * @returns The current router instance
  */
 export function getCurrentRouter() {
     if (!currentRouter) {
@@ -94,7 +98,8 @@ export function getCurrentRouter() {
 }
 
 /**
- * Get current AppTheme
+ * Get the current AppTheme instance
+ * @returns The current AppTheme instance
  */
 export function getCurrentAppTheme() {
     if (!currentAppTheme) {
@@ -106,7 +111,7 @@ export function getCurrentAppTheme() {
 
 
 /**
- * Make dev utilities globally accessible in the browser console
+ * Attach development utilities to the window object
  */
 export function attachDevUtilsToWindow() {
     if (typeof window === 'undefined') return;

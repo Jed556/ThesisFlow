@@ -19,6 +19,9 @@ export const metadata: NavigationItem = {
     return (approved / total) * 100;
 };
 
+/**
+ * Main thesis overview page for students, showing progress, chapters, and team members
+ */
 export default function ThesisPage() {
     const progress = calculateProgress();
     const teamMembers = getThesisTeamMembers(); return (

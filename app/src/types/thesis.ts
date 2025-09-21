@@ -1,9 +1,17 @@
 
-// Thesis-specific role types - Based on thesis data context  
+/**
+ * Thesis-specific role types - Based on thesis data context
+ */
 export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'unknown';
+
+/**
+ * Thesis role display title
+ */
 export type ThesisRoleDisplay = 'Student (Leader)' | 'Student (Member)' | 'Adviser' | 'Editor' | 'Unknown';
 
-// Comment/feedback interface
+/**
+ * Thesis comment/feedback
+ */
 export interface ThesisComment {
     author: string;
     date: string;
@@ -12,7 +20,9 @@ export interface ThesisComment {
     version?: number; // Version index based on submission hash position in submissions array
 }
 
-// Chapter interface
+/**
+ * Thesis chapter details
+ */
 export interface ThesisChapter {
     id: number;
     title: string;
@@ -23,7 +33,9 @@ export interface ThesisChapter {
     comments: ThesisComment[];
 }
 
-// Main thesis data interface
+/**
+ * Main thesis data
+ */
 export interface ThesisData {
     title: string;
     leader: string;
@@ -36,5 +48,7 @@ export interface ThesisData {
     chapters: ThesisChapter[];
 }
 
-// Status color mapping type
+/**
+ * Status color mapping
+ */
 export type StatusColor = 'success' | 'warning' | 'error' | 'default';

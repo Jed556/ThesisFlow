@@ -13,6 +13,9 @@ export const metadata: NavigationItem = {
     hidden: false,
 };
 
+/**
+ * Test page for development and debugging purposes
+ */
 export default function TestPage() {
     return (
         <>

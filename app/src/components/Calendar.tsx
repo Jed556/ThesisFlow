@@ -5,16 +5,38 @@ import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
 import type { ScheduleEvent } from '../types/schedule';
 import { isSameDay, isInRange, startOfMonth, endOfMonth, addDays } from '../utils/dateUtils';
 
+/**
+ * Props for the Calendar component
+ */
 interface CalendarProps {
+    /**
+     * Array of schedule events to display
+     */
     events: ScheduleEvent[];
+    /**
+     * Currently selected date
+     */
     selected?: Date;
+    /**
+     * Callback when a date is selected
+     * @param date - Selected date or undefined if deselected
+     */
     onSelect?: (date?: Date) => void;
+    /**
+     * Callback when an event is clicked
+     * @param event - The clicked schedule event
+     */
     onEventClick?: (event: ScheduleEvent) => void;
-    onRangeSelect?: (r: { from?: Date; to?: Date }) => void;
+    /**
+     * Callback when a date range is selected (in range mode)
+     * @param range - Object with optional from and to dates
+     * If only from is set, the range is in-progress
+     */
+    onRangeSelect?: (range: { from?: Date; to?: Date }) => void;
 }
 
 /**
- * Calendar component for displaying and interacting with schedule events
+ * Interactive calendar
  * @param events - Array of schedule events
  * @param selected - Currently selected date
  * @param onSelect - Callback when a date is selected

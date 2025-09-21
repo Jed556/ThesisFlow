@@ -15,6 +15,9 @@ export const metadata: NavigationItem = {
     // hidden: false,
 };
 
+/**
+ *  Navbar tab for thesis submissions and related actions
+ */
 export default function ThesisSubmissionPage() {
     // Render child routes through Outlet
     return <Outlet />;

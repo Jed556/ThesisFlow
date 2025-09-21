@@ -14,7 +14,7 @@ export const FILE_SIZE_LIMITS = {
     other: 25 * 1024 * 1024     // 25MB
 } as const;
 
-// Supported file types for each category
+// Supported file types by category
 export const SUPPORTED_FILE_TYPES = {
     document: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt', 'rtf'],
     image: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'tiff'],
@@ -25,6 +25,8 @@ export const SUPPORTED_FILE_TYPES = {
 
 /**
  * Get file extension from filename
+ * @param filename - The name of the file
+ * @returns The file extension
  */
 export function getFileExtension(filename: string): string {
     const lastDotIndex = filename.lastIndexOf('.');
@@ -33,6 +35,8 @@ export function getFileExtension(filename: string): string {
 
 /**
  * Get file category based on extension
+ * @param extension - The file extension to categorize
+ * @returns The file category
  */
 export function getFileCategory(extension: string): FileCategory {
     const ext = extension.toLowerCase();
@@ -48,6 +52,8 @@ export function getFileCategory(extension: string): FileCategory {
 
 /**
  * Get file type information for UI display
+ * @param extension - The file extension to get info for
+ * @returns The file type information
  */
 export function getFileTypeInfo(extension: string): FileTypeInfo {
     const category = getFileCategory(extension);
@@ -66,6 +72,8 @@ export function getFileTypeInfo(extension: string): FileTypeInfo {
 
 /**
  * Validate file before upload
+ * @param file - The file to validate
+ * @returns An object containing the validation result and error message (if any)
  */
 export function validateFile(file: File): { isValid: boolean; error?: string } {
     const extension = getFileExtension(file.name);
@@ -93,6 +101,8 @@ export function validateFile(file: File): { isValid: boolean; error?: string } {
 
 /**
  * Check if file type is considered safe for upload
+ * @param extension - The file extension to check
+ * @returns True if the file type is safe, false otherwise
  */
 function isSafeFileType(extension: string): boolean {
     const safeExtensions = ['txt', 'csv', 'json', 'xml', 'md'];
@@ -101,6 +111,8 @@ function isSafeFileType(extension: string): boolean {
 
 /**
  * Format file size for display
+ * @param bytes - The file size in bytes
+ * @returns The formatted file size string
  */
 export function formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
@@ -114,6 +126,8 @@ export function formatFileSize(bytes: number): string {
 
 /**
  * Convert file to base64 for database storage
+ * @param file - The file to convert
+ * @returns A promise that resolves with the base64 string
  */
 export async function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -136,6 +150,8 @@ export async function fileToBase64(file: File): Promise<string> {
 
 /**
  * Convert file to ArrayBuffer for processing
+ * @param file - The file to convert
+ * @returns A promise that resolves with the ArrayBuffer
  */
 export async function fileToArrayBuffer(file: File): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
@@ -156,6 +172,8 @@ export async function fileToArrayBuffer(file: File): Promise<ArrayBuffer> {
 
 /**
  * Generate a unique hash for file identification
+ * @param file - The file to generate a hash for
+ * @returns A promise that resolves with the generated hash
  */
 export async function generateFileHash(file: File): Promise<string> {
     const arrayBuffer = await fileToArrayBuffer(file);
@@ -166,6 +184,8 @@ export async function generateFileHash(file: File): Promise<string> {
 
 /**
  * Extract metadata from media files
+ * @param file - The file to extract metadata from
+ * @returns A promise that resolves with the extracted metadata
  */
 export async function extractMediaMetadata(file: File): Promise<MediaMetadata | null> {
     const category = getFileCategory(getFileExtension(file.name));
@@ -181,6 +201,8 @@ export async function extractMediaMetadata(file: File): Promise<MediaMetadata | 
 
 /**
  * Extract metadata from image files
+ * @param file - The image file to extract metadata from
+ * @returns A promise that resolves with the extracted metadata
  */
 async function extractImageMetadata(file: File): Promise<MediaMetadata> {
     return new Promise((resolve) => {
@@ -206,6 +228,8 @@ async function extractImageMetadata(file: File): Promise<MediaMetadata> {
 
 /**
  * Extract metadata from video/audio files
+ * @param file - The video/audio file to extract metadata from
+ * @returns A promise that resolves with the extracted metadata
  */
 async function extractVideoAudioMetadata(file: File): Promise<MediaMetadata> {
     return new Promise((resolve) => {
@@ -232,6 +256,9 @@ async function extractVideoAudioMetadata(file: File): Promise<MediaMetadata> {
 
 /**
  * Create a thumbnail for image/video files
+ * @param file - The file to create a thumbnail for
+ * @param maxSize - The maximum size for the thumbnail
+ * @returns A promise that resolves with the thumbnail data URL
  */
 export async function createThumbnail(file: File, maxSize: number = 200): Promise<string | null> {
     const category = getFileCategory(getFileExtension(file.name));
@@ -246,7 +273,10 @@ export async function createThumbnail(file: File, maxSize: number = 200): Promis
 }
 
 /**
- * Create thumbnail for image files
+ * Create a thumbnail for image files
+ * @param file - The image file to create a thumbnail for
+ * @param maxSize - The maximum size for the thumbnail
+ * @returns A promise that resolves with the thumbnail data URL
  */
 async function createImageThumbnail(file: File, maxSize: number): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -281,6 +311,9 @@ async function createImageThumbnail(file: File, maxSize: number): Promise<string
 
 /**
  * Create thumbnail for video files
+ * @param file - The video file to create a thumbnail for
+ * @param maxSize - The maximum size for the thumbnail
+ * @returns A promise that resolves with the thumbnail data URL
  */
 async function createVideoThumbnail(file: File, maxSize: number): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -337,7 +370,10 @@ function calculateThumbnailSize(originalWidth: number, originalHeight: number, m
 }
 
 /**
- * Prepare file for database upload with all necessary metadata
+ * Prepare file for upload with all necessary metadata
+ * @param file - The file to prepare
+ * @param author - The author of the file
+ * @returns A promise that resolves with the prepared file data
  */
 export async function prepareFileForUpload(file: File, author: string): Promise<{
     hash: string;
@@ -383,6 +419,7 @@ export async function prepareFileForUpload(file: File, author: string): Promise<
 
 /**
  * Create file upload progress tracker
+ * @returns 
  */
 export function createUploadProgressTracker(): {
     updateProgress: (fileName: string, progress: number) => void;

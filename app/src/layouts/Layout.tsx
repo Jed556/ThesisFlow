@@ -6,6 +6,9 @@ import { Account } from '@toolpad/core/Account';
 
 import { useSession } from '../SessionContext';
 
+/**
+ * CustomActions for the dashboard toolbar
+ */
 function CustomActions() {
     return (
         <Stack direction="row" alignItems="center">
@@ -14,6 +17,9 @@ function CustomActions() {
     );
 }
 
+/**
+ * CustomAccount chip for the dashboard toolbar
+ */
 function CustomAccount() {
     return (
         <Account
@@ -24,6 +30,9 @@ function CustomAccount() {
     );
 }
 
+/**
+ * Dashboard layout for the application
+ */
 export default function Layout() {
     const { session } = useSession();
     const location = useLocation();

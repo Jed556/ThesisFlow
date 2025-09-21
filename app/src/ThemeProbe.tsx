@@ -2,6 +2,9 @@ import * as React from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography } from '@mui/material';
 
+/**
+ * Small overlay box displaying the current primary theme color for debugging purposes
+ */
 export default function ThemeProbe() {
     const theme = useTheme();
     React.useEffect(() => {

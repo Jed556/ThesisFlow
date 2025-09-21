@@ -2,6 +2,9 @@ import { useRouteError, isRouteErrorResponse } from 'react-router';
 import { Box, Typography, Button, Paper, Container } from '@mui/material';
 import { Home, Refresh, BugReport } from '@mui/icons-material';
 
+/**
+ * ErrorBoundary page to catch and display errors in the application
+ */
 export default function ErrorBoundary() {
     const error = useRouteError();
 

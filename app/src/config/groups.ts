@@ -1,5 +1,10 @@
 import type { NavigationGroup } from '../types/navigation';
 
+/**
+ * Navigation groups define sections in the sidebar navigation.
+ * Each group can have a header, divider, title, and segment identifier.
+ * Groups help organize navigation items into logical sections.
+ */
 export const navigationGroups: NavigationGroup[] = [
     {
         index: 1,

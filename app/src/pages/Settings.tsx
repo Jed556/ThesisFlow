@@ -11,6 +11,9 @@ export const metadata: NavigationItem = {
     roles: ['admin', 'student', 'editor', 'adviser'],
 };
 
+/**
+ * Settings page for user preferences and application configurations
+ */
 export default function SettingsPage() {
     return (
         <>

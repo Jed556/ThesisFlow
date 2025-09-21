@@ -4,12 +4,30 @@ import Avatar, { Name } from './Avatar';
 import type { FileType } from '../types/file';
 import { getChapterSubmissions, getDisplayName } from '../utils/dbUtils';
 
+/**
+ * Props for the ChapterFile component
+ */
 interface ChapterFileProps {
+    /**
+     * ID of the chapter to display files for
+     */
     chapterId: number;
+    /**
+     * Optional callback when a version is selected
+     * @param version - The selected version number
+     */
     onVersionSelect?: (version: number) => void;
+    /**
+     * Currently selected version number
+     */
     selectedVersion?: number;
 }
 
+/**
+ * Get the file icon for a specific file type
+ * @param fileType - The type of the file
+ * @returns The icon for the file type
+ */
 const getFileIcon = (fileType: FileType) => {
     switch (fileType.toLowerCase()) {
         case 'pdf':
@@ -22,6 +40,12 @@ const getFileIcon = (fileType: FileType) => {
     }
 };
 
+/**
+ * File versions list for a chapter
+ * @param chapterId - ID of the chapter to display files for
+ * @param onVersionSelect - Optional callback when a version is selected
+ * @param selectedVersion - Currently selected version number
+ */
 export function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: ChapterFileProps) {
     // Get all submission files for this chapter
     const submissionFiles = getChapterSubmissions(chapterId);

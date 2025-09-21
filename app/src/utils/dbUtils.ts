@@ -16,6 +16,7 @@ export function getProfile(email: string): UserProfile | undefined {
 
 /**
  * Get formatted display name for user
+ * 
  */
 export function getDisplayName(email: string): string {
     const profile = getProfile(email);

@@ -3,7 +3,9 @@
  * Contains all file handling, upload, and metadata types
  */
 
-// File type for icon mapping - expanded to include media files
+/**
+ * Supported file types/extensions
+ */
 export type FileType =
     // Documents
     | 'pdf' | 'docx' | 'doc' | 'xlsx' | 'xls' | 'pptx' | 'ppt' | 'txt' | 'rtf'
@@ -18,10 +20,14 @@ export type FileType =
     // Other
     | string;
 
-// File categories for better organization
+/**
+ * File categories for better organization
+ */
 export type FileCategory = 'document' | 'image' | 'video' | 'audio' | 'archive' | 'other';
 
-// Helper interface for file type categorization
+/**
+ * Helper interface for file type categorization
+ */
 export interface FileTypeInfo {
     category: FileCategory;
     icon: string;
@@ -29,7 +35,9 @@ export interface FileTypeInfo {
     canPreview: boolean;
 }
 
-// File upload progress interface
+/**
+ * File upload progress
+ */
 export interface FileUploadProgress {
     fileName: string;
     progress: number; // 0-100
@@ -37,7 +45,9 @@ export interface FileUploadProgress {
     error?: string;
 }
 
-// Media file metadata interface
+/**
+ * Media file metadata
+ */
 export interface MediaMetadata {
     width?: number;
     height?: number;
@@ -47,7 +57,9 @@ export interface MediaMetadata {
     frameRate?: number;
 }
 
-// File attachment interface
+/**
+ * File attachment details
+ */
 export interface FileAttachment {
     name: string;
     type: string;
@@ -60,27 +72,35 @@ export interface FileAttachment {
     metadata?: MediaMetadata; // Additional metadata for media files
 }
 
-// Extended file attachment with submission metadata
+/**
+ * Extended file attachment with submission metadata
+ */
 export interface FileRegistryEntry extends FileAttachment {
     author: string; // email
     submissionDate: string;
     category: 'submission' | 'attachment';
 }
 
-// File validation result interface
+/**
+ * File validation result
+ */
 export interface FileValidationResult {
     isValid: boolean;
     error?: string;
 }
 
-// File processing result interface
+/**
+ * Processed file result
+ */
 export interface FileProcessingResult {
     hash: string;
     base64Data: string;
     fileInfo: FileAttachment;
 }
 
-// Batch upload configuration interface
+/**
+ * Batch upload configuration
+ */
 export interface BatchUploadConfig {
     maxConcurrentUploads?: number;
     retryAttempts?: number;
@@ -89,7 +109,9 @@ export interface BatchUploadConfig {
     onFileError?: (fileName: string, error: string) => void;
 }
 
-// File upload context interface
+/**
+ * File upload type
+ */
 export interface FileUploadContext {
     author: string; // email
     category: 'submission' | 'attachment';
@@ -97,10 +119,14 @@ export interface FileUploadContext {
     commentId?: string;
 }
 
-// File operation status
+/**
+ * Current status of a file operation
+ */
 export type FileOperationStatus = 'pending' | 'processing' | 'completed' | 'error';
 
-// File operation result
+/**
+ * File operation result
+ */
 export interface FileOperationResult {
     success: boolean;
     fileName: string;

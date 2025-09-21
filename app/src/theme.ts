@@ -1,6 +1,9 @@
 import { createTheme } from '@mui/material/styles';
 import type { AppTheme } from '@toolpad/core/AppProvider';
 
+/**
+ * Light mode color palette
+ */
 const lightPalette = {
     mode: 'light',
     common: {
@@ -86,6 +89,9 @@ const lightPalette = {
     }
 }
 
+/**
+ * Dark mode color palette
+ */
 const darkPalette = {
     mode: "dark",
     common: {
@@ -171,6 +177,9 @@ const darkPalette = {
     }
 }
 
+/**
+ * Base application theme
+ */
 const theme = createTheme({
     colorSchemes: { light: true, dark: true },
     breakpoints: {
@@ -343,6 +352,9 @@ const theme = createTheme({
     },
 });
 
+/**
+ * Component style overrides
+ */
 const components = {
     MuiCssBaseline: {
         styleOverrides: {

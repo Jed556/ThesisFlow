@@ -6,20 +6,64 @@ import { parseThesisDate } from '../utils/dateUtils';
 import { getThesisRole, getThesisRoleDisplayText } from '../utils/roleUtils';
 import { getDisplayName, getAttachmentFiles, getDocumentNameByVersion } from '../utils/dbUtils';
 
+/**
+ * Props for the ChapterComment component
+ */
 interface ChapterCommentProps {
+    /**
+     * Array of thesis comments
+     */
     comments: ThesisComment[];
+    /**
+     * ID of the chapter
+     */
     chapterId: number;
+    /**
+     * Whether to group comments by document version
+     * @default false
+     */
     groupByVersion?: boolean;
+    /**
+     * Sort order for versions ('asc' or 'desc')
+     * @default 'asc' (oldest version first)
+     */
     versionSort?: SortOrder;
+    /**
+     * Currently selected version to filter comments
+     * @default -1 (no filtering)
+     */
     versionSelected?: number;
+    /**
+     * Sort order for comments within a version ('asc' or 'desc')
+     * @default 'asc' (oldest comment first)
+     */
     commentSort?: SortOrder;
+    /**
+     * Callback when a version is selected
+     * @param version - The version number that was selected
+     */
     onVersionSelect?: (version: number) => void;
+    /**
+     * Email of the current user
+     */
     currentUserEmail?: string;
+    /**
+     * Whether to show dividers between versions
+     * @default true
+     */
     showVersionDividers?: boolean;
 }
 
+/**
+ * Sort order for comments
+ */
 type SortOrder = 'asc' | 'desc';
 
+/**
+ * Get the attachment icon for a file type
+ * @param fileType - The type of the file
+ * @returns The icon for the attachment
+ */
 const getAttachmentIcon = (fileType: string) => {
     switch (fileType.toLowerCase()) {
         case 'pdf':
@@ -35,17 +79,20 @@ const getAttachmentIcon = (fileType: string) => {
     }
 };
 
-export function ChapterComment({
-    comments,
-    chapterId,
-    groupByVersion = false,
-    versionSort = 'asc',
-    versionSelected = -1,
-    commentSort = 'asc',
-    onVersionSelect,
-    currentUserEmail,
-    showVersionDividers = true
-}: ChapterCommentProps) {
+/**
+ * Chapter comments section
+ * @param comments - Array of thesis comments
+ * @param chapterId - ID of the chapter
+ * @param groupByVersion - Whether to group comments by document version
+ * @param versionSort - Sort order for versions ('asc' or 'desc')
+ * @param versionSelected - Currently selected version to filter comments
+ * @param commentSort - Sort order for comments within a version ('asc' or 'desc')
+ * @param onVersionSelect - Callback when a version is selected
+ * @param currentUserEmail - Email of the current user
+ * @param showVersionDividers - Whether to show dividers between versions
+ */
+export function ChapterComment({ comments, chapterId, groupByVersion = false, versionSort = 'asc', versionSelected = -1,
+    commentSort = 'asc', onVersionSelect, currentUserEmail, showVersionDividers = true }: ChapterCommentProps) {
 
     if (comments.length === 0) {
         return null;
@@ -71,7 +118,11 @@ export function ChapterComment({
         return sorted;
     };
 
-    // Comment Card Component
+    /**
+     * Comment Card Component
+     * @param comment - The thesis comment to display
+     * @param index - Index of the comment in the list
+     */
     const CommentCard = ({ comment, index }: { comment: ThesisComment; index: number }) => {
         const isCurrentUser = isCurrentUserComment(comment);
         const authorDisplayName = getDisplayName(comment.author);
