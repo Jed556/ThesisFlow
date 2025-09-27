@@ -407,7 +407,8 @@ export async function prepareFileForUpload(file: File, author: string): Promise<
         mimeType: file.type,
         thumbnail: thumbnail || undefined,
         uploadDate: new Date().toISOString(),
-        metadata: metadata || undefined
+        metadata: metadata || undefined,
+        author // email
     };
 
     return {

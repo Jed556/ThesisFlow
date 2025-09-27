@@ -24,7 +24,7 @@ export const navigationGroups: NavigationGroup[] = [
         index: 3,
         header: true,
         divider: true,
-        title: 'User Management',
-        segment: 'user-management',
+        title: 'Management',
+        segment: 'management',
     },
 ];

@@ -1,5 +1,5 @@
 // User role types - System-wide roles
-export type UserRole = 'student' | 'editor' | 'adviser' | 'admin';
+export type UserRole = 'student' | 'editor' | 'adviser' | 'admin' | 'developer';
 
 /**
  * Interface for user profiles in the ThesisFlow system

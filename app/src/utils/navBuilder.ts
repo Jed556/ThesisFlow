@@ -84,8 +84,12 @@ function isHidden(metadata?: NavigationItem) {
     if (!metadata) return false;
     // If the page is marked hidden, allow opt-in for the dev-helper when env flag is set
     if (metadata.hidden) {
-        if (DEV_HELPER_ENABLED && metadata.segment === 'dev-helper') {
-            return false;
+        if (DEV_HELPER_ENABLED) {
+            const seg = resolveSegment(metadata);
+            // allow any page under dev/ when dev helper enabled
+            if (seg && seg.startsWith('dev/')) {
+                return false;
+            }
         }
         return true;
     }

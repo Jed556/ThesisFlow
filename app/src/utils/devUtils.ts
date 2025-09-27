@@ -31,7 +31,7 @@ export function setCurrentAppTheme(theme: any) {
  * @returns {boolean} True if in development environment
  */
 export function isDevelopmentEnvironment(): boolean {
-    return !import.meta.env.PROD || import.meta.env.VITE_SHOW_DEV_FEATURES === 'true' ||
+    return !import.meta.env.PROD || import.meta.env.VITE_DEV_UTILS_ENABLED === 'true' ||
         import.meta.env.MODE === 'development' || import.meta.env.MODE === 'preview' || import.meta.env.MODE === 'test';
 }
 
@@ -47,7 +47,7 @@ export function getEnvironmentInfo() {
             DEV: import.meta.env.DEV,
             MODE: import.meta.env.MODE,
             PROD: import.meta.env.PROD,
-            VITE_SHOW_DEV_FEATURES: import.meta.env.VITE_SHOW_DEV_FEATURES
+            VITE_DEV_UTILS_ENABLED: import.meta.env.VITE_DEV_UTILS_ENABLED
         }
     };
     console.log('Environment Info:', info);

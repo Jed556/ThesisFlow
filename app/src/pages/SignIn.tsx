@@ -3,17 +3,27 @@ import { TextField, Button, Link, Alert, Typography, FormControl, IconButton, In
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
 import { Navigate, useNavigate } from 'react-router';
-import { useSession, type Session } from '../SessionContext';
+import { useSession } from '../SessionContext';
 import { signInWithCredentials } from '../firebase/auth';
-import { getUserRole } from '../utils/roleUtils';
+import { getUserByEmail } from '../utils/firestoreUtils';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
+import type { Session } from '../types/session';
 
 export const metadata: NavigationItem = {
     title: 'Sign In',
     segment: 'sign-in',
     hidden: true,
 };
+
+const DEV_HELPER_USERNAME = import.meta.env.VITE_DEV_HELPER_USERNAME || '';
+const DEV_HELPER_PASSWORD = import.meta.env.VITE_DEV_HELPER_PASSWORD || '';
+const DEV_EMAIL_DOMAIN = import.meta.env.VITE_DEV_EMAIL_DOMAIN || 'thesisflow.dev';
+const DEV_EMAIL_SUFFIX = DEV_EMAIL_DOMAIN.startsWith('@') ? DEV_EMAIL_DOMAIN : '@' + DEV_EMAIL_DOMAIN;
+
+const DEV_HELPER_ENABLED = (import.meta.env.VITE_DEV_HELPER_ENABLED === 'true') &&
+    DEV_HELPER_USERNAME !== '' &&
+    DEV_HELPER_PASSWORD !== '';
 
 /**
  * Context for managing form state in the sign-in page
@@ -36,15 +46,29 @@ function Info() {
     const formContext = React.useContext(FormContext);
 
     const testAccounts = [
-        { role: 'Student', email: 'student@test.com', color: 'primary' as const },
-        { role: 'Adviser', email: 'adviser@test.com', color: 'secondary' as const },
-        { role: 'Editor', email: 'editor@test.com', color: 'info' as const },
-        { role: 'Admin', email: 'admin@test.com', color: 'error' as const },
+        { role: 'Student', email: 'student' + DEV_EMAIL_SUFFIX, color: 'primary' as const },
+        { role: 'Adviser', email: 'adviser' + DEV_EMAIL_SUFFIX, color: 'secondary' as const },
+        { role: 'Editor', email: 'editor' + DEV_EMAIL_SUFFIX, color: 'info' as const },
+        { role: 'Admin', email: 'admin' + DEV_EMAIL_SUFFIX, color: 'error' as const },
     ];
+
+    if (DEV_HELPER_ENABLED) {
+        testAccounts.push({ role: 'Developer', email: DEV_HELPER_USERNAME + DEV_EMAIL_SUFFIX, color: 'success' as const });
+    }
 
     const handleDevClick = (email: string) => {
         if (formContext && isDevelopmentEnvironment()) {
             formContext.setEmailValue(email);
+
+            if (DEV_HELPER_ENABLED)
+                try {
+                    const emailPrefix = email.split('@')[0];
+                    if (emailPrefix === (DEV_HELPER_USERNAME) && DEV_HELPER_PASSWORD) {
+                        formContext.setPasswordValue(DEV_HELPER_PASSWORD);
+                        return;
+                    }
+                } catch (e) { } // ignore env access issues and fall back to default
+
             formContext.setPasswordValue('Password_123');
         }
     };
@@ -211,12 +235,57 @@ export default function SignIn() {
                             if (!email) return { error: 'Email is required' };
                             if (!password) return { error: 'Password is required' };
 
+
+                            // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
+
+                            if (DEV_HELPER_ENABLED)
+                                try {
+                                    if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
+                                        const name = email.split('@')[0];
+                                        // Check name before @ matches env username and password matches
+                                        if (DEV_HELPER_ENABLED && name === DEV_HELPER_USERNAME && password === DEV_HELPER_PASSWORD) {
+                                            // Create a temporary session so Layout doesn't redirect to sign-in
+                                            try {
+                                                const tmpSession: Session = {
+                                                    user: {
+                                                        name,
+                                                        email,
+                                                        role: 'developer',
+                                                    },
+                                                };
+                                                setSession(tmpSession);
+                                                navigate('/dev-helper', { replace: true });
+                                                return {};
+                                            } catch (e) {
+                                                // navigation error: fall back to normal flow
+                                                console.warn('dev-helper navigation failed', e);
+                                            }
+                                        } else {
+                                            return { error: 'Invalid dev credentials' };
+                                        }
+                                    }
+                                } catch (e) {
+                                    // ignore env access issues and continue with normal sign-in
+                                    console.warn('dev env check failed', e);
+                                }
+
+
                             result = await signInWithCredentials(email, password);
                         }
 
                         if (result?.success && result?.user) {
                             const email = result.user.email || '';
-                            const userRole = getUserRole(email);
+                            let userRole;
+
+                            try {
+                                const profile = await getUserByEmail(email);
+                                if (profile && profile.role) {
+                                    userRole = profile.role;
+                                }
+                            } catch (err) {
+                                // ignore and fallback to getUserRole
+                                console.warn('Failed to read user profile for role detection', err);
+                            }
 
                             const userSession: Session = {
                                 user: {

@@ -9,7 +9,6 @@ import {
     PriorityHigh, Visibility, NotificationImportant, CheckCircle, Cancel, Warning, School, Book, Slideshow, Assignment,
     Groups, BeachAccess
 } from '@mui/icons-material';
-import { getDisplayName, getProfile } from '../utils/dbUtils';
 import { Avatar, Name } from '../components';
 import { EventCard } from '../components';
 import { Calendar } from '../components';
@@ -18,11 +17,12 @@ import type { ScheduleEvent, EventType, EventStatus, CalendarView } from '../typ
 import { mockScheduleEvents, mockAcademicCalendar } from '../data/mockScheduleData';
 
 export const metadata: NavigationItem = {
+    index: 2,
     title: 'Calendar',
     segment: 'calendar',
     icon: <CalendarToday />,
     group: 'main',
-    index: 2,
+    children: [],
 };
 
 /**

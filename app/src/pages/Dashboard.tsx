@@ -11,7 +11,6 @@ export const metadata: NavigationItem = {
 	segment: 'dashboard',
 	icon: <DashboardIcon />,
 	children: [],
-	roles: ['student', 'admin'],
 };
 
 /**
@@ -19,7 +18,7 @@ export const metadata: NavigationItem = {
  */
 export default function DashboardPage() {
 	const { session } = useSession();
-	const userRole = session?.user?.role || 'guest';
+	const userRole = session?.user?.role;
 
 	return (
 		<>

@@ -1,30 +1,10 @@
 import * as React from 'react';
-
-/**
- * Session user information
- */
-export interface Session {
-    user: {
-        name?: string;
-        email?: string;
-        image?: string;
-        role?: string;
-    };
-}
-
-/**
- * Context type for session management
- */
-interface SessionContextType {
-    session: Session | null;
-    setSession: (session: Session) => void;
-    loading: boolean;
-}
+import type { SessionContext } from './types/session';
 
 /**
  * Base application context for session management 
  */
-const SessionContext = React.createContext<SessionContextType>({
+const SessionContext = React.createContext<SessionContext>({
     session: null,
     setSession: () => { },
     loading: true,

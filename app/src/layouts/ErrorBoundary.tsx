@@ -43,7 +43,7 @@ export default function ErrorBoundary() {
                     <Typography variant="body1" paragraph>
                         We're sorry for the inconvenience. The page you're looking for might not exist or there was an unexpected error.
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', bgcolor: 'grey.100', p: 2, borderRadius: 1 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', bgcolor: 'grey.900', p: 2, borderRadius: 1 }}>
                         {errorMessage}
                     </Typography>
                 </Box>
