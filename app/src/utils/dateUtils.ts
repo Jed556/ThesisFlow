@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 /**
  * Date utility functions for ThesisFlow application
  * Handles various date formats and provides consistent date operations
@@ -141,13 +143,17 @@ export function formatThesisDate(date: Date): string {
 }
 
 /**
- * Gets a relative time string (e.g., "2 days ago", "1 hour ago")
- * @param date - The date to compare to now
- * @returns Relative time string
+ * Unified relative formatter.
+ * @param date - date to format relative to now
+ * @param options.style - 'long' (default) or 'short'
+ * @param options.showSeconds - include seconds for sub-minute values
+ * @param options.omitAgo - when true, omit the trailing 'ago' in long mode
+ * @param now - optional "now" date for testing or custom reference
+ * @returns formatted relative time string
  */
-export function getRelativeTime(date: Date): string {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+export function formatRelative(date: Date, options?: { style?: 'long' | 'short'; showSeconds?: boolean; omitAgo?: boolean }, now?: Date): string {
+    const _now = now ?? new Date();
+    const diffMs = _now.getTime() - date.getTime();
     const diffSeconds = Math.floor(diffMs / 1000);
     const diffMinutes = Math.floor(diffSeconds / 60);
     const diffHours = Math.floor(diffMinutes / 60);
@@ -156,21 +162,141 @@ export function getRelativeTime(date: Date): string {
     const diffMonths = Math.floor(diffDays / 30);
     const diffYears = Math.floor(diffDays / 365);
 
-    if (diffYears > 0) {
-        return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
-    } else if (diffMonths > 0) {
-        return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
-    } else if (diffWeeks > 0) {
-        return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
-    } else if (diffDays > 0) {
-        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    } else if (diffHours > 0) {
-        return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    } else if (diffMinutes > 0) {
-        return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
-    } else {
-        return 'Just now';
+    const style = options?.style ?? 'long';
+    const isShort = style === 'short';
+    const showSeconds = !!options?.showSeconds;
+    const omitAgo = !!options?.omitAgo;
+
+    if (isShort) {
+        if (diffYears > 0) return `${diffYears}yr`;
+        if (diffMonths > 0) return `${diffMonths}mo`;
+        if (diffWeeks > 0) return `${diffWeeks}wk`;
+        if (diffDays > 0) return `${diffDays}d`;
+        if (diffHours > 0) return `${diffHours}h`;
+        if (diffMinutes > 0) return `${diffMinutes}m`;
+        if (showSeconds) {
+            if (diffSeconds > 0) return `${diffSeconds}s`;
+        }
+        return 'now';
     }
+
+    // long style
+    if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''}${omitAgo ? '' : ' ago'}`;
+    if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}${omitAgo ? '' : ' ago'}`;
+    if (diffWeeks > 0) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''}${omitAgo ? '' : ' ago'}`;
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''}${omitAgo ? '' : ' ago'}`;
+    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''}${omitAgo ? '' : ' ago'}`;
+    if (diffMinutes > 0) return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''}${omitAgo ? '' : ' ago'}`;
+
+    // less than a minute
+    if (showSeconds) {
+        if (diffSeconds > 0) return `${diffSeconds} second${diffSeconds > 1 ? 's' : ''}${omitAgo ? '' : ' ago'}`;
+        return isShort ? 'now' : 'Just now';
+    }
+
+    if (isShort) return 'now';
+    return 'Just now';
+}
+
+/**
+ * Formats a log timestamp for display: local time + relative time
+ * @param date - date to format
+ * @param options.style - 'long' (default) or 'short'
+ * @param options.showSeconds - include seconds for sub-minute values
+ * @param options.omitAgo - when true, omit the trailing 'ago' in long mode
+ * @param now - optional "now" date for testing or custom reference
+ * @returns string like '11:34 AM · 2m' or '11:34 AM · 2 minutes ago'
+ */
+export function formatLogTimestamp(date: Date, options?: { style?: 'long' | 'short'; showSeconds?: boolean; omitAgo?: boolean }, now?: Date): string {
+    // Determine relative string and whether the timestamp is ~1 day old
+    const _now = now ?? new Date();
+    const rel = formatRelative(date, { style: options?.style ?? 'long', showSeconds: options?.showSeconds, omitAgo: options?.omitAgo }, _now);
+
+    // Compute difference in days to detect the 1-day boundary precisely
+    const diffMs = _now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // If exactly 1 day old, swap the usual display: show relative on the left and the date on the right
+    if (diffDays === 1) {
+        // show full date (no time) on the right side in local format: e.g., '2025-09-27' or localized short date
+        const dateStr = date.toLocaleDateString('en-US');
+        if (!rel) return dateStr;
+        return `${rel} · ${dateStr}`;
+    }
+
+    // Default: show time on the left, relative on the right
+    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    if (!rel) return timeStr;
+    return `${timeStr} · ${rel}`;
+}
+
+/**
+ * React hook: returns a ticking `Date`.
+ * @param conservative - if true, start with higher-frequency ticks and gradually degrade to less frequent ticks (seconds -> minutes -> hours) to conserve resources.
+ * @param ticksPerSecond - initial frequency in ticks per second when running high-frequency phase.
+ * @returns current ticking date
+ */
+
+export function useTick(conservative: boolean = false, ticksPerSecond: number = 1) {
+    const [now, setNow] = React.useState(() => new Date());
+
+    React.useEffect(() => {
+        let id: ReturnType<typeof setInterval> | undefined;
+        let switchTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const cleanup = () => {
+            if (id) clearInterval(id);
+            if (switchTimer) clearTimeout(switchTimer);
+            id = undefined;
+            switchTimer = undefined;
+        };
+
+        // compute initial interval from ticksPerSecond (Hz)
+        const initialMs = Math.max(1, Math.round(1000 / Math.max(1, ticksPerSecond)));
+
+        if (!conservative) {
+            // aggressive/real-time mode: continuous ticks at initialMs
+            id = setInterval(() => setNow(new Date()), initialMs);
+            return cleanup;
+        }
+
+        // conservative mode: multiplicative progression of intervals
+        // multipliers: seconds -> minutes -> hours -> days -> weeks
+        const multipliers = [60, 60, 24, 7];
+
+        // intervalsMs[0] = initialMs, intervalsMs[i] = initialMs * product(multipliers[0..i-1])
+        const intervalsMs: number[] = [initialMs];
+        for (let i = 0; i < multipliers.length; i++) {
+            intervalsMs.push(intervalsMs[i] * multipliers[i]);
+        }
+
+        // durations (in seconds) for how long to stay in phase i before switching to i+1
+        // durationsSec[i] = product(multipliers[0..i]) where i corresponds to the multiplier index
+        const durationsSec: number[] = [];
+        let acc = 1;
+        for (let m of multipliers) {
+            acc *= m;
+            durationsSec.push(acc);
+        }
+
+        let phase = 0;
+        const startPhase = (p: number) => {
+            cleanup();
+            phase = p;
+            const interval = intervalsMs[Math.min(p, intervalsMs.length - 1)];
+            id = setInterval(() => setNow(new Date()), interval);
+            // schedule next phase if there is one
+            if (p < durationsSec.length) {
+                switchTimer = setTimeout(() => startPhase(p + 1), durationsSec[p] * 1000);
+            }
+        };
+
+        startPhase(0);
+
+        return cleanup;
+    }, [conservative, ticksPerSecond]);
+
+    return now;
 }
 
 /**
