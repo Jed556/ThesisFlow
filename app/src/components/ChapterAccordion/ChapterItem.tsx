@@ -1,34 +1,49 @@
 import * as React from 'react';
-import {
-    Typography,
-    Box,
-    Card,
-    CardContent,
-    Tooltip,
-} from '@mui/material';
-import type { ThesisComment } from '../types/thesis';
-import { ChapterFile } from './ChapterFile';
-import { ChapterComment } from './ChapterComment';
-import { SortButton } from './SortButton';
+import { Typography, Box, Card, CardContent, } from '@mui/material';
+import type { ThesisComment } from '../../types/thesis';
+import ChapterFile from './ChapterFile';
+import ChapterComment from './ChapterComment';
+import SortButton from '../SortButton/SortButton';
 
+/**
+ * Props for the ChapterItem component
+ */
 interface ChapterItemProps {
+    /**
+     * ID of the chapter
+     */
     chapterId: number;
+    /**
+     * Array of comments related to the chapter
+     */
     comments: ThesisComment[];
 }
 
-export function ChapterItem({ chapterId, comments }: ChapterItemProps) {
+/**
+ * Chapter item with file versions and comments
+ * @param chapterId - ID of the chapter
+ * @param comments - Array of comments related to the chapter
+ */
+export default function ChapterItem({ chapterId, comments }: ChapterItemProps) {
     const [selectedVersion, setSelectedVersion] = React.useState<number | undefined>();
     const [commentSortOrder, setCommentSortOrder] = React.useState<'asc' | 'desc'>('asc'); // Default: latest at bottom
 
     // Mock current user - in real app this would come from session/auth context
     const currentUserEmail = "john.doe@university.edu"; // Student email
 
-    // Helper function to get comments for a specific version
+    /**
+     * Get comments for a specific version
+     * @param version - Version number
+     * @returns Array of comments for the specified version
+     */
     const getCommentsForVersion = (version: number) => {
         return comments.filter(comment => comment.version === version);
     };
 
-    // Handle version selection/deselection
+    /**
+     * Handle version selection/deselection
+     * @param version - Version number to select/deselect
+     */
     const handleVersionSelect = (version: number) => {
         if (selectedVersion === version) {
             // If clicking on the already selected version, deselect it
@@ -39,7 +54,10 @@ export function ChapterItem({ chapterId, comments }: ChapterItemProps) {
         }
     };
 
-    // Handle comment sort toggle
+    /**
+     * Handle comment sort toggle
+     * Toggles between ascending and descending order
+     */
     const toggleCommentSortOrder = () => {
         setCommentSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
     };
@@ -52,24 +70,18 @@ export function ChapterItem({ chapterId, comments }: ChapterItemProps) {
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, gap: 3 }}>
                 {/* File Versions Column */}
                 <Box sx={{ flex: 1 }}>
-                    <Tooltip
-                        title={!selectedVersion ? "Click on a document version to view its specific feedback. Click again to deselect and view all feedback." : ""}
-                        placement="top"
-                        arrow
-                    >
-                        <Card variant="outlined">
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                                    Document Versions
-                                </Typography>
-                                <ChapterFile
-                                    chapterId={chapterId}
-                                    onVersionSelect={handleVersionSelect}
-                                    selectedVersion={selectedVersion}
-                                />
-                            </CardContent>
-                        </Card>
-                    </Tooltip>
+                    <Card variant="outlined">
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                                Document Versions
+                            </Typography>
+                            <ChapterFile
+                                chapterId={chapterId}
+                                onVersionSelect={handleVersionSelect}
+                                selectedVersion={selectedVersion}
+                            />
+                        </CardContent>
+                    </Card>
                 </Box>
 
                 {/* Comments Column */}

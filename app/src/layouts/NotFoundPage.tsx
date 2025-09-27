@@ -1,8 +1,10 @@
-import * as React from 'react';
 import { Box, Typography, Button, Paper, Container } from '@mui/material';
 import { Home, ArrowBack, Search } from '@mui/icons-material';
 import { useNavigate } from 'react-router';
 
+/**
+ * Page displayed when a user navigates to a non-existent route (404 Not Found)
+ */
 export default function NotFoundPage() {
     const navigate = useNavigate();
 

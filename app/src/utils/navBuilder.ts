@@ -2,7 +2,8 @@ import * as React from 'react';
 import type { Navigation } from '@toolpad/core/AppProvider';
 import type { RouteObject } from 'react-router';
 import type { NavigationItem, NavigationGroup } from '../types/navigation';
-import { hasRoleAccess, type UserRole } from './roleUtils';
+import { hasRoleAccess } from './roleUtils';
+import type { UserRole } from '../types/profile';
 import Layout from '../layouts/Layout';
 import ErrorBoundary from '../layouts/ErrorBoundary';
 import NotFoundPage from '../layouts/NotFoundPage';
@@ -67,6 +68,34 @@ async function discoverPages(): Promise<void> {
     await Promise.all(loadPromises);
 }
 
+// Honor env flag to allow showing the dev-helper page only when explicitly enabled
+const DEV_HELPER_USERNAME = import.meta.env.VITE_DEV_HELPER_USERNAME || '';
+const DEV_HELPER_PASSWORD = import.meta.env.VITE_DEV_HELPER_PASSWORD || '';
+const DEV_HELPER_ENABLED = (import.meta.env.VITE_DEV_HELPER_ENABLED === 'true') &&
+    DEV_HELPER_USERNAME !== '' &&
+    DEV_HELPER_PASSWORD !== '';
+
+/**
+ * 
+ * @param metadata Optional NavigationItem metadata to check
+ * @returns true if the page should be hidden, false otherwise
+ */
+function isHidden(metadata?: NavigationItem) {
+    if (!metadata) return false;
+    // If the page is marked hidden, allow opt-in for the dev-helper when env flag is set
+    if (metadata.hidden) {
+        if (DEV_HELPER_ENABLED) {
+            const seg = resolveSegment(metadata);
+            // allow any page under dev/ when dev helper enabled
+            if (seg && seg.startsWith('dev/')) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 /**
  * Initialize the page registry
  */
@@ -76,6 +105,18 @@ async function initializeRegistry(): Promise<void> {
         await discoverPages();
         registryInitialized = true;
     }
+}
+
+/**
+ * Return the canonical segment/path for a page metadata.
+ * Use this instead of repeating `metadata.path || metadata.segment`.
+ * Removes any leading slash and any trailing slashes (e.g. '/dashboard/me/' -> 'dashboard/me').
+ */
+function resolveSegment(metadata?: NavigationItem): string | undefined {
+    const seg = metadata ? (metadata.path ?? metadata.segment) : undefined;
+    if (seg == null) return undefined;
+    // Remove leading and trailing slashes. If original was "/", this yields '' (empty string).
+    return seg.replace(/^\/+|\/+$/g, '');
 }
 
 /**
@@ -111,16 +152,16 @@ function groupNavigationItems(pages: NavigationItem[], navigationGroups: Navigat
 /**
  * Converts NavigationItem to Toolpad Navigation format
  */
-function convertToToolpadNavigation(item: NavigationItem, userRole?: UserRole): Navigation[0] {
+function convertToToolpadNavigation(metadata: NavigationItem, userRole?: UserRole): Navigation[0] {
     const baseItem: any = {
-        segment: item.segment,
-        title: item.title,
-        icon: item.icon,
+        segment: resolveSegment(metadata),
+        title: metadata.title,
+        icon: metadata.icon,
     };
 
     // Add children if they exist
-    if (item.children && item.children.length > 0) {
-        const visibleChildren = item.children
+    if (metadata.children && metadata.children.length > 0) {
+        const visibleChildren = metadata.children
             .map(childSegment => {
                 const childPage = Object.values(PAGE_REGISTRY).find(
                     page => page.metadata.segment === childSegment
@@ -128,7 +169,7 @@ function convertToToolpadNavigation(item: NavigationItem, userRole?: UserRole): 
                 return childPage;
             })
             .filter(childPage => {
-                if (!childPage || childPage.metadata.hidden) {
+                if (!childPage || isHidden(childPage.metadata)) {
                     return false;
                 }
                 // Filter by role access
@@ -161,7 +202,7 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
     const visiblePages = Object.values(PAGE_REGISTRY)
         .map(page => page.metadata)
         .filter(metadata => {
-            if (metadata.hidden) {
+            if (isHidden(metadata)) {
                 return false;
             }
             // Filter by role access
@@ -178,7 +219,7 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
             page.children.forEach(child => {
                 // Also check if the child page itself is hidden or role-restricted
                 const childPage = Object.values(PAGE_REGISTRY).find(p => p.metadata.segment === child);
-                if (childPage && !childPage.metadata.hidden) {
+                if (childPage && !isHidden(childPage.metadata)) {
                     // Check role access for child pages
                     if (userRole && childPage.metadata.roles) {
                         if (hasRoleAccess(userRole, childPage.metadata.roles)) {
@@ -206,17 +247,17 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
         if (a.index !== undefined && b.index !== undefined) {
             return a.index - b.index;
         }
-        
+
         // If only a has an index, a comes first
         if (a.index !== undefined && b.index === undefined) {
             return -1;
         }
-        
+
         // If only b has an index, b comes first
         if (a.index === undefined && b.index !== undefined) {
             return 1;
         }
-        
+
         // If neither has an index, sort alphabetically by segment
         return a.segment.localeCompare(b.segment);
     });
@@ -253,17 +294,17 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
             if (a.index !== undefined && b.index !== undefined) {
                 return a.index - b.index;
             }
-            
+
             // If only a has an index, a comes first
             if (a.index !== undefined && b.index === undefined) {
                 return -1;
             }
-            
+
             // If only b has an index, b comes first
             if (a.index === undefined && b.index !== undefined) {
                 return 1;
             }
-            
+
             // If neither has an index, sort alphabetically by segment
             return (a.segment || '').localeCompare(b.segment || '');
         });
@@ -284,24 +325,24 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
         //     kind: 'header',
         //     title: 'Other',
         // });
-        
+
         // Sort ungrouped pages by index, then alphabetically by segment
         const sortedUngroupedPages = ungroupedPages.sort((a, b) => {
             // If both have indexes, sort by index
             if (a.index !== undefined && b.index !== undefined) {
                 return a.index - b.index;
             }
-            
+
             // If only a has an index, a comes first
             if (a.index !== undefined && b.index === undefined) {
                 return -1;
             }
-            
+
             // If only b has an index, b comes first
             if (a.index === undefined && b.index !== undefined) {
                 return 1;
             }
-            
+
             // If neither has an index, sort alphabetically by segment
             return (a.segment || '').localeCompare(b.segment || '');
         });
@@ -327,8 +368,8 @@ export async function buildRoutes(): Promise<RouteObject[]> {
     const allPages = Object.values(PAGE_REGISTRY);
 
     // Separate special pages (like signin) from regular pages
-    const specialPages = allPages.filter(page => page.metadata.hidden);
-    const visiblePages = allPages.filter(page => !page.metadata.hidden);
+    const specialPages = allPages.filter(page => isHidden(page.metadata));
+    const visiblePages = allPages.filter(page => !isHidden(page.metadata));
 
     // Get all child segments to exclude from top-level routes
     const childSegments = new Set<string>();
@@ -351,7 +392,7 @@ export async function buildRoutes(): Promise<RouteObject[]> {
 
     topLevelPages.forEach(page => {
         const route: RouteObject = {
-            path: page.metadata.segment,
+            path: resolveSegment(page.metadata),
             Component: page.default,
         };
 
@@ -362,10 +403,10 @@ export async function buildRoutes(): Promise<RouteObject[]> {
             page.metadata.children.forEach(childSegment => {
                 const childPage = allPages.find(p => p.metadata.segment === childSegment);
 
-                // Only add child route if the child page exists and is not hidden
-                if (childPage && !childPage.metadata.hidden) {
+                // Only add child route if the child page exists and is not hidden (honoring ENABLE_DB_HELPER)
+                if (childPage && !isHidden(childPage.metadata)) {
                     childRoutes.push({
-                        path: childSegment,
+                        path: resolveSegment(childPage.metadata),
                         Component: childPage.default,
                     });
                 }
@@ -391,7 +432,7 @@ export async function buildRoutes(): Promise<RouteObject[]> {
     // Add special routes (like signin)
     specialPages.forEach(page => {
         routes.push({
-            path: `/${page.metadata.segment}`,
+            path: `/${resolveSegment(page.metadata)}`,
             Component: page.default,
             errorElement: React.createElement(ErrorBoundary),
         });
@@ -441,6 +482,7 @@ export async function refreshPageRegistry(): Promise<void> {
 
 /**
  * Utility to get all page segments
+ * @returns Array of all page segments
  */
 export async function getPageSegments(): Promise<string[]> {
     await initializeRegistry();

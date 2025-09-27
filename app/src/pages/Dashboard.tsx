@@ -1,4 +1,3 @@
-import * as React from 'react';
 import Typography from '@mui/material/Typography';
 import { Box, Chip } from '@mui/material';
 import type { NavigationItem } from '../types/navigation';
@@ -12,14 +11,14 @@ export const metadata: NavigationItem = {
 	segment: 'dashboard',
 	icon: <DashboardIcon />,
 	children: [],
-	// path: '/dashboard',
-	roles: ['student', 'admin'],
-	// hidden: false,
 };
 
+/**
+ * Home dashboard page displaying user info, quick links and stats
+ */
 export default function DashboardPage() {
 	const { session } = useSession();
-	const userRole = session?.user?.role || 'guest';
+	const userRole = session?.user?.role;
 
 	return (
 		<>

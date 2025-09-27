@@ -4,8 +4,10 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import App from './App';
 import ErrorBoundary from './layouts/ErrorBoundary';
 import { buildRoutes } from './utils/navBuilder';
+import { attachDevUtilsToWindow, setCurrentRoutes, setCurrentRouter } from './utils/devUtils';
 
-// Create a component to handle async router creation
+attachDevUtilsToWindow(); // Attach dev utilities to window for console access
+
 function AppWithRouter() {
     const [router, setRouter] = React.useState<ReturnType<typeof createBrowserRouter> | null>(null);
 
@@ -13,9 +15,10 @@ function AppWithRouter() {
         async function initializeRouter() {
             try {
                 const routes = await buildRoutes();
-                if (process.env.NODE_ENV === 'development') {
-                    console.log('Built routes:', routes); // Debug log
-                }
+
+                // Store routes for dev utils
+                setCurrentRoutes(routes);
+
                 const createdRouter = createBrowserRouter([
                     {
                         path: '/',
@@ -24,6 +27,9 @@ function AppWithRouter() {
                         children: routes,
                     },
                 ]);
+
+                // Store router for dev utils
+                setCurrentRouter(createdRouter);
                 setRouter(createdRouter);
             } catch (error) {
                 console.error('Failed to build routes:', error);
@@ -34,9 +40,7 @@ function AppWithRouter() {
     }, []);
 
     if (!router) {
-        return (
-            <></>
-        );
+        return <></>;
     }
 
     return <RouterProvider router={router} />;

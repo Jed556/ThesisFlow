@@ -145,3 +145,6 @@ package-lock.json
 # Instruction and Prompt files
 **.instructions.md
 **.prompt.md
+
+# Virtual environment
+**.venv

@@ -1,11 +1,10 @@
-import * as React from 'react';
-import { Typography, Paper, Box, Chip, Accordion, AccordionSummary, AccordionDetails, List, ListItem, ListItemText, ListItemIcon, Divider, Card, CardContent, LinearProgress, Avatar, Stack, Button, IconButton, } from '@mui/material';
-import { School, } from '@mui/icons-material';
-import { useNavigate } from 'react-router';
+import { Typography, Paper, Box, Chip, Card, CardContent, LinearProgress, Stack } from '@mui/material';
+import { School } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisChapter } from '../../types/thesis';
 import { mockThesisData } from '../../data/mockData';
-import { getDisplayName, getThesisTeamMembers } from '../../utils/dbUtils';
+import { getThesisTeamMembers, getDisplayName } from '../../utils/dbUtils';
+import Avatar, { Name } from '../../components/Avatar/Avatar';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -13,24 +12,19 @@ export const metadata: NavigationItem = {
     title: 'My Thesis',
     segment: 'thesis',
     icon: <School />,
-    // children: [],
-    // path: '/thesis',
     roles: ['student', 'admin'],
-    // hidden: false,
-};
-
-const calculateProgress = () => {
+}; const calculateProgress = () => {
     const total = mockThesisData.chapters.length;
     const approved = mockThesisData.chapters.filter((ch: ThesisChapter) => ch.status === 'approved').length;
     return (approved / total) * 100;
 };
 
+/**
+ * Main thesis overview page for students, showing progress, chapters, and team members
+ */
 export default function ThesisPage() {
     const progress = calculateProgress();
-    const navigate = useNavigate();
-    const teamMembers = getThesisTeamMembers();
-
-    return (
+    const teamMembers = getThesisTeamMembers(); return (
         <>
             {/* Thesis Header (with members section) */}
             <Paper sx={{ p: 3, mb: 3 }}>
@@ -45,12 +39,15 @@ export default function ThesisPage() {
                     </Typography>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                         {teamMembers.map((member) => (
-                            <Chip
+                            <Avatar
                                 key={member.id}
-                                avatar={<Avatar sx={{ width: 24, height: 24 }}>{member.name.charAt(0)}</Avatar>}
-                                label={`${member.name} (${member.role})`}
-                                variant="outlined"
+                                email={member.email}
+                                initials={[Name.FIRST]}
+                                mode="chip"
+                                tooltip='email'
+                                label={`${getDisplayName(member.email)} (${member.thesisRole})`}
                                 size="small"
+                                chipProps={{ variant: 'outlined', size: 'small' }}
                             />
                         ))}
                     </Stack>

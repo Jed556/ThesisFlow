@@ -1,0 +1,15 @@
+email,firstName,lastName,role,department,prefix,id
+john.doe@university.edu,John,Doe,student,Computer Science,,1
+jane.smith@university.edu,Jane,Smith,adviser,Computer Science,Dr.,2
+mike.johnson@university.edu,Michael,Johnson,editor,Educational Technology,Prof.,3
+sarah.wilson@university.edu,Sarah,Wilson,student,Computer Science,,4
+alex.chen@university.edu,Alex,Chen,student,Computer Science,,5
+maria.garcia@university.edu,Maria,Garcia,student,Data Science,,6
+david.kim@university.edu,David,Kim,adviser,Educational Technology,Dr.,7
+emily.brown@university.edu,Emily,Brown,editor,Computer Science,Prof.,8
+robert.lee@university.edu,Robert,Lee,student,Information Systems,,9
+lisa.wang@university.edu,Lisa,Wang,adviser,Machine Learning,Dr.,10
+student@test.com,Test,Student,student,Development,,
+adviser@test.com,Test,Adviser,adviser,Development,,
+editor@test.com,Test,Editor,editor,Development,,
+admin@test.com,Test,Admin,admin,Development,,

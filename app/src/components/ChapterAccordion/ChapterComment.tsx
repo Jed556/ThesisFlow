@@ -1,47 +1,69 @@
-import * as React from 'react';
-import {
-    Typography,
-    Box,
-    Chip,
-    Card,
-    CardContent,
-    Avatar,
-    Stack,
-    Divider,
-    IconButton,
-} from '@mui/material';
-import {
-    Person,
-    Edit,
-    PictureAsPdf,
-    Description,
-    AttachFile,
-    Visibility,
-} from '@mui/icons-material';
-import type { ThesisComment, FileAttachment } from '../types/thesis';
-import { parseThesisDate } from '../utils/dateUtils';
-import { getThesisRole, getThesisRoleDisplayText, isThesisStudent } from '../utils/roleUtils';
-import {
-    getProfile,
-    getDisplayName,
-    getAttachmentFiles,
-    getDocumentNameByVersion
-} from '../utils/dbUtils';
+import { Typography, Box, Chip, Card, CardContent, Stack, Divider, IconButton, } from '@mui/material';
+import { Person, Edit, PictureAsPdf, Description, AttachFile, Visibility, } from '@mui/icons-material';
+import Avatar, { Name } from '../Avatar/Avatar';
+import type { ThesisComment } from '../../types/thesis';
+import { parseThesisDate } from '../../utils/dateUtils';
+import { getThesisRole, getThesisRoleDisplayText } from '../../utils/roleUtils';
+import { getDisplayName, getAttachmentFiles, getDocumentNameByVersion } from '../../utils/dbUtils';
 
+/**
+ * Props for the ChapterComment component
+ */
 interface ChapterCommentProps {
+    /**
+     * Array of thesis comments
+     */
     comments: ThesisComment[];
-    chapterId: number; // Add chapterId for getting document names
+    /**
+     * ID of the chapter
+     */
+    chapterId: number;
+    /**
+     * Whether to group comments by document version
+     * @default false
+     */
     groupByVersion?: boolean;
+    /**
+     * Sort order for versions ('asc' or 'desc')
+     * @default 'asc' (oldest version first)
+     */
     versionSort?: SortOrder;
+    /**
+     * Currently selected version to filter comments
+     * @default -1 (no filtering)
+     */
     versionSelected?: number;
+    /**
+     * Sort order for comments within a version ('asc' or 'desc')
+     * @default 'asc' (oldest comment first)
+     */
     commentSort?: SortOrder;
+    /**
+     * Callback when a version is selected
+     * @param version - The version number that was selected
+     */
     onVersionSelect?: (version: number) => void;
-    currentUserEmail?: string; // Email of the current user for message alignment
-    showVersionDividers?: boolean; // Control whether to show version dividers
+    /**
+     * Email of the current user
+     */
+    currentUserEmail?: string;
+    /**
+     * Whether to show dividers between versions
+     * @default true
+     */
+    showVersionDividers?: boolean;
 }
 
+/**
+ * Sort order for comments
+ */
 type SortOrder = 'asc' | 'desc';
 
+/**
+ * Get the attachment icon for a file type
+ * @param fileType - The type of the file
+ * @returns The icon for the attachment
+ */
 const getAttachmentIcon = (fileType: string) => {
     switch (fileType.toLowerCase()) {
         case 'pdf':
@@ -57,27 +79,27 @@ const getAttachmentIcon = (fileType: string) => {
     }
 };
 
-export function ChapterComment({
-    comments,
-    chapterId,
-    groupByVersion = false,
-    versionSort = 'asc',
-    versionSelected = -1,
-    commentSort = 'asc',
-    onVersionSelect,
-    currentUserEmail,
-    showVersionDividers = true
-}: ChapterCommentProps) {
+/**
+ * Chapter comments section
+ * @param comments - Array of thesis comments
+ * @param chapterId - ID of the chapter
+ * @param groupByVersion - Whether to group comments by document version
+ * @param versionSort - Sort order for versions ('asc' or 'desc')
+ * @param versionSelected - Currently selected version to filter comments
+ * @param commentSort - Sort order for comments within a version ('asc' or 'desc')
+ * @param onVersionSelect - Callback when a version is selected
+ * @param currentUserEmail - Email of the current user
+ * @param showVersionDividers - Whether to show dividers between versions
+ */
+export default function ChapterComment({ comments, chapterId, groupByVersion = false, versionSort = 'asc', versionSelected = -1,
+    commentSort = 'asc', onVersionSelect, currentUserEmail, showVersionDividers = true }: ChapterCommentProps) {
 
     if (comments.length === 0) {
-        return null; // Let parent handle the empty state
+        return null;
     }
 
-    // Check if a comment is from the current user
     const isCurrentUserComment = (comment: ThesisComment): boolean => {
         if (!currentUserEmail) return false;
-
-        // Comments now use email directly as the author field
         return comment.author === currentUserEmail;
     };
 
@@ -87,24 +109,26 @@ export function ChapterComment({
             const dateB = parseThesisDate(b.date);
 
             if (commentSort === 'asc') {
-                return dateA.getTime() - dateB.getTime(); // Oldest first, latest at bottom
+                return dateA.getTime() - dateB.getTime();
             } else {
-                return dateB.getTime() - dateA.getTime(); // Latest first, oldest at bottom
+                return dateB.getTime() - dateA.getTime();
             }
         });
 
         return sorted;
     };
 
-    // Comment Card Component
+    /**
+     * Comment Card Component
+     * @param comment - The thesis comment to display
+     * @param index - Index of the comment in the list
+     */
     const CommentCard = ({ comment, index }: { comment: ThesisComment; index: number }) => {
         const isCurrentUser = isCurrentUserComment(comment);
-        const authorProfile = getProfile(comment.author);
         const authorDisplayName = getDisplayName(comment.author);
         const userRole = getThesisRole(comment.author);
         const userRoleDisplay = getThesisRoleDisplayText(comment.author);
 
-        // Get attachment files from hashes
         const attachmentFiles = getAttachmentFiles(comment.attachments);
 
         return (
@@ -122,20 +146,23 @@ export function ChapterComment({
                         maxWidth: '80%',
                         ml: isCurrentUser ? 2 : 1,
                         mr: isCurrentUser ? 1 : 2,
-                        bgcolor: isCurrentUser ? 'primary.50' : 'background.paper'
+                        bgcolor: isCurrentUser ? 'primary' : 'background.paper'
                     }}
                 >
                     <CardContent sx={{ p: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                             {!isCurrentUser && (
-                                <Avatar sx={{
-                                    width: 28,
-                                    height: 28,
-                                    mr: 1.5,
-                                    bgcolor: userRole === 'adviser' ? 'primary.main' : 'secondary.main'
-                                }}>
-                                    {userRole === 'adviser' ? <Person fontSize="small" /> : <Edit fontSize="small" />}
-                                </Avatar>
+                                <Avatar
+                                    email={comment.author}
+                                    initials={[Name.FIRST]}
+                                    size="small"
+                                    sx={{
+                                        width: 28,
+                                        height: 28,
+                                        mr: 1.5,
+                                        bgcolor: userRole === 'adviser' ? 'primary.main' : 'secondary.main'
+                                    }}
+                                />
                             )}
                             <Box sx={{ flexGrow: 1, textAlign: isCurrentUser ? 'right' : 'left' }}>
                                 <Typography variant="subtitle2" sx={{ fontSize: '0.875rem' }}>
@@ -146,14 +173,16 @@ export function ChapterComment({
                                 </Typography>
                             </Box>
                             {isCurrentUser && (
-                                <Avatar sx={{
-                                    width: 28,
-                                    height: 28,
-                                    ml: 1.5,
-                                    bgcolor: 'primary.main'
-                                }}>
-                                    <Person fontSize="small" />
-                                </Avatar>
+                                <Avatar
+                                    email={comment.author}
+                                    size="small"
+                                    sx={{
+                                        width: 28,
+                                        height: 28,
+                                        ml: 1.5,
+                                        bgcolor: 'primary.main'
+                                    }}
+                                />
                             )}
                         </Box>
 
@@ -243,7 +272,7 @@ export function ChapterComment({
         return (
             <Box>
                 <Stack spacing={3}>
-                    {filteredVersions.map((version, versionIndex) => {
+                    {filteredVersions.map((version) => {
                         const versionComments = groupedComments[version];
                         const documentName = getDocumentNameByVersion(chapterId, version);
 

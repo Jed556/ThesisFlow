@@ -1,8 +1,10 @@
-import * as React from 'react';
 import { useRouteError, isRouteErrorResponse } from 'react-router';
 import { Box, Typography, Button, Paper, Container } from '@mui/material';
 import { Home, Refresh, BugReport } from '@mui/icons-material';
 
+/**
+ * ErrorBoundary page to catch and display errors in the application
+ */
 export default function ErrorBoundary() {
     const error = useRouteError();
 
@@ -41,7 +43,7 @@ export default function ErrorBoundary() {
                     <Typography variant="body1" paragraph>
                         We're sorry for the inconvenience. The page you're looking for might not exist or there was an unexpected error.
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', bgcolor: 'grey.100', p: 2, borderRadius: 1 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', bgcolor: 'grey.900', p: 2, borderRadius: 1 }}>
                         {errorMessage}
                     </Typography>
                 </Box>

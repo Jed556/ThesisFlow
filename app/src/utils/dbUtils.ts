@@ -3,8 +3,10 @@
  * These functions handle data retrieval, formatting, and calculations
  */
 
-import type { FileRegistryEntry } from '../types/thesis';
-import { mockFileRegistry, mockThesisData, mockUserProfiles, type UserProfile } from '../data/mockData';
+import type { FileAttachment } from '../types/file';
+import { mockFileRegistry, mockThesisData, mockUserProfiles } from '../data/mockData';
+import type { UserProfile } from '../types/profile';
+import { parseThesisDate } from './dateUtils';
 
 /**
  * Get user profile by email
@@ -15,12 +17,31 @@ export function getProfile(email: string): UserProfile | undefined {
 
 /**
  * Get formatted display name for user
+ * 
  */
 export function getDisplayName(email: string): string {
     const profile = getProfile(email);
     if (!profile) return email; // Fallback to email if profile not found
 
-    return profile.title ? `${profile.title} ${profile.name}` : profile.name;
+    const parts: string[] = [];
+
+    if (profile.prefix) {
+        parts.push(profile.prefix);
+    }
+
+    parts.push(profile.firstName);
+
+    if (profile.middleName) {
+        parts.push(profile.middleName);
+    }
+
+    parts.push(profile.lastName);
+
+    if (profile.suffix) {
+        parts.push(profile.suffix);
+    }
+
+    return parts.join(' ');
 }
 
 /**
@@ -33,10 +54,8 @@ export function getThesisTeamMembers() {
     const leader = getProfile(mockThesisData.leader);
     if (leader) {
         teamMembers.push({
-            id: leader.id,
-            name: leader.name,
-            email: leader.email,
-            role: 'Leader'
+            ...leader,
+            thesisRole: 'Leader' // Using different property name to avoid conflict
         });
     }
 
@@ -45,10 +64,8 @@ export function getThesisTeamMembers() {
         const member = getProfile(memberEmail);
         if (member) {
             teamMembers.push({
-                id: member.id,
-                name: member.name,
-                email: member.email,
-                role: 'Member'
+                ...member,
+                thesisRole: 'Member' // Using different property name to avoid conflict
             });
         }
     });
@@ -57,10 +74,8 @@ export function getThesisTeamMembers() {
     const adviser = getProfile(mockThesisData.adviser);
     if (adviser) {
         teamMembers.push({
-            id: adviser.id,
-            name: adviser.name,
-            email: adviser.email,
-            role: 'Adviser'
+            ...adviser,
+            thesisRole: 'Adviser' // Using different property name to avoid conflict
         });
     }
 
@@ -68,10 +83,8 @@ export function getThesisTeamMembers() {
     const editor = getProfile(mockThesisData.editor);
     if (editor) {
         teamMembers.push({
-            id: editor.id,
-            name: editor.name,
-            email: editor.email,
-            role: 'Editor'
+            ...editor,
+            thesisRole: 'Editor' // Using different property name to avoid conflict
         });
     }
 
@@ -110,14 +123,14 @@ export function getVersionFromHash(chapterId: number, hash: string): number {
 /**
  * Get file by hash from the registry
  */
-export function getFileByHash(hash: string): FileRegistryEntry | undefined {
+export function getFileByHash(hash: string): FileAttachment | undefined {
     return mockFileRegistry[hash];
 }
 
 /**
  * Get all submission files for a specific chapter
  */
-export function getChapterSubmissions(chapterId: number): FileRegistryEntry[] {
+export function getChapterSubmissions(chapterId: number): FileAttachment[] {
     const chapter = mockThesisData.chapters.find(ch => ch.id === chapterId);
     if (!chapter) return [];
 
@@ -127,36 +140,36 @@ export function getChapterSubmissions(chapterId: number): FileRegistryEntry[] {
 /**
  * Get attachment files by hash array
  */
-export function getAttachmentFiles(hashes: string[]): FileRegistryEntry[] {
+export function getAttachmentFiles(hashes: string[]): FileAttachment[] {
     return hashes.map(hash => mockFileRegistry[hash]).filter(Boolean);
 }
 
 /**
  * Get version history for a specific chapter
  */
-export function getVersionHistory(chapterId: number): FileRegistryEntry[] {
+export function getVersionHistory(chapterId: number): FileAttachment[] {
     const submissions = getChapterSubmissions(chapterId);
     return submissions
         .filter(file => file.category === 'submission')
-        .sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
+        .sort((a, b) => parseThesisDate(b.uploadDate).getTime() - parseThesisDate(a.uploadDate).getTime());
 }
 
 /**
  * Get current version for a specific chapter
  */
-export function getCurrentVersion(chapterId: number): FileRegistryEntry | null {
+export function getCurrentVersion(chapterId: number): FileAttachment | null {
     const submissions = getChapterSubmissions(chapterId);
     const versions = submissions.filter(file => file.category === 'submission');
     if (versions.length === 0) return null;
 
     // Return the most recently submitted file
-    return versions.sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime())[0] || null;
+    return versions.sort((a, b) => parseThesisDate(b.uploadDate).getTime() - parseThesisDate(a.uploadDate).getTime())[0] || null;
 }
 
 /**
  * Get all versions for a specific chapter
  */
-export function getAllVersions(chapterId: number): FileRegistryEntry[] {
+export function getAllVersions(chapterId: number): FileAttachment[] {
     return getVersionHistory(chapterId);
 }
 
@@ -165,7 +178,10 @@ export function getAllVersions(chapterId: number): FileRegistryEntry[] {
  */
 export function getGroupMember(name: string) {
     const teamMembers = getThesisTeamMembers();
-    return teamMembers.find(member => member.name === name);
+    return teamMembers.find(member => {
+        const displayName = getDisplayName(member.email);
+        return displayName === name;
+    });
 }
 
 /**

@@ -1,31 +1,30 @@
-import * as React from 'react';
-import {
-    Typography,
-    Box,
-    Chip,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    Button,
-} from '@mui/material';
-import {
-    ExpandMore,
-    CheckCircle,
-    Pending,
-    Cancel,
-    Schedule,
-    Upload,
-    CloudUpload,
-} from '@mui/icons-material';
-import type { StatusColor, ThesisChapter } from '../types/thesis';
-import { getChapterSubmissions } from '../utils/dbUtils';
-import { ChapterItem } from './ChapterItem';
+import { Typography, Box, Chip, Accordion, AccordionSummary, AccordionDetails, Button, } from '@mui/material';
+import { ExpandMore, CheckCircle, Pending, Cancel, Schedule, Upload, CloudUpload, } from '@mui/icons-material';
+import type { StatusColor, ThesisChapter } from '../../types/thesis';
+import { getChapterSubmissions } from '../../utils/dbUtils';
+import  ChapterItem  from './ChapterItem';
 
+/**
+ * Props for the ChapterAccordion component
+ */
 interface ChapterAccordionProps {
+    /**
+     * Thesis chapter to display
+     */
     chapter: ThesisChapter;
+    /**
+     * Callback when the upload button is clicked
+     * @param chapterId - ID of the chapter being uploaded
+     * @param chapterTitle - Title of the chapter being uploaded
+     */
     onUploadClick: (chapterId: number, chapterTitle: string) => void;
 }
 
+/**
+ * Get the color for a chapter's status
+ * @param status - Chapter status string
+ * @returns Color for the chapter status
+ */
 const getStatusColor = (status: string): StatusColor => {
     switch (status) {
         case 'approved':
@@ -41,6 +40,11 @@ const getStatusColor = (status: string): StatusColor => {
     }
 };
 
+/**
+ * Get the icon for a chapter's status
+ * @param status - Chapter status string
+ * @returns Icon element for the chapter status
+ */
 const getStatusIcon = (status: string) => {
     switch (status) {
         case 'approved':
@@ -56,6 +60,11 @@ const getStatusIcon = (status: string) => {
     }
 };
 
+/**
+ * Get the display text for a chapter's status
+ * @param status - Chapter status string
+ * @returns Display text for the chapter status
+ */
 const getStatusDisplayText = (status: string): string => {
     switch (status) {
         case 'approved':
@@ -71,13 +80,18 @@ const getStatusDisplayText = (status: string): string => {
     }
 };
 
-export function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
+/**
+ * Display chapter details and upload options in an accordion
+ * @param chapter - Chapter object
+ * @param onUploadClick - Callback function for upload button click
+ */
+export default function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
     // Check if chapter has any submissions
     const hasSubmissions = getChapterSubmissions(chapter.id).length > 0;
 
     return (
-        <Accordion sx={{ my: 2, borderRadius: 2, '&:before, &:after': { display: 'none' }, boxShadow: 3 }}>
-            <AccordionSummary expandIcon={<ExpandMore />} sx={{ position: 'sticky', top: 0, zIndex: 1, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}>
+        <Accordion>
+            <AccordionSummary expandIcon={<ExpandMore />}>
                 <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
                     <Box sx={{ mr: 2 }}>
                         {getStatusIcon(chapter.status)}

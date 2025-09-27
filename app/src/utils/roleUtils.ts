@@ -3,17 +3,16 @@
  * Handles both system-wide authentication roles and thesis-specific contextual roles
  */
 
-import type { SystemUserRole, ThesisRole } from '../types/thesis';
-import { mockThesisData } from '../data/mockData';
-
-export type UserRole = SystemUserRole; // Use the centralized system role type
+import type { ThesisRole } from '../types/thesis';
+import type { UserRole } from '../types/profile';
+import { mockThesisData } from '../data/mockData';/**
 
 /**
  * Determines system-wide user role based on email domain or specific email addresses
  * This is a simple implementation - in a real application, you would
  * fetch this from your backend/database or JWT token
  */
-export function getUserRole(email: string): SystemUserRole {
+export function getUserRole(email: string): UserRole {
     // Admin users - you can add specific admin emails here
     const adminEmails = [
         'admin@thesisflow.com',
@@ -61,7 +60,7 @@ export function getUserRole(email: string): SystemUserRole {
 /**
  * Checks if a user has access to a specific role requirement
  */
-export function hasRoleAccess(userRole: SystemUserRole, requiredRoles: string[]): boolean {
+export function hasRoleAccess(userRole: UserRole, requiredRoles: string[]): boolean {
     if (!requiredRoles || requiredRoles.length === 0) {
         return true; // No role requirement means accessible to all
     }
@@ -73,7 +72,7 @@ export function hasRoleAccess(userRole: SystemUserRole, requiredRoles: string[])
  * Gets role hierarchy for permission checking
  * Higher numbers indicate higher privileges
  */
-export function getRoleHierarchy(role: SystemUserRole): number {
+export function getRoleHierarchy(role: UserRole): number {
     switch (role) {
         case 'admin':
             return 4;
@@ -91,7 +90,7 @@ export function getRoleHierarchy(role: SystemUserRole): number {
 /**
  * Checks if user role has at least the minimum required role level
  */
-export function hasMinimumRole(userRole: SystemUserRole, minimumRole: SystemUserRole): boolean {
+export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boolean {
     return getRoleHierarchy(userRole) >= getRoleHierarchy(minimumRole);
 }
 

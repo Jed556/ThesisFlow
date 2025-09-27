@@ -1,4 +1,6 @@
-import type { ThesisData, FileAttachment, FileRegistryEntry, SystemUserRole } from '../types/thesis';
+import type { ThesisData } from '../types/thesis';
+import type { FileAttachment } from '../types/file';
+import type { UserProfile } from '../types/profile';
 
 /**
  * Centralized mock data for the ThesisFlow application
@@ -10,16 +12,15 @@ import type { ThesisData, FileAttachment, FileRegistryEntry, SystemUserRole } fr
  * Centralized file registry with unique hashes
  * All files in the system are stored here with hash-based references
  */
-export const mockFileRegistry: Record<string, FileRegistryEntry> = {
+export const mockFileRegistry: Record<string, FileAttachment> = {
     // Chapter 1 - Introduction files
     "f1a2b3c4": {
         name: "Chapter_1_Introduction.pdf",
         type: "pdf",
         size: "2.1 MB",
         url: "/uploads/chapter_1_introduction.pdf",
-        submittedBy: "John Doe",
-        submittedByEmail: "john.doe@university.edu",
-        submissionDate: "2024-02-01 at 2:30 PM",
+        author: "john.doe@university.edu",
+        uploadDate: "2024-02-01 at 2:30 PM",
         category: "submission"
     },
     "a5b6c7d8": {
@@ -27,9 +28,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "245 KB",
         url: "/files/introduction_feedback.pdf",
-        submittedBy: "Jane Smith",
-        submittedByEmail: "jane.smith@university.edu",
-        submissionDate: "2024-02-10 at 3:20 PM",
+        author: "jane.smith@university.edu",
+        uploadDate: "2024-02-10 at 3:20 PM",
         category: "attachment"
     },
 
@@ -39,9 +39,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "docx",
         size: "1.6 MB",
         url: "/uploads/chapter_2_literature_review_v1.docx",
-        submittedBy: "John Doe",
-        submittedByEmail: "john.doe@university.edu",
-        submissionDate: "2024-02-28 at 3:45 PM",
+        author: "john.doe@university.edu",
+        uploadDate: "2024-02-28 at 3:45 PM",
         category: "submission"
     },
     "i3j4k5l6": {
@@ -49,9 +48,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "docx",
         size: "1.8 MB",
         url: "/uploads/chapter_2_literature_review_v2.docx",
-        submittedBy: "Jane Smith",
-        submittedByEmail: "jane.smith@university.edu",
-        submissionDate: "2024-03-01 at 9:15 AM",
+        author: "jane.smith@university.edu",
+        uploadDate: "2024-03-01 at 9:15 AM",
         category: "submission"
     },
     "m7n8o9p0": {
@@ -59,9 +57,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "docx",
         size: "2.2 MB",
         url: "/uploads/chapter_2_literature_review_v3.docx",
-        submittedBy: "Sarah Wilson",
-        submittedByEmail: "sarah.wilson@university.edu",
-        submissionDate: "2024-03-15 at 4:20 PM",
+        author: "sarah.wilson@university.edu",
+        uploadDate: "2024-03-15 at 4:20 PM",
         category: "submission"
     },
     "q1r2s3t4": {
@@ -69,9 +66,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "150 KB",
         url: "/files/recent_papers_list.pdf",
-        submittedBy: "Sarah Wilson",
-        submittedByEmail: "sarah.wilson@university.edu",
-        submissionDate: "2024-03-11 at 9:30 AM",
+        author: "sarah.wilson@university.edu",
+        uploadDate: "2024-03-11 at 9:30 AM",
         category: "attachment"
     },
 
@@ -81,9 +77,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "1.2 MB",
         url: "/uploads/chapter_3_methodology_v1.pdf",
-        submittedBy: "Sarah Wilson",
-        submittedByEmail: "sarah.wilson@university.edu",
-        submissionDate: "2024-03-20 at 2:15 PM",
+        author: "sarah.wilson@university.edu",
+        uploadDate: "2024-03-20 at 2:15 PM",
         category: "submission"
     },
     "y9z0a1b2": {
@@ -91,9 +86,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "1.4 MB",
         url: "/uploads/chapter_3_methodology_v2.pdf",
-        submittedBy: "Mike Johnson",
-        submittedByEmail: "mike.johnson@university.edu",
-        submissionDate: "2024-03-25 at 11:20 AM",
+        author: "mike.johnson@university.edu",
+        uploadDate: "2024-03-25 at 11:20 AM",
         category: "submission"
     },
     "c3d4e5f6": {
@@ -101,9 +95,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "1.5 MB",
         url: "/uploads/chapter_3_methodology_v3.pdf",
-        submittedBy: "Mike Johnson",
-        submittedByEmail: "mike.johnson@university.edu",
-        submissionDate: "2024-04-01 at 4:45 PM",
+        author: "mike.johnson@university.edu",
+        uploadDate: "2024-04-01 at 4:45 PM",
         category: "submission"
     },
     "g7h8i9j0": {
@@ -111,9 +104,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "890 KB",
         url: "/files/methodology_guidelines.pdf",
-        submittedBy: "David Kim",
-        submittedByEmail: "david.kim@university.edu",
-        submissionDate: "2024-04-18 at 1:20 PM",
+        author: "david.kim@university.edu",
+        uploadDate: "2024-04-18 at 1:20 PM",
         category: "attachment"
     },
 
@@ -123,9 +115,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "800 KB",
         url: "/uploads/chapter_4_results_analysis_draft.pdf",
-        submittedBy: "Alex Chen",
-        submittedByEmail: "alex.chen@university.edu",
-        submissionDate: "2024-05-03 at 2:15 PM",
+        author: "alex.chen@university.edu",
+        uploadDate: "2024-05-03 at 2:15 PM",
         category: "submission"
     },
 
@@ -135,9 +126,8 @@ export const mockFileRegistry: Record<string, FileRegistryEntry> = {
         type: "pdf",
         size: "350 KB",
         url: "/uploads/chapter_5_conclusion_outline.pdf",
-        submittedBy: "Maria Garcia",
-        submittedByEmail: "maria.garcia@university.edu",
-        submissionDate: "2024-05-06 at 10:30 AM",
+        author: "maria.garcia@university.edu",
+        uploadDate: "2024-05-06 at 10:30 AM",
         category: "submission"
     }
 };
@@ -348,90 +338,90 @@ export const mockThesisData: ThesisData = {
 /**
  * Mock data for user profiles
  */
-export interface UserProfile {
-    id: number;
-    name: string;
-    email: string;
-    role: SystemUserRole; // System-wide role: student, editor, adviser, admin
-    title?: string; // e.g., "Dr.", "Prof."
-    department?: string;
-    avatar?: string;
-}
-
 export const mockUserProfiles: UserProfile[] = [
     {
         id: 1,
-        name: "John Doe",
+        firstName: "John",
+        lastName: "Doe",
         email: "john.doe@university.edu",
         role: "student",
         department: "Computer Science"
     },
     {
         id: 2,
-        name: "Jane Smith",
+        prefix: "Dr.",
+        firstName: "Jane",
+        lastName: "Smith",
         email: "jane.smith@university.edu",
         role: "adviser",
-        title: "Dr.",
         department: "Computer Science"
     },
     {
         id: 3,
-        name: "Michael Johnson",
+        prefix: "Prof.",
+        firstName: "Michael",
+        lastName: "Johnson",
         email: "mike.johnson@university.edu",
         role: "editor",
-        title: "Prof.",
         department: "Educational Technology"
     },
     {
         id: 4,
-        name: "Sarah Wilson",
+        firstName: "Sarah",
+        lastName: "Wilson",
         email: "sarah.wilson@university.edu",
         role: "student",
         department: "Computer Science"
     },
     {
         id: 5,
-        name: "Alex Chen",
+        firstName: "Alex",
+        lastName: "Chen",
         email: "alex.chen@university.edu",
         role: "student",
         department: "Computer Science"
     },
     {
         id: 6,
-        name: "Maria Garcia",
+        firstName: "Maria",
+        lastName: "Garcia",
         email: "maria.garcia@university.edu",
         role: "student",
         department: "Data Science"
     },
     {
         id: 7,
-        name: "David Kim",
+        prefix: "Dr.",
+        firstName: "David",
+        lastName: "Kim",
         email: "david.kim@university.edu",
         role: "adviser",
-        title: "Dr.",
         department: "Educational Technology"
     },
     {
         id: 8,
-        name: "Emily Brown",
+        prefix: "Prof.",
+        firstName: "Emily",
+        lastName: "Brown",
         email: "emily.brown@university.edu",
         role: "editor",
-        title: "Prof.",
         department: "Computer Science"
     },
     {
         id: 9,
-        name: "Robert Lee",
+        firstName: "Robert",
+        lastName: "Lee",
         email: "robert.lee@university.edu",
         role: "student",
         department: "Information Systems"
     },
     {
         id: 10,
-        name: "Lisa Wang",
+        prefix: "Dr.",
+        firstName: "Lisa",
+        lastName: "Wang",
         email: "lisa.wang@university.edu",
         role: "adviser",
-        title: "Dr.",
         department: "Machine Learning"
     }
 ];

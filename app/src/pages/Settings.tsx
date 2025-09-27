@@ -1,10 +1,8 @@
-import * as React from 'react';
 import Typography from '@mui/material/Typography';
 import type { NavigationItem } from '../types/navigation';
 import { Settings } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {
-    // group: 'settings',
     index: 100,
     title: 'Settings',
     segment: 'settings',
@@ -13,6 +11,9 @@ export const metadata: NavigationItem = {
     roles: ['admin', 'student', 'editor', 'adviser'],
 };
 
+/**
+ * Settings page for user preferences and application configurations
+ */
 export default function SettingsPage() {
     return (
         <>
