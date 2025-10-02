@@ -6,7 +6,7 @@ import RecommendationSection from './RecommendationSection';
 export const metadata: NavigationItem = {
     group: 'adviser-editor',
     index: 1,
-    title: 'Editor Recommendations',
+    title: 'Editor',
     segment: 'editor-recommendations',
     icon: <Edit />,
     roles: ['student', 'admin'],
