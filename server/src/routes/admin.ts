@@ -4,13 +4,37 @@
  */
 import { Router, Response } from 'express';
 import { auth } from '../firebase';
-import { verifyFirebaseToken, requireAdmin, AuthRequest } from '../middleware';
+import { verifyFirebaseToken, requireAdmin, verifyApiSecret, AuthRequest } from '../middleware';
 
 const router = Router();
 
-// Apply authentication middleware to all routes
-router.use(verifyFirebaseToken);
-router.use(requireAdmin);
+/**
+ * Flexible authentication middleware
+ * Accepts either Firebase ID token OR API secret
+ */
+async function flexibleAuth(req: AuthRequest, res: Response, next: any) {
+    const authHeader = req.headers.authorization;
+    const apiSecret = req.headers['x-api-secret'];
+
+    // Try Firebase token first
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return verifyFirebaseToken(req, res, (err?: any) => {
+            if (err) return next(err);
+            return requireAdmin(req, res, next);
+        });
+    }
+
+    // Fall back to API secret
+    if (apiSecret) {
+        return verifyApiSecret(req, res, next);
+    }
+
+    // No valid auth provided
+    return res.status(401).json({ error: 'Unauthorized: Provide either Bearer token or x-api-secret' });
+}
+
+// Apply flexible authentication to all routes
+router.use(flexibleAuth);
 
 /**
  * POST /api/admin/users/create

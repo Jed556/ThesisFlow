@@ -158,22 +158,29 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
     }
 
     try {
+        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
         const currentUser = firebaseAuth.currentUser;
-        if (!currentUser) {
-            return { success: false, message: 'Not authenticated' };
+        if (currentUser) {
+            // Use Firebase ID token for authentication if user is signed in
+            const idToken = await currentUser.getIdToken();
+            headers['Authorization'] = `Bearer ${idToken}`;
+        } else {
+            // Fall back to API secret for dev-helper or server-to-server calls
+            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
+            if (!apiSecret) {
+                return { success: false, message: 'Not authenticated and no API secret configured' };
+            }
+            headers['x-api-secret'] = apiSecret;
         }
 
-        // Get ID token for authentication
-        const idToken = await currentUser.getIdToken();
-
         // Call the admin API server
-        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
         const response = await fetch(`${apiUrl}/api/admin/users/delete`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`,
-            },
+            headers,
             body: JSON.stringify(payload),
         });
 
@@ -255,22 +262,29 @@ export async function adminCreateUserAccount(email: string, password: string): P
     }
 
     try {
+        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
         const currentUser = firebaseAuth.currentUser;
-        if (!currentUser) {
-            return { success: false, message: 'Not authenticated' };
+        if (currentUser) {
+            // Use Firebase ID token for authentication if user is signed in
+            const idToken = await currentUser.getIdToken();
+            headers['Authorization'] = `Bearer ${idToken}`;
+        } else {
+            // Fall back to API secret for dev-helper or server-to-server calls
+            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
+            if (!apiSecret) {
+                return { success: false, message: 'Not authenticated and no API secret configured' };
+            }
+            headers['x-api-secret'] = apiSecret;
         }
 
-        // Get ID token for authentication
-        const idToken = await currentUser.getIdToken();
-
         // Call the admin API server
-        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
         const response = await fetch(`${apiUrl}/api/admin/users/create`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`,
-            },
+            headers,
             body: JSON.stringify({ email, password }),
         });
 
