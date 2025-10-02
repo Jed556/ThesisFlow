@@ -69,6 +69,11 @@ export default function AdminUsersPage() {
     const [formErrors, setFormErrors] = React.useState<Partial<Record<keyof UserFormData, string>>>({});
     const [saving, setSaving] = React.useState(false);
 
+    // Calculate admin count for deletion protection
+    const adminCount = React.useMemo(() => {
+        return users.filter(u => u.role === 'admin').length;
+    }, [users]);
+
     const loadUsers = React.useCallback(async () => {
         try {
             setLoading(true);
@@ -150,23 +155,6 @@ export default function AdminUsersPage() {
         return Object.keys(errors).length === 0;
     };
 
-    /**
-     * Clean up user profile by removing undefined, null, and empty string values
-     * This prevents Firestore errors when saving
-     */
-    const cleanUserProfile = (profile: Partial<UserProfile>): Partial<UserProfile> => {
-        const cleaned: any = {};
-
-        for (const [key, value] of Object.entries(profile)) {
-            // Keep the value if it's not null, not undefined, and not an empty string
-            if (value !== null && value !== undefined && value !== '') {
-                cleaned[key] = value;
-            }
-        }
-
-        return cleaned as Partial<UserProfile>;
-    };
-
     const handleSave = async () => {
         if (!validateForm()) return;
 
@@ -192,6 +180,11 @@ export default function AdminUsersPage() {
                 }
 
                 const nextId = users.reduce((max, user) => Math.max(max, user.id ?? 0), 0) + 1;
+                
+                // Force first user to be admin
+                const isFirstUser = users.length === 0;
+                const userRole = isFirstUser ? 'admin' : formData.role;
+                
                 const newUser: UserProfile = {
                     id: nextId,
                     email,
@@ -200,15 +193,19 @@ export default function AdminUsersPage() {
                     lastName: formData.lastName.trim(),
                     prefix: formData.prefix?.trim(),
                     suffix: formData.suffix?.trim(),
-                    role: formData.role,
+                    role: userRole,
                     department: formData.department?.trim(),
                     avatar: formData.avatar?.trim(),
                     phone: formData.phone?.trim(),
                 };
 
-                // Clean up empty values before saving
-                const cleanedUser = cleanUserProfile(newUser) as UserProfile;
-                await setUserProfile(email, cleanedUser);
+                // setUserProfile now automatically cleans empty values
+                await setUserProfile(email, newUser);
+                
+                // Show notification if role was changed to admin
+                if (isFirstUser && formData.role !== 'admin') {
+                    alert('First user created as admin. At least one admin account is required in the system.');
+                }
             } else {
                 // Update existing user
                 if (!selectedUser) return;
@@ -232,9 +229,8 @@ export default function AdminUsersPage() {
                     await deleteUserProfile(selectedUser.email);
                 }
 
-                // Clean up empty values before saving
-                const cleanedUser = cleanUserProfile(updatedUser) as UserProfile;
-                await setUserProfile(email, cleanedUser);
+                // setUserProfile now automatically cleans empty values
+                await setUserProfile(email, updatedUser);
             }
 
             await loadUsers();
@@ -249,6 +245,12 @@ export default function AdminUsersPage() {
 
     const handleDelete = async () => {
         if (!selectedUser) return;
+
+        // Prevent deletion of last admin
+        if (selectedUser.role === 'admin' && adminCount <= 1) {
+            alert('Cannot delete the last admin account. At least one admin must exist in the system.');
+            return;
+        }
 
         setSaving(true);
         try {
@@ -272,6 +274,15 @@ export default function AdminUsersPage() {
 
     const handleMultiDelete = async (deletedUsers: UserProfile[]) => {
         try {
+            // Count how many admins would remain after deletion
+            const deletedAdmins = deletedUsers.filter(u => u.role === 'admin').length;
+            const remainingAdmins = adminCount - deletedAdmins;
+
+            if (remainingAdmins < 1) {
+                alert('Cannot delete all admin accounts. At least one admin must exist in the system.');
+                throw new Error('Cannot delete last admin');
+            }
+
             // Delete all selected users (both auth and Firestore)
             await Promise.all(
                 deletedUsers.map(async user => {
@@ -356,9 +367,8 @@ export default function AdminUsersPage() {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { password: _pwd, ...profile } = user as any;
 
-                // Clean up empty values before saving
-                const cleanedProfile = cleanUserProfile(profile);
-                await setUserProfile(user.email, cleanedProfile);
+                // setUserProfile now automatically cleans empty values
+                await setUserProfile(user.email, profile);
             }
 
             await loadUsers();
@@ -394,11 +404,10 @@ export default function AdminUsersPage() {
                 phone: newRow.phone?.trim(),
             };
 
-            // Clean up empty values before saving
-            const cleanedUser = cleanUserProfile(updatedUser) as UserProfile;
-            await setUserProfile(email, cleanedUser);
+            // setUserProfile now automatically cleans empty values
+            await setUserProfile(email, updatedUser);
             await loadUsers();
-            return cleanedUser;
+            return updatedUser;
         } catch (error) {
             console.error('Failed to update user:', error);
             throw error;
@@ -498,6 +507,7 @@ export default function AdminUsersPage() {
             label="Delete"
             onClick={() => handleOpenDeleteDialog(params.row)}
             showInMenu={false}
+            disabled={params.row.role === 'admin' && adminCount <= 1}
         />,
     ];
 
@@ -604,9 +614,10 @@ export default function AdminUsersPage() {
                             value={formData.role}
                             onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                             error={!!formErrors.role}
-                            helperText={formErrors.role}
+                            helperText={formErrors.role || (users.length === 0 && !editMode ? 'First user will be created as admin' : '')}
                             required
                             fullWidth
+                            disabled={users.length === 0 && !editMode}
                         >
                             {ROLE_OPTIONS.map((role) => (
                                 <MenuItem key={role} value={role}>
@@ -654,16 +665,27 @@ export default function AdminUsersPage() {
             <Dialog open={deleteDialogOpen} onClose={handleCloseDialog}>
                 <DialogTitle>Delete User</DialogTitle>
                 <DialogContent>
-                    <Typography>
-                        Are you sure you want to delete user <strong>{selectedUser?.email}</strong>?
-                        This action cannot be undone.
-                    </Typography>
+                    {selectedUser?.role === 'admin' && adminCount <= 1 ? (
+                        <Typography color="error">
+                            Cannot delete the last admin account. At least one admin must exist in the system.
+                            You can edit this user's information or change their role instead.
+                        </Typography>
+                    ) : (
+                        <Typography>
+                            Are you sure you want to delete user <strong>{selectedUser?.email}</strong>?
+                            This action cannot be undone.
+                        </Typography>
+                    )}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={handleCloseDialog} disabled={saving}>Cancel</Button>
-                    <Button onClick={handleDelete} variant="contained" color="error" disabled={saving}>
-                        {saving ? 'Deleting...' : 'Delete'}
+                    <Button onClick={handleCloseDialog} disabled={saving}>
+                        {selectedUser?.role === 'admin' && adminCount <= 1 ? 'Close' : 'Cancel'}
                     </Button>
+                    {!(selectedUser?.role === 'admin' && adminCount <= 1) && (
+                        <Button onClick={handleDelete} variant="contained" color="error" disabled={saving}>
+                            {saving ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    )}
                 </DialogActions>
             </Dialog>
         </Box>
