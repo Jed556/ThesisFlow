@@ -32,35 +32,16 @@ const FormContext = React.createContext<{
     passwordValue: string;
     setEmailValue: (value: string) => void;
     setPasswordValue: (value: string) => void;
+    noUsersState: boolean | null;
 } | null>(null);
-
-function noUsers(): boolean | null {
-    const [noUsers, setNoUsers] = React.useState<boolean | null>(null);
-
-    React.useEffect(() => {
-        let active = true;
-        (async () => {
-            try {
-                const existing = await getAllUsers();
-                if (!active) return;
-                setNoUsers(existing.length === 0);
-            } catch (err) {
-                console.warn('Failed to check existing users', err);
-                if (!active) return;
-                setNoUsers(null);
-            }
-        })();
-        return () => { active = false; };
-    }, []);
-
-    return noUsers;
-}
 
 /**
  * Info alert with test account buttons for development environment
  */
 function Alerts() {
     const formContext = React.useContext(FormContext);
+    const noUsersState = formContext?.noUsersState;
+
     let testAccountsStack;
 
     if (isDevelopmentEnvironment()) {
@@ -125,7 +106,7 @@ function Alerts() {
                     {testAccountsStack}
                 </Alert>
             )}
-            {noUsers() === true && (
+            {noUsersState === true && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                     No user accounts exist yet. Sign in with the developer account first to initialize users.
                 </Alert>
@@ -238,6 +219,23 @@ export default function SignIn() {
     // Form state for controlled components
     const [emailValue, setEmailValue] = React.useState('');
     const [passwordValue, setPasswordValue] = React.useState('');
+    const [noUsersState, setNoUsersState] = React.useState<boolean | null>(null);
+
+    React.useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                const existing = await getAllUsers();
+                if (!active) return;
+                setNoUsersState(existing.length === 0);
+            } catch (err) {
+                console.warn('Failed to check existing users', err);
+                if (!active) return;
+                setNoUsersState(null);
+            }
+        })();
+        return () => { active = false; };
+    }, []);
 
     if (session) {
         return <Navigate to="/" />;
@@ -248,6 +246,7 @@ export default function SignIn() {
         passwordValue,
         setEmailValue,
         setPasswordValue,
+        noUsersState,
     };
 
     return (
@@ -270,7 +269,7 @@ export default function SignIn() {
 
 
                             // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
-                            if ((DEV_HELPER_EXISTS && noUsers()) || DEV_HELPER_ENABLED)
+                            if ((DEV_HELPER_EXISTS && noUsersState) || DEV_HELPER_ENABLED)
                                 try {
                                     if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
                                         const name = email.split('@')[0];
