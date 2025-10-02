@@ -23,8 +23,6 @@ const DEV_EMAIL_SUFFIX = DEV_EMAIL_DOMAIN.startsWith('@') ? DEV_EMAIL_DOMAIN : '
 const DEV_HELPER_EXISTS = DEV_HELPER_USERNAME !== '' && DEV_HELPER_PASSWORD !== '';
 const DEV_HELPER_ENABLED = (import.meta.env.VITE_DEV_HELPER_ENABLED === 'true') && DEV_HELPER_EXISTS;
 
-const [noUsers, setNoUsers] = React.useState<boolean | null>(null);
-
 
 /**
  * Context for managing form state in the sign-in page
@@ -35,6 +33,28 @@ const FormContext = React.createContext<{
     setEmailValue: (value: string) => void;
     setPasswordValue: (value: string) => void;
 } | null>(null);
+
+function noUsers(): boolean | null {
+    const [noUsers, setNoUsers] = React.useState<boolean | null>(null);
+
+    React.useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                const existing = await getAllUsers();
+                if (!active) return;
+                setNoUsers(existing.length === 0);
+            } catch (err) {
+                console.warn('Failed to check existing users', err);
+                if (!active) return;
+                setNoUsers(null);
+            }
+        })();
+        return () => { active = false; };
+    }, []);
+
+    return noUsers;
+}
 
 /**
  * Info alert with test account buttons for development environment
@@ -95,22 +115,6 @@ function Alerts() {
         );
     }
 
-    React.useEffect(() => {
-        let active = true;
-        (async () => {
-            try {
-                const existing = await getAllUsers();
-                if (!active) return;
-                setNoUsers(existing.length === 0);
-            } catch (err) {
-                console.warn('Failed to check existing users', err);
-                if (!active) return;
-                setNoUsers(null);
-            }
-        })();
-        return () => { active = false; };
-    }, []);
-
     return (
         <>
             {testAccountsStack && (
@@ -121,10 +125,9 @@ function Alerts() {
                     {testAccountsStack}
                 </Alert>
             )}
-            {noUsers === true && (
+            {noUsers() === true && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                     No user accounts exist yet. Sign in with the developer account first to initialize users.
-                    {DEV_HELPER_EXISTS ? null : ("No developer account is configured. Set VITE_DEV_HELPER_USERNAME and VITE_DEV_HELPER_PASSWORD environment variables to enable it.")}
                 </Alert>
             )}
         </>
@@ -267,7 +270,7 @@ export default function SignIn() {
 
 
                             // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
-                            if ((DEV_HELPER_EXISTS && noUsers) || DEV_HELPER_ENABLED)
+                            if ((DEV_HELPER_EXISTS && noUsers()) || DEV_HELPER_ENABLED)
                                 try {
                                     if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
                                         const name = email.split('@')[0];
