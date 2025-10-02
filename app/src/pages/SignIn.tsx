@@ -269,26 +269,30 @@ export default function SignIn() {
                                 try {
                                     if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
                                         const name = email.split('@')[0];
-                                        // Check name before @ matches env username and password matches
-                                        if (DEV_HELPER_ENABLED && name === DEV_HELPER_USERNAME && password === DEV_HELPER_PASSWORD) {
-                                            // Create a temporary session so Layout doesn't redirect to sign-in
-                                            try {
-                                                const tmpSession: Session = {
-                                                    user: {
-                                                        name,
-                                                        email,
-                                                        role: 'developer',
-                                                    },
-                                                };
-                                                setSession(tmpSession);
-                                                navigate('/dev-helper', { replace: true });
-                                                return {};
-                                            } catch (e) {
-                                                // navigation error: fall back to normal flow
-                                                console.warn('dev-helper navigation failed', e);
+                                        // Only apply the dev-helper shortcut when the local-part exactly matches the configured dev username.
+                                        // If the email is someone@thesisflow.dev but the local-part is not the dev helper username,
+                                        // fall through to the normal sign-in flow (don't return an 'Invalid dev credentials' error).
+                                        if (DEV_HELPER_ENABLED && name === DEV_HELPER_USERNAME) {
+                                            if (password === DEV_HELPER_PASSWORD) {
+                                                // Create a temporary session so Layout doesn't redirect to sign-in
+                                                try {
+                                                    const tmpSession: Session = {
+                                                        user: {
+                                                            name,
+                                                            email,
+                                                            role: 'developer',
+                                                        },
+                                                    };
+                                                    setSession(tmpSession);
+                                                    navigate('/dev-helper', { replace: true });
+                                                    return {};
+                                                } catch (e) {
+                                                    // navigation error: fall back to normal flow
+                                                    console.warn('dev-helper navigation failed', e);
+                                                }
+                                            } else {
+                                                return { error: 'Invalid dev credentials' };
                                             }
-                                        } else {
-                                            return { error: 'Invalid dev credentials' };
                                         }
                                     }
                                 } catch (e) {
