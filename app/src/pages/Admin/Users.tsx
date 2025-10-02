@@ -150,6 +150,23 @@ export default function AdminUsersPage() {
         return Object.keys(errors).length === 0;
     };
 
+    /**
+     * Clean up user profile by removing undefined, null, and empty string values
+     * This prevents Firestore errors when saving
+     */
+    const cleanUserProfile = (profile: Partial<UserProfile>): Partial<UserProfile> => {
+        const cleaned: any = {};
+
+        for (const [key, value] of Object.entries(profile)) {
+            // Keep the value if it's not null, not undefined, and not an empty string
+            if (value !== null && value !== undefined && value !== '') {
+                cleaned[key] = value;
+            }
+        }
+
+        return cleaned as Partial<UserProfile>;
+    };
+
     const handleSave = async () => {
         if (!validateForm()) return;
 
@@ -189,7 +206,9 @@ export default function AdminUsersPage() {
                     phone: formData.phone?.trim(),
                 };
 
-                await setUserProfile(email, newUser);
+                // Clean up empty values before saving
+                const cleanedUser = cleanUserProfile(newUser) as UserProfile;
+                await setUserProfile(email, cleanedUser);
             } else {
                 // Update existing user
                 if (!selectedUser) return;
@@ -213,7 +232,9 @@ export default function AdminUsersPage() {
                     await deleteUserProfile(selectedUser.email);
                 }
 
-                await setUserProfile(email, updatedUser);
+                // Clean up empty values before saving
+                const cleanedUser = cleanUserProfile(updatedUser) as UserProfile;
+                await setUserProfile(email, cleanedUser);
             }
 
             await loadUsers();
@@ -334,7 +355,10 @@ export default function AdminUsersPage() {
                 // Remove any password before saving profile
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { password: _pwd, ...profile } = user as any;
-                await setUserProfile(user.email, profile);
+
+                // Clean up empty values before saving
+                const cleanedProfile = cleanUserProfile(profile);
+                await setUserProfile(user.email, cleanedProfile);
             }
 
             await loadUsers();
@@ -370,9 +394,11 @@ export default function AdminUsersPage() {
                 phone: newRow.phone?.trim(),
             };
 
-            await setUserProfile(email, updatedUser);
+            // Clean up empty values before saving
+            const cleanedUser = cleanUserProfile(updatedUser) as UserProfile;
+            await setUserProfile(email, cleanedUser);
             await loadUsers();
-            return updatedUser;
+            return cleanedUser;
         } catch (error) {
             console.error('Failed to update user:', error);
             throw error;

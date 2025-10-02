@@ -20,7 +20,7 @@ async function flexibleAuth(req: AuthRequest, res: Response, next: any) {
         // Try Firebase token first
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const idToken = authHeader.split('Bearer ')[1];
-            
+
             try {
                 const decodedToken = await auth.verifyIdToken(idToken);
                 req.user = {
@@ -28,13 +28,13 @@ async function flexibleAuth(req: AuthRequest, res: Response, next: any) {
                     email: decodedToken.email,
                     role: decodedToken.role || (decodedToken.admin ? 'admin' : undefined),
                 };
-                
+
                 // Check admin privileges
                 const isAdmin = req.user.role === 'admin' || req.user.role === 'developer';
                 if (!isAdmin) {
                     return res.status(403).json({ error: 'Forbidden: Admin privileges required' });
                 }
-                
+
                 return next();
             } catch (tokenError) {
                 console.error('Token verification failed:', tokenError);
@@ -45,16 +45,16 @@ async function flexibleAuth(req: AuthRequest, res: Response, next: any) {
         // Fall back to API secret
         if (apiSecret) {
             const expectedSecret = process.env.ADMIN_API_SECRET;
-            
+
             if (!expectedSecret) {
                 console.error('ADMIN_API_SECRET not configured');
                 return res.status(500).json({ error: 'Server configuration error' });
             }
-            
+
             if (apiSecret === expectedSecret) {
                 return next();
             }
-            
+
             return res.status(401).json({ error: 'Unauthorized: Invalid API secret' });
         }
 
