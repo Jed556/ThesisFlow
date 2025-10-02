@@ -20,10 +20,11 @@ const DEV_HELPER_USERNAME = import.meta.env.VITE_DEV_HELPER_USERNAME || '';
 const DEV_HELPER_PASSWORD = import.meta.env.VITE_DEV_HELPER_PASSWORD || '';
 const DEV_EMAIL_DOMAIN = import.meta.env.VITE_DEV_EMAIL_DOMAIN || 'thesisflow.dev';
 const DEV_EMAIL_SUFFIX = DEV_EMAIL_DOMAIN.startsWith('@') ? DEV_EMAIL_DOMAIN : '@' + DEV_EMAIL_DOMAIN;
+const DEV_HELPER_EXISTS = DEV_HELPER_USERNAME !== '' && DEV_HELPER_PASSWORD !== '';
+const DEV_HELPER_ENABLED = (import.meta.env.VITE_DEV_HELPER_ENABLED === 'true') && DEV_HELPER_EXISTS;
 
-const DEV_HELPER_ENABLED = (import.meta.env.VITE_DEV_HELPER_ENABLED === 'true') &&
-    DEV_HELPER_USERNAME !== '' &&
-    DEV_HELPER_PASSWORD !== '';
+const [noUsers, setNoUsers] = React.useState<boolean | null>(null);
+
 
 /**
  * Context for managing form state in the sign-in page
@@ -94,8 +95,6 @@ function Alerts() {
         );
     }
 
-    const [noUsers, setNoUsers] = React.useState<boolean | null>(null);
-
     React.useEffect(() => {
         let active = true;
         (async () => {
@@ -114,15 +113,18 @@ function Alerts() {
 
     return (
         <>
-            <Alert severity="info">
-                <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    Development Test Accounts
-                </Typography>
-                {testAccountsStack}
-            </Alert>
+            {testAccountsStack && (
+                <Alert severity="info">
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                        Development Test Accounts
+                    </Typography>
+                    {testAccountsStack}
+                </Alert>
+            )}
             {noUsers === true && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                     No user accounts exist yet. Sign in with the developer account first to initialize users.
+                    {DEV_HELPER_EXISTS ? null : ("No developer account is configured. Set VITE_DEV_HELPER_USERNAME and VITE_DEV_HELPER_PASSWORD environment variables to enable it.")}
                 </Alert>
             )}
         </>
@@ -265,14 +267,14 @@ export default function SignIn() {
 
 
                             // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
-                            if (DEV_HELPER_ENABLED)
+                            if ((DEV_HELPER_EXISTS && noUsers) || DEV_HELPER_ENABLED)
                                 try {
                                     if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
                                         const name = email.split('@')[0];
                                         // Only apply the dev-helper shortcut when the local-part exactly matches the configured dev username.
                                         // If the email is someone@thesisflow.dev but the local-part is not the dev helper username,
                                         // fall through to the normal sign-in flow (don't return an 'Invalid dev credentials' error).
-                                        if (DEV_HELPER_ENABLED && name === DEV_HELPER_USERNAME) {
+                                        if (name === DEV_HELPER_USERNAME) {
                                             if (password === DEV_HELPER_PASSWORD) {
                                                 // Create a temporary session so Layout doesn't redirect to sign-in
                                                 try {
