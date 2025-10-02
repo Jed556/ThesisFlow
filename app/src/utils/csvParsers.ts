@@ -118,6 +118,7 @@ export function parseUsers(csvText: string): { parsed: UserProfile[]; errors: st
         const lastName = get('lastName') || get('last_name') || get('lastname') || get('family_name');
         const roleRaw = (get('role') || 'student').toLowerCase() as UserRole;
         const idRaw = get('id') || '';
+        const password = get('password') || get('pass'); // Optional password field for CSV import
 
         if (!email) {
             errors.push(`row ${idx + 2}: missing email`);
@@ -138,6 +139,11 @@ export function parseUsers(csvText: string): { parsed: UserProfile[]; errors: st
             department: get('department') || undefined,
             avatar: get('avatar') || undefined,
         };
+
+        // Attach password as a non-standard field if provided (for auth creation)
+        if (password) {
+            (user as any).password = password;
+        }
 
         parsed.push(user);
     });

@@ -27,4 +27,11 @@ export const navigationGroups: NavigationGroup[] = [
         title: 'Management',
         segment: 'management',
     },
+    {
+        index: 4,
+        header: true,
+        divider: true,
+        title: 'Adviser & Editor',
+        segment: 'adviser-editor',
+    },
 ];

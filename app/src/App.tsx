@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { firebaseSignOut, signInWithGoogle, onAuthStateChanged } from './firebase/auth';
+import { authSignOut, signInWithGoogle, onAuthStateChanged } from './utils/firebase/auth';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { getUserByEmail } from './utils/firestoreUtils';
+import { getUserByEmail } from './utils/firebase/firestore';
 import { setCurrentAppTheme } from './utils/devUtils';
 import { buildNavigation } from './utils/navBuilder';
 import { getUserRole } from './utils/roleUtils';
@@ -24,7 +24,7 @@ const BRANDING = {
 
 const AUTHENTICATION: Authentication = {
     signIn: signInWithGoogle,
-    signOut: firebaseSignOut,
+    signOut: authSignOut,
 };
 
 export default function App() {

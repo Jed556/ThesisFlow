@@ -1,4 +1,4 @@
-import { firebaseFirestore, firebaseAuth } from '../firebase/firebaseConfig';
+import { firebaseFirestore, firebaseAuth } from './firebaseConfig';
 import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 /** Firestore collection name used for user documents */
@@ -12,7 +12,7 @@ const ACADEMIC_CALENDARS_COLLECTION = 'academic_calendars';
 // Profile helpers
 // ==========================
 
-import type { UserProfile, UserRole } from '../types/profile';
+import type { UserProfile, UserRole } from '../../types/profile';
 
 /**
  * Get the currently signed-in user's email from Firebase Auth.
@@ -48,6 +48,17 @@ export async function setUserProfile(email: string, data: Partial<UserProfile>):
     const id = encodeURIComponent(email);
     const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
     await setDoc(ref, { email, ...data }, { merge: true });
+}
+
+/**
+ * Delete a user profile document entirely from Firestore.
+ * @param email - Email used for the document key
+ */
+export async function deleteUserProfile(email: string): Promise<void> {
+    if (!email) throw new Error('email required');
+    const id = encodeURIComponent(email);
+    const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
+    await deleteDoc(ref);
 }
 
 /**
@@ -127,7 +138,7 @@ export async function isUserInRole(email: string, role: UserRole): Promise<boole
 // Thesis helpers
 // ==========================
 
-import type { ThesisData } from '../types/thesis';
+import type { ThesisData } from '../../types/thesis';
 
 /**
  * Get a thesis data by id
@@ -158,7 +169,7 @@ export async function setThesis(id: string | null, data: ThesisData): Promise<st
 // File helpers
 // ==========================
 
-import type { FileAttachment } from '../types/file';
+import type { FileAttachment } from '../../types/file';
 
 /**
  * Store or update file metadata record in Firestore
@@ -182,7 +193,7 @@ export async function getFileByHash(hash: string): Promise<FileAttachment | null
 // Schedule / Event helpers
 // ==========================
 
-import type { ScheduleEvent } from '../types/schedule';
+import type { ScheduleEvent } from '../../types/schedule';
 
 /**
  * Create or update a schedule event
@@ -220,7 +231,7 @@ export function onEvent(id: string, cb: (event: ScheduleEvent | null) => void) {
 // Academic calendars helpers
 // ==========================
 
-import type { AcademicCalendar } from '../types/schedule';
+import type { AcademicCalendar } from '../../types/schedule';
 
 /**
  * Get academic calendar by id

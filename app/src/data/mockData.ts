@@ -423,5 +423,14 @@ export const mockUserProfiles: UserProfile[] = [
         email: "lisa.wang@university.edu",
         role: "adviser",
         department: "Machine Learning"
+    },
+    {
+        id: 11,
+        prefix: "Prof.",
+        firstName: "Olivia",
+        lastName: "Martinez",
+        email: "olivia.martinez@university.edu",
+        role: "editor",
+        department: "Digital Learning"
     }
 ];
