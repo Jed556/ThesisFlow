@@ -42,6 +42,21 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint (only in development)
+if (process.env.NODE_ENV !== 'production') {
+    app.get('/debug/config', (req, res) => {
+        res.json({
+            hasFirebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
+            hasFirebaseClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+            hasFirebasePrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+            hasAdminApiSecret: !!process.env.ADMIN_API_SECRET,
+            nodeEnv: process.env.NODE_ENV,
+            port: process.env.PORT,
+            allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || [],
+        });
+    });
+}
+
 // API routes
 app.use('/api/admin', adminRoutes);
 

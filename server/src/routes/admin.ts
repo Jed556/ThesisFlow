@@ -16,21 +16,54 @@ async function flexibleAuth(req: AuthRequest, res: Response, next: any) {
     const authHeader = req.headers.authorization;
     const apiSecret = req.headers['x-api-secret'];
 
-    // Try Firebase token first
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        return verifyFirebaseToken(req, res, (err?: any) => {
-            if (err) return next(err);
-            return requireAdmin(req, res, next);
-        });
-    }
+    try {
+        // Try Firebase token first
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const idToken = authHeader.split('Bearer ')[1];
+            
+            try {
+                const decodedToken = await auth.verifyIdToken(idToken);
+                req.user = {
+                    uid: decodedToken.uid,
+                    email: decodedToken.email,
+                    role: decodedToken.role || (decodedToken.admin ? 'admin' : undefined),
+                };
+                
+                // Check admin privileges
+                const isAdmin = req.user.role === 'admin' || req.user.role === 'developer';
+                if (!isAdmin) {
+                    return res.status(403).json({ error: 'Forbidden: Admin privileges required' });
+                }
+                
+                return next();
+            } catch (tokenError) {
+                console.error('Token verification failed:', tokenError);
+                return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+            }
+        }
 
-    // Fall back to API secret
-    if (apiSecret) {
-        return verifyApiSecret(req, res, next);
-    }
+        // Fall back to API secret
+        if (apiSecret) {
+            const expectedSecret = process.env.ADMIN_API_SECRET;
+            
+            if (!expectedSecret) {
+                console.error('ADMIN_API_SECRET not configured');
+                return res.status(500).json({ error: 'Server configuration error' });
+            }
+            
+            if (apiSecret === expectedSecret) {
+                return next();
+            }
+            
+            return res.status(401).json({ error: 'Unauthorized: Invalid API secret' });
+        }
 
-    // No valid auth provided
-    return res.status(401).json({ error: 'Unauthorized: Provide either Bearer token or x-api-secret' });
+        // No valid auth provided
+        return res.status(401).json({ error: 'Unauthorized: Provide either Bearer token or x-api-secret' });
+    } catch (error) {
+        console.error('Auth middleware error:', error);
+        return res.status(500).json({ error: 'Authentication error' });
+    }
 }
 
 // Apply flexible authentication to all routes
@@ -80,6 +113,11 @@ router.post('/users/create', async (req: AuthRequest, res: Response) => {
         });
     } catch (error: any) {
         console.error(`Failed to create user: ${email}`, error);
+        console.error('Error details:', {
+            code: error?.code,
+            message: error?.message,
+            stack: error?.stack,
+        });
         return res.status(500).json({
             success: false,
             message: error?.message ?? 'Unable to create user',
@@ -116,6 +154,11 @@ router.post('/users/delete', async (req: AuthRequest, res: Response) => {
         });
     } catch (error: any) {
         console.error(`Failed to delete user: ${uid || email}`, error);
+        console.error('Error details:', {
+            code: error?.code,
+            message: error?.message,
+            stack: error?.stack,
+        });
         return res.status(500).json({
             success: false,
             message: error?.message ?? 'Unable to delete user',
