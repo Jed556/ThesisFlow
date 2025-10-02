@@ -9,6 +9,30 @@ const EVENTS_COLLECTION = 'events';
 const ACADEMIC_CALENDARS_COLLECTION = 'academic_calendars';
 
 // ==========================
+// Data Cleaning Utilities
+// ==========================
+
+/**
+ * Clean up data by removing undefined, null, and empty string values.
+ * This prevents Firestore validation errors when saving documents with optional fields.
+ * 
+ * @param data - Object to clean
+ * @returns Cleaned object with only populated fields
+ */
+function cleanData<T extends Record<string, any>>(data: T): Partial<T> {
+    const cleaned: any = {};
+
+    for (const [key, value] of Object.entries(data)) {
+        // Keep the value if it's not null, not undefined, and not an empty string
+        if (value !== null && value !== undefined && value !== '') {
+            cleaned[key] = value;
+        }
+    }
+
+    return cleaned as Partial<T>;
+}
+
+// ==========================
 // Profile helpers
 // ==========================
 
@@ -47,7 +71,11 @@ export async function setUserProfile(email: string, data: Partial<UserProfile>):
     if (!email) throw new Error('email required');
     const id = encodeURIComponent(email);
     const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
-    await setDoc(ref, { email, ...data }, { merge: true });
+
+    // Clean the data to remove undefined, null, and empty string values
+    const cleanedData = cleanData({ email, ...data });
+
+    await setDoc(ref, cleanedData, { merge: true });
 }
 
 /**
@@ -155,12 +183,15 @@ export async function getThesisById(id: string): Promise<ThesisData | null> {
  * Create or update a thesis document
  */
 export async function setThesis(id: string | null, data: ThesisData): Promise<string> {
+    // Clean the data to remove undefined, null, and empty string values
+    const cleanedData = cleanData(data);
+
     if (id) {
         const ref = doc(firebaseFirestore, THESES_COLLECTION, id);
-        await setDoc(ref, data, { merge: true });
+        await setDoc(ref, cleanedData, { merge: true });
         return id;
     } else {
-        const ref = await addDoc(collection(firebaseFirestore, THESES_COLLECTION), data as any);
+        const ref = await addDoc(collection(firebaseFirestore, THESES_COLLECTION), cleanedData as any);
         return ref.id;
     }
 }
@@ -176,7 +207,11 @@ import type { FileAttachment } from '../../types/file';
  */
 export async function setFileRecord(hash: string, fileInfo: FileAttachment): Promise<void> {
     const ref = doc(firebaseFirestore, FILES_COLLECTION, hash);
-    await setDoc(ref, fileInfo, { merge: true });
+
+    // Clean the data to remove undefined, null, and empty string values
+    const cleanedData = cleanData(fileInfo);
+
+    await setDoc(ref, cleanedData, { merge: true });
 }
 
 /**
@@ -199,12 +234,15 @@ import type { ScheduleEvent } from '../../types/schedule';
  * Create or update a schedule event
  */
 export async function setEvent(id: string | null, event: ScheduleEvent): Promise<string> {
+    // Clean the data to remove undefined, null, and empty string values
+    const cleanedData = cleanData(event);
+
     if (id) {
         const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
-        await setDoc(ref, event, { merge: true });
+        await setDoc(ref, cleanedData, { merge: true });
         return id;
     } else {
-        const ref = await addDoc(collection(firebaseFirestore, EVENTS_COLLECTION), event as any);
+        const ref = await addDoc(collection(firebaseFirestore, EVENTS_COLLECTION), cleanedData as any);
         return ref.id;
     }
 }
@@ -247,12 +285,15 @@ export async function getAcademicCalendarById(id: string): Promise<AcademicCalen
  * Create or update academic calendar
  */
 export async function setAcademicCalendar(id: string | null, cal: AcademicCalendar): Promise<string> {
+    // Clean the data to remove undefined, null, and empty string values
+    const cleanedData = cleanData(cal);
+
     if (id) {
         const ref = doc(firebaseFirestore, ACADEMIC_CALENDARS_COLLECTION, id);
-        await setDoc(ref, cal, { merge: true });
+        await setDoc(ref, cleanedData, { merge: true });
         return id;
     } else {
-        const ref = await addDoc(collection(firebaseFirestore, ACADEMIC_CALENDARS_COLLECTION), cal as any);
+        const ref = await addDoc(collection(firebaseFirestore, ACADEMIC_CALENDARS_COLLECTION), cleanedData as any);
         return ref.id;
     }
 }
