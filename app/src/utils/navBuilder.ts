@@ -112,7 +112,7 @@ async function initializeRegistry(): Promise<void> {
  * Use this instead of repeating `metadata.path || metadata.segment`.
  * Removes any leading slash and any trailing slashes (e.g. '/dashboard/me/' -> 'dashboard/me').
  */
-function resolveSegment(metadata?: NavigationItem): string | undefined {
+export function resolveSegment(metadata?: NavigationItem): string | undefined {
     const seg = metadata ? (metadata.path ?? metadata.segment) : undefined;
     if (seg == null) return undefined;
     // Remove leading and trailing slashes. If original was "/", this yields '' (empty string).

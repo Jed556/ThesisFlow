@@ -1,11 +1,16 @@
 import * as React from 'react';
-import { Box, Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Select, MenuItem, Typography } from '@mui/material';
-import type { NavigationItem } from '../../types/navigation';
+import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip, Stack, } from '@mui/material';
+import { People, Delete, Edit } from '@mui/icons-material';
+import { GridColDef, GridActionsCellItem, GridRowParams } from '@mui/x-data-grid';
+import { DataGrid } from '../../components';
 import { useSession } from '../../SessionContext';
+import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
-import { getAllUsers, setUserProfile } from '../../utils/firestoreUtils';
-import { Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText, LinearProgress, FormControl, InputLabel } from '@mui/material';
-import { Edit, People, Save, Cancel } from '@mui/icons-material';
+import { getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile } from '../../utils/firebase/firestore';
+import { adminCreateUserAccount, adminDeleteUserAccount } from '../../utils/firebase/auth';
+import { parseUsers } from '../../utils/csvParsers';
+
+const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -16,330 +21,625 @@ export const metadata: NavigationItem = {
     roles: ['admin', 'developer'],
 };
 
-const ROLE_OPTIONS: UserRole[] = ['student', 'editor', 'adviser', 'admin'];
+const ROLE_OPTIONS: UserRole[] = ['student', 'editor', 'adviser', 'admin', 'developer'];
 
+const ROLE_COLORS: Record<UserRole, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
+    student: 'default',
+    editor: 'info',
+    adviser: 'primary',
+    admin: 'error',
+    developer: 'secondary',
+};
+
+interface UserFormData {
+    id?: number;
+    email: string;
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    prefix?: string;
+    suffix?: string;
+    role: UserRole;
+    department?: string;
+    avatar?: string;
+    phone?: string;
+}
+
+const emptyFormData: UserFormData = {
+    email: '',
+    firstName: '',
+    lastName: '',
+    role: 'student',
+};
+
+/**
+ * Admin page for managing user profiles with a custom DataGrid implementation.
+ */
 export default function AdminUsersPage() {
     const { session } = useSession();
     const userRole = session?.user?.role;
 
     const [users, setUsers] = React.useState<UserProfile[]>([]);
-    const [editingId, setEditingId] = React.useState<number | null>(null);
-    const [draft, setDraft] = React.useState<Partial<UserProfile>>({});
     const [loading, setLoading] = React.useState(true);
-    const [csvImporting, setCsvImporting] = React.useState(false);
-    const [csvParsed, setCsvParsed] = React.useState<Partial<UserProfile>[]>([]);
-    const [duplicatePairs, setDuplicatePairs] = React.useState<Array<{ existing: UserProfile; incoming: Partial<UserProfile> }>>([]);
-    const [previewOpen, setPreviewOpen] = React.useState(false);
-    const [applyProgress, setApplyProgress] = React.useState<number | null>(null);
+    const [dialogOpen, setDialogOpen] = React.useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+    const [editMode, setEditMode] = React.useState(false);
+    const [formData, setFormData] = React.useState<UserFormData>(emptyFormData);
+    const [selectedUser, setSelectedUser] = React.useState<UserProfile | null>(null);
+    const [formErrors, setFormErrors] = React.useState<Partial<Record<keyof UserFormData, string>>>({});
+    const [saving, setSaving] = React.useState(false);
 
-    React.useEffect(() => {
-        let mounted = true;
-        async function load() {
+    const loadUsers = React.useCallback(async () => {
+        try {
             setLoading(true);
-            try {
-                const all = await getAllUsers();
-                if (mounted) setUsers(all);
-            } catch (err) {
-                console.error('Failed to load users', err);
-            } finally {
-                if (mounted) setLoading(false);
-            }
+            const allUsers = await getAllUsers();
+            setUsers(allUsers);
+        } catch (error) {
+            console.error('Failed to load users:', error);
+        } finally {
+            setLoading(false);
         }
-        load();
-        return () => { mounted = false; };
     }, []);
 
-    // CSV parsing utility (very small, expects header row)
-    function parseCsv(text: string): Partial<UserProfile>[] {
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (lines.length === 0) return [];
-        const headers = lines[0].split(',').map(h => h.trim());
-        const rows = lines.slice(1).map(line => {
-            const cols = line.split(',').map(c => c.trim());
-            const obj: any = {};
-            headers.forEach((h, i) => {
-                obj[h] = cols[i] ?? '';
-            });
-            // Map CSV columns to UserProfile partial
-            const partial: Partial<UserProfile> = {
-                email: obj['email'] || obj['Email'] || '',
-                firstName: obj['firstName'] || obj['first_name'] || obj['FirstName'] || obj['first'] || undefined,
-                lastName: obj['lastName'] || obj['last_name'] || obj['LastName'] || obj['last'] || undefined,
-                role: (obj['role'] || obj['Role']) as UserRole | undefined,
-                department: obj['department'] || obj['dept'] || undefined,
-                prefix: obj['prefix'] || undefined,
-                middleName: obj['middleName'] || undefined,
-                suffix: obj['suffix'] || undefined,
-                avatar: obj['avatar'] || undefined,
-            };
-            return partial;
-        });
-        return rows;
-    }
+    React.useEffect(() => {
+        loadUsers();
+    }, [loadUsers]);
 
-    async function handleCsvFile(file: File | null) {
-        if (!file) return;
-        setCsvImporting(true);
+    const handleOpenCreateDialog = () => {
+        setEditMode(false);
+        setFormData(emptyFormData);
+        setFormErrors({});
+        setDialogOpen(true);
+    };
+
+    const handleOpenEditDialog = (user: UserProfile) => {
+        setEditMode(true);
+        setSelectedUser(user);
+        setFormData({
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            middleName: user.middleName,
+            lastName: user.lastName,
+            prefix: user.prefix,
+            suffix: user.suffix,
+            role: user.role,
+            department: user.department,
+            avatar: user.avatar,
+            phone: user.phone,
+        });
+        setFormErrors({});
+        setDialogOpen(true);
+    };
+
+    const handleOpenDeleteDialog = (user: UserProfile) => {
+        setSelectedUser(user);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleCloseDialog = () => {
+        setDialogOpen(false);
+        setDeleteDialogOpen(false);
+        setSelectedUser(null);
+        setFormData(emptyFormData);
+        setFormErrors({});
+    };
+
+    const validateForm = (): boolean => {
+        const errors: Partial<Record<keyof UserFormData, string>> = {};
+
+        if (!formData.email.trim()) {
+            errors.email = 'Email is required';
+        } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) {
+            errors.email = 'Enter a valid email address';
+        }
+
+        if (!formData.firstName.trim()) {
+            errors.firstName = 'First name is required';
+        }
+
+        if (!formData.lastName.trim()) {
+            errors.lastName = 'Last name is required';
+        }
+
+        if (!formData.role) {
+            errors.role = 'Role is required';
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleSave = async () => {
+        if (!validateForm()) return;
+
+        setSaving(true);
+        try {
+            const email = formData.email.toLowerCase().trim();
+
+            if (!editMode) {
+                // Create new user
+                const existing = await getUserByEmail(email);
+                if (existing) {
+                    setFormErrors({ email: 'A user with this email already exists' });
+                    setSaving(false);
+                    return;
+                }
+
+                // Create Firebase Auth account first using Cloud Function (doesn't affect current session)
+                const authResult = await adminCreateUserAccount(email, DEFAULT_PASSWORD);
+                if (!authResult.success) {
+                    setFormErrors({ email: `Failed to create auth account: ${authResult.message}` });
+                    setSaving(false);
+                    return;
+                }
+
+                const nextId = users.reduce((max, user) => Math.max(max, user.id ?? 0), 0) + 1;
+                const newUser: UserProfile = {
+                    id: nextId,
+                    email,
+                    firstName: formData.firstName.trim(),
+                    middleName: formData.middleName?.trim(),
+                    lastName: formData.lastName.trim(),
+                    prefix: formData.prefix?.trim(),
+                    suffix: formData.suffix?.trim(),
+                    role: formData.role,
+                    department: formData.department?.trim(),
+                    avatar: formData.avatar?.trim(),
+                    phone: formData.phone?.trim(),
+                };
+
+                await setUserProfile(email, newUser);
+            } else {
+                // Update existing user
+                if (!selectedUser) return;
+
+                const updatedUser: UserProfile = {
+                    ...selectedUser,
+                    email,
+                    firstName: formData.firstName.trim(),
+                    middleName: formData.middleName?.trim(),
+                    lastName: formData.lastName.trim(),
+                    prefix: formData.prefix?.trim(),
+                    suffix: formData.suffix?.trim(),
+                    role: formData.role,
+                    department: formData.department?.trim(),
+                    avatar: formData.avatar?.trim(),
+                    phone: formData.phone?.trim(),
+                };
+
+                // Handle email change
+                if (email !== selectedUser.email) {
+                    await deleteUserProfile(selectedUser.email);
+                }
+
+                await setUserProfile(email, updatedUser);
+            }
+
+            await loadUsers();
+            handleCloseDialog();
+        } catch (error) {
+            console.error('Failed to save user:', error);
+            setFormErrors({ email: 'Failed to save user. Please try again.' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!selectedUser) return;
+
+        setSaving(true);
+        try {
+            // Delete Firebase Auth account first
+            const authResult = await adminDeleteUserAccount({ email: selectedUser.email });
+            if (!authResult.success) {
+                console.error('Failed to delete auth account:', authResult.message);
+                // Continue anyway to clean up Firestore
+            }
+
+            // Delete Firestore profile
+            await deleteUserProfile(selectedUser.email);
+            await loadUsers();
+            handleCloseDialog();
+        } catch (error) {
+            console.error('Failed to delete user:', error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleMultiDelete = async (deletedUsers: UserProfile[]) => {
+        try {
+            // Delete all selected users (both auth and Firestore)
+            await Promise.all(
+                deletedUsers.map(async user => {
+                    // Delete auth account
+                    const authResult = await adminDeleteUserAccount({ email: user.email });
+                    if (!authResult.success) {
+                        console.error(`Failed to delete auth for ${user.email}:`, authResult.message);
+                    }
+                    // Delete Firestore profile
+                    return deleteUserProfile(user.email);
+                })
+            );
+            // Refresh the user list
+            await loadUsers();
+        } catch (error) {
+            console.error('Failed to delete users:', error);
+            throw error;
+        }
+    };
+
+    const handleExport = (selectedUsers: UserProfile[]) => {
+        // Convert to CSV
+        const headers = ['ID', 'Email', 'First Name', 'Last Name', 'Role', 'Department', 'Phone', 'Last Active'];
+        const csvRows = selectedUsers.map(user => [
+            user.id,
+            user.email,
+            user.firstName,
+            user.lastName,
+            user.role,
+            user.department || '',
+            user.phone || '',
+            user.lastActive ? new Date(user.lastActive).toLocaleString() : 'Never'
+        ].join(','));
+
+        const csv = [headers.join(','), ...csvRows].join('\n');
+
+        // Download file
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
+
+    const handleImport = async (file: File) => {
         try {
             const text = await file.text();
-            const parsed = parseCsv(text).filter(r => r.email && r.email.length > 0);
-            setCsvParsed(parsed);
+            const { parsed, errors: parseErrors } = parseUsers(text);
 
-            // Detect duplicates by email
-            const byEmail = new Map(users.map(u => [u.email.toLowerCase(), u] as const));
-            const dups: Array<{ existing: UserProfile; incoming: Partial<UserProfile> }> = [];
-            parsed.forEach(incoming => {
-                const ex = byEmail.get((incoming.email || '').toLowerCase());
-                if (ex) dups.push({ existing: ex, incoming });
-            });
-            setDuplicatePairs(dups);
-            setPreviewOpen(true);
-        } catch (err) {
-            console.error('Failed to parse CSV', err);
-        } finally {
-            setCsvImporting(false);
-        }
-    }
+            const errors: string[] = [];
+            if (parseErrors.length) errors.push(...parseErrors.map(e => `Parse: ${e}`));
 
-    async function applyCsvChanges(options?: { replaceDuplicates?: boolean }) {
-        const toApply = [...csvParsed];
-        const total = toApply.length;
-        let applied = 0;
-        setApplyProgress(0);
-        for (const row of toApply) {
-            try {
-                if (!row.email) continue;
-                const email = row.email;
-                // If duplicates exist and replaceDuplicates is false, skip those
-                const isDup = duplicatePairs.some(d => d.existing.email.toLowerCase() === email.toLowerCase());
-                if (isDup && !options?.replaceDuplicates) {
-                    applied++;
-                    setApplyProgress(Math.round((applied / total) * 100));
+            // Filter out already-existing users and prepare to import
+            const toImport: (UserProfile & { password?: string })[] = [];
+            for (let i = 0; i < parsed.length; i++) {
+                const u = parsed[i];
+                const exists = await getUserByEmail(u.email.toLowerCase());
+                if (exists) {
+                    errors.push(`Row ${i + 2}: user ${u.email} already exists`);
+                    continue;
+                }
+                toImport.push(u as UserProfile & { password?: string });
+            }
+
+            if (toImport.length === 0) {
+                alert(`No users to import.\n\nErrors:\n${errors.join('\n')}`);
+                return;
+            }
+
+            // Create auth accounts and Firestore profiles
+            for (const user of toImport) {
+                const pwd = (user as any).password || DEFAULT_PASSWORD;
+                const authResult = await adminCreateUserAccount(user.email, pwd);
+                if (!authResult.success) {
+                    errors.push(`Auth create failed for ${user.email}: ${authResult.message}`);
                     continue;
                 }
 
-                // Build partial to set
-                const partial: Partial<UserProfile> = {
-                    firstName: row.firstName,
-                    lastName: row.lastName,
-                    role: row.role as UserRole | undefined,
-                    department: row.department,
-                    prefix: row.prefix,
-                    middleName: row.middleName,
-                    suffix: row.suffix,
-                    avatar: row.avatar,
-                };
-
-                await setUserProfile(email, partial);
-                applied++;
-                setApplyProgress(Math.round((applied / total) * 100));
-            } catch (err) {
-                console.error('Failed to apply CSV row', row, err);
+                // Remove any password before saving profile
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { password: _pwd, ...profile } = user as any;
+                await setUserProfile(user.email, profile);
             }
-        }
 
-        // Refresh users list
-        try {
-            const all = await getAllUsers();
-            setUsers(all);
+            await loadUsers();
+
+            const message = `Imported ${toImport.length} user(s).`;
+            if (errors.length) alert(`${message}\n\nErrors:\n${errors.join('\n')}`);
+            else alert(message);
         } catch (err) {
-            console.error('Failed to refresh users', err);
+            console.error('Import failed', err);
+            alert('Failed to import CSV. See console for details.');
         }
+    };
 
-        setApplyProgress(null);
-        setPreviewOpen(false);
-        setCsvParsed([]);
-        setDuplicatePairs([]);
-    }
+    const handleInlineUpdate = async (newRow: UserProfile, oldRow: UserProfile): Promise<UserProfile> => {
+        try {
+            const email = newRow.email.toLowerCase().trim();
 
+            // Handle email change
+            if (email !== oldRow.email) {
+                await deleteUserProfile(oldRow.email);
+            }
+
+            const updatedUser: UserProfile = {
+                ...newRow,
+                email,
+                firstName: newRow.firstName.trim(),
+                middleName: newRow.middleName?.trim(),
+                lastName: newRow.lastName.trim(),
+                prefix: newRow.prefix?.trim(),
+                suffix: newRow.suffix?.trim(),
+                department: newRow.department?.trim(),
+                avatar: newRow.avatar?.trim(),
+                phone: newRow.phone?.trim(),
+            };
+
+            await setUserProfile(email, updatedUser);
+            await loadUsers();
+            return updatedUser;
+        } catch (error) {
+            console.error('Failed to update user:', error);
+            throw error;
+        }
+    };
+
+    const columns: GridColDef[] = [
+        {
+            field: 'id',
+            headerName: 'ID',
+            width: 70,
+            type: 'number',
+            editable: false,
+        },
+        {
+            field: 'email',
+            headerName: 'Email',
+            flex: 1,
+            minWidth: 200,
+            editable: true,
+        },
+        {
+            field: 'fullName',
+            headerName: 'Full Name',
+            flex: 1,
+            minWidth: 200,
+            editable: false,
+            valueGetter: (value, row) => {
+                const parts = [row.prefix, row.firstName, row.middleName, row.lastName, row.suffix].filter(Boolean);
+                return parts.join(' ');
+            },
+        },
+        {
+            field: 'firstName',
+            headerName: 'First Name',
+            flex: 1,
+            minWidth: 150,
+            editable: true,
+        },
+        {
+            field: 'lastName',
+            headerName: 'Last Name',
+            flex: 1,
+            minWidth: 150,
+            editable: true,
+        },
+        {
+            field: 'role',
+            headerName: 'Role',
+            width: 130,
+            type: 'singleSelect',
+            valueOptions: ROLE_OPTIONS,
+            editable: true,
+            renderCell: (params) => (
+                <Chip
+                    label={params.value}
+                    color={ROLE_COLORS[params.value as UserRole]}
+                    size="small"
+                    sx={{ textTransform: 'capitalize' }}
+                />
+            ),
+        },
+        {
+            field: 'department',
+            headerName: 'Department',
+            flex: 1,
+            minWidth: 150,
+            editable: true,
+        },
+        {
+            field: 'phone',
+            headerName: 'Phone',
+            width: 150,
+            editable: true,
+        },
+        {
+            field: 'lastActive',
+            headerName: 'Last Active',
+            width: 180,
+            type: 'dateTime',
+            editable: false,
+            valueGetter: (value) => {
+                if (!value) return null;
+                return value as Date;
+            },
+            valueFormatter: (value) => {
+                if (!value) return 'Never';
+                const date = new Date(value as any);
+                return date.toLocaleString();
+            },
+        },
+    ];
+
+    const getAdditionalActions = (params: GridRowParams<UserProfile>) => [
+        <GridActionsCellItem
+            icon={<Delete />}
+            label="Delete"
+            onClick={() => handleOpenDeleteDialog(params.row)}
+            showInMenu={false}
+        />,
+    ];
 
     if (userRole !== 'admin' && userRole !== 'developer') {
         return (
             <Box sx={{ p: 4 }}>
                 <Typography variant="h5">Not authorized</Typography>
-                <Typography variant="body1">You need to be an administrator or developer to manage users.</Typography>
+                <Typography variant="body1">
+                    You need to be an administrator or developer to manage users.
+                </Typography>
             </Box>
         );
     }
 
-    function startEdit(user: UserProfile) {
-        setEditingId(user.id);
-        setDraft({ ...user });
-    }
-
-    function cancelEdit() {
-        setEditingId(null);
-        setDraft({});
-    }
-
-    async function saveEdit() {
-        if (editingId == null) return;
-        // find the user being edited
-        const orig = users.find(u => u.id === editingId);
-        if (!orig) return;
-
-        const email = draft.email || orig.email;
-        // Build partial profile to save
-        const toSave: Partial<UserProfile> = {
-            firstName: draft.firstName ?? orig.firstName,
-            middleName: draft.middleName ?? orig.middleName,
-            lastName: draft.lastName ?? orig.lastName,
-            prefix: draft.prefix ?? orig.prefix,
-            suffix: draft.suffix ?? orig.suffix,
-            department: draft.department ?? orig.department,
-            role: (draft.role as UserRole) ?? orig.role,
-            avatar: draft.avatar ?? orig.avatar,
-        };
-
-        try {
-            await setUserProfile(email, toSave);
-            // Update local UI
-            setUsers(prev => prev.map(u => (u.id === editingId ? { ...u, ...toSave } as UserProfile : u)));
-            cancelEdit();
-        } catch (err) {
-            console.error('Failed to save user profile', err);
-        }
-    }
-
     return (
-        <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>Users</Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-                <Button variant="contained" component="label">Upload CSV<input hidden accept=".csv" type="file" onChange={e => handleCsvFile(e.target.files?.[0] ?? null)} /></Button>
-                {csvImporting && <LinearProgress sx={{ flex: 1 }} />}
-                <Button variant="outlined" onClick={() => { setPreviewOpen(true); }}>Preview Duplicates ({duplicatePairs.length})</Button>
-            </Box>
-            <TableContainer component={Paper}>
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>ID</TableCell>
-                            <TableCell>Name</TableCell>
-                            <TableCell>Email</TableCell>
-                            <TableCell>Role</TableCell>
-                            <TableCell>Department</TableCell>
-                            <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {users.map(user => (
-                            <TableRow key={user.id}>
-                                <TableCell>{user.id}</TableCell>
-                                <TableCell>
-                                    {editingId === user.id ? (
-                                        <TextField
-                                            size="small"
-                                            value={draft.firstName ?? ''}
-                                            onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))}
-                                            placeholder="First name"
-                                        />
-                                    ) : (
-                                        `${user.firstName} ${user.lastName || ''}`
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    {editingId === user.id ? (
-                                        <TextField
-                                            size="small"
-                                            value={draft.email ?? user.email}
-                                            onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
-                                        />
-                                    ) : (
-                                        user.email
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    {editingId === user.id ? (
-                                        <Select
-                                            size="small"
-                                            value={draft.role ?? user.role}
-                                            onChange={e => setDraft(d => ({ ...d, role: e.target.value as UserRole }))}
-                                        >
-                                            {ROLE_OPTIONS.map(r => (
-                                                <MenuItem key={r} value={r}>{r}</MenuItem>
-                                            ))}
-                                        </Select>
-                                    ) : (
-                                        user.role
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    {editingId === user.id ? (
-                                        <TextField
-                                            size="small"
-                                            value={draft.department ?? ''}
-                                            onChange={e => setDraft(d => ({ ...d, department: e.target.value }))}
-                                        />
-                                    ) : (
-                                        user.department || ''
-                                    )}
-                                </TableCell>
-                                <TableCell align="right">
-                                    {editingId === user.id ? (
-                                        <>
-                                            <Button startIcon={<Save />} size="small" onClick={saveEdit} sx={{ mr: 1 }}>Save</Button>
-                                            <Button startIcon={<Cancel />} size="small" onClick={cancelEdit}>Cancel</Button>
-                                        </>
-                                    ) : (
-                                        <Button startIcon={<Edit />} size="small" onClick={() => startEdit(user)}>Edit</Button>
-                                    )}
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-            <DuplicatesPreviewDialog
-                open={previewOpen}
-                pairs={duplicatePairs}
-                onClose={() => setPreviewOpen(false)}
-                onApply={(opts) => applyCsvChanges(opts)}
-                progress={applyProgress}
+        <Box sx={{ width: '100%' }}>
+            <DataGrid
+                rows={users}
+                columns={columns}
+                loading={loading}
+                initialPage={0}
+                initialPageSize={10}
+                pageSizeOptions={[5, 10, 25, 50]}
+                checkboxSelection
+                disableRowSelectionOnClick
+                height={600}
+                editable
+                additionalActions={getAdditionalActions}
+                enableMultiDelete
+                enableExport
+                enableImport
+                enableRefresh
+                enableAdd
+                enableQuickFilter
+                onRowUpdate={handleInlineUpdate}
+                onRowUpdateError={(error) => console.error('Update failed:', error)}
+                onRowsDelete={handleMultiDelete}
+                onExport={handleExport}
+                onImport={handleImport}
+                onRefresh={loadUsers}
+                onAdd={handleOpenCreateDialog}
             />
+
+            {/* Create/Edit Dialog */}
+            <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+                <DialogTitle>{editMode ? 'Edit User' : 'Create New User'}</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <TextField
+                            label="Email"
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            error={!!formErrors.email}
+                            helperText={formErrors.email}
+                            required
+                            fullWidth
+                        />
+                        <Stack direction="row" spacing={2}>
+                            <TextField
+                                label="Prefix"
+                                value={formData.prefix || ''}
+                                onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
+                                sx={{ width: 100 }}
+                                placeholder="Dr."
+                            />
+                            <TextField
+                                label="First Name"
+                                value={formData.firstName}
+                                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                                error={!!formErrors.firstName}
+                                helperText={formErrors.firstName}
+                                required
+                                fullWidth
+                            />
+                        </Stack>
+                        <TextField
+                            label="Middle Name"
+                            value={formData.middleName || ''}
+                            onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                            fullWidth
+                        />
+                        <Stack direction="row" spacing={2}>
+                            <TextField
+                                label="Last Name"
+                                value={formData.lastName}
+                                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                                error={!!formErrors.lastName}
+                                helperText={formErrors.lastName}
+                                required
+                                fullWidth
+                            />
+                            <TextField
+                                label="Suffix"
+                                value={formData.suffix || ''}
+                                onChange={(e) => setFormData({ ...formData, suffix: e.target.value })}
+                                sx={{ width: 100 }}
+                                placeholder="Jr."
+                            />
+                        </Stack>
+                        <TextField
+                            select
+                            label="Role"
+                            value={formData.role}
+                            onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+                            error={!!formErrors.role}
+                            helperText={formErrors.role}
+                            required
+                            fullWidth
+                        >
+                            {ROLE_OPTIONS.map((role) => (
+                                <MenuItem key={role} value={role}>
+                                    <Chip
+                                        label={role}
+                                        color={ROLE_COLORS[role]}
+                                        size="small"
+                                        sx={{ textTransform: 'capitalize' }}
+                                    />
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                        <TextField
+                            label="Department"
+                            value={formData.department || ''}
+                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                            fullWidth
+                        />
+                        <TextField
+                            label="Phone"
+                            type="tel"
+                            value={formData.phone || ''}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            fullWidth
+                            placeholder="+1 (555) 123-4567"
+                        />
+                        <TextField
+                            label="Avatar URL"
+                            value={formData.avatar || ''}
+                            onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
+                            fullWidth
+                            placeholder="https://example.com/avatar.jpg"
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDialog} disabled={saving}>Cancel</Button>
+                    <Button onClick={handleSave} variant="contained" disabled={saving}>
+                        {saving ? 'Saving...' : editMode ? 'Save Changes' : 'Create User'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onClose={handleCloseDialog}>
+                <DialogTitle>Delete User</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        Are you sure you want to delete user <strong>{selectedUser?.email}</strong>?
+                        This action cannot be undone.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDialog} disabled={saving}>Cancel</Button>
+                    <Button onClick={handleDelete} variant="contained" color="error" disabled={saving}>
+                        {saving ? 'Deleting...' : 'Delete'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
-    );
-}
-
-// Preview dialog for duplicates and CSV changes
-function DuplicatesPreviewDialog(props: {
-    open: boolean;
-    pairs: Array<{ existing: UserProfile; incoming: Partial<UserProfile> }>;
-    onClose: () => void;
-    onApply: (opts?: { replaceDuplicates?: boolean }) => void;
-    progress: number | null;
-}) {
-    const { open, pairs, onClose, onApply, progress } = props;
-
-    return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle>CSV Import Preview</DialogTitle>
-            <DialogContent dividers>
-                {pairs.length === 0 ? (
-                    <Typography>No duplicates detected. Ready to apply CSV rows.</Typography>
-                ) : (
-                    <List>
-                        {pairs.map((p, i) => (
-                            <ListItem key={i} alignItems="flex-start">
-                                <ListItemText
-                                    primary={`${p.existing.email}`}
-                                    secondary={
-                                        <>
-                                            <Typography component="div">Existing: {p.existing.firstName} {p.existing.lastName} — {p.existing.role} — {p.existing.department}</Typography>
-                                            <Typography component="div">Incoming: {p.incoming.firstName || '-'} {p.incoming.lastName || '-'} — {p.incoming.role || '-'} — {p.incoming.department || '-'}</Typography>
-                                        </>
-                                    }
-                                />
-                            </ListItem>
-                        ))}
-                    </List>
-                )}
-                {progress != null && <Box sx={{ mt: 1 }}><LinearProgress variant="determinate" value={progress} /></Box>}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={() => onApply({ replaceDuplicates: false })}>Apply (skip duplicates)</Button>
-                <Button onClick={() => onApply({ replaceDuplicates: true })} variant="contained">Apply and replace duplicates</Button>
-                <Button onClick={onClose}>Close</Button>
-            </DialogActions>
-        </Dialog>
     );
 }

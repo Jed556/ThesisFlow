@@ -1,6 +1,9 @@
 // Avatar
 export { default as Avatar, Name, NAME_PRESETS } from './Avatar/Avatar';
 
+// DataGrid
+export { default as DataGrid } from './DataGrid/DataGrid';
+
 // Chapter Accordion and related components
 export { default as ChapterAccordion } from './ChapterAccordion/ChapterAccordion';
 export { default as ChapterFile } from './ChapterAccordion/ChapterFile';

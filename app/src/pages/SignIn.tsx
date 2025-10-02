@@ -4,8 +4,8 @@ import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
 import { Navigate, useNavigate } from 'react-router';
 import { useSession } from '../SessionContext';
-import { signInWithCredentials } from '../firebase/auth';
-import { getUserByEmail } from '../utils/firestoreUtils';
+import { signInWithCredentials } from '../utils/firebase/auth';
+import { getAllUsers, getUserByEmail } from '../utils/firebase/firestore';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
@@ -38,46 +38,40 @@ const FormContext = React.createContext<{
 /**
  * Info alert with test account buttons for development environment
  */
-function Info() {
-    if (!isDevelopmentEnvironment()) {
-        return null;
-    }
-
+function Alerts() {
     const formContext = React.useContext(FormContext);
+    let testAccountsStack;
 
-    const testAccounts = [
-        { role: 'Student', email: 'student' + DEV_EMAIL_SUFFIX, color: 'primary' as const },
-        { role: 'Adviser', email: 'adviser' + DEV_EMAIL_SUFFIX, color: 'secondary' as const },
-        { role: 'Editor', email: 'editor' + DEV_EMAIL_SUFFIX, color: 'info' as const },
-        { role: 'Admin', email: 'admin' + DEV_EMAIL_SUFFIX, color: 'error' as const },
-    ];
+    if (isDevelopmentEnvironment()) {
+        const testAccounts: { role: string; email: string; color: 'primary' | 'secondary' | 'info' | 'error' | 'success' }[] = [
+            { role: 'Student', email: 'student' + DEV_EMAIL_SUFFIX, color: 'primary' as const },
+            { role: 'Adviser', email: 'adviser' + DEV_EMAIL_SUFFIX, color: 'secondary' as const },
+            { role: 'Editor', email: 'editor' + DEV_EMAIL_SUFFIX, color: 'info' as const },
+            { role: 'Admin', email: 'admin' + DEV_EMAIL_SUFFIX, color: 'error' as const },
+        ];
 
-    if (DEV_HELPER_ENABLED) {
-        testAccounts.push({ role: 'Developer', email: DEV_HELPER_USERNAME + DEV_EMAIL_SUFFIX, color: 'success' as const });
-    }
-
-    const handleDevClick = (email: string) => {
-        if (formContext && isDevelopmentEnvironment()) {
-            formContext.setEmailValue(email);
-
-            if (DEV_HELPER_ENABLED)
-                try {
-                    const emailPrefix = email.split('@')[0];
-                    if (emailPrefix === (DEV_HELPER_USERNAME) && DEV_HELPER_PASSWORD) {
-                        formContext.setPasswordValue(DEV_HELPER_PASSWORD);
-                        return;
-                    }
-                } catch (e) { } // ignore env access issues and fall back to default
-
-            formContext.setPasswordValue('Password_123');
+        if (DEV_HELPER_ENABLED) {
+            testAccounts.push({ role: 'Developer', email: DEV_HELPER_USERNAME + DEV_EMAIL_SUFFIX, color: 'success' as const });
         }
-    };
 
-    return (
-        <Alert severity="info">
-            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                Development Test Accounts
-            </Typography>
+        const handleDevClick = (email: string) => {
+            if (formContext && isDevelopmentEnvironment()) {
+                formContext.setEmailValue(email);
+
+                if (DEV_HELPER_ENABLED)
+                    try {
+                        const emailPrefix = email.split('@')[0];
+                        if (emailPrefix === (DEV_HELPER_USERNAME) && DEV_HELPER_PASSWORD) {
+                            formContext.setPasswordValue(DEV_HELPER_PASSWORD);
+                            return;
+                        }
+                    } catch (e) { } // ignore env access issues and fall back to default
+
+                formContext.setPasswordValue('Password_123');
+            }
+        };
+
+        testAccountsStack = (
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 {testAccounts.map((account) => (
                     <Chip
@@ -97,7 +91,41 @@ function Info() {
                     />
                 ))}
             </Stack>
-        </Alert>
+        );
+    }
+
+    const [noUsers, setNoUsers] = React.useState<boolean | null>(null);
+
+    React.useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                const existing = await getAllUsers();
+                if (!active) return;
+                setNoUsers(existing.length === 0);
+            } catch (err) {
+                console.warn('Failed to check existing users', err);
+                if (!active) return;
+                setNoUsers(null);
+            }
+        })();
+        return () => { active = false; };
+    }, []);
+
+    return (
+        <>
+            <Alert severity="info">
+                <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    Development Test Accounts
+                </Typography>
+                {testAccountsStack}
+            </Alert>
+            {noUsers === true && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    No user accounts exist yet. Sign in with the developer account first to initialize users.
+                </Alert>
+            )}
+        </>
     );
 }
 
@@ -237,31 +265,34 @@ export default function SignIn() {
 
 
                             // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
-
                             if (DEV_HELPER_ENABLED)
                                 try {
                                     if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
                                         const name = email.split('@')[0];
-                                        // Check name before @ matches env username and password matches
-                                        if (DEV_HELPER_ENABLED && name === DEV_HELPER_USERNAME && password === DEV_HELPER_PASSWORD) {
-                                            // Create a temporary session so Layout doesn't redirect to sign-in
-                                            try {
-                                                const tmpSession: Session = {
-                                                    user: {
-                                                        name,
-                                                        email,
-                                                        role: 'developer',
-                                                    },
-                                                };
-                                                setSession(tmpSession);
-                                                navigate('/dev-helper', { replace: true });
-                                                return {};
-                                            } catch (e) {
-                                                // navigation error: fall back to normal flow
-                                                console.warn('dev-helper navigation failed', e);
+                                        // Only apply the dev-helper shortcut when the local-part exactly matches the configured dev username.
+                                        // If the email is someone@thesisflow.dev but the local-part is not the dev helper username,
+                                        // fall through to the normal sign-in flow (don't return an 'Invalid dev credentials' error).
+                                        if (DEV_HELPER_ENABLED && name === DEV_HELPER_USERNAME) {
+                                            if (password === DEV_HELPER_PASSWORD) {
+                                                // Create a temporary session so Layout doesn't redirect to sign-in
+                                                try {
+                                                    const tmpSession: Session = {
+                                                        user: {
+                                                            name,
+                                                            email,
+                                                            role: 'developer',
+                                                        },
+                                                    };
+                                                    setSession(tmpSession);
+                                                    navigate('/dev-helper', { replace: true });
+                                                    return {};
+                                                } catch (e) {
+                                                    // navigation error: fall back to normal flow
+                                                    console.warn('dev-helper navigation failed', e);
+                                                }
+                                            } else {
+                                                return { error: 'Invalid dev credentials' };
                                             }
-                                        } else {
-                                            return { error: 'Invalid dev credentials' };
                                         }
                                     }
                                 } catch (e) {
@@ -313,7 +344,7 @@ export default function SignIn() {
                     }
                 }}
                 slots={{
-                    subtitle: Info,
+                    subtitle: Alerts,
                     emailField: CustomEmailField,
                     passwordField: CustomPasswordField,
                     submitButton: CustomButton,

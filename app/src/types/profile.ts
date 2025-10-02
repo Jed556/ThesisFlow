@@ -45,4 +45,12 @@ export interface UserProfile {
      * URL to the user's avatar image
      */
     avatar?: string;
+    /**
+     * User's contact phone number
+     */
+    phone?: string;
+    /**
+     * User's last active date
+     */
+    lastActive?: Date;
 }
