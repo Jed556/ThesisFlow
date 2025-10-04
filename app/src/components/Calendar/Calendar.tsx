@@ -1,9 +1,17 @@
 import * as React from 'react';
-import { Box, IconButton, Button, ToggleButton, ToggleButtonGroup, Typography, Paper } from '@mui/material';
+import { Box, IconButton, Button, ToggleButton, ToggleButtonGroup, Typography, Paper, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
 import type { ScheduleEvent } from '../../types/schedule';
 import { isSameDay, isInRange, startOfMonth, endOfMonth, addDays } from '../../utils/dateUtils';
+
+/**
+ * Select mode for the calendar
+ * - 'day': Single day selection only (hides toggle)
+ * - 'range': Range selection only (hides toggle)
+ * - 'all': Show toggle to switch between single and range
+ */
+export type CalendarSelectMode = 'day' | 'range' | 'all';
 
 /**
  * Props for the Calendar component
@@ -33,6 +41,27 @@ interface CalendarProps {
      * If only from is set, the range is in-progress
      */
     onRangeSelect?: (range: { from?: Date; to?: Date }) => void;
+    /**
+     * Dialog mode - renders calendar in a centered dialog with backdrop
+     */
+    dialogMode?: boolean;
+    /**
+     * Dialog open state (only used when dialogMode is true)
+     */
+    open?: boolean;
+    /**
+     * Dialog close handler
+     */
+    onClose?: () => void;
+    /**
+     * Dialog title
+     */
+    dialogTitle?: string;
+    /**
+     * Select mode - controls whether user can select day, range, or both
+     * @default 'all'
+     */
+    selectMode?: CalendarSelectMode;
 }
 
 /**
@@ -42,9 +71,25 @@ interface CalendarProps {
  * @param onSelect - Callback when a date is selected
  * @param onEventClick - Callback when an event is clicked
  * @param onRangeSelect - Callback when a date range is selected
+ * @param dialogMode - Render in dialog mode with backdrop
+ * @param open - Dialog open state
+ * @param onClose - Dialog close handler
+ * @param dialogTitle - Title for dialog mode
+ * @param selectMode - Selection mode (day, range, or all)
  * @returns 
  */
-export default function Calendar({ events, selected, onSelect, onEventClick, onRangeSelect }: CalendarProps) {
+export default function Calendar({
+    events,
+    selected,
+    onSelect,
+    onEventClick,
+    onRangeSelect,
+    dialogMode = false,
+    open = true,
+    onClose,
+    dialogTitle = 'Select Date',
+    selectMode = 'all'
+}: CalendarProps) {
     // Map events by date string for quick lookup
     const eventDays = React.useMemo(() => {
         const map = new Map<string, ScheduleEvent[]>();
@@ -56,21 +101,36 @@ export default function Calendar({ events, selected, onSelect, onEventClick, onR
         return map;
     }, [events]);
 
+    // Determine initial mode based on selectMode
+    const getInitialMode = (): 'single' | 'range' => {
+        if (selectMode === 'day') return 'single';
+        if (selectMode === 'range') return 'range';
+        return 'single'; // default for 'all'
+    };
+
     // UI state
-    const [mode, setMode] = React.useState<'single' | 'range'>('single');
+    const [mode, setMode] = React.useState<'single' | 'range'>(getInitialMode);
     const [viewMonth, setViewMonth] = React.useState<Date>(() => startOfMonth(new Date()));
     const [range, setRange] = React.useState<{ from?: Date; to?: Date }>({});
     const [dragging, setDragging] = React.useState<'none' | 'start' | 'end'>('none');
 
-    // Notify parent of range changes
-    React.useEffect(() => onRangeSelect?.(range), [range, onRangeSelect]);
+    // Reset mode when selectMode changes
+    React.useEffect(() => {
+        setMode(getInitialMode());
+    }, [selectMode]);
 
     // End dragging on pointer up globally
     React.useEffect(() => {
-        const onUp = () => setDragging('none');
+        const onUp = () => {
+            if (dragging !== 'none' && range.from && range.to) {
+                // Notify parent when dragging ends with a complete range
+                onRangeSelect?.(range);
+            }
+            setDragging('none');
+        };
         window.addEventListener('pointerup', onUp);
         return () => window.removeEventListener('pointerup', onUp);
-    }, []);
+    }, [dragging, range, onRangeSelect]);
 
     /**
      * Builds a calendar matrix for the given month
@@ -119,12 +179,20 @@ export default function Calendar({ events, selected, onSelect, onEventClick, onR
         const from = range.from;
         const to = range.to;
         if (!from || (from && to)) {
-            setRange({ from: date, to: undefined });
+            const newRange = { from: date, to: undefined };
+            setRange(newRange);
+            onRangeSelect?.(newRange);
             return;
         }
         if (from && !to) {
-            if (date.getTime() < from.getTime()) setRange({ from: date, to: from });
-            else setRange({ from, to: date });
+            let newRange;
+            if (date.getTime() < from.getTime()) {
+                newRange = { from: date, to: from };
+            } else {
+                newRange = { from, to: date };
+            }
+            setRange(newRange);
+            onRangeSelect?.(newRange);
         }
     }
 
@@ -163,18 +231,23 @@ export default function Calendar({ events, selected, onSelect, onEventClick, onR
     const calendarGridBoxSize = 46;
     const calendarGridPadding = '0.2rem';
 
-    return (
+    // Determine if toggle should be shown
+    const showToggle = selectMode === 'all';
+
+    const calendarContent = (
         <Box sx={{ width: 'max-content' }}>
-            <Paper sx={{ p: 2 }} elevation={2}>
+            <Paper sx={{ p: 2 }} elevation={dialogMode ? 0 : 2}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 2 }}>
                     <Box>
                         <Typography variant="h6">{viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && setMode(v)}>
-                            <ToggleButton value="single">Single</ToggleButton>
-                            <ToggleButton value="range">Range</ToggleButton>
-                        </ToggleButtonGroup>
+                        {showToggle && (
+                            <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && setMode(v)}>
+                                <ToggleButton value="single">Single</ToggleButton>
+                                <ToggleButton value="range">Range</ToggleButton>
+                            </ToggleButtonGroup>
+                        )}
                         <IconButton onClick={() => setViewMonth(addDays(viewMonth, -30))} size="small"><ArrowBackIosNew fontSize="small" /></IconButton>
                         <IconButton onClick={() => setViewMonth(addDays(viewMonth, 30))} size="small"><ArrowForwardIos fontSize="small" /></IconButton>
                     </Box>
@@ -300,4 +373,55 @@ export default function Calendar({ events, selected, onSelect, onEventClick, onR
             </Paper>
         </Box>
     );
+
+    // Wrap in dialog if dialogMode is enabled
+    if (dialogMode) {
+        return (
+            <Dialog
+                open={open}
+                onClose={onClose}
+                maxWidth="md"
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'transparent',
+                        boxShadow: 'none',
+                        overflow: 'visible'
+                    }
+                }}
+                slotProps={{
+                    backdrop: {
+                        sx: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.7)'
+                        }
+                    }
+                }}
+            >
+                <DialogTitle sx={{ bgcolor: 'background.paper', borderTopLeftRadius: 1, borderTopRightRadius: 1 }}>
+                    {dialogTitle}
+                </DialogTitle>
+                <DialogContent sx={{ bgcolor: 'background.paper', p: 0, display: 'flex', justifyContent: 'center' }}>
+                    {calendarContent}
+                </DialogContent>
+                <DialogActions sx={{ bgcolor: 'background.paper', borderBottomLeftRadius: 1, borderBottomRightRadius: 1 }}>
+                    <Button onClick={onClose}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            if (mode === 'range' && range.from && range.to) {
+                                onRangeSelect?.(range);
+                            } else if (mode === 'single' && selected) {
+                                onSelect?.(selected);
+                            }
+                            onClose?.();
+                        }}
+                        disabled={(mode === 'range' && (!range.from || !range.to)) || (mode === 'single' && !selected)}
+                    >
+                        Select
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        );
+    }
+
+    return calendarContent;
 }

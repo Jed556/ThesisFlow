@@ -1,23 +1,17 @@
 /**
  * Schedule and calendar-related type definitions for the ThesisFlow application
  * Contains all scheduling, event, and calendar types
+ * 
+ * Calendar System Design (Google Calendar Model):
+ * - Each user has a "Personal" calendar (auto-created)
+ * - Each group has a shared calendar (auto-created)
+ * - Admins/Developers can create custom calendars
+ * - Events belong to ONE calendar
+ * - Users can filter which calendars to view
  */
 
-// Academic semester types
-export type AcademicSemester = 'first' | 'second' | 'intersemester' | 'summer';
-
-// Event types for different kinds of scheduled activities
-export type EventType =
-    | 'meeting'
-    | 'deadline'
-    | 'defense'
-    | 'lecture'
-    | 'presentation'
-    | 'consultation'
-    | 'submission'
-    | 'holiday'
-    | 'other';
-
+// Calendar type for different calendar categories
+export type CalendarType = 'personal' | 'group' | 'custom';
 
 // Event status
 export type EventStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'completed' | 'rescheduled';
@@ -31,14 +25,48 @@ export type ParticipantRole = 'organizer' | 'required' | 'optional' | 'observer'
 export type ParticipantStatus = 'pending' | 'accepted' | 'declined' | 'tentative';
 
 /**
- * Event visibility levels
- * 'public' - visible to all users
- * 'private' - visible only to the event creator and invited participants
- * 'group' - visible to a specific group (e.g., thesis group)
- * 'groups' - visible to all handled groups of the author
- * 'department' - visible to all users in the same department or faculty
+ * Calendar interface - represents a collection of events
+ * Similar to Google Calendar's calendar system
  */
-export type EventVisibility = 'public' | 'private' | 'group' | 'groups' | 'department';
+export interface Calendar {
+    id: string;
+    name: string;
+    description?: string;
+    type: CalendarType;
+    color: string; // hex color for UI display
+
+    // Ownership and access control
+    ownerId: string; // email of owner (user for personal, group id for group calendars)
+    createdBy: string; // email of creator
+    createdAt: string;
+    lastModified: string;
+
+    // Access permissions
+    // For personal: only owner can view/edit
+    // For group: group members + advisers/editors can view, owner can edit
+    // For custom: defined by permissions array
+    permissions: CalendarPermission[];
+
+    // Group-specific fields
+    groupId?: string; // If this is a group calendar
+    groupName?: string; // Display name for group calendars
+
+    // Visibility flags
+    isVisible: boolean; // Can be hidden without deleting
+    isDefault?: boolean; // Is this a default calendar (Personal for users)
+}
+
+/**
+ * Calendar permissions for fine-grained access control
+ */
+export interface CalendarPermission {
+    userEmail?: string; // specific user
+    role?: string; // or role-based (admin, developer, editor, adviser, student)
+    groupId?: string; // or group-based
+    canView: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+}
 
 // Participant interface
 export interface EventParticipant {
@@ -81,9 +109,10 @@ export interface ScheduleEvent {
     id: string;
     title: string;
     description?: string;
-    type: EventType;
     status: EventStatus;
-    visibility: EventVisibility;
+
+    // Calendar association - events belong to ONE calendar
+    calendarId: string; // ID of the calendar this event belongs to
 
     // Date and time information
     startDate: string; // ISO date string
@@ -99,7 +128,7 @@ export interface ScheduleEvent {
 
     // Additional metadata
     tags?: string[];
-    color?: string; // for calendar display
+    color?: string; // optional override for calendar color
     attachments?: string[]; // file hashes
 
     // Recurrence and reminders
@@ -123,7 +152,7 @@ export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year';
 
 // Filter options for schedule display
 export interface ScheduleFilter {
-    eventTypes?: EventType[];
+    calendarIds?: string[]; // Filter by specific calendars
     statuses?: EventStatus[];
     participants?: string[]; // email addresses
     dateRange?: {
@@ -131,7 +160,6 @@ export interface ScheduleFilter {
         end: string;
     };
     tags?: string[];
-    visibility?: EventVisibility[];
 }
 
 // Schedule statistics interface
@@ -139,29 +167,15 @@ export interface ScheduleStats {
     totalEvents: number;
     upcomingEvents: number;
     overdueEvents: number;
-    eventsByType: Record<EventType, number>;
     eventsByStatus: Record<EventStatus, number>;
-}
-
-// Academic calendar interface for semester/term schedules
-export interface AcademicCalendar {
-    year: number;
-    semester: AcademicSemester;
-    startDate: string;
-    endDate: string;
-    holidays: ScheduleEvent[];
-    importantDates: ScheduleEvent[];
-    examPeriods: {
-        midterm: { start: string; end: string };
-        final: { start: string; end: string };
-    };
+    eventsByCalendar: Record<string, number>; // Count by calendar ID
 }
 
 // Event creation/update payload
 export interface EventPayload {
     title: string;
     description?: string;
-    type: EventType;
+    calendarId: string; // Required: which calendar to add event to
     startDate: string;
     endDate: string;
     isAllDay: boolean;
@@ -170,7 +184,6 @@ export interface EventPayload {
     tags?: string[];
     recurrence?: RecurrenceSettings;
     reminders?: EventReminder[];
-    visibility: EventVisibility;
 }
 
 // Schedule notification interface

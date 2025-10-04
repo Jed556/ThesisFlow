@@ -6,7 +6,7 @@ import { DataGrid } from '../../components';
 import { useSession } from '../../SessionContext';
 import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
-import { getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile } from '../../utils/firebase/firestore';
+import { getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar } from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount } from '../../utils/firebase/auth';
 import { parseUsers } from '../../utils/csvParsers';
 
@@ -180,11 +180,11 @@ export default function AdminUsersPage() {
                 }
 
                 const nextId = users.reduce((max, user) => Math.max(max, user.id ?? 0), 0) + 1;
-                
+
                 // Force first user to be admin
                 const isFirstUser = users.length === 0;
                 const userRole = isFirstUser ? 'admin' : formData.role;
-                
+
                 const newUser: UserProfile = {
                     id: nextId,
                     email,
@@ -201,7 +201,16 @@ export default function AdminUsersPage() {
 
                 // setUserProfile now automatically cleans empty values
                 await setUserProfile(email, newUser);
-                
+
+                // Create personal calendar for the new user
+                try {
+                    await createPersonalCalendar(email);
+                    console.log('Personal calendar created for new user:', email);
+                } catch (calendarError) {
+                    console.error('Failed to create personal calendar:', calendarError);
+                    // Don't fail the entire user creation if calendar creation fails
+                }
+
                 // Show notification if role was changed to admin
                 if (isFirstUser && formData.role !== 'admin') {
                     alert('First user created as admin. At least one admin account is required in the system.');
