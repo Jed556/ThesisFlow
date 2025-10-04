@@ -4,5 +4,5 @@ export * from './roleUtils';
 export * from './devUtils';
 export * from './dateUtils';
 export * from './navBuilder';
-export * from './firebase/auth';    
-export * from './firebase/firestore';
+export * from './firebase/auth';
+export * from './firebase/firestore/firestore';

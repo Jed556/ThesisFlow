@@ -192,6 +192,53 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
     }
 }
 
+/**
+ * Bulk delete user accounts using the admin API server.
+ *
+ * This can only be successfully executed by authenticated administrators.
+ * The API validates admin privileges before deleting the specified users.
+ *
+ * @param payloads - Array of identifiers for accounts to remove
+ * @returns Result indicating success or failure along with an optional message
+ */
+export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPayload[]): Promise<AdminDeleteUserResponse> {
+    if (!payloads || payloads.length === 0) {
+        return { success: false, message: 'Provide at least one user to delete.' };
+    }
+
+    try {
+        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        const currentUser = firebaseAuth.currentUser;
+        if (currentUser) {
+            const idToken = await currentUser.getIdToken();
+            headers['Authorization'] = `Bearer ${idToken}`;
+        } else {
+            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
+            if (!apiSecret) {
+                return { success: false, message: 'Not authenticated and no API secret configured' };
+            }
+            headers['x-api-secret'] = apiSecret;
+        }
+
+        // Call the admin API server
+        const response = await fetch(`${apiUrl}/api/admin/users/bulk-delete`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ users: payloads }),
+        });
+
+        const result = await response.json();
+        return result;
+    } catch (error: any) {
+        const message = error?.message ?? 'Failed to bulk delete user accounts. Ensure you have admin privileges.';
+        return { success: false, message };
+    }
+}
+
 
 
 /**

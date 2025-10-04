@@ -30,8 +30,15 @@ export type ParticipantRole = 'organizer' | 'required' | 'optional' | 'observer'
 
 export type ParticipantStatus = 'pending' | 'accepted' | 'declined' | 'tentative';
 
-// Event visibility/privacy level
-export type EventVisibility = 'public' | 'private' | 'group' | 'department';
+/**
+ * Event visibility levels
+ * 'public' - visible to all users
+ * 'private' - visible only to the event creator and invited participants
+ * 'group' - visible to a specific group (e.g., thesis group)
+ * 'groups' - visible to all handled groups of the author
+ * 'department' - visible to all users in the same department or faculty
+ */
+export type EventVisibility = 'public' | 'private' | 'group' | 'groups' | 'department';
 
 // Participant interface
 export interface EventParticipant {
@@ -101,7 +108,7 @@ export interface ScheduleEvent {
 
     // Tracking information
     createdBy: string;
-    createdDate: string;
+    createdAt: string;
     lastModified: string;
     lastModifiedBy: string;
 
