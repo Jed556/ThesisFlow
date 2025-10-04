@@ -99,11 +99,10 @@ export default function Calendar({ events, selected, onSelect, onEventClick, onR
 
     const matrix = React.useMemo(() => buildMatrix(viewMonth), [viewMonth]);
 
-    // Refs and state to measure day cell positions so we can position the
-    // rounded "pill" exactly in pixels (robust against grid gaps, borders,
-    // and rounding). We'll keep a map of refs by date string.
-    const cellRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
-    const [segPixelStyles, setSegPixelStyles] = React.useState<Record<string, { left: string; width: string }>>({});
+    // We'll render the weekday header and all day cells inside the same CSS grid
+    // so the columns align perfectly and resizing doesn't cause jitter.
+    // Range "pill" backgrounds are rendered as grid-spanning elements (no pixel
+    // measurement required).
 
 
     /**
@@ -158,226 +157,147 @@ export default function Calendar({ events, selected, onSelect, onEventClick, onR
         }
     }
 
-    // Compute per-week pixel bounds for the pill segments after layout.
-    React.useLayoutEffect(() => {
-        // For each week, find segments again and compute pixel left/width from
-        // the bounding rects of the start and end day cells. Key by week index
-        // so we can lookup styles when rendering.
-        const styles: Record<string, { left: string; width: string }> = {};
-        matrix.forEach((week, wi) => {
-            const segs: Array<{ start: number; end: number }> = [];
-            let inSeg = false;
-            let segStart = 0;
-            week.forEach((d, idx) => {
-                const dayVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                const from = range.from ? new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate()).getTime() : undefined;
-                const to = range.to ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate()).getTime() : undefined;
-                const isIn = (from !== undefined && to !== undefined && dayVal >= Math.min(from, to) && dayVal <= Math.max(from, to));
-                if (isIn && !inSeg) { inSeg = true; segStart = idx; }
-                if (!isIn && inSeg) { inSeg = false; segs.push({ start: segStart, end: idx - 1 }); }
-            });
-            if (inSeg) segs.push({ start: segStart, end: 6 });
+    // No pixel-measurement required; range segments will be rendered using
+    // grid column spans so they align perfectly with header columns.
 
-            // For each segment compute pixel left/width
-            segs.forEach((s, si) => {
-                const startDay = week[s.start];
-                const endDay = week[s.end];
-                const startRef = cellRefs.current.get(startDay.toDateString());
-                const endRef = cellRefs.current.get(endDay.toDateString());
-                if (startRef && endRef) {
-                    const startRect = startRef.getBoundingClientRect();
-                    const endRect = endRef.getBoundingClientRect();
-                    // The parent week container's left to compute relative px
-                    const parent = startRef.parentElement; // the week grid
-                    const parentRect = parent ? parent.getBoundingClientRect() : ({ left: 0, width: 0 } as DOMRect);
-                    const parentWidth = Math.round(parentRect.width || 0);
-                    const bleed = -1.5; // small overlap so pill meets circular buttons visually
-                    let leftPx = Math.round(startRect.left - parentRect.left) - bleed;
-                    let rightPx = Math.round(endRect.right - parentRect.left) + bleed;
-                    // Clamp to parent bounds to avoid overflow/overshoot
-                    leftPx = Math.max(0, leftPx);
-                    rightPx = Math.min(parentWidth, rightPx);
-                    styles[`w${wi}-s${si}`] = { left: `${leftPx}px`, width: `${Math.max(0, rightPx - leftPx)}px` };
-                }
-            });
-        });
-        setSegPixelStyles(styles);
-
-        // Recompute on resize / zoom
-        const onResize = () => {
-            // throttle via rAF
-            window.requestAnimationFrame(() => {
-                // trigger recompute by re-running effect
-                const newStyles: Record<string, { left: string; width: string }> = {};
-                matrix.forEach((week, wi) => {
-                    const segs: Array<{ start: number; end: number }> = [];
-                    let inSeg = false;
-                    let segStart = 0;
-                    week.forEach((d, idx) => {
-                        const dayVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                        const from = range.from ? new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate()).getTime() : undefined;
-                        const to = range.to ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate()).getTime() : undefined;
-                        const isIn = (from !== undefined && to !== undefined && dayVal >= Math.min(from, to) && dayVal <= Math.max(from, to));
-                        if (isIn && !inSeg) { inSeg = true; segStart = idx; }
-                        if (!isIn && inSeg) { inSeg = false; segs.push({ start: segStart, end: idx - 1 }); }
-                    });
-                    if (inSeg) segs.push({ start: segStart, end: 6 });
-                    segs.forEach((s, si) => {
-                        const startDay = week[s.start];
-                        const endDay = week[s.end];
-                        const startRef = cellRefs.current.get(startDay.toDateString());
-                        const endRef = cellRefs.current.get(endDay.toDateString());
-                        if (startRef && endRef) {
-                            const startRect = startRef.getBoundingClientRect();
-                            const endRect = endRef.getBoundingClientRect();
-                            const parent = startRef.parentElement;
-                            const parentRect = parent ? parent.getBoundingClientRect() : ({ left: 0, width: 0 } as DOMRect);
-                            const parentWidth = Math.round(parentRect.width || 0);
-                            const bleed = 6;
-                            let leftPx = Math.round(startRect.left - parentRect.left) - bleed;
-                            let rightPx = Math.round(endRect.right - parentRect.left) + bleed;
-                            leftPx = Math.max(0, leftPx);
-                            rightPx = Math.min(parentWidth, rightPx);
-                            newStyles[`w${wi}-s${si}`] = { left: `${leftPx}px`, width: `${Math.max(0, rightPx - leftPx)}px` };
-                        }
-                    });
-                });
-                setSegPixelStyles(newStyles);
-            });
-        };
-        window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
-    }, [matrix, range]);
+    const calendarGridBoxSize = 46;
+    const calendarGridPadding = '0.2rem';
 
     return (
-        <Paper sx={{ p: 2 }} elevation={2}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Box>
-                    <Typography variant="h6">{viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && setMode(v)}>
-                        <ToggleButton value="single">Single</ToggleButton>
-                        <ToggleButton value="range">Range</ToggleButton>
-                    </ToggleButtonGroup>
-                    <IconButton onClick={() => setViewMonth(addDays(viewMonth, -30))} size="small"><ArrowBackIosNew fontSize="small" /></IconButton>
-                    <IconButton onClick={() => setViewMonth(addDays(viewMonth, 30))} size="small"><ArrowForwardIos fontSize="small" /></IconButton>
-                </Box>
-            </Box>
-
-            {/* Weekday header: use same grid structure and consistent cell height to align with day cells */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5, textAlign: 'center', mb: 1 }}>
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-                    <Box key={d} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48, p: 0 }}>
-                        <Typography variant="caption" sx={{ lineHeight: 1 }}>{d}</Typography>
+        <Box sx={{ width: 'max-content' }}>
+            <Paper sx={{ p: 2 }} elevation={2}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 2 }}>
+                    <Box>
+                        <Typography variant="h6">{viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Typography>
                     </Box>
-                ))}
-            </Box>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && setMode(v)}>
+                            <ToggleButton value="single">Single</ToggleButton>
+                            <ToggleButton value="range">Range</ToggleButton>
+                        </ToggleButtonGroup>
+                        <IconButton onClick={() => setViewMonth(addDays(viewMonth, -30))} size="small"><ArrowBackIosNew fontSize="small" /></IconButton>
+                        <IconButton onClick={() => setViewMonth(addDays(viewMonth, 30))} size="small"><ArrowForwardIos fontSize="small" /></IconButton>
+                    </Box>
+                </Box>
 
-            <Box>
-                {matrix.map((week, wi) => (
-                    <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5, mb: 0.5, position: 'relative' }}>
-                        {/* compute contiguous in-range segments for this week so we can paint a single rounded background behind them */}
-                        {(() => {
-                            const segs: Array<{ start: number; end: number }> = [];
-                            let inSeg = false;
-                            let segStart = 0;
-                            week.forEach((d, idx) => {
-                                const dayVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                                const from = range.from ? new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate()).getTime() : undefined;
-                                const to = range.to ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate()).getTime() : undefined;
-                                const isIn = (from !== undefined && to !== undefined && dayVal >= Math.min(from, to) && dayVal <= Math.max(from, to));
-                                if (isIn && !inSeg) { inSeg = true; segStart = idx; }
-                                if (!isIn && inSeg) { inSeg = false; segs.push({ start: segStart, end: idx - 1 }); }
-                            });
-                            if (inSeg) segs.push({ start: segStart, end: 6 });
-                            return segs.map((s, i) => {
-                                const key = `w${wi}-s${i}`;
-                                // Use pixel-measured styles when available; otherwise fall
-                                // back to the lightweight calc-based bleed.
-                                const px = segPixelStyles[key];
-                                const left = px ? px.left : `calc(${(s.start * 100) / 7}% - 6px)`;
-                                const width = px ? px.width : `calc(${((s.end - s.start + 1) * 100) / 7}% + 12px)`;
-                                return (
-                                    <Box
-                                        key={`seg-${wi}-${i}`}
-                                        sx={(theme) => ({
-                                            position: 'absolute',
-                                            left,
-                                            width,
-                                            // center the pill vertically relative to the week row
-                                            top: 'calc(50% - 18px)',
-                                            height: 36,
-                                            bgcolor: alpha(theme.palette.primary.main, 0.18),
-                                            borderRadius: '50rem',
-                                            zIndex: 0,
-                                        })}
-                                    />
-                                );
-                            });
-                        })()}
+                {/* Calendar grid */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center' }}>
+                    {/* Day header */}
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
+                        <Box key={d} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48, p: 0 }}>
+                            <Typography variant="caption" sx={{ lineHeight: 1 }}>{d}</Typography>
+                        </Box>
+                    ))}
 
-                        {week.map((day) => {
-                            const inMonth = day.getMonth() === viewMonth.getMonth();
-                            const key = day.toDateString();
-                            const todaysEvents = eventDays.get(key) || [];
-                            const isStart = range.from && isSameDay(range.from, day);
-                            const isEnd = range.to && isSameDay(range.to, day);
-                            const inR = isInRange(day, range);
-                            const isSelectedSingle = mode === 'single' && selected && isSameDay(selected, day);
-                            const isEndpointInRange = mode === 'range' && (isStart || isEnd);
-                            const isActive = isSelectedSingle || isEndpointInRange;
-                            return (
-                                <Box
-                                    key={key}
-                                    ref={(el: HTMLDivElement | null) => {
-                                        if (el) cellRefs.current.set(key, el);
-                                        else cellRefs.current.delete(key);
-                                    }}
-                                    sx={{ p: 0, height: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative' }}
-                                >
-                                    <Button
-                                        onClick={() => handleDayClick(day)}
-                                        onPointerEnter={() => handlePointerEnterDay(day)}
-                                        onPointerDown={(e) => {
-                                            if (mode === 'range') {
-                                                if (isStart) { e.preventDefault(); handleEndpointPointerDown('start'); }
-                                                else if (isEnd) { e.preventDefault(); handleEndpointPointerDown('end'); }
-                                            }
-                                        }}
-                                        // Show filled/contained when selected in single mode or when this day is a range endpoint.
-                                        variant={isActive ? 'contained' : 'text'}
-                                        sx={(theme) => ({
-                                            minWidth: 36,
-                                            width: 36,
-                                            height: 36,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            // Fill the button for single-selected day or range endpoints; interior in-range days remain unfilled.
-                                            bgcolor: isActive ? theme.palette.primary.main : undefined,
-                                            color: isActive ? theme.palette.primary.contrastText : (inMonth ? undefined : theme.palette.text.disabled),
-                                            borderRadius: '50%',
-                                            px: 0,
-                                            boxSizing: 'border-box',
-                                            '&:hover': { bgcolor: isSelectedSingle ? theme.palette.primary.dark : undefined }
-                                        })}
-                                    >
-                                        <Typography variant="body2" sx={{ lineHeight: 1 }}>{day.getDate()}</Typography>
-                                    </Button>
+                    {/* Weeks */}
+                    {matrix.map((week, wi) => {
+                        // For each week we render segments as grid-spanning background elements
+                        // followed by the 7 day cells. Each segment is placed on grid row (wi + 2)
+                        // because header occupies row 1.
+                        const calendarGridButtonSize = calendarGridBoxSize - 10;
+                        return (
+                            <React.Fragment key={wi}>
+                                {(() => {
+                                    const segs: Array<{ start: number; end: number }> = [];
+                                    let inSeg = false;
+                                    let segStart = 0;
+                                    week.forEach((d, idx) => {
+                                        const dayVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+                                        const from = range.from ? new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate()).getTime() : undefined;
+                                        const to = range.to ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate()).getTime() : undefined;
+                                        const isIn = (from !== undefined && to !== undefined && dayVal >= Math.min(from, to) && dayVal <= Math.max(from, to));
+                                        if (isIn && !inSeg) { inSeg = true; segStart = idx; }
+                                        if (!isIn && inSeg) { inSeg = false; segs.push({ start: segStart, end: idx - 1 }); }
+                                    });
+                                    if (inSeg) segs.push({ start: segStart, end: 6 });
+                                    return segs.map((s, i) => {
+                                        // NOTE: Calculate margins to align segment with circular buttons
+                                        // Button width = 36px, cell padding = 0.5rem (8px), gap = 0.5 (4px)
+                                        // Each cell is (36 + 2*8) = 52px wide
+                                        // Segment should start at left edge of first button and end at right edge of last button
+                                        // Left & Right margin: move inward by padding amount (8px)
 
-                                    {/* Event badge inside the button container (absolute so it doesn't affect layout) */}
-                                    {todaysEvents.length > 0 && (
-                                        <Box sx={{ position: 'absolute', right: 2, top: 10, zIndex: 2 }}>
-                                            <Box sx={(theme) => ({ width: 10, height: 10, borderRadius: '50%', backgroundColor: todaysEvents[0].color || theme.palette.primary.main, boxShadow: `0 0 0 3px ${alpha(theme.palette.background.default, 0.06)}` })} />
+                                        return (
+                                            <Box
+                                                key={`seg-${wi}-${i}`}
+                                                sx={(theme) => ({
+                                                    gridColumn: `${s.start + 1} / ${s.end + 2}`,
+                                                    gridRow: wi + 2,
+                                                    alignSelf: 'center',
+                                                    height: calendarGridButtonSize,
+                                                    bgcolor: alpha(theme.palette.primary.main, 0.18),
+                                                    borderRadius: '50rem',
+                                                    zIndex: 0,
+                                                    pointerEvents: 'none',
+                                                    // Use margin to inset the segment to match button edges
+                                                    marginLeft: calendarGridPadding,
+                                                    marginRight: calendarGridPadding,
+                                                })}
+                                            />
+                                        );
+                                    });
+                                })()}
+
+                                {/* Days in week */}
+                                {week.map((day) => {
+                                    const inMonth = day.getMonth() === viewMonth.getMonth();
+                                    const key = day.toDateString();
+                                    const todaysEvents = eventDays.get(key) || [];
+                                    const isStart = range.from && isSameDay(range.from, day);
+                                    const isEnd = range.to && isSameDay(range.to, day);
+                                    const inR = isInRange(day, range);
+                                    const isSelectedSingle = mode === 'single' && selected && isSameDay(selected, day);
+                                    const isEndpointInRange = mode === 'range' && (isStart || isEnd);
+                                    const isActive = isSelectedSingle || isEndpointInRange;
+                                    return (
+                                        <Box
+                                            key={key}
+                                            sx={{ p: calendarGridPadding, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative', gridRow: wi + 2, gridColumn: (day.getDay() + 1) }}
+                                        >
+                                            <Button
+                                                onClick={() => handleDayClick(day)}
+                                                onPointerEnter={() => handlePointerEnterDay(day)}
+                                                onPointerDown={(e) => {
+                                                    if (mode === 'range') {
+                                                        if (isStart) { e.preventDefault(); handleEndpointPointerDown('start'); }
+                                                        else if (isEnd) { e.preventDefault(); handleEndpointPointerDown('end'); }
+                                                    }
+                                                }}
+                                                // Show filled/contained when selected in single mode or when this day is a range endpoint.
+                                                variant={isActive ? 'contained' : 'text'}
+                                                sx={(theme) => ({
+                                                    minWidth: calendarGridButtonSize,
+                                                    width: calendarGridButtonSize,
+                                                    height: calendarGridButtonSize,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    // Fill the button for single-selected day or range endpoints; interior in-range days remain unfilled.
+                                                    bgcolor: isActive ? theme.palette.primary.main : undefined,
+                                                    color: isActive ? theme.palette.primary.contrastText : (inMonth ? undefined : theme.palette.text.disabled),
+                                                    borderRadius: '50%',
+                                                    p: 0,
+                                                    boxSizing: 'border-box',
+                                                    '&:hover': { bgcolor: isSelectedSingle ? theme.palette.primary.dark : undefined }
+                                                })}
+                                            >
+                                                <Typography variant="body2" sx={{ lineHeight: 1 }}>{day.getDate()}</Typography>
+                                            </Button>
+
+                                            {/* Event badge inside the button container (absolute so it doesn't affect layout) */}
+                                            {todaysEvents.length > 0 && (
+                                                <Box sx={{ position: 'absolute', right: 2, top: 10, zIndex: 2 }}>
+                                                    <Box sx={(theme) => ({ width: 10, height: 10, borderRadius: '50%', backgroundColor: todaysEvents[0].color || theme.palette.primary.main, boxShadow: `0 0 0 3px ${alpha(theme.palette.background.default, 0.06)}` })} />
+                                                </Box>
+                                            )}
                                         </Box>
-                                    )}
-                                </Box>
-                            );
-                        })}
-                    </Box>
-                ))}
-            </Box>
-        </Paper>
+                                    );
+                                })}
+                            </React.Fragment>
+                        )
+                    })}
+                </Box>
+            </Paper>
+        </Box>
     );
 }

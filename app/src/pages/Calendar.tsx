@@ -122,7 +122,7 @@ export default function CalendarPage() {
     const [tabValue, setTabValue] = React.useState(0);
     const [calendarView, setCalendarView] = React.useState<CalendarView>('month');
     const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(new Date());
-    const [showUpcoming, setShowUpcoming] = React.useState(true);
+    const [showUpcoming, setShowUpcoming] = React.useState(false);
     const [filterTypes, setFilterTypes] = React.useState<EventType[]>([]);
     const [filterStatuses, setFilterStatuses] = React.useState<EventStatus[]>([]);
     const [searchTerm, setSearchTerm] = React.useState('');
@@ -206,10 +206,7 @@ export default function CalendarPage() {
                                     </Box>
                                 </Box>
                                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
-                                    <Box sx={{ width: { xs: '100%', md: '33%' } }}>
-                                        <Calendar events={mockScheduleEvents} selected={selectedDate} onSelect={(d) => setSelectedDate(d)} onEventClick={(ev) => setSelectedDate(new Date(ev.startDate))} />
-                                        {/* internal view buttons removed to avoid duplication with header controls */}
-                                    </Box>
+                                    <Calendar events={mockScheduleEvents} selected={selectedDate} onSelect={(d) => setSelectedDate(d)} onEventClick={(ev) => setSelectedDate(new Date(ev.startDate))} />
                                     <Box sx={{ width: { xs: '100%', md: '67%' } }}>
                                         <Typography variant="subtitle1" gutterBottom>
                                             Events on {selectedDate ? selectedDate.toLocaleDateString() : '—'}
