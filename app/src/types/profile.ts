@@ -46,9 +46,28 @@ export interface UserProfile {
      */
     avatar?: string;
     /**
+     * URL to the user's profile banner image
+     */
+    banner?: string;
+    /**
      * User's contact phone number
      */
     phone?: string;
+    /**
+     * User's biography or description
+     */
+    bio?: string;
+
+    preferences?: {
+        /**
+         * User's theme color preference (hex color)
+         */
+        themeColor?: string;
+        /**
+         * Whether to reduce animations for better performance or accessibility
+         */
+        reduceAnimations?: boolean;
+    }
     /**
      * User's last active date
      */

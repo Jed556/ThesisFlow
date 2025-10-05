@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Box, Paper, IconButton, Collapse, Divider, List, ListItem, ListItemText, TextField, Button, Tooltip, InputBase } from '@mui/material';
 import { ExpandMore, ClearAll, Send, VerticalAlignBottom } from '@mui/icons-material';
-import { formatLogTimestamp, useTick } from '../utils/dateUtils';
+import { formatLogTimestamp, useTick } from '../../utils/dateUtils';
 
 export interface DevConsoleProps {
     logs: string[];

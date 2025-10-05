@@ -23,6 +23,10 @@ export { default as ScrollContainer } from './ScrollContainer/ScrollContainer';
 // Sort Button
 export { default as SortButton } from './SortButton/SortButton';
 
+// Color Picker
+export { ColorPicker, type ColorPickerProps } from './ColorPicker/ColorPicker';
+export { ColorPickerDialog, type ColorPickerDialogProps } from './ColorPicker/ColorPickerDialog';
+
 // Animation Components
 export { default as AnimatedPage } from './Animate/AnimatedPage/AnimatedPage';
 export { default as AnimatedList } from './Animate/AnimatedList/AnimatedList';

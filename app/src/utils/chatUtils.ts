@@ -3,7 +3,8 @@ import type { FileAttachment } from '../types/file';
 import type { SortOrder } from '../types/sort';
 import type { ThesisComment, ThesisRole } from '../types/thesis';
 import { sortArray } from './sortUtils';
-import { formatFileSize as formatFileSizeUtil } from './fileUtils';
+import { formatFileSize } from './fileUtils';
+import { isSameDay, addDays, parseThesisDate } from './dateUtils';
 
 /**
  * Convert thesis role to chat participant role
@@ -121,16 +122,20 @@ export const groupMessagesBySender = (messages: ChatMessage[]): ChatMessage[][] 
  * @returns Formatted date string
  */
 export const formatDateGroup = (timestamp: string | Date): string => {
-    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+    // Normalize input using the project's date parsing utility
+    const date = typeof timestamp === 'string' ? parseThesisDate(timestamp) : timestamp;
     const now = new Date();
+
+    // Start-of-day reference for today and yesterday
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterday = addDays(today, -1);
+
+    // Message date normalized to start-of-day for comparison
     const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-    if (messageDate.getTime() === today.getTime()) {
+    if (isSameDay(messageDate, today)) {
         return 'Today';
-    } else if (messageDate.getTime() === yesterday.getTime()) {
+    } else if (isSameDay(messageDate, yesterday)) {
         return 'Yesterday';
     } else {
         return date.toLocaleDateString('en-US', {
@@ -183,12 +188,15 @@ export const filterMessagesByDateRange = (
     startDate: Date,
     endDate: Date
 ): ChatMessage[] => {
-    return messages.filter(message => {
-        const messageDate = typeof message.timestamp === 'string'
-            ? new Date(message.timestamp)
-            : message.timestamp;
+    // Normalize input range to start-of-day and end-of-day
+    const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
 
-        return messageDate >= startDate && messageDate <= endDate;
+    return messages.filter(message => {
+        const raw = typeof message.timestamp === 'string' ? parseThesisDate(message.timestamp) : message.timestamp;
+        const msgDate = new Date(raw.getFullYear(), raw.getMonth(), raw.getDate());
+
+        return msgDate >= start && msgDate <= end;
     });
 };
 
@@ -257,12 +265,8 @@ export const getMostRecentMessage = (messages: ChatMessage[]): ChatMessage | nul
     if (messages.length === 0) return null;
 
     return messages.reduce((latest, current) => {
-        const latestDate = typeof latest.timestamp === 'string'
-            ? new Date(latest.timestamp)
-            : latest.timestamp;
-        const currentDate = typeof current.timestamp === 'string'
-            ? new Date(current.timestamp)
-            : current.timestamp;
+        const latestDate = typeof latest.timestamp === 'string' ? parseThesisDate(latest.timestamp) : latest.timestamp;
+        const currentDate = typeof current.timestamp === 'string' ? parseThesisDate(current.timestamp) : current.timestamp;
 
         return currentDate > latestDate ? current : latest;
     });
@@ -294,12 +298,6 @@ export const calculateMessageAttachmentSize = (message: ChatMessage): number => 
         return total + bytes;
     }, 0);
 };
-
-/**
- * Format file size for display (re-exported from fileUtils)
- * @deprecated Import formatFileSize from fileUtils directly
- */
-export const formatFileSize = formatFileSizeUtil;
 
 /**
  * Validate message content
