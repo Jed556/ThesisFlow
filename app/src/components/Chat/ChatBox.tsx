@@ -318,34 +318,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                     flexDirection: 'column'
                 }}
             >
-                {isLoading ? (
-                    // Skeleton loading state
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {[1, 2, 3].map((i) => (
-                            <Box
-                                key={i}
-                                sx={{
-                                    display: 'flex',
-                                    justifyContent: i % 2 === 0 ? 'flex-end' : 'flex-start',
-                                }}
-                            >
-                                <Box sx={{ maxWidth: '80%', width: '100%', p: 2 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1.5 }}>
-                                        {i % 2 !== 0 && <Skeleton variant="circular" width={28} height={28} />}
-                                        <Box sx={{ flexGrow: 1 }}>
-                                            <Skeleton variant="text" width={80} height={20} />
-                                            <Skeleton variant="text" width={120} height={16} />
-                                        </Box>
-                                        {i % 2 === 0 && <Skeleton variant="circular" width={28} height={28} />}
-                                    </Box>
-                                    <Skeleton variant="text" width="90%" height={20} />
-                                    <Skeleton variant="text" width="75%" height={20} />
-                                    <Skeleton variant="text" width="60%" height={20} />
-                                </Box>
-                            </Box>
-                        ))}
-                    </Box>
-                ) : messages.length === 0 ? (
+                {messages.length === 0 && !isLoading ? (
                     <Box
                         sx={{
                             display: 'flex',
@@ -360,13 +333,40 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                     </Box>
                 ) : (
                     <>
-                        {shouldAnimate && animationVariant !== 'none' ? (
+                        {shouldAnimate && animationVariant !== 'none' && !isLoading ? (
                             <AnimatedList
                                 variant={animationVariant}
                                 staggerDelay={animationStaggerDelay}
                             >
                                 {renderMessages()}
                             </AnimatedList>
+                        ) : isLoading ? (
+                            // Show skeleton messages while loading
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                {[1, 2, 3].map((i) => (
+                                    <Box
+                                        key={i}
+                                        sx={{
+                                            display: 'flex',
+                                            justifyContent: i % 2 === 0 ? 'flex-end' : 'flex-start',
+                                        }}
+                                    >
+                                        <Box sx={{ maxWidth: '80%', width: '100%', p: 2 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1.5 }}>
+                                                {i % 2 !== 0 && <Skeleton variant="circular" width={28} height={28} />}
+                                                <Box sx={{ flexGrow: 1 }}>
+                                                    <Skeleton variant="text" width={80} height={20} />
+                                                    <Skeleton variant="text" width={120} height={16} />
+                                                </Box>
+                                                {i % 2 === 0 && <Skeleton variant="circular" width={28} height={28} />}
+                                            </Box>
+                                            <Skeleton variant="text" width="90%" height={20} />
+                                            <Skeleton variant="text" width="75%" height={20} />
+                                            <Skeleton variant="text" width="60%" height={20} />
+                                        </Box>
+                                    </Box>
+                                ))}
+                            </Box>
                         ) : (
                             renderMessages()
                         )}

@@ -258,6 +258,7 @@ export default function ChapterComment({
                                     currentUserId={currentUserEmail || ''}
                                     showInput={false}
                                     height="auto"
+                                    autoScroll={false}
                                     config={{
                                         showTimestamps: true,
                                         showAvatars: true,
@@ -290,6 +291,7 @@ export default function ChapterComment({
             currentUserId={currentUserEmail || ''}
             showInput={false}
             height="auto"
+            autoScroll={false}
             config={{
                 showTimestamps: true,
                 showAvatars: true,

@@ -225,34 +225,15 @@ export default function Avatar({ profile, email, name, initials = NAME_PRESETS.f
         ? { width: size, height: size, fontSize: `${size * 0.4}px` }
         : sizeMap[size];
 
-    // Show skeleton if loading
-    if (loading) {
-        const skeletonAvatar = (
-            <Skeleton
-                variant="circular"
-                width={avatarSize.width}
-                height={avatarSize.height}
-                sx={sx}
-            />
-        );
-
-        if (mode === 'chip') {
-            return (
-                <Chip
-                    avatar={skeletonAvatar}
-                    label={<Skeleton variant="text" width={80} />}
-                    variant={chipProps?.variant || 'outlined'}
-                    size={chipProps?.size || 'small'}
-                    color={chipProps?.color || 'default'}
-                />
-            );
-        }
-
-        return skeletonAvatar;
-    }
-
-    // Create the avatar element
-    const avatarCore = (
+    // Create the avatar element with embedded skeleton
+    const avatarCore = loading ? (
+        <Skeleton
+            variant="circular"
+            width={avatarSize.width}
+            height={avatarSize.height}
+            sx={sx}
+        />
+    ) : (
         <MuiAvatar
             sx={{
                 ...avatarSize,
@@ -288,7 +269,7 @@ export default function Avatar({ profile, email, name, initials = NAME_PRESETS.f
         const chipCore = (
             <Chip
                 avatar={avatarCore}
-                label={label || displayName}
+                label={loading ? <Skeleton variant="text" width={80} /> : (label || displayName)}
                 variant={chipProps?.variant || 'outlined'}
                 size={chipProps?.size || 'small'}
                 color={chipProps?.color || 'default'}

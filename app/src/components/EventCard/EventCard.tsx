@@ -27,43 +27,6 @@ export default function EventCard({
     onDelete?: () => void;
     loading?: boolean;
 }) {
-    // Show skeleton while loading
-    if (loading) {
-        return (
-            <Card sx={{ mb: 2, borderLeft: `4px solid #bdbdbd` }}>
-                <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                            <Skeleton variant="circular" width={20} height={20} />
-                            <Skeleton variant="text" width="40%" height={28} />
-                        </Box>
-                        <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 2 }} />
-                    </Box>
-                    <Skeleton variant="text" width="90%" height={20} sx={{ mb: 2 }} />
-                    <Stack spacing={1.5} sx={{ mb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Skeleton variant="circular" width={20} height={20} />
-                            <Skeleton variant="text" width="60%" height={20} />
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Skeleton variant="circular" width={20} height={20} />
-                            <Skeleton variant="text" width="50%" height={20} />
-                        </Box>
-                    </Stack>
-                    <Box sx={{ display: 'flex', gap: 0.5, mb: 2 }}>
-                        <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 2 }} />
-                        <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 2 }} />
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Skeleton variant="circular" width={32} height={32} />
-                        <Skeleton variant="circular" width={32} height={32} />
-                        <Skeleton variant="circular" width={32} height={32} />
-                    </Box>
-                </CardContent>
-            </Card>
-        );
-    }
-
     const startDate = event?.startDate ? new Date(event.startDate) : new Date();
     const endDate = event?.endDate ? new Date(event.endDate) : new Date(event.startDate || Date.now());
     const isToday = startDate.toDateString() === new Date().toDateString();
@@ -76,9 +39,9 @@ export default function EventCard({
         <Card
             sx={{
                 mb: 2,
-                borderLeft: `4px solid ${calendar?.color || event.color || defaultEventColor}`,
-                opacity: isPast && event.status !== 'completed' ? 0.7 : 1,
-                backgroundColor: isToday ? 'action.hover' : 'background.paper',
+                borderLeft: `4px solid ${loading ? '#bdbdbd' : (calendar?.color || event.color || defaultEventColor)}`,
+                opacity: loading ? 1 : (isPast && event.status !== 'completed' ? 0.7 : 1),
+                backgroundColor: loading ? 'background.paper' : (isToday ? 'action.hover' : 'background.paper'),
                 transition: (theme) =>
                     theme.transitions.create(['transform', 'box-shadow'], {
                         duration: theme.transitions.duration.short,
@@ -91,19 +54,28 @@ export default function EventCard({
             }}
         >
             <CardContent>
+                {/* Header with title and status */}
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                        <CalendarMonth fontSize="small" />
-                        <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>{event.title}</Typography>
+                        {loading ? <Skeleton variant="circular" width={20} height={20} /> : <CalendarMonth fontSize="small" />}
+                        {loading ? (
+                            <Skeleton variant="text" width="40%" height={28} />
+                        ) : (
+                            <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>{event.title}</Typography>
+                        )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Chip label={event.status} size="small" sx={{ backgroundColor: statusColors[event.status], color: 'white' }} />
-                        {onEdit && (
+                        {loading ? (
+                            <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 2 }} />
+                        ) : (
+                            <Chip label={event.status} size="small" sx={{ backgroundColor: statusColors[event.status], color: 'white' }} />
+                        )}
+                        {!loading && onEdit && (
                             <IconButton size="small" onClick={onEdit} sx={{ ml: 0.5 }}>
                                 <Edit fontSize="small" />
                             </IconButton>
                         )}
-                        {onDelete && (
+                        {!loading && onDelete && (
                             <IconButton size="small" onClick={onDelete} sx={{ ml: 0 }}>
                                 <Delete fontSize="small" />
                             </IconButton>
@@ -111,49 +83,70 @@ export default function EventCard({
                     </Box>
                 </Box>
 
-                {event.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{event.description}</Typography>}
+                {/* Description */}
+                {loading ? (
+                    <Skeleton variant="text" width="90%" height={20} sx={{ mb: 2 }} />
+                ) : (
+                    event.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{event.description}</Typography>
+                )}
 
                 <Stack spacing={1.5} sx={{ mb: 2 }}>
                     {/* Time information */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <AccessTime fontSize="small" color="action" />
-                        <Typography variant="body2">
-                            {formatDate(startDate)}
-                            {!event.isAllDay && <> at {formatTime(startDate)} - {formatTime(endDate)}</>}
-                            {event.isAllDay && <> (All Day)</>}
-                        </Typography>
+                        {loading ? (
+                            <>
+                                <Skeleton variant="circular" width={20} height={20} />
+                                <Skeleton variant="text" width="60%" height={20} />
+                            </>
+                        ) : (
+                            <>
+                                <AccessTime fontSize="small" color="action" />
+                                <Typography variant="body2">
+                                    {formatDate(startDate)}
+                                    {!event.isAllDay && <> at {formatTime(startDate)} - {formatTime(endDate)}</>}
+                                    {event.isAllDay && <> (All Day)</>}
+                                </Typography>
+                            </>
+                        )}
                     </Box>
 
-                    {/* Location information - show physical and virtual separately */}
-                    {event.location && (
-                        <>
-                            {(event.location.type === 'physical' || event.location.type === 'hybrid') && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <LocationOn fontSize="small" color="action" />
-                                    <Typography variant="body2">
-                                        {event.location.address && event.location.room
-                                            ? `${event.location.address} - Room ${event.location.room}`
-                                            : event.location.address || `Room ${event.location.room}` || 'Physical location'
-                                        }
-                                    </Typography>
-                                </Box>
-                            )}
-                            {(event.location.type === 'virtual' || event.location.type === 'hybrid') && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Monitor fontSize="small" color="action" />
-                                    <Typography variant="body2">
-                                        {event.location.platform && event.location.url
-                                            ? `${event.location.platform}: ${event.location.url}`
-                                            : event.location.platform || event.location.url || 'Virtual meeting'
-                                        }
-                                    </Typography>
-                                </Box>
-                            )}
-                        </>
+                    {/* Location information */}
+                    {loading ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Skeleton variant="circular" width={20} height={20} />
+                            <Skeleton variant="text" width="50%" height={20} />
+                        </Box>
+                    ) : (
+                        event.location && (
+                            <>
+                                {(event.location.type === 'physical' || event.location.type === 'hybrid') && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <LocationOn fontSize="small" color="action" />
+                                        <Typography variant="body2">
+                                            {event.location.address && event.location.room
+                                                ? `${event.location.address} - Room ${event.location.room}`
+                                                : event.location.address || `Room ${event.location.room}` || 'Physical location'
+                                            }
+                                        </Typography>
+                                    </Box>
+                                )}
+                                {(event.location.type === 'virtual' || event.location.type === 'hybrid') && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Monitor fontSize="small" color="action" />
+                                        <Typography variant="body2">
+                                            {event.location.platform && event.location.url
+                                                ? `${event.location.platform}: ${event.location.url}`
+                                                : event.location.platform || event.location.url || 'Virtual meeting'
+                                            }
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </>
+                        )
                     )}
 
                     {/* Calendar information */}
-                    {calendar && (
+                    {!loading && calendar && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Box
                                 sx={{
@@ -170,33 +163,53 @@ export default function EventCard({
                     )}
                 </Stack>
 
-                {Array.isArray(event.tags) && event.tags.length > 0 && (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {event.tags.map((tag, index) => (
-                            <Chip key={index} label={tag} size="small" variant="outlined" sx={{ fontSize: '0.75rem' }} />
-                        ))}
+                {/* Tags */}
+                {loading ? (
+                    <Box sx={{ display: 'flex', gap: 0.5, mb: 2 }}>
+                        <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 2 }} />
+                        <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 2 }} />
                     </Box>
+                ) : (
+                    Array.isArray(event.tags) && event.tags.length > 0 && (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+                            {event.tags.map((tag, index) => (
+                                <Chip key={index} label={tag} size="small" variant="outlined" sx={{ fontSize: '0.75rem' }} />
+                            ))}
+                        </Box>
+                    )
                 )}
 
-                {Array.isArray(event.participants) && event.participants.length > 0 && (
+                {/* Participants with embedded skeleton in Avatar */}
+                {loading ? (
                     <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Participants ({event.participants.length}):</Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                            {event.participants.slice(0, 5).map((participant, index) => (
-                                <Avatar
-                                    key={index}
-                                    email={participant?.email}
-                                    initials={[Name.FIRST]}
-                                    size="medium"
-                                    tooltipText={`${getDisplayName(participant?.email)} (${participant?.role})`}
-                                    sx={{ ...(participant?.status === 'declined' && { opacity: 0.5 }) }}
-                                />
-                            ))}
-                            {event.participants.length > 5 && (
-                                <Avatar name={`+${event.participants.length - 5}`} size="medium" sx={{ fontSize: '0.75rem' }} />
-                            )}
+                        <Skeleton variant="text" width={120} height={20} sx={{ mb: 1 }} />
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Skeleton variant="circular" width={32} height={32} />
+                            <Skeleton variant="circular" width={32} height={32} />
+                            <Skeleton variant="circular" width={32} height={32} />
                         </Box>
                     </Box>
+                ) : (
+                    Array.isArray(event.participants) && event.participants.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Participants ({event.participants.length}):</Typography>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {event.participants.slice(0, 5).map((participant, index) => (
+                                    <Avatar
+                                        key={index}
+                                        email={participant?.email}
+                                        initials={[Name.FIRST]}
+                                        size="medium"
+                                        tooltipText={`${getDisplayName(participant?.email)} (${participant?.role})`}
+                                        sx={{ ...(participant?.status === 'declined' && { opacity: 0.5 }) }}
+                                    />
+                                ))}
+                                {event.participants.length > 5 && (
+                                    <Avatar name={`+${event.participants.length - 5}`} size="medium" sx={{ fontSize: '0.75rem' }} />
+                                )}
+                            </Box>
+                        </Box>
+                    )
                 )}
             </CardContent>
         </Card>

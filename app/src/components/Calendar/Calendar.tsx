@@ -285,76 +285,36 @@ export default function Calendar({
     // Determine if toggle should be shown
     const showToggle = selectMode === 'all';
 
-    // Skeleton for loading state
-    if (loading) {
-        const loadingContent = (
-            <Box sx={{ width: 'max-content' }}>
-                <Paper sx={{ p: 2 }} elevation={dialogMode ? 0 : 2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 2 }}>
-                        <Skeleton variant="text" width={150} height={32} />
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                            <Skeleton variant="rectangular" width={120} height={32} sx={{ borderRadius: 1 }} />
-                            <Skeleton variant="circular" width={32} height={32} />
-                            <Skeleton variant="circular" width={32} height={32} />
-                        </Box>
-                    </Box>
-                    <Box sx={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(7, 1fr)',
-                        gap: '0.2rem'
-                    }}>
-                        {/* Weekday headers */}
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                            <Box key={i} sx={{ textAlign: 'center', p: 1 }}>
-                                <Skeleton variant="text" width={20} height={20} sx={{ mx: 'auto' }} />
-                            </Box>
-                        ))}
-                        {/* Day cells */}
-                        {Array.from({ length: 35 }).map((_, i) => (
-                            <Skeleton
-                                key={i}
-                                variant="rectangular"
-                                width={46}
-                                height={46}
-                                sx={{ borderRadius: 1 }}
-                            />
-                        ))}
-                    </Box>
-                </Paper>
-            </Box>
-        );
-
-        if (dialogMode) {
-            return (
-                <Dialog open={open} onClose={onClose} maxWidth="sm">
-                    <DialogTitle>{dialogTitle}</DialogTitle>
-                    <DialogContent>{loadingContent}</DialogContent>
-                    <DialogActions>
-                        <Button onClick={onClose}>Cancel</Button>
-                    </DialogActions>
-                </Dialog>
-            );
-        }
-
-        return loadingContent;
-    }
-
     const calendarContent = (
         <Box sx={{ width: 'max-content' }}>
             <Paper sx={{ p: 2 }} elevation={dialogMode ? 0 : 2}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 2 }}>
                     <Box>
-                        <Typography variant="h6">{viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Typography>
+                        {loading ? (
+                            <Skeleton variant="text" width={150} height={32} />
+                        ) : (
+                            <Typography variant="h6">{viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Typography>
+                        )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        {showToggle && (
-                            <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && handleModeToggle(v as 'single' | 'range')}>
-                                <ToggleButton value="single">Single</ToggleButton>
-                                <ToggleButton value="range">Range</ToggleButton>
-                            </ToggleButtonGroup>
+                        {loading ? (
+                            <>
+                                <Skeleton variant="rectangular" width={120} height={32} sx={{ borderRadius: 1 }} />
+                                <Skeleton variant="circular" width={32} height={32} />
+                                <Skeleton variant="circular" width={32} height={32} />
+                            </>
+                        ) : (
+                            <>
+                                {showToggle && (
+                                    <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && handleModeToggle(v as 'single' | 'range')}>
+                                        <ToggleButton value="single">Single</ToggleButton>
+                                        <ToggleButton value="range">Range</ToggleButton>
+                                    </ToggleButtonGroup>
+                                )}
+                                <IconButton onClick={() => setViewMonth(addDays(viewMonth, -30))} size="small"><ArrowBackIosNew fontSize="small" /></IconButton>
+                                <IconButton onClick={() => setViewMonth(addDays(viewMonth, 30))} size="small"><ArrowForwardIos fontSize="small" /></IconButton>
+                            </>
                         )}
-                        <IconButton onClick={() => setViewMonth(addDays(viewMonth, -30))} size="small"><ArrowBackIosNew fontSize="small" /></IconButton>
-                        <IconButton onClick={() => setViewMonth(addDays(viewMonth, 30))} size="small"><ArrowForwardIos fontSize="small" /></IconButton>
                     </Box>
                 </Box>
 
@@ -363,120 +323,139 @@ export default function Calendar({
                     {/* Day header */}
                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
                         <Box key={d} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48, p: 0 }}>
-                            <Typography variant="caption" sx={{ lineHeight: 1 }}>{d}</Typography>
+                            {loading ? (
+                                <Skeleton variant="text" width={20} height={20} sx={{ mx: 'auto' }} />
+                            ) : (
+                                <Typography variant="caption" sx={{ lineHeight: 1 }}>{d}</Typography>
+                            )}
                         </Box>
                     ))}
 
                     {/* Weeks */}
-                    {matrix.map((week, wi) => {
-                        // For each week we render segments as grid-spanning background elements
-                        // followed by the 7 day cells. Each segment is placed on grid row (wi + 2)
-                        // because header occupies row 1.
-                        const calendarGridButtonSize = calendarGridBoxSize - 10;
-                        return (
-                            <React.Fragment key={wi}>
-                                {(() => {
-                                    const segs: Array<{ start: number; end: number }> = [];
-                                    let inSeg = false;
-                                    let segStart = 0;
-                                    week.forEach((d, idx) => {
-                                        const dayVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                                        const from = range.from ? new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate()).getTime() : undefined;
-                                        const to = range.to ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate()).getTime() : undefined;
-                                        const isIn = (from !== undefined && to !== undefined && dayVal >= Math.min(from, to) && dayVal <= Math.max(from, to));
-                                        if (isIn && !inSeg) { inSeg = true; segStart = idx; }
-                                        if (!isIn && inSeg) { inSeg = false; segs.push({ start: segStart, end: idx - 1 }); }
-                                    });
-                                    if (inSeg) segs.push({ start: segStart, end: 6 });
-                                    return segs.map((s, i) => {
-                                        // NOTE: Calculate margins to align segment with circular buttons
-                                        // Button width = 36px, cell padding = 0.5rem (8px), gap = 0.5 (4px)
-                                        // Each cell is (36 + 2*8) = 52px wide
-                                        // Segment should start at left edge of first button and end at right edge of last button
-                                        // Left & Right margin: move inward by padding amount (8px)
+                    {loading ? (
+                        // Show skeleton day cells while loading
+                        Array.from({ length: 35 }).map((_, i) => (
+                            <Box key={i} sx={{ p: calendarGridPadding, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                <Skeleton
+                                    variant="rectangular"
+                                    width={calendarGridBoxSize - 10}
+                                    height={calendarGridBoxSize - 10}
+                                    sx={{ borderRadius: '50%' }}
+                                />
+                            </Box>
+                        ))
+                    ) : (
+                        // Show actual calendar days when loaded
+                        matrix.map((week, wi) => {
+                            // For each week we render segments as grid-spanning background elements
+                            // followed by the 7 day cells. Each segment is placed on grid row (wi + 2)
+                            // because header occupies row 1.
+                            const calendarGridButtonSize = calendarGridBoxSize - 10;
+                            return (
+                                <React.Fragment key={wi}>
+                                    {(() => {
+                                        const segs: Array<{ start: number; end: number }> = [];
+                                        let inSeg = false;
+                                        let segStart = 0;
+                                        week.forEach((d, idx) => {
+                                            const dayVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+                                            const from = range.from ? new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate()).getTime() : undefined;
+                                            const to = range.to ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate()).getTime() : undefined;
+                                            const isIn = (from !== undefined && to !== undefined && dayVal >= Math.min(from, to) && dayVal <= Math.max(from, to));
+                                            if (isIn && !inSeg) { inSeg = true; segStart = idx; }
+                                            if (!isIn && inSeg) { inSeg = false; segs.push({ start: segStart, end: idx - 1 }); }
+                                        });
+                                        if (inSeg) segs.push({ start: segStart, end: 6 });
+                                        return segs.map((s, i) => {
+                                            // NOTE: Calculate margins to align segment with circular buttons
+                                            // Button width = 36px, cell padding = 0.5rem (8px), gap = 0.5 (4px)
+                                            // Each cell is (36 + 2*8) = 52px wide
+                                            // Segment should start at left edge of first button and end at right edge of last button
+                                            // Left & Right margin: move inward by padding amount (8px)
 
+                                            return (
+                                                <Box
+                                                    key={`seg-${wi}-${i}`}
+                                                    sx={(theme) => ({
+                                                        gridColumn: `${s.start + 1} / ${s.end + 2}`,
+                                                        gridRow: wi + 2,
+                                                        alignSelf: 'center',
+                                                        height: calendarGridButtonSize,
+                                                        bgcolor: alpha(theme.palette.primary.main, 0.18),
+                                                        borderRadius: '50rem',
+                                                        zIndex: 0,
+                                                        pointerEvents: 'none',
+                                                        // Use margin to inset the segment to match button edges
+                                                        marginLeft: calendarGridPadding,
+                                                        marginRight: calendarGridPadding,
+                                                    })}
+                                                />
+                                            );
+                                        });
+                                    })()}
+
+                                    {/* Days in week */}
+                                    {week.map((day) => {
+                                        const inMonth = day.getMonth() === viewMonth.getMonth();
+                                        const key = day.toDateString();
+                                        const todaysEvents = eventDays.get(key) || [];
+                                        const isStart = range.from && isSameDay(range.from, day);
+                                        const isEnd = range.to && isSameDay(range.to, day);
+                                        const inR = isInRange(day, range);
+                                        const isSelectedSingle = mode === 'single' && selected && isSameDay(selected, day);
+                                        const isEndpointInRange = mode === 'range' && (isStart || isEnd);
+                                        const isActive = isSelectedSingle || isEndpointInRange;
+                                        const isToday = isSameDay(day, new Date());
                                         return (
                                             <Box
-                                                key={`seg-${wi}-${i}`}
-                                                sx={(theme) => ({
-                                                    gridColumn: `${s.start + 1} / ${s.end + 2}`,
-                                                    gridRow: wi + 2,
-                                                    alignSelf: 'center',
-                                                    height: calendarGridButtonSize,
-                                                    bgcolor: alpha(theme.palette.primary.main, 0.18),
-                                                    borderRadius: '50rem',
-                                                    zIndex: 0,
-                                                    pointerEvents: 'none',
-                                                    // Use margin to inset the segment to match button edges
-                                                    marginLeft: calendarGridPadding,
-                                                    marginRight: calendarGridPadding,
-                                                })}
-                                            />
-                                        );
-                                    });
-                                })()}
-
-                                {/* Days in week */}
-                                {week.map((day) => {
-                                    const inMonth = day.getMonth() === viewMonth.getMonth();
-                                    const key = day.toDateString();
-                                    const todaysEvents = eventDays.get(key) || [];
-                                    const isStart = range.from && isSameDay(range.from, day);
-                                    const isEnd = range.to && isSameDay(range.to, day);
-                                    const inR = isInRange(day, range);
-                                    const isSelectedSingle = mode === 'single' && selected && isSameDay(selected, day);
-                                    const isEndpointInRange = mode === 'range' && (isStart || isEnd);
-                                    const isActive = isSelectedSingle || isEndpointInRange;
-                                    const isToday = isSameDay(day, new Date());
-                                    return (
-                                        <Box
-                                            key={key}
-                                            sx={{ p: calendarGridPadding, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative', gridRow: wi + 2, gridColumn: (day.getDay() + 1) }}
-                                        >
-                                            <Button
-                                                onClick={() => handleDayClick(day)}
-                                                onPointerEnter={() => handlePointerEnterDay(day)}
-                                                onPointerDown={(e) => {
-                                                    if (mode === 'range') {
-                                                        if (isStart) { e.preventDefault(); handleEndpointPointerDown('start'); }
-                                                        else if (isEnd) { e.preventDefault(); handleEndpointPointerDown('end'); }
-                                                    }
-                                                }}
-                                                // Show filled/contained when selected in single mode or when this day is a range endpoint.
-                                                variant={isActive ? 'contained' : 'text'}
-                                                sx={(theme) => ({
-                                                    minWidth: calendarGridButtonSize,
-                                                    width: calendarGridButtonSize,
-                                                    height: calendarGridButtonSize,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    // Fill the button for single-selected day or range endpoints; interior in-range days remain unfilled.
-                                                    bgcolor: isActive ? theme.palette.primary.main : undefined,
-                                                    color: isActive ? theme.palette.primary.contrastText : (inMonth ? undefined : theme.palette.text.disabled),
-                                                    borderRadius: '50%',
-                                                    p: 0,
-                                                    boxSizing: 'border-box',
-                                                    // Grey outline for today's date
-                                                    border: isToday ? '1px solid grey' : undefined,
-                                                    '&:hover': { bgcolor: isSelectedSingle ? theme.palette.primary.dark : undefined }
-                                                })}
+                                                key={key}
+                                                sx={{ p: calendarGridPadding, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative', gridRow: wi + 2, gridColumn: (day.getDay() + 1) }}
                                             >
-                                                <Typography variant="body2" sx={{ lineHeight: 1 }}>{day.getDate()}</Typography>
-                                            </Button>
+                                                <Button
+                                                    onClick={() => handleDayClick(day)}
+                                                    onPointerEnter={() => handlePointerEnterDay(day)}
+                                                    onPointerDown={(e) => {
+                                                        if (mode === 'range') {
+                                                            if (isStart) { e.preventDefault(); handleEndpointPointerDown('start'); }
+                                                            else if (isEnd) { e.preventDefault(); handleEndpointPointerDown('end'); }
+                                                        }
+                                                    }}
+                                                    // Show filled/contained when selected in single mode or when this day is a range endpoint.
+                                                    variant={isActive ? 'contained' : 'text'}
+                                                    sx={(theme) => ({
+                                                        minWidth: calendarGridButtonSize,
+                                                        width: calendarGridButtonSize,
+                                                        height: calendarGridButtonSize,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        // Fill the button for single-selected day or range endpoints; interior in-range days remain unfilled.
+                                                        bgcolor: isActive ? theme.palette.primary.main : undefined,
+                                                        color: isActive ? theme.palette.primary.contrastText : (inMonth ? undefined : theme.palette.text.disabled),
+                                                        borderRadius: '50%',
+                                                        p: 0,
+                                                        boxSizing: 'border-box',
+                                                        // Grey outline for today's date
+                                                        border: isToday ? '1px solid grey' : undefined,
+                                                        '&:hover': { bgcolor: isSelectedSingle ? theme.palette.primary.dark : undefined }
+                                                    })}
+                                                >
+                                                    <Typography variant="body2" sx={{ lineHeight: 1 }}>{day.getDate()}</Typography>
+                                                </Button>
 
-                                            {/* Event badge inside the button container (absolute so it doesn't affect layout) */}
-                                            {todaysEvents.length > 0 && (
-                                                <Box sx={{ position: 'absolute', right: 2, top: 10, zIndex: 2 }}>
-                                                    <Box sx={(theme) => ({ width: 10, height: 10, borderRadius: '50%', backgroundColor: todaysEvents[0].color || theme.palette.primary.main, boxShadow: `0 0 0 3px ${alpha(theme.palette.background.default, 0.06)}` })} />
-                                                </Box>
-                                            )}
-                                        </Box>
-                                    );
-                                })}
-                            </React.Fragment>
-                        )
-                    })}
+                                                {/* Event badge inside the button container (absolute so it doesn't affect layout) */}
+                                                {todaysEvents.length > 0 && (
+                                                    <Box sx={{ position: 'absolute', right: 2, top: 10, zIndex: 2 }}>
+                                                        <Box sx={(theme) => ({ width: 10, height: 10, borderRadius: '50%', backgroundColor: todaysEvents[0].color || theme.palette.primary.main, boxShadow: `0 0 0 3px ${alpha(theme.palette.background.default, 0.06)}` })} />
+                                                    </Box>
+                                                )}
+                                            </Box>
+                                        );
+                                    })}
+                                </React.Fragment>
+                            );
+                        })
+                    )}
                 </Box>
             </Paper>
         </Box>

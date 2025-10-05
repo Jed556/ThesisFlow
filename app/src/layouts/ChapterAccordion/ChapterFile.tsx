@@ -53,50 +53,11 @@ const getFileIcon = (fileType: FileType) => {
  * @param loading - Whether the files are still loading
  */
 export default function ChapterFile({ chapterId, onVersionSelect, selectedVersion, loading = false }: ChapterFileProps) {
-    // Show skeleton while loading
-    if (loading) {
-        return (
-            <Card variant="outlined" sx={{ mb: 2 }}>
-                <CardContent sx={{ py: 2 }}>
-                    <Stack spacing={3}>
-                        {[1, 2].map((i) => (
-                            <Box
-                                key={i}
-                                sx={{
-                                    p: 2,
-                                    border: 2,
-                                    borderColor: 'divider',
-                                    borderRadius: 2,
-                                    bgcolor: 'background.paper'
-                                }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                                    <Skeleton variant="circular" width={24} height={24} />
-                                    <Box sx={{ flexGrow: 1 }}>
-                                        <Skeleton variant="text" width="60%" height={24} />
-                                        <Skeleton variant="text" width="40%" height={20} />
-                                    </Box>
-                                    <Skeleton variant="rectangular" width={60} height={24} />
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                                    <Skeleton variant="circular" width={28} height={28} />
-                                    <Box sx={{ flexGrow: 1 }}>
-                                        <Skeleton variant="text" width="30%" height={20} />
-                                        <Skeleton variant="text" width="50%" height={16} />
-                                    </Box>
-                                </Box>
-                            </Box>
-                        ))}
-                    </Stack>
-                </CardContent>
-            </Card>
-        );
-    }
-
     // Get all submission files for this chapter
-    const submissionFiles = getChapterSubmissions(chapterId);
+    const submissionFiles = loading ? [] : getChapterSubmissions(chapterId);
 
-    if (submissionFiles.length === 0) {
+    // If not loading and no files, show info alert
+    if (!loading && submissionFiles.length === 0) {
         return (
             <Alert severity="info" sx={{ mb: 2 }}>
                 No document uploaded yet. Click "Upload Document" to submit your chapter.
@@ -105,15 +66,52 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
     }
 
     // Sort files by submission date (newest first)
-    const sortedFiles = submissionFiles
+    const sortedFiles = loading ? [] : submissionFiles
         .filter(file => file.category === 'submission')
         .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+
+    // Show skeleton cards while loading
+    const filesToRender = loading ? [1, 2] : sortedFiles;
 
     return (
         <Card variant="outlined" sx={{ mb: 2 }}>
             <CardContent sx={{ py: 2 }}>
                 <Stack spacing={3}>
-                    {sortedFiles.map((file, index) => {
+                    {filesToRender.map((fileOrIndex, index) => {
+                        if (loading) {
+                            // Render skeleton
+                            return (
+                                <Box
+                                    key={`skeleton-${index}`}
+                                    sx={{
+                                        p: 2,
+                                        border: 2,
+                                        borderColor: 'divider',
+                                        borderRadius: 2,
+                                        bgcolor: 'background.paper'
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                                        <Skeleton variant="circular" width={24} height={24} />
+                                        <Box sx={{ flexGrow: 1 }}>
+                                            <Skeleton variant="text" width="60%" height={24} />
+                                            <Skeleton variant="text" width="40%" height={20} />
+                                        </Box>
+                                        <Skeleton variant="rectangular" width={60} height={24} />
+                                    </Box>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                                        <Skeleton variant="circular" width={28} height={28} />
+                                        <Box sx={{ flexGrow: 1 }}>
+                                            <Skeleton variant="text" width="30%" height={20} />
+                                            <Skeleton variant="text" width="50%" height={16} />
+                                        </Box>
+                                    </Box>
+                                </Box>
+                            );
+                        }
+
+                        // Render actual file
+                        const file = fileOrIndex as any;
                         const isCurrentVersion = index === 0; // Most recent file is current
                         const version = sortedFiles.length - index; // Calculate version number
                         const isSelected = selectedVersion === version;
