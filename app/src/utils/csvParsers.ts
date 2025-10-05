@@ -18,7 +18,6 @@ import type {
     EventLocation,
     EventReminder,
     RecurrenceSettings,
-    AcademicCalendar,
 } from '../types/schedule';
 import type { FileAttachment } from '../types/file';
 import type { ThesisData, ThesisChapter, ThesisComment } from '../types/thesis';
@@ -190,17 +189,16 @@ export function parseEvents(csvText: string): { parsed: ScheduleEvent[]; errors:
             id,
             title,
             description: get('description') || undefined,
-            type: (get('type') as any) || 'other',
+            calendarId: get('calendarId') || get('calendar_id') || 'default',
             status: (get('status') as any) || 'scheduled',
-            visibility: (get('visibility') as any) || 'public',
             startDate,
             endDate,
             isAllDay,
             organizer: get('organizer') || (participants.length ? participants[0].email : ''),
             participants,
-            location: (get('location_name') || get('location')) ? ({
-                type: 'physical',
-                name: get('location_name') || get('location'),
+            location: (get('location_address') || get('location_room') || get('location_url')) ? ({
+                type: (get('location_url') && get('location_address')) ? 'hybrid' as const :
+                    (get('location_url') ? 'virtual' as const : 'physical' as const),
                 address: get('location_address') || undefined,
                 room: get('location_room') || undefined,
                 url: get('location_url') || undefined,
@@ -212,7 +210,7 @@ export function parseEvents(csvText: string): { parsed: ScheduleEvent[]; errors:
             recurrence: undefined,
             reminders: undefined,
             createdBy: get('createdBy') || '',
-            createdDate: get('createdDate') || new Date().toISOString(),
+            createdAt: get('createdDate') || get('createdAt') || new Date().toISOString(),
             lastModified: get('lastModified') || new Date().toISOString(),
             lastModifiedBy: get('lastModifiedBy') || get('createdBy') || '',
         };
