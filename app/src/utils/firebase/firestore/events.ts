@@ -1,5 +1,6 @@
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, updateDoc, deleteDoc, documentId } from 'firebase/firestore';
 import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
+import { addEventToCalendar, removeEventFromCalendar } from './calendars';
 import { cleanData } from './firestore';
 
 import type { ScheduleEvent } from '../../../types/schedule';
@@ -14,14 +15,21 @@ export async function setEvent(id: string | null, event: ScheduleEvent): Promise
     // Clean the data to remove undefined, null, and empty string values
     const cleanedData = cleanData(event);
 
+    let eventId: string;
+    
     if (id) {
         const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
         await setDoc(ref, cleanedData, { merge: true });
-        return id;
+        eventId = id;
     } else {
         const ref = await addDoc(collection(firebaseFirestore, EVENTS_COLLECTION), cleanedData as any);
-        return ref.id;
+        eventId = ref.id;
+        
+        // Add event ID to calendar's eventIds array
+        await addEventToCalendar(event.calendarId, eventId);
     }
+    
+    return eventId;
 }
 
 /**
@@ -104,6 +112,15 @@ export async function getEventsByCalendar(calendarId: string): Promise<(Schedule
  */
 export async function deleteEvent(id: string): Promise<void> {
     if (!id) throw new Error('Event ID required');
+    
+    // Get event to find its calendar ID
+    const event = await getEventById(id);
+    if (event) {
+        // Remove event ID from calendar
+        await removeEventFromCalendar(event.calendarId, id);
+    }
+    
+    // Delete the event
     const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
     await deleteDoc(ref);
 }
@@ -115,10 +132,47 @@ export async function deleteEvent(id: string): Promise<void> {
 export async function bulkDeleteEvents(ids: string[]): Promise<void> {
     if (!ids || ids.length === 0) throw new Error('Event IDs required');
 
+    // Fetch all events to get their calendar IDs
+    const events = await Promise.all(ids.map(id => getEventById(id)));
+    
+    // Remove event IDs from calendars
+    const calendarUpdates = events
+        .filter(event => event !== null)
+        .map(event => removeEventFromCalendar(event!.calendarId, event!.id!));
+    
+    await Promise.all(calendarUpdates);
+
+    // Delete events
     const deletePromises = ids.map(id => {
         const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
         return deleteDoc(ref);
     });
 
     await Promise.all(deletePromises);
+}
+
+/**
+ * Get events by their IDs (batch fetching)
+ * This is the second step in the new async loading pattern
+ * Firestore 'in' query supports up to 30 items, so we batch the requests
+ * @param eventIds - Array of event IDs to fetch
+ * @returns Array of ScheduleEvent with their Firestore document IDs
+ */
+export async function getEventsByIds(eventIds: string[]): Promise<(ScheduleEvent & { id: string })[]> {
+    if (!eventIds || eventIds.length === 0) return [];
+
+    const events: (ScheduleEvent & { id: string })[] = [];
+
+    // Batch requests in groups of 30 (Firestore 'in' limit)
+    for (let i = 0; i < eventIds.length; i += 30) {
+        const batch = eventIds.slice(i, i + 30);
+        const q = query(
+            collection(firebaseFirestore, EVENTS_COLLECTION),
+            where(documentId(), 'in', batch)
+        );
+        const snap = await getDocs(q);
+        events.push(...snap.docs.map(d => ({ id: d.id, ...d.data() } as ScheduleEvent & { id: string })));
+    }
+
+    return events;
 }

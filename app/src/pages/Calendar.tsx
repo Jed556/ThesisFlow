@@ -19,11 +19,11 @@ import { Calendar as CalendarComponent } from '../components';
 import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
 import AnimatedList from '../components/Animate/AnimatedList/AnimatedList';
 import { useSession } from '../SessionContext';
-import { getAllEvents, setEvent, deleteEvent } from '../utils/firebase/firestore';
 import type { NavigationItem } from '../types/navigation';
 import type { ScheduleEvent, EventStatus, CalendarView, EventLocation, Calendar as CalendarType } from '../types/schedule';
 import { format, isWithinInterval, parseISO } from 'date-fns';
-import { getUserCalendars, createPersonalCalendar } from '../utils/firebase/firestore';
+import { getUserCalendars, createPersonalCalendar, getEventIdsFromCalendars } from '../utils/firebase/firestore/calendars';
+import { setEvent, deleteEvent, bulkDeleteEvents, getEventsByIds } from '../utils/firebase/firestore/events';
 
 export const metadata: NavigationItem = {
     index: 2,
@@ -228,8 +228,11 @@ export default function CalendarPage() {
             // Select all calendars by default (Google Calendar style)
             setSelectedCalendarIds(userCalendars.map(cal => cal.id));
 
-            // Load all events (will be filtered by selected calendars in UI)
-            const fetchedEvents = await getAllEvents();
+            // Step 2: Get event IDs from selected calendars
+            const eventIds = await getEventIdsFromCalendars(userCalendars);
+
+            // Step 3: Async load events by their IDs
+            const fetchedEvents = await getEventsByIds(eventIds);
             setEvents(fetchedEvents);
 
             // Extract all unique tags from events for autocomplete
@@ -560,6 +563,7 @@ export default function CalendarPage() {
                 description: newCalendarDescription,
                 type: 'custom',
                 color: newCalendarColor,
+                eventIds: [],
                 ownerId: session?.user?.email || '',
                 createdBy: session?.user?.email || '',
                 createdAt: new Date().toISOString(),

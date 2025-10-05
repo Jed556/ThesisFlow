@@ -142,6 +142,7 @@ export async function createPersonalCalendar(userEmail: string): Promise<string>
         description: 'Your personal calendar',
         type: 'personal',
         color: DEFAULT_COLORS.personal,
+        eventIds: [],
         ownerId: userEmail,
         createdBy: userEmail,
         createdAt: new Date().toISOString(),
@@ -225,6 +226,7 @@ export async function createGroupCalendar(
         description: `Calendar for ${groupName}`,
         type: 'group',
         color: DEFAULT_COLORS.group,
+        eventIds: [],
         ownerId: groupId,
         createdBy: creatorEmail,
         createdAt: new Date().toISOString(),
@@ -302,4 +304,53 @@ export function canViewCalendar(calendar: Calendar, userEmail: string, userRole?
     if (rolePerm) return rolePerm.canView;
 
     return false;
+}
+
+/**
+ * Add an event ID to a calendar's eventIds array
+ * Called when creating a new event
+ */
+export async function addEventToCalendar(calendarId: string, eventId: string): Promise<void> {
+    const calendar = await getCalendarById(calendarId);
+    if (!calendar) throw new Error('Calendar not found');
+
+    // Add event ID if not already present
+    if (!calendar.eventIds.includes(eventId)) {
+        const updatedEventIds = [...calendar.eventIds, eventId];
+        const ref = doc(firebaseFirestore, CALENDARS_COLLECTION, calendarId);
+        await setDoc(ref, {
+            eventIds: updatedEventIds,
+            lastModified: new Date().toISOString()
+        }, { merge: true });
+    }
+}
+
+/**
+ * Remove an event ID from a calendar's eventIds array
+ * Called when deleting an event
+ */
+export async function removeEventFromCalendar(calendarId: string, eventId: string): Promise<void> {
+    const calendar = await getCalendarById(calendarId);
+    if (!calendar) throw new Error('Calendar not found');
+
+    // Remove event ID if present
+    const updatedEventIds = calendar.eventIds.filter(id => id !== eventId);
+    const ref = doc(firebaseFirestore, CALENDARS_COLLECTION, calendarId);
+    await setDoc(ref, {
+        eventIds: updatedEventIds,
+        lastModified: new Date().toISOString()
+    }, { merge: true });
+}
+
+/**
+ * Get all event IDs from user's visible calendars
+ * This is the first step in the new async loading pattern
+ */
+export async function getEventIdsFromCalendars(calendars: Calendar[]): Promise<string[]> {
+    // Collect all unique event IDs from selected calendars
+    const eventIdsSet = new Set<string>();
+    calendars.forEach(calendar => {
+        calendar.eventIds.forEach(eventId => eventIdsSet.add(eventId));
+    });
+    return Array.from(eventIdsSet);
 }

@@ -35,6 +35,9 @@ export interface Calendar {
     type: CalendarType;
     color: string; // hex color for UI display
 
+    // Event management
+    eventIds: string[]; // Array of event IDs that belong to this calendar
+
     // Ownership and access control
     ownerId: string; // email of owner (user for personal, group id for group calendars)
     createdBy: string; // email of creator
