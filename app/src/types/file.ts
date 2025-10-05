@@ -61,6 +61,7 @@ export interface MediaMetadata {
  * File attachment details
  */
 export interface FileAttachment {
+    id?: string; // Optional unique identifier for the attachment
     name: string;
     type: string;
     size: string;

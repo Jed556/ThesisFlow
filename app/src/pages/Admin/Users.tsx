@@ -3,6 +3,8 @@ import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActi
 import { People, Delete, Edit } from '@mui/icons-material';
 import { GridColDef, GridActionsCellItem, GridRowParams } from '@mui/x-data-grid';
 import { DataGrid } from '../../components';
+import AnimatedPage from '../../components/Animate/AnimatedPage/AnimatedPage';
+import { GrowTransition } from '../../components/Animate/AnimatedDialog/AnimatedDialog';
 import { useSession } from '../../SessionContext';
 import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
@@ -532,171 +534,173 @@ export default function AdminUsersPage() {
     }
 
     return (
-        <Box sx={{ width: '100%' }}>
-            <DataGrid
-                rows={users}
-                columns={columns}
-                loading={loading}
-                initialPage={0}
-                initialPageSize={10}
-                pageSizeOptions={[5, 10, 25, 50]}
-                checkboxSelection
-                disableRowSelectionOnClick
-                height={600}
-                editable
-                additionalActions={getAdditionalActions}
-                enableMultiDelete
-                enableExport
-                enableImport
-                enableRefresh
-                enableAdd
-                enableQuickFilter
-                onRowUpdate={handleInlineUpdate}
-                onRowUpdateError={(error) => console.error('Update failed:', error)}
-                onRowsDelete={handleMultiDelete}
-                onExport={handleExport}
-                onImport={handleImport}
-                onRefresh={loadUsers}
-                onAdd={handleOpenCreateDialog}
-            />
+        <AnimatedPage variant="fade">
+            <Box sx={{ width: '100%' }}>
+                <DataGrid
+                    rows={users}
+                    columns={columns}
+                    loading={loading}
+                    initialPage={0}
+                    initialPageSize={10}
+                    pageSizeOptions={[5, 10, 25, 50]}
+                    checkboxSelection
+                    disableRowSelectionOnClick
+                    height={600}
+                    editable
+                    additionalActions={getAdditionalActions}
+                    enableMultiDelete
+                    enableExport
+                    enableImport
+                    enableRefresh
+                    enableAdd
+                    enableQuickFilter
+                    onRowUpdate={handleInlineUpdate}
+                    onRowUpdateError={(error) => console.error('Update failed:', error)}
+                    onRowsDelete={handleMultiDelete}
+                    onExport={handleExport}
+                    onImport={handleImport}
+                    onRefresh={loadUsers}
+                    onAdd={handleOpenCreateDialog}
+                />
 
-            {/* Create/Edit Dialog */}
-            <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                <DialogTitle>{editMode ? 'Edit User' : 'Create New User'}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2} sx={{ mt: 1 }}>
-                        <TextField
-                            label="Email"
-                            type="email"
-                            value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            error={!!formErrors.email}
-                            helperText={formErrors.email}
-                            required
-                            fullWidth
-                        />
-                        <Stack direction="row" spacing={2}>
+                {/* Create/Edit Dialog */}
+                <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth slots={{ transition: GrowTransition }}>
+                    <DialogTitle>{editMode ? 'Edit User' : 'Create New User'}</DialogTitle>
+                    <DialogContent>
+                        <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
-                                label="Prefix"
-                                value={formData.prefix || ''}
-                                onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
-                                sx={{ width: 100 }}
-                                placeholder="Dr."
-                            />
-                            <TextField
-                                label="First Name"
-                                value={formData.firstName}
-                                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                                error={!!formErrors.firstName}
-                                helperText={formErrors.firstName}
+                                label="Email"
+                                type="email"
+                                value={formData.email}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                error={!!formErrors.email}
+                                helperText={formErrors.email}
                                 required
                                 fullWidth
                             />
-                        </Stack>
-                        <TextField
-                            label="Middle Name"
-                            value={formData.middleName || ''}
-                            onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
-                            fullWidth
-                        />
-                        <Stack direction="row" spacing={2}>
+                            <Stack direction="row" spacing={2}>
+                                <TextField
+                                    label="Prefix"
+                                    value={formData.prefix || ''}
+                                    onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
+                                    sx={{ width: 100 }}
+                                    placeholder="Dr."
+                                />
+                                <TextField
+                                    label="First Name"
+                                    value={formData.firstName}
+                                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                                    error={!!formErrors.firstName}
+                                    helperText={formErrors.firstName}
+                                    required
+                                    fullWidth
+                                />
+                            </Stack>
                             <TextField
-                                label="Last Name"
-                                value={formData.lastName}
-                                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                                error={!!formErrors.lastName}
-                                helperText={formErrors.lastName}
+                                label="Middle Name"
+                                value={formData.middleName || ''}
+                                onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                                fullWidth
+                            />
+                            <Stack direction="row" spacing={2}>
+                                <TextField
+                                    label="Last Name"
+                                    value={formData.lastName}
+                                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                                    error={!!formErrors.lastName}
+                                    helperText={formErrors.lastName}
+                                    required
+                                    fullWidth
+                                />
+                                <TextField
+                                    label="Suffix"
+                                    value={formData.suffix || ''}
+                                    onChange={(e) => setFormData({ ...formData, suffix: e.target.value })}
+                                    sx={{ width: 100 }}
+                                    placeholder="Jr."
+                                />
+                            </Stack>
+                            <TextField
+                                select
+                                label="Role"
+                                value={formData.role}
+                                onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+                                error={!!formErrors.role}
+                                helperText={formErrors.role || (users.length === 0 && !editMode ? 'First user will be created as admin' : '')}
                                 required
+                                fullWidth
+                                disabled={users.length === 0 && !editMode}
+                            >
+                                {ROLE_OPTIONS.map((role) => (
+                                    <MenuItem key={role} value={role}>
+                                        <Chip
+                                            label={role}
+                                            color={ROLE_COLORS[role]}
+                                            size="small"
+                                            sx={{ textTransform: 'capitalize' }}
+                                        />
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                            <TextField
+                                label="Department"
+                                value={formData.department || ''}
+                                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                                 fullWidth
                             />
                             <TextField
-                                label="Suffix"
-                                value={formData.suffix || ''}
-                                onChange={(e) => setFormData({ ...formData, suffix: e.target.value })}
-                                sx={{ width: 100 }}
-                                placeholder="Jr."
+                                label="Phone"
+                                type="tel"
+                                value={formData.phone || ''}
+                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                fullWidth
+                                placeholder="+1 (555) 123-4567"
+                            />
+                            <TextField
+                                label="Avatar URL"
+                                value={formData.avatar || ''}
+                                onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
+                                fullWidth
+                                placeholder="https://example.com/avatar.jpg"
                             />
                         </Stack>
-                        <TextField
-                            select
-                            label="Role"
-                            value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                            error={!!formErrors.role}
-                            helperText={formErrors.role || (users.length === 0 && !editMode ? 'First user will be created as admin' : '')}
-                            required
-                            fullWidth
-                            disabled={users.length === 0 && !editMode}
-                        >
-                            {ROLE_OPTIONS.map((role) => (
-                                <MenuItem key={role} value={role}>
-                                    <Chip
-                                        label={role}
-                                        color={ROLE_COLORS[role]}
-                                        size="small"
-                                        sx={{ textTransform: 'capitalize' }}
-                                    />
-                                </MenuItem>
-                            ))}
-                        </TextField>
-                        <TextField
-                            label="Department"
-                            value={formData.department || ''}
-                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                            fullWidth
-                        />
-                        <TextField
-                            label="Phone"
-                            type="tel"
-                            value={formData.phone || ''}
-                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            fullWidth
-                            placeholder="+1 (555) 123-4567"
-                        />
-                        <TextField
-                            label="Avatar URL"
-                            value={formData.avatar || ''}
-                            onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
-                            fullWidth
-                            placeholder="https://example.com/avatar.jpg"
-                        />
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog} disabled={saving}>Cancel</Button>
-                    <Button onClick={handleSave} variant="contained" disabled={saving}>
-                        {saving ? 'Saving...' : editMode ? 'Save Changes' : 'Create User'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Delete Confirmation Dialog */}
-            <Dialog open={deleteDialogOpen} onClose={handleCloseDialog}>
-                <DialogTitle>Delete User</DialogTitle>
-                <DialogContent>
-                    {selectedUser?.role === 'admin' && adminCount <= 1 ? (
-                        <Typography color="error">
-                            Cannot delete the last admin account. At least one admin must exist in the system.
-                            You can edit this user's information or change their role instead.
-                        </Typography>
-                    ) : (
-                        <Typography>
-                            Are you sure you want to delete user <strong>{selectedUser?.email}</strong>?
-                            This action cannot be undone.
-                        </Typography>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog} disabled={saving}>
-                        {selectedUser?.role === 'admin' && adminCount <= 1 ? 'Close' : 'Cancel'}
-                    </Button>
-                    {!(selectedUser?.role === 'admin' && adminCount <= 1) && (
-                        <Button onClick={handleDelete} variant="contained" color="error" disabled={saving}>
-                            {saving ? 'Deleting...' : 'Delete'}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleCloseDialog} disabled={saving}>Cancel</Button>
+                        <Button onClick={handleSave} variant="contained" disabled={saving}>
+                            {saving ? 'Saving...' : editMode ? 'Save Changes' : 'Create User'}
                         </Button>
-                    )}
-                </DialogActions>
-            </Dialog>
-        </Box>
+                    </DialogActions>
+                </Dialog>
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog open={deleteDialogOpen} onClose={handleCloseDialog} slots={{ transition: GrowTransition }}>
+                    <DialogTitle>Delete User</DialogTitle>
+                    <DialogContent>
+                        {selectedUser?.role === 'admin' && adminCount <= 1 ? (
+                            <Typography color="error">
+                                Cannot delete the last admin account. At least one admin must exist in the system.
+                                You can edit this user's information or change their role instead.
+                            </Typography>
+                        ) : (
+                            <Typography>
+                                Are you sure you want to delete user <strong>{selectedUser?.email}</strong>?
+                                This action cannot be undone.
+                            </Typography>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleCloseDialog} disabled={saving}>
+                            {selectedUser?.role === 'admin' && adminCount <= 1 ? 'Close' : 'Cancel'}
+                        </Button>
+                        {!(selectedUser?.role === 'admin' && adminCount <= 1) && (
+                            <Button onClick={handleDelete} variant="contained" color="error" disabled={saving}>
+                                {saving ? 'Deleting...' : 'Delete'}
+                            </Button>
+                        )}
+                    </DialogActions>
+                </Dialog>
+            </Box>
+        </AnimatedPage>
     );
 }

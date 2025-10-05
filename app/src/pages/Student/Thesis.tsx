@@ -5,6 +5,8 @@ import type { ThesisChapter } from '../../types/thesis';
 import { mockThesisData } from '../../data/mockData';
 import { getThesisTeamMembers, getDisplayName } from '../../utils/dbUtils';
 import Avatar, { Name } from '../../components/Avatar/Avatar';
+import AnimatedPage from '../../components/Animate/AnimatedPage/AnimatedPage';
+import AnimatedList from '../../components/Animate/AnimatedList/AnimatedList';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -25,7 +27,7 @@ export const metadata: NavigationItem = {
 export default function ThesisPage() {
     const progress = calculateProgress();
     const teamMembers = getThesisTeamMembers(); return (
-        <>
+        <AnimatedPage variant="slideUp">
             {/* Thesis Header (with members section) */}
             <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h4" gutterBottom>
@@ -80,37 +82,39 @@ export default function ThesisPage() {
             {/* Chapters Overview */}
             <Typography variant="h5" sx={{ mb: 2 }}>Chapters</Typography>
 
-            {mockThesisData.chapters.map((chapter: ThesisChapter) => (
-                <Card key={chapter.id} sx={{ mb: 2 }}>
-                    <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                            <Typography variant="h6">{chapter.title}</Typography>
-                            <Chip
-                                label={chapter.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                color={
-                                    chapter.status === 'approved' ? 'success' :
-                                        chapter.status === 'under_review' ? 'warning' :
-                                            chapter.status === 'revision_required' ? 'error' :
-                                                'default'
-                                }
-                                size="small"
-                            />
-                        </Box>
+            <AnimatedList variant="slideUp" staggerDelay={50}>
+                {mockThesisData.chapters.map((chapter: ThesisChapter) => (
+                    <Card key={chapter.id} sx={{ mb: 2 }}>
+                        <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="h6">{chapter.title}</Typography>
+                                <Chip
+                                    label={chapter.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                    color={
+                                        chapter.status === 'approved' ? 'success' :
+                                            chapter.status === 'under_review' ? 'warning' :
+                                                chapter.status === 'revision_required' ? 'error' :
+                                                    'default'
+                                    }
+                                    size="small"
+                                />
+                            </Box>
 
-                        {chapter.submissionDate && (
-                            <Typography variant="body2" color="text.secondary">
-                                Last submitted: {chapter.submissionDate}
-                            </Typography>
-                        )}
+                            {chapter.submissionDate && (
+                                <Typography variant="body2" color="text.secondary">
+                                    Last submitted: {chapter.submissionDate}
+                                </Typography>
+                            )}
 
-                        {chapter.comments.length > 0 && (
-                            <Typography variant="body2" color="text.secondary">
-                                {chapter.comments.length} feedback(s) received
-                            </Typography>
-                        )}
-                    </CardContent>
-                </Card>
-            ))}
-        </>
+                            {chapter.comments.length > 0 && (
+                                <Typography variant="body2" color="text.secondary">
+                                    {chapter.comments.length} feedback(s) received
+                                </Typography>
+                            )}
+                        </CardContent>
+                    </Card>
+                ))}
+            </AnimatedList>
+        </AnimatedPage>
     );
 }

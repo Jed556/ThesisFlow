@@ -5,6 +5,8 @@ import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisChapter } from '../../../types/thesis';
 import { mockThesisData } from '../../../data/mockData';
 import { ChapterAccordion } from '../../../components';
+import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
+import AnimatedList from '../../../components/Animate/AnimatedList/AnimatedList';
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 2,
@@ -89,17 +91,19 @@ export default function ThesisChaptersPage() {
     };
 
     return (
-        <>
+        <AnimatedPage variant="fade">
             {/* Chapter Submissions */}
-            {
-                mockThesisData.chapters.map((chapter: ThesisChapter) => (
-                    <ChapterAccordion
-                        key={chapter.id}
-                        chapter={chapter}
-                        onUploadClick={handleUploadClick}
-                    />
-                ))
-            }
+            <AnimatedList variant="slideUp" staggerDelay={60}>
+                {
+                    mockThesisData.chapters.map((chapter: ThesisChapter) => (
+                        <ChapterAccordion
+                            key={chapter.id}
+                            chapter={chapter}
+                            onUploadClick={handleUploadClick}
+                        />
+                    ))
+                }
+            </AnimatedList>
             <Box sx={{ mb: 2 }}></Box>
 
             {/* Upload Dialog */}
@@ -163,6 +167,6 @@ export default function ThesisChaptersPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </>
+        </AnimatedPage>
     );
 }

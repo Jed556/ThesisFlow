@@ -1,6 +1,37 @@
 import { createTheme } from '@mui/material/styles';
 import type { AppTheme } from '@toolpad/core/AppProvider';
 
+// Extend MUI theme types to include custom animation properties
+declare module '@mui/material/styles' {
+    interface Easing {
+        // Material Design 3 easings
+        smooth?: string;
+        emphasized?: string;
+        emphasizedDecelerate?: string;
+        emphasizedAccelerate?: string;
+        legacy?: string;
+    }
+    interface Duration {
+        // Material Design 3 duration tokens
+        short1?: number;
+        short2?: number;
+        short3?: number;
+        short4?: number;
+        medium1?: number;
+        medium2?: number;
+        medium3?: number;
+        medium4?: number;
+        long1?: number;
+        long2?: number;
+        long3?: number;
+        long4?: number;
+        extraLong1?: number;
+        extraLong2?: number;
+        extraLong3?: number;
+        extraLong4?: number;
+    }
+}
+
 /**
  * Light mode color palette
  */
@@ -325,19 +356,46 @@ const theme = createTheme({
     },
     transitions: {
         easing: {
+            // Standard Material Design easings
             easeInOut: "cubic-bezier(0.4, 0, 0.2, 1)",
             easeOut: "cubic-bezier(0.0, 0, 0.2, 1)",
             easeIn: "cubic-bezier(0.4, 0, 1, 1)",
-            sharp: "cubic-bezier(0.4, 0, 0.6, 1)"
+            sharp: "cubic-bezier(0.4, 0, 0.6, 1)",
+            // Material Design 3 (M3) motion easings
+            // https://m3.material.io/styles/motion/easing-and-duration/tokens-specs
+            smooth: "cubic-bezier(0.4, 0.0, 0.2, 1)", // Standard easing
+            emphasized: "cubic-bezier(0.2, 0.0, 0, 1.0)", // Emphasized easing for important transitions
+            emphasizedDecelerate: "cubic-bezier(0.05, 0.7, 0.1, 1.0)", // Entering elements
+            emphasizedAccelerate: "cubic-bezier(0.3, 0.0, 0.8, 0.15)", // Exiting elements
+            legacy: "cubic-bezier(0.4, 0.0, 0.6, 1)", // Legacy standard for compatibility
         },
         duration: {
+            // Basic durations
             shortest: 150,
             shorter: 200,
             short: 250,
             standard: 300,
             complex: 375,
             enteringScreen: 225,
-            leavingScreen: 195
+            leavingScreen: 195,
+            // Material Design 3 duration tokens
+            // https://m3.material.io/styles/motion/easing-and-duration/tokens-specs
+            short1: 50,   // Extra short for simple transitions
+            short2: 100,  // Short for quick state changes
+            short3: 150,  // Short for expanding/collapsing
+            short4: 200,  // Short for small/simple
+            medium1: 250, // Medium for most transitions
+            medium2: 300, // Medium for complex transitions
+            medium3: 350, // Medium for elaborate transitions
+            medium4: 400, // Medium for very complex transitions
+            long1: 450,   // Long for large/complex elements
+            long2: 500,   // Long for screen transitions
+            long3: 550,   // Long for elaborate screen transitions
+            long4: 600,   // Long for full-screen transitions
+            extraLong1: 700, // Extra long for special emphasis
+            extraLong2: 800, // Extra long for dramatic reveals
+            extraLong3: 900, // Extra long for complex animations
+            extraLong4: 1000, // Extra long for page transitions
         }
     },
     zIndex: {
@@ -360,16 +418,194 @@ const components = {
         styleOverrides: {
             html: { height: '100%' },
             body: { height: '100%', overflow: 'hidden' },
-            '#root': { height: '100%' },
+            '#root': {
+                height: '100%',
+            },
             '.rdp-root': {
                 '--rdp-accent-color': theme.palette?.primary?.main,
-            }
+            },
         },
     },
     MuiTypography: {
         styleOverrides: {
             root: {
                 cursor: 'default',
+            },
+        },
+    },
+    MuiTextField: {
+        styleOverrides: {
+            root: {
+                '& input': { cursor: 'text' },
+                '& .MuiOutlinedInput-root': {
+                    transition: theme.transitions.create(['border-color', 'box-shadow'], {
+                        duration: theme.transitions.duration.short,
+                        easing: theme.transitions.easing.easeInOut,
+                    }),
+                    '&:hover:not(.Mui-disabled) .MuiOutlinedInput-notchedOutline': {
+                        borderColor: theme.palette?.primary?.main,
+                    },
+                    '&.Mui-focused': {
+                        transition: theme.transitions.create(['border-color', 'box-shadow'], {
+                            duration: theme.transitions.duration.short,
+                            easing: theme.transitions.easing.emphasizedDecelerate,
+                        }),
+                    },
+                },
+            },
+        },
+    },
+    MuiOutlinedInput: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create(['border-color', 'background-color'], {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.easeInOut,
+                }),
+                '&:hover:not(.Mui-disabled) .MuiOutlinedInput-notchedOutline': {
+                    transition: theme.transitions.create(['border-color'], {
+                        duration: theme.transitions.duration.short,
+                        easing: theme.transitions.easing.emphasizedDecelerate,
+                    }),
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    transition: theme.transitions.create(['border-color', 'border-width'], {
+                        duration: theme.transitions.duration.short,
+                        easing: theme.transitions.easing.emphasizedDecelerate,
+                    }),
+                },
+            },
+            notchedOutline: {
+                transition: theme.transitions.create(['border-color', 'border-width'], {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.easeInOut,
+                }),
+            },
+        },
+    },
+    MuiInputBase: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create(['border-color', 'background-color'], {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.easeInOut,
+                }),
+                '&.Mui-focused': {
+                    transition: theme.transitions.create(['border-color', 'background-color'], {
+                        duration: theme.transitions.duration.short,
+                        easing: theme.transitions.easing.emphasizedDecelerate,
+                    }),
+                },
+            },
+        },
+    },
+    MuiButton: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create(
+                    ['background-color', 'box-shadow', 'transform'],
+                    {
+                        duration: theme.transitions.duration.short,
+                        easing: theme.transitions.easing.emphasizedDecelerate,
+                    }
+                ),
+                '&:hover': {
+                    // transform: 'translateY(-1px)',
+                    boxShadow: theme.shadows?.[4],
+                },
+                '&:active': {
+                    transform: 'translateY(0)',
+                    transition: theme.transitions.create('transform', {
+                        duration: theme.transitions.duration.shortest,
+                        easing: theme.transitions.easing.emphasizedAccelerate,
+                    }),
+                },
+            },
+        },
+    },
+    MuiPaper: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create(['box-shadow', 'transform', 'width', 'height'], {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.easeInOut,
+                }),
+            },
+        },
+    },
+    MuiCard: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create(['box-shadow', 'transform', 'width', 'height'], {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.emphasized,
+                }),
+                '&:hover': {
+                    // transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows?.[8],
+                },
+            },
+        },
+    },
+    MuiDialog: {
+        styleOverrides: {
+            root: {
+                '& .MuiBackdrop-root': {
+                    transition: theme.transitions.create('opacity', {
+                        duration: theme.transitions.duration.enteringScreen,
+                        easing: theme.transitions.easing.easeInOut,
+                    }),
+                },
+            },
+            paper: {
+                transition: theme.transitions.create(['transform', 'opacity'], {
+                    duration: theme.transitions.duration.medium2,
+                    easing: theme.transitions.easing.emphasizedDecelerate,
+                }),
+            },
+        },
+    },
+    MuiDrawer: {
+        styleOverrides: {
+            paper: {
+                transition: theme.transitions.create('transform', {
+                    duration: theme.transitions.duration.enteringScreen,
+                    easing: theme.transitions.easing.emphasized,
+                }) + ' !important',
+            },
+        },
+    },
+    MuiList: {
+        styleOverrides: {
+            root: {
+                gap: theme.spacing(1),
+                transition: theme.transitions.create(['width'], {
+                    duration: theme.transitions.duration.shorter,
+                    easing: theme.transitions.easing.easeInOut,
+                })
+            },
+        },
+    },
+    MuiListItem: {
+        styleOverrides: {
+            root: {
+                height: 'auto',
+                overflow: 'hidden',
+                marginBottom: theme.spacing(0.5),
+            },
+        },
+    },
+    MuiListItemButton: {
+        styleOverrides: {
+            root: {
+                height: 'auto',
+                transition: theme.transitions.create(['background-color', 'transform'], {
+                    duration: theme.transitions.duration.shorter,
+                    easing: theme.transitions.easing.easeInOut,
+                }),
+                '&:hover': {
+                    transform: 'scale(1.02) translateX(1px)',
+                },
             },
         },
     },
@@ -381,6 +617,10 @@ const components = {
                 borderRadius: theme.shape?.borderRadius ?? 8,
                 '&:before, &:after': { display: 'none' },
                 boxShadow: theme.shadows?.[3] ?? 'none',
+                transition: theme.transitions.create(['margin', 'box-shadow'], {
+                    duration: theme.transitions.duration.standard,
+                    easing: theme.transitions.easing.emphasized,
+                }),
                 '&.Mui-expanded': {
                     marginTop: theme.spacing(1),
                     marginBottom: theme.spacing(1),
@@ -403,9 +643,15 @@ const components = {
                 position: 'sticky',
                 top: 0,
                 zIndex: (theme.zIndex?.appBar ?? 1100) - 1,
-                margin: 0,
                 cursor: 'pointer',
                 minHeight: 80,
+                transition: theme.transitions.create('background-color', {
+                    duration: theme.transitions.duration.shorter,
+                    easing: theme.transitions.easing.easeInOut,
+                }),
+                '& .MuiTypography-root': {
+                    cursor: 'pointer',
+                },
                 '&.Mui-expanded': {
                     minHeight: 80,
                 },
@@ -417,7 +663,56 @@ const components = {
                 },
             },
         },
-    }
+    },
+    MuiChip: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create(['transform', 'box-shadow'], {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.emphasized,
+                }),
+                // '&:hover': {
+                //     transform: 'scale(1.05)',
+                // },
+            },
+        },
+    },
+    MuiIconButton: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create('transform', {
+                    duration: theme.transitions.duration.shortest,
+                    easing: theme.transitions.easing.emphasized,
+                }),
+                '&:hover': {
+                    transform: 'scale(1.1)',
+                },
+                '&:active': {
+                    transform: 'scale(0.95)',
+                },
+            },
+        },
+    },
+    MuiTableRow: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create('background-color', {
+                    duration: theme.transitions.duration.shorter,
+                    easing: theme.transitions.easing.easeInOut,
+                }),
+            },
+        },
+    },
+    MuiAlert: {
+        styleOverrides: {
+            root: {
+                transition: theme.transitions.create(['opacity', 'transform'], {
+                    duration: theme.transitions.duration.standard,
+                    easing: theme.transitions.easing.emphasizedDecelerate,
+                }),
+            },
+        },
+    },
 }
 
 const light = createTheme(theme, { palette: lightPalette, components });

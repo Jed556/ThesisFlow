@@ -9,6 +9,7 @@ import { getAllUsers, getUserByEmail } from '../utils/firebase/firestore';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
+import { AnimatedPage } from '../components';
 
 export const metadata: NavigationItem = {
     title: 'Sign In',
@@ -250,111 +251,113 @@ export default function SignIn() {
     };
 
     return (
-        <FormContext.Provider value={formContextValue}>
-            <SignInPage
-                providers={[{ id: 'credentials', name: 'Knightmail' }]}
-                signIn={async (provider, formData, callbackUrl) => {
-                    let result;
-                    try {
-                        if (provider.id === 'credentials') {
-                            // Use our controlled values instead of formData for better reliability
-                            const email = emailValue || (formData?.get('email') as string);
-                            const password = passwordValue || (formData?.get('password') as string);
+        <AnimatedPage variant='fade' duration='enteringScreen'>
+            <FormContext.Provider value={formContextValue}>
+                <SignInPage
+                    providers={[{ id: 'credentials', name: 'Knightmail' }]}
+                    signIn={async (provider, formData, callbackUrl) => {
+                        let result;
+                        try {
+                            if (provider.id === 'credentials') {
+                                // Use our controlled values instead of formData for better reliability
+                                const email = emailValue || (formData?.get('email') as string);
+                                const password = passwordValue || (formData?.get('password') as string);
 
-                            if (!email && !password) {
-                                return { error: 'Email and password are required' };
-                            }
-                            if (!email) return { error: 'Email is required' };
-                            if (!password) return { error: 'Password is required' };
+                                if (!email && !password) {
+                                    return { error: 'Email and password are required' };
+                                }
+                                if (!email) return { error: 'Email is required' };
+                                if (!password) return { error: 'Password is required' };
 
 
-                            // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
-                            if ((DEV_HELPER_EXISTS && noUsersState) || DEV_HELPER_ENABLED)
-                                try {
-                                    if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
-                                        const name = email.split('@')[0];
-                                        // Only apply the dev-helper shortcut when the local-part exactly matches the configured dev username.
-                                        // If the email is someone@thesisflow.dev but the local-part is not the dev helper username,
-                                        // fall through to the normal sign-in flow (don't return an 'Invalid dev credentials' error).
-                                        if (name === DEV_HELPER_USERNAME) {
-                                            if (password === DEV_HELPER_PASSWORD) {
-                                                // Create a temporary session so Layout doesn't redirect to sign-in
-                                                try {
-                                                    const tmpSession: Session = {
-                                                        user: {
-                                                            name,
-                                                            email,
-                                                            role: 'developer',
-                                                        },
-                                                    };
-                                                    setSession(tmpSession);
-                                                    navigate('/dev-helper', { replace: true });
-                                                    return {};
-                                                } catch (e) {
-                                                    // navigation error: fall back to normal flow
-                                                    console.warn('dev-helper navigation failed', e);
+                                // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
+                                if ((DEV_HELPER_EXISTS && noUsersState) || DEV_HELPER_ENABLED)
+                                    try {
+                                        if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
+                                            const name = email.split('@')[0];
+                                            // Only apply the dev-helper shortcut when the local-part exactly matches the configured dev username.
+                                            // If the email is someone@thesisflow.dev but the local-part is not the dev helper username,
+                                            // fall through to the normal sign-in flow (don't return an 'Invalid dev credentials' error).
+                                            if (name === DEV_HELPER_USERNAME) {
+                                                if (password === DEV_HELPER_PASSWORD) {
+                                                    // Create a temporary session so Layout doesn't redirect to sign-in
+                                                    try {
+                                                        const tmpSession: Session = {
+                                                            user: {
+                                                                name,
+                                                                email,
+                                                                role: 'developer',
+                                                            },
+                                                        };
+                                                        setSession(tmpSession);
+                                                        navigate('/dev-helper', { replace: true });
+                                                        return {};
+                                                    } catch (e) {
+                                                        // navigation error: fall back to normal flow
+                                                        console.warn('dev-helper navigation failed', e);
+                                                    }
+                                                } else {
+                                                    return { error: 'Invalid dev credentials' };
                                                 }
-                                            } else {
-                                                return { error: 'Invalid dev credentials' };
                                             }
                                         }
+                                    } catch (e) {
+                                        // ignore env access issues and continue with normal sign-in
+                                        console.warn('dev env check failed', e);
                                     }
-                                } catch (e) {
-                                    // ignore env access issues and continue with normal sign-in
-                                    console.warn('dev env check failed', e);
-                                }
 
 
-                            result = await signInWithCredentials(email, password);
-                        }
-
-                        if (result?.success && result?.user) {
-                            const email = result.user.email || '';
-                            let userRole;
-
-                            try {
-                                const profile = await getUserByEmail(email);
-                                if (profile && profile.role) {
-                                    userRole = profile.role;
-                                }
-                            } catch (err) {
-                                // ignore and fallback to getUserRole
-                                console.warn('Failed to read user profile for role detection', err);
+                                result = await signInWithCredentials(email, password);
                             }
 
-                            const userSession: Session = {
-                                user: {
-                                    name: result.user.displayName || '',
-                                    email: email,
-                                    image: result.user.photoURL || '',
-                                    role: userRole,
-                                },
-                            };
-                            setSession(userSession);
-                            navigate(callbackUrl || '/', { replace: true });
-                            return {};
-                        }
-                        return { error: result?.error || 'Failed to sign in' };
-                    } catch (error) {
-                        if (typeof error === 'object' && error !== null && 'code' in error) {
-                            console.error('Sign-in error:', (error as { code: string }).code);
-                            if ((error as { code: string }).code === 'auth/invalid-credential') {
-                                return { error: 'Invalid Credentials' };
+                            if (result?.success && result?.user) {
+                                const email = result.user.email || '';
+                                let userRole;
+
+                                try {
+                                    const profile = await getUserByEmail(email);
+                                    if (profile && profile.role) {
+                                        userRole = profile.role;
+                                    }
+                                } catch (err) {
+                                    // ignore and fallback to getUserRole
+                                    console.warn('Failed to read user profile for role detection', err);
+                                }
+
+                                const userSession: Session = {
+                                    user: {
+                                        name: result.user.displayName || '',
+                                        email: email,
+                                        image: result.user.photoURL || '',
+                                        role: userRole,
+                                    },
+                                };
+                                setSession(userSession);
+                                navigate(callbackUrl || '/', { replace: true });
+                                return {};
                             }
-                        } else {
-                            console.error('Sign-in error:', error);
+                            return { error: result?.error || 'Failed to sign in' };
+                        } catch (error) {
+                            if (typeof error === 'object' && error !== null && 'code' in error) {
+                                console.error('Sign-in error:', (error as { code: string }).code);
+                                if ((error as { code: string }).code === 'auth/invalid-credential') {
+                                    return { error: 'Invalid Credentials' };
+                                }
+                            } else {
+                                console.error('Sign-in error:', error);
+                            }
+                            return { error: error instanceof Error ? error.message : 'An error occurred' };
                         }
-                        return { error: error instanceof Error ? error.message : 'An error occurred' };
-                    }
-                }}
-                slots={{
-                    subtitle: Alerts,
-                    emailField: CustomEmailField,
-                    passwordField: CustomPasswordField,
-                    submitButton: CustomButton,
-                    forgotPasswordLink: ForgotPasswordLink,
-                }}
-            />
-        </FormContext.Provider>
+                    }}
+                    slots={{
+                        subtitle: Alerts,
+                        emailField: CustomEmailField,
+                        passwordField: CustomPasswordField,
+                        submitButton: CustomButton,
+                        forgotPasswordLink: ForgotPasswordLink,
+                    }}
+                />
+            </FormContext.Provider>
+        </AnimatedPage>
     );
 }

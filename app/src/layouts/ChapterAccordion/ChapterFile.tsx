@@ -1,6 +1,6 @@
-import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, Tooltip } from '@mui/material';
+import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, Tooltip, Skeleton } from '@mui/material';
 import { PictureAsPdf, Description, Delete, Download, } from '@mui/icons-material';
-import Avatar, { Name } from '../Avatar/Avatar';
+import Avatar, { Name } from '../../components/Avatar/Avatar';
 import type { FileType } from '../../types/file';
 import { getChapterSubmissions, getDisplayName } from '../../utils/dbUtils';
 
@@ -21,6 +21,11 @@ interface ChapterFileProps {
      * Currently selected version number
      */
     selectedVersion?: number;
+    /**
+     * Whether the files are still loading
+     * @default false
+     */
+    loading?: boolean;
 }
 
 /**
@@ -45,8 +50,49 @@ const getFileIcon = (fileType: FileType) => {
  * @param chapterId - ID of the chapter to display files for
  * @param onVersionSelect - Optional callback when a version is selected
  * @param selectedVersion - Currently selected version number
+ * @param loading - Whether the files are still loading
  */
-export default function ChapterFile({ chapterId, onVersionSelect, selectedVersion }: ChapterFileProps) {
+export default function ChapterFile({ chapterId, onVersionSelect, selectedVersion, loading = false }: ChapterFileProps) {
+    // Show skeleton while loading
+    if (loading) {
+        return (
+            <Card variant="outlined" sx={{ mb: 2 }}>
+                <CardContent sx={{ py: 2 }}>
+                    <Stack spacing={3}>
+                        {[1, 2].map((i) => (
+                            <Box
+                                key={i}
+                                sx={{
+                                    p: 2,
+                                    border: 2,
+                                    borderColor: 'divider',
+                                    borderRadius: 2,
+                                    bgcolor: 'background.paper'
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                                    <Skeleton variant="circular" width={24} height={24} />
+                                    <Box sx={{ flexGrow: 1 }}>
+                                        <Skeleton variant="text" width="60%" height={24} />
+                                        <Skeleton variant="text" width="40%" height={20} />
+                                    </Box>
+                                    <Skeleton variant="rectangular" width={60} height={24} />
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                                    <Skeleton variant="circular" width={28} height={28} />
+                                    <Box sx={{ flexGrow: 1 }}>
+                                        <Skeleton variant="text" width="30%" height={20} />
+                                        <Skeleton variant="text" width="50%" height={16} />
+                                    </Box>
+                                </Box>
+                            </Box>
+                        ))}
+                    </Stack>
+                </CardContent>
+            </Card>
+        );
+    }
+
     // Get all submission files for this chapter
     const submissionFiles = getChapterSubmissions(chapterId);
 

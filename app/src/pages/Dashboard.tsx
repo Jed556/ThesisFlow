@@ -3,46 +3,47 @@ import { Box, Chip } from '@mui/material';
 import type { NavigationItem } from '../types/navigation';
 import { useSession } from '../SessionContext';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
 
 export const metadata: NavigationItem = {
-	group: 'main',
-	index: 0,
-	title: 'Dashboard',
-	segment: 'dashboard',
-	icon: <DashboardIcon />,
-	children: [],
+    group: 'main',
+    index: 0,
+    title: 'Dashboard',
+    segment: 'dashboard',
+    icon: <DashboardIcon />,
+    children: [],
 };
 
 /**
  * Home dashboard page displaying user info, quick links and stats
  */
 export default function DashboardPage() {
-	const { session } = useSession();
-	const userRole = session?.user?.role;
+    const { session } = useSession();
+    const userRole = session?.user?.role;
 
-	return (
-		<>
-			<Typography variant="h4" gutterBottom>Welcome to the dashboard!</Typography>
-			<Box sx={{ mt: 2 }}>
-				<Typography variant="body1" sx={{ mb: 1 }}>
-					Current User: {session?.user?.name || 'Unknown'}
-				</Typography>
-				<Typography variant="body1" sx={{ mb: 1 }}>
-					Email: {session?.user?.email || 'Unknown'}
-				</Typography>
-				<Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-					Role: <Chip
-						label={userRole}
-						color={
-							userRole === 'admin' ? 'error' :
-								userRole === 'editor' ? 'warning' :
-									userRole === 'adviser' ? 'info' :
-										'primary'
-						}
-						size="small"
-					/>
-				</Typography>
-			</Box>
-		</>
-	);
+    return (
+        <AnimatedPage variant="slideUp">
+            <Typography variant="h4" gutterBottom>Welcome to the dashboard!</Typography>
+            <Box sx={{ mt: 2 }}>
+                <Typography variant="body1" sx={{ mb: 1 }}>
+                    Current User: {session?.user?.name || 'Unknown'}
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 1 }}>
+                    Email: {session?.user?.email || 'Unknown'}
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Role: <Chip
+                        label={userRole}
+                        color={
+                            userRole === 'admin' ? 'error' :
+                                userRole === 'editor' ? 'warning' :
+                                    userRole === 'adviser' ? 'info' :
+                                        'primary'
+                        }
+                        size="small"
+                    />
+                </Typography>
+            </Box>
+        </AnimatedPage>
+    );
 }

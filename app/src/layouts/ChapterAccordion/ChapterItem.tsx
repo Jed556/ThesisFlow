@@ -3,7 +3,7 @@ import { Typography, Box, Card, CardContent, } from '@mui/material';
 import type { ThesisComment } from '../../types/thesis';
 import ChapterFile from './ChapterFile';
 import ChapterComment from './ChapterComment';
-import SortButton from '../SortButton/SortButton';
+import SortButton from '../../components/SortButton/SortButton';
 
 /**
  * Props for the ChapterItem component

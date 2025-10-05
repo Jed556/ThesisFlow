@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, IconButton, Button, ToggleButton, ToggleButtonGroup, Typography, Paper, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, IconButton, Button, ToggleButton, ToggleButtonGroup, Typography, Paper, Dialog, DialogTitle, DialogContent, DialogActions, Skeleton } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
 import type { ScheduleEvent } from '../../types/schedule';
@@ -62,6 +62,16 @@ interface CalendarProps {
      * @default 'all'
      */
     selectMode?: CalendarSelectMode;
+    /**
+     * Allow deselection in single mode - if true, clicking selected date deselects it
+     * @default true
+     */
+    allowDeselect?: boolean;
+    /**
+     * Whether the calendar data is still loading
+     * @default false
+     */
+    loading?: boolean;
 }
 
 /**
@@ -88,7 +98,9 @@ export default function Calendar({
     open = true,
     onClose,
     dialogTitle = 'Select Date',
-    selectMode = 'all'
+    selectMode = 'all',
+    allowDeselect = true,
+    loading = false
 }: CalendarProps) {
     // Map events by date string for quick lookup
     const eventDays = React.useMemo(() => {
@@ -114,10 +126,40 @@ export default function Calendar({
     const [range, setRange] = React.useState<{ from?: Date; to?: Date }>({});
     const [dragging, setDragging] = React.useState<'none' | 'start' | 'end'>('none');
 
+    // Remember separate contexts for single and range modes
+    const [singleModeContext, setSingleModeContext] = React.useState<Date | undefined>(selected);
+    const [rangeModeContext, setRangeModeContext] = React.useState<{ from?: Date; to?: Date }>({});
+
+    // Sync with prop when it changes externally
+    React.useEffect(() => {
+        if (selected && mode === 'single') {
+            setSingleModeContext(selected);
+        }
+    }, [selected, mode]);
+
     // Reset mode when selectMode changes
     React.useEffect(() => {
         setMode(getInitialMode());
     }, [selectMode]);
+
+    // When toggling modes, restore previous context
+    const handleModeToggle = (newMode: 'single' | 'range') => {
+        if (newMode === 'single') {
+            // Restore single mode context
+            if (singleModeContext) {
+                onSelect?.(singleModeContext);
+            }
+            // Clear range display
+            setRange({});
+        } else {
+            // Restore range mode context
+            setRange(rangeModeContext);
+            if (rangeModeContext.from && rangeModeContext.to) {
+                onRangeSelect?.(rangeModeContext);
+            }
+        }
+        setMode(newMode);
+    };
 
     // End dragging on pointer up globally
     React.useEffect(() => {
@@ -172,7 +214,14 @@ export default function Calendar({
      */
     function handleDayClick(date: Date) {
         if (mode === 'single') {
-            onSelect?.(date);
+            // Check if clicking the same date (for deselection)
+            if (allowDeselect && selected && isSameDay(date, selected)) {
+                onSelect?.(undefined);
+                setSingleModeContext(undefined);
+            } else {
+                onSelect?.(date);
+                setSingleModeContext(date);
+            }
             return;
         }
         // Range mode: clicks set from/to
@@ -181,6 +230,7 @@ export default function Calendar({
         if (!from || (from && to)) {
             const newRange = { from: date, to: undefined };
             setRange(newRange);
+            setRangeModeContext(newRange);
             onRangeSelect?.(newRange);
             return;
         }
@@ -192,6 +242,7 @@ export default function Calendar({
                 newRange = { from, to: date };
             }
             setRange(newRange);
+            setRangeModeContext(newRange);
             onRangeSelect?.(newRange);
         }
     }
@@ -234,6 +285,60 @@ export default function Calendar({
     // Determine if toggle should be shown
     const showToggle = selectMode === 'all';
 
+    // Skeleton for loading state
+    if (loading) {
+        const loadingContent = (
+            <Box sx={{ width: 'max-content' }}>
+                <Paper sx={{ p: 2 }} elevation={dialogMode ? 0 : 2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 2 }}>
+                        <Skeleton variant="text" width={150} height={32} />
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Skeleton variant="rectangular" width={120} height={32} sx={{ borderRadius: 1 }} />
+                            <Skeleton variant="circular" width={32} height={32} />
+                            <Skeleton variant="circular" width={32} height={32} />
+                        </Box>
+                    </Box>
+                    <Box sx={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        gap: '0.2rem'
+                    }}>
+                        {/* Weekday headers */}
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                            <Box key={i} sx={{ textAlign: 'center', p: 1 }}>
+                                <Skeleton variant="text" width={20} height={20} sx={{ mx: 'auto' }} />
+                            </Box>
+                        ))}
+                        {/* Day cells */}
+                        {Array.from({ length: 35 }).map((_, i) => (
+                            <Skeleton
+                                key={i}
+                                variant="rectangular"
+                                width={46}
+                                height={46}
+                                sx={{ borderRadius: 1 }}
+                            />
+                        ))}
+                    </Box>
+                </Paper>
+            </Box>
+        );
+
+        if (dialogMode) {
+            return (
+                <Dialog open={open} onClose={onClose} maxWidth="sm">
+                    <DialogTitle>{dialogTitle}</DialogTitle>
+                    <DialogContent>{loadingContent}</DialogContent>
+                    <DialogActions>
+                        <Button onClick={onClose}>Cancel</Button>
+                    </DialogActions>
+                </Dialog>
+            );
+        }
+
+        return loadingContent;
+    }
+
     const calendarContent = (
         <Box sx={{ width: 'max-content' }}>
             <Paper sx={{ p: 2 }} elevation={dialogMode ? 0 : 2}>
@@ -243,7 +348,7 @@ export default function Calendar({
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         {showToggle && (
-                            <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && setMode(v)}>
+                            <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && handleModeToggle(v as 'single' | 'range')}>
                                 <ToggleButton value="single">Single</ToggleButton>
                                 <ToggleButton value="range">Range</ToggleButton>
                             </ToggleButtonGroup>
@@ -322,6 +427,7 @@ export default function Calendar({
                                     const isSelectedSingle = mode === 'single' && selected && isSameDay(selected, day);
                                     const isEndpointInRange = mode === 'range' && (isStart || isEnd);
                                     const isActive = isSelectedSingle || isEndpointInRange;
+                                    const isToday = isSameDay(day, new Date());
                                     return (
                                         <Box
                                             key={key}
@@ -351,6 +457,8 @@ export default function Calendar({
                                                     borderRadius: '50%',
                                                     p: 0,
                                                     boxSizing: 'border-box',
+                                                    // Grey outline for today's date
+                                                    border: isToday ? '1px solid grey' : undefined,
                                                     '&:hover': { bgcolor: isSelectedSingle ? theme.palette.primary.dark : undefined }
                                                 })}
                                             >
@@ -381,14 +489,14 @@ export default function Calendar({
                 open={open}
                 onClose={onClose}
                 maxWidth="md"
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'transparent',
-                        boxShadow: 'none',
-                        overflow: 'visible'
-                    }
-                }}
                 slotProps={{
+                    paper: {
+                        sx: {
+                            bgcolor: 'transparent',
+                            boxShadow: 'none',
+                            overflow: 'visible'
+                        }
+                    },
                     backdrop: {
                         sx: {
                             backgroundColor: 'rgba(0, 0, 0, 0.7)'

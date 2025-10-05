@@ -164,12 +164,14 @@ export async function createPersonalCalendar(userEmail: string): Promise<string>
 /**
  * Create a group calendar (auto-generated)
  * Should be called when a new group is created
+ * Automatically adds advisers and editors with appropriate permissions
  */
 export async function createGroupCalendar(
     groupId: string,
     groupName: string,
     creatorEmail: string,
-    adviserEmails?: string[]
+    adviserEmails?: string[],
+    editorEmails?: string[]
 ): Promise<string> {
     const permissions: any[] = [
         {
@@ -180,13 +182,25 @@ export async function createGroupCalendar(
         }
     ];
 
-    // Add advisers with view permission
+    // Add advisers with view and comment permission
     if (adviserEmails && adviserEmails.length > 0) {
         adviserEmails.forEach(email => {
             permissions.push({
                 userEmail: email,
                 canView: true,
-                canEdit: false,
+                canEdit: true, // Advisers can edit
+                canDelete: false
+            });
+        });
+    }
+
+    // Add editors with view and edit permission
+    if (editorEmails && editorEmails.length > 0) {
+        editorEmails.forEach(email => {
+            permissions.push({
+                userEmail: email,
+                canView: true,
+                canEdit: true,
                 canDelete: false
             });
         });

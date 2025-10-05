@@ -1,4 +1,4 @@
-import { Avatar as MuiAvatar, Chip, type AvatarProps as MuiAvatarProps, Tooltip } from '@mui/material';
+import { Avatar as MuiAvatar, Chip, type AvatarProps as MuiAvatarProps, Tooltip, Skeleton } from '@mui/material';
 import React from 'react';
 import type { UserProfile } from '../../types/profile';
 import { getAvatarInitials, getInitialsFromFullName, findProfileByEmail, getDisplayName } from '../../utils/avatarUtils';
@@ -127,6 +127,12 @@ export interface AvatarProps {
      * If not provided, the `tooltip` setting will determine what text (if any) to show
      */
     tooltipText?: string;
+
+    /**
+     * Whether the avatar is still loading
+     * @default false
+     */
+    loading?: boolean;
 }
 
 // Size mappings for predefined sizes
@@ -203,9 +209,10 @@ function generateInitials(profile: UserProfile | null, name: string | null, conf
  * @param onClick - Click event handler
  * @param tooltip - Quick tooltip selection ('email', 'full', 'none')
  * @param tooltipText - Optional custom tooltip text (overrides `tooltip`)
+ * @param loading - Whether the avatar is still loading
  */
 export default function Avatar({ profile, email, name, initials = NAME_PRESETS.firstLast, mode = 'default',
-    label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, }: AvatarProps) {
+    label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, loading = false }: AvatarProps) {
     // Resolve profile from email if needed
     const resolvedProfile = profile || (email ? findProfileByEmail(email) : null);
 
@@ -217,6 +224,32 @@ export default function Avatar({ profile, email, name, initials = NAME_PRESETS.f
     const avatarSize = typeof size === 'number'
         ? { width: size, height: size, fontSize: `${size * 0.4}px` }
         : sizeMap[size];
+
+    // Show skeleton if loading
+    if (loading) {
+        const skeletonAvatar = (
+            <Skeleton
+                variant="circular"
+                width={avatarSize.width}
+                height={avatarSize.height}
+                sx={sx}
+            />
+        );
+
+        if (mode === 'chip') {
+            return (
+                <Chip
+                    avatar={skeletonAvatar}
+                    label={<Skeleton variant="text" width={80} />}
+                    variant={chipProps?.variant || 'outlined'}
+                    size={chipProps?.size || 'small'}
+                    color={chipProps?.color || 'default'}
+                />
+            );
+        }
+
+        return skeletonAvatar;
+    }
 
     // Create the avatar element
     const avatarCore = (

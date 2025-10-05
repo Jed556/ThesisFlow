@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Box, Card, CardContent, Typography, Chip, Stack } from '@mui/material';
-import { AccessTime, LocationOn, CalendarMonth, NotificationImportant, Event } from '@mui/icons-material';
+import { Box, Card, CardContent, Typography, Chip, Stack, IconButton, Skeleton } from '@mui/material';
+import { AccessTime, LocationOn, CalendarMonth, Monitor, Edit, Delete } from '@mui/icons-material';
 import Avatar, { Name } from '../Avatar/Avatar';
 import { getDisplayName, getProfile } from '../../utils/dbUtils';
 import type { ScheduleEvent, EventStatus, Calendar as CalendarType } from '../../types/schedule';
@@ -14,7 +14,56 @@ const statusColors: Record<EventStatus, string> = {
     rescheduled: '#ff9800'
 };
 
-export default function EventCard({ event, calendar }: { event: ScheduleEvent; calendar?: CalendarType }) {
+export default function EventCard({
+    event,
+    calendar,
+    onEdit,
+    onDelete,
+    loading = false
+}: {
+    event: ScheduleEvent;
+    calendar?: CalendarType;
+    onEdit?: () => void;
+    onDelete?: () => void;
+    loading?: boolean;
+}) {
+    // Show skeleton while loading
+    if (loading) {
+        return (
+            <Card sx={{ mb: 2, borderLeft: `4px solid #bdbdbd` }}>
+                <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                            <Skeleton variant="circular" width={20} height={20} />
+                            <Skeleton variant="text" width="40%" height={28} />
+                        </Box>
+                        <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 2 }} />
+                    </Box>
+                    <Skeleton variant="text" width="90%" height={20} sx={{ mb: 2 }} />
+                    <Stack spacing={1.5} sx={{ mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Skeleton variant="circular" width={20} height={20} />
+                            <Skeleton variant="text" width="60%" height={20} />
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Skeleton variant="circular" width={20} height={20} />
+                            <Skeleton variant="text" width="50%" height={20} />
+                        </Box>
+                    </Stack>
+                    <Box sx={{ display: 'flex', gap: 0.5, mb: 2 }}>
+                        <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 2 }} />
+                        <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 2 }} />
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Skeleton variant="circular" width={32} height={32} />
+                        <Skeleton variant="circular" width={32} height={32} />
+                        <Skeleton variant="circular" width={32} height={32} />
+                    </Box>
+                </CardContent>
+            </Card>
+        );
+    }
+
     const startDate = event?.startDate ? new Date(event.startDate) : new Date();
     const endDate = event?.endDate ? new Date(event.endDate) : new Date(event.startDate || Date.now());
     const isToday = startDate.toDateString() === new Date().toDateString();
@@ -29,7 +78,16 @@ export default function EventCard({ event, calendar }: { event: ScheduleEvent; c
                 mb: 2,
                 borderLeft: `4px solid ${calendar?.color || event.color || defaultEventColor}`,
                 opacity: isPast && event.status !== 'completed' ? 0.7 : 1,
-                backgroundColor: isToday ? 'action.hover' : 'background.paper'
+                backgroundColor: isToday ? 'action.hover' : 'background.paper',
+                transition: (theme) =>
+                    theme.transitions.create(['transform', 'box-shadow'], {
+                        duration: theme.transitions.duration.short,
+                        easing: theme.transitions.easing.easeInOut,
+                    }),
+                '&:hover': {
+                    transform: 'translateX(4px)',
+                    boxShadow: (theme) => theme.shadows[6],
+                },
             }}
         >
             <CardContent>
@@ -38,49 +96,76 @@ export default function EventCard({ event, calendar }: { event: ScheduleEvent; c
                         <CalendarMonth fontSize="small" />
                         <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>{event.title}</Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         <Chip label={event.status} size="small" sx={{ backgroundColor: statusColors[event.status], color: 'white' }} />
+                        {onEdit && (
+                            <IconButton size="small" onClick={onEdit} sx={{ ml: 0.5 }}>
+                                <Edit fontSize="small" />
+                            </IconButton>
+                        )}
+                        {onDelete && (
+                            <IconButton size="small" onClick={onDelete} sx={{ ml: 0 }}>
+                                <Delete fontSize="small" />
+                            </IconButton>
+                        )}
                     </Box>
                 </Box>
 
                 {event.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{event.description}</Typography>}
 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-                    <Box sx={{ flex: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                            <AccessTime fontSize="small" color="action" />
-                            <Typography variant="body2">
-                                {formatDate(startDate)}
-                                {!event.isAllDay && <> at {formatTime(startDate)} - {formatTime(endDate)}</>}
-                                {event.isAllDay && <> (All Day)</>}
-                            </Typography>
-                        </Box>
-
-                        {event.location && (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <LocationOn fontSize="small" color="action" />
-                                <Typography variant="body2">
-                                    {event.location.name}
-                                    {event.location.room && ` - ${event.location.room}`}
-                                    {event.location.type === 'virtual' && event.location.platform && ` (${event.location.platform})`}
-                                </Typography>
-                            </Box>
-                        )}
+                <Stack spacing={1.5} sx={{ mb: 2 }}>
+                    {/* Time information */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <AccessTime fontSize="small" color="action" />
+                        <Typography variant="body2">
+                            {formatDate(startDate)}
+                            {!event.isAllDay && <> at {formatTime(startDate)} - {formatTime(endDate)}</>}
+                            {event.isAllDay && <> (All Day)</>}
+                        </Typography>
                     </Box>
 
+                    {/* Location information - show physical and virtual separately */}
+                    {event.location && (
+                        <>
+                            {(event.location.type === 'physical' || event.location.type === 'hybrid') && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <LocationOn fontSize="small" color="action" />
+                                    <Typography variant="body2">
+                                        {event.location.address && event.location.room
+                                            ? `${event.location.address} - Room ${event.location.room}`
+                                            : event.location.address || `Room ${event.location.room}` || 'Physical location'
+                                        }
+                                    </Typography>
+                                </Box>
+                            )}
+                            {(event.location.type === 'virtual' || event.location.type === 'hybrid') && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Monitor fontSize="small" color="action" />
+                                    <Typography variant="body2">
+                                        {event.location.platform && event.location.url
+                                            ? `${event.location.platform}: ${event.location.url}`
+                                            : event.location.platform || event.location.url || 'Virtual meeting'
+                                        }
+                                    </Typography>
+                                </Box>
+                            )}
+                        </>
+                    )}
+
+                    {/* Calendar information */}
                     {calendar && (
-                        <Box sx={{ flex: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Box
-                                    sx={{
-                                        width: 12,
-                                        height: 12,
-                                        borderRadius: 1,
-                                        backgroundColor: calendar.color
-                                    }}
-                                />
-                                <Typography variant="body2">{calendar.name}</Typography>
-                            </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box
+                                sx={{
+                                    width: 12,
+                                    height: 12,
+                                    borderRadius: 1,
+                                    backgroundColor: calendar.color
+                                }}
+                            />
+                            <Typography variant="body2" color="text.secondary">
+                                Calendar: {calendar.name}
+                            </Typography>
                         </Box>
                     )}
                 </Stack>

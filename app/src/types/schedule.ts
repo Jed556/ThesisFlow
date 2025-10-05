@@ -79,9 +79,10 @@ export interface EventParticipant {
 // Location interface for events
 export interface EventLocation {
     type: 'physical' | 'virtual' | 'hybrid';
-    name: string;
+    // Physical location fields (required for physical/hybrid)
     address?: string;
     room?: string;
+    // Virtual location fields (required for virtual/hybrid)
     url?: string; // For virtual meetings
     platform?: string; // e.g., 'Zoom', 'Teams', 'Google Meet'
     notes?: string;

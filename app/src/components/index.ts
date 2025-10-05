@@ -5,10 +5,10 @@ export { default as Avatar, Name, NAME_PRESETS } from './Avatar/Avatar';
 export { default as DataGrid } from './DataGrid/DataGrid';
 
 // Chapter Accordion and related components
-export { default as ChapterAccordion } from './ChapterAccordion/ChapterAccordion';
-export { default as ChapterFile } from './ChapterAccordion/ChapterFile';
-export { default as ChapterComment } from './ChapterAccordion/ChapterComment';
-export { default as ChapterItem } from './ChapterAccordion/ChapterItem';
+export { default as ChapterAccordion } from '../layouts/ChapterAccordion/ChapterAccordion';
+export { default as ChapterFile } from '../layouts/ChapterAccordion/ChapterFile';
+export { default as ChapterComment } from '../layouts/ChapterAccordion/ChapterComment';
+export { default as ChapterItem } from '../layouts/ChapterAccordion/ChapterItem';
 
 
 // Event Card
@@ -22,3 +22,8 @@ export { default as ScrollContainer } from './ScrollContainer/ScrollContainer';
 
 // Sort Button
 export { default as SortButton } from './SortButton/SortButton';
+
+// Animation Components
+export { default as AnimatedPage } from './Animate/AnimatedPage/AnimatedPage';
+export { default as AnimatedList } from './Animate/AnimatedList/AnimatedList';
+export { default as AnimatedDialog, FadeTransition, GrowTransition, SlideUpTransition, ZoomTransition } from './Animate/AnimatedDialog/AnimatedDialog';
