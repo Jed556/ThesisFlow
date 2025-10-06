@@ -132,6 +132,9 @@ export const mockFileRegistry: Record<string, FileAttachment> = {
     }
 };
 
+// Export array of all theses
+export const mockAllTheses: ThesisData[] = [];
+
 export const mockThesisData: ThesisData = {
     title: "Machine Learning Applications in Educational Technology: A Comprehensive Study",
     leader: "john.doe@university.edu",
@@ -140,7 +143,7 @@ export const mockThesisData: ThesisData = {
     editor: "mike.johnson@university.edu",
     submissionDate: "2024-01-15 at 9:00 AM",
     lastUpdated: "2024-08-20 at 4:30 PM",
-    overallStatus: "In Progress",
+    overallStatus: "Pre Title Defense",
     chapters: [
         {
             id: 1,
@@ -434,3 +437,79 @@ export const mockUserProfiles: UserProfile[] = [
         department: "Digital Learning"
     }
 ];
+
+// Additional thesis projects for dashboard statistics
+const thesis2: ThesisData = {
+    title: "Blockchain Technology in Supply Chain Management",
+    leader: "robert.lee@university.edu",
+    members: [],
+    adviser: "david.kim@university.edu",
+    editor: "emily.brown@university.edu",
+    submissionDate: "2024-02-01 at 10:00 AM",
+    lastUpdated: "2024-09-15 at 2:00 PM",
+    overallStatus: "Pre Thesis Defense",
+    chapters: [
+        { id: 1, title: "Introduction", status: "approved", submissionDate: "2024-03-01", lastModified: "2024-03-10", submissions: [], comments: [] },
+        { id: 2, title: "Literature Review", status: "approved", submissionDate: "2024-04-15", lastModified: "2024-04-20", submissions: [], comments: [] },
+        { id: 3, title: "Methodology", status: "approved", submissionDate: "2024-05-20", lastModified: "2024-05-25", submissions: [], comments: [] },
+        { id: 4, title: "Results and Analysis", status: "approved", submissionDate: "2024-07-10", lastModified: "2024-07-15", submissions: [], comments: [] },
+        { id: 5, title: "Conclusion", status: "under_review", submissionDate: "2024-09-10", lastModified: "2024-09-15", submissions: [], comments: [] }
+    ]
+};
+
+const thesis3: ThesisData = {
+    title: "Natural Language Processing for Sentiment Analysis in Social Media",
+    leader: "maria.garcia@university.edu",
+    members: ["alex.chen@university.edu"],
+    adviser: "lisa.wang@university.edu",
+    editor: "olivia.martinez@university.edu",
+    submissionDate: "2024-01-20 at 11:00 AM",
+    lastUpdated: "2024-06-30 at 5:00 PM",
+    overallStatus: "Pre Title Defense",
+    chapters: [
+        { id: 1, title: "Introduction", status: "approved", submissionDate: "2024-02-20", lastModified: "2024-02-25", submissions: [], comments: [] },
+        { id: 2, title: "Literature Review", status: "approved", submissionDate: "2024-03-25", lastModified: "2024-04-01", submissions: [], comments: [] },
+        { id: 3, title: "Methodology", status: "under_review", submissionDate: "2024-06-15", lastModified: "2024-06-30", submissions: [], comments: [] },
+        { id: 4, title: "Results and Analysis", status: "not_submitted", submissionDate: null, lastModified: null, submissions: [], comments: [] },
+        { id: 5, title: "Conclusion", status: "not_submitted", submissionDate: null, lastModified: null, submissions: [], comments: [] }
+    ]
+};
+
+const thesis4: ThesisData = {
+    title: "IoT Security Framework for Smart Home Devices",
+    leader: "sarah.wilson@university.edu",
+    members: [],
+    adviser: "jane.smith@university.edu",
+    editor: "mike.johnson@university.edu",
+    submissionDate: "2024-03-10 at 9:30 AM",
+    lastUpdated: "2024-08-05 at 3:30 PM",
+    overallStatus: "Pre Title Defense",
+    chapters: [
+        { id: 1, title: "Introduction", status: "approved", submissionDate: "2024-04-10", lastModified: "2024-04-15", submissions: [], comments: [] },
+        { id: 2, title: "Literature Review", status: "under_review", submissionDate: "2024-07-20", lastModified: "2024-08-05", submissions: [], comments: [] },
+        { id: 3, title: "Methodology", status: "not_submitted", submissionDate: null, lastModified: null, submissions: [], comments: [] },
+        { id: 4, title: "Results and Analysis", status: "not_submitted", submissionDate: null, lastModified: null, submissions: [], comments: [] },
+        { id: 5, title: "Conclusion", status: "not_submitted", submissionDate: null, lastModified: null, submissions: [], comments: [] }
+    ]
+};
+
+const thesis5: ThesisData = {
+    title: "Augmented Reality Applications in Medical Education",
+    leader: "alex.chen@university.edu",
+    members: ["john.doe@university.edu"],
+    adviser: "david.kim@university.edu",
+    editor: "emily.brown@university.edu",
+    submissionDate: "2024-02-15 at 2:00 PM",
+    lastUpdated: "2024-09-20 at 4:00 PM",
+    overallStatus: "Pre Thesis Defense",
+    chapters: [
+        { id: 1, title: "Introduction", status: "approved", submissionDate: "2024-03-15", lastModified: "2024-03-20", submissions: [], comments: [] },
+        { id: 2, title: "Literature Review", status: "approved", submissionDate: "2024-05-10", lastModified: "2024-05-15", submissions: [], comments: [] },
+        { id: 3, title: "Methodology", status: "approved", submissionDate: "2024-06-20", lastModified: "2024-06-25", submissions: [], comments: [] },
+        { id: 4, title: "Results and Analysis", status: "under_review", submissionDate: "2024-09-10", lastModified: "2024-09-20", submissions: [], comments: [] },
+        { id: 5, title: "Conclusion", status: "not_submitted", submissionDate: null, lastModified: null, submissions: [], comments: [] }
+    ]
+};
+
+// Populate the array with all theses
+mockAllTheses.push(mockThesisData, thesis2, thesis3, thesis4, thesis5);
