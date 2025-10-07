@@ -94,7 +94,9 @@ export default function AdminUsersPage() {
 
     const handleOpenCreateDialog = () => {
         setEditMode(false);
-        setFormData(emptyFormData);
+        // If this is the first user, force admin role
+        const isFirstUser = users.length === 0;
+        setFormData(isFirstUser ? { ...emptyFormData, role: 'admin' } : emptyFormData);
         setFormErrors({});
         setDialogOpen(true);
     };
@@ -151,6 +153,11 @@ export default function AdminUsersPage() {
 
         if (!formData.role) {
             errors.role = 'Role is required';
+        }
+
+        // Prevent changing the last admin to non-admin role
+        if (editMode && selectedUser?.role === 'admin' && formData.role !== 'admin' && adminCount <= 1) {
+            errors.role = 'Cannot change the last admin to a different role. At least one admin must exist.';
         }
 
         setFormErrors(errors);
@@ -395,6 +402,12 @@ export default function AdminUsersPage() {
 
     const handleInlineUpdate = async (newRow: UserProfile, oldRow: UserProfile): Promise<UserProfile> => {
         try {
+            // Prevent changing the last admin to non-admin role
+            if (oldRow.role === 'admin' && newRow.role !== 'admin' && adminCount <= 1) {
+                alert('Cannot change the last admin to a different role. At least one admin must exist in the system.');
+                return oldRow;
+            }
+
             const email = newRow.email.toLowerCase().trim();
 
             // Handle email change
@@ -626,10 +639,14 @@ export default function AdminUsersPage() {
                                 value={formData.role}
                                 onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                                 error={!!formErrors.role}
-                                helperText={formErrors.role || (users.length === 0 && !editMode ? 'First user will be created as admin' : '')}
+                                helperText={
+                                    formErrors.role ||
+                                    (users.length === 0 && !editMode ? 'First user will be created as admin' : '') ||
+                                    (editMode && selectedUser?.role === 'admin' && adminCount <= 1 ? 'Cannot change role of last admin account' : '')
+                                }
                                 required
                                 fullWidth
-                                disabled={users.length === 0 && !editMode}
+                                disabled={(users.length === 0 && !editMode) || (editMode && selectedUser?.role === 'admin' && adminCount <= 1)}
                             >
                                 {ROLE_OPTIONS.map((role) => (
                                     <MenuItem key={role} value={role}>
