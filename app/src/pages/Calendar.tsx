@@ -3,7 +3,7 @@ import {
     Box, Card, CardContent, Typography, Chip, Grid, Button, IconButton,
     FormControl, InputLabel, Select, MenuItem, TextField, Stack, Tooltip, Badge, Divider, List,
     ListItem, ListItemText, ListItemAvatar, Autocomplete, Dialog, DialogTitle, DialogContent,
-    DialogActions, Alert, Snackbar, Menu, Checkbox, FormControlLabel
+    DialogActions, Menu, Checkbox, FormControlLabel
 } from '@mui/material';
 import {
     CalendarToday, Event, Schedule, FilterList, ViewModule, ViewList, ViewWeek, AccessTime, LocationOn, People,
@@ -18,8 +18,10 @@ import { EventCard } from '../components';
 import { Calendar as CalendarComponent } from '../components';
 import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
 import AnimatedList from '../components/Animate/AnimatedList/AnimatedList';
-import { useSession } from '../SessionContext';
+import { useSession } from '@toolpad/core';
+import { useSnackbar } from '../contexts/SnackbarContext';
 import type { NavigationItem } from '../types/navigation';
+import type { Session } from '../types/session';
 import type { ScheduleEvent, EventStatus, CalendarView, EventLocation, Calendar as CalendarType } from '../types/schedule';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { getUserCalendars, createPersonalCalendar, getEventIdsFromCalendars } from '../utils/firebase/firestore/calendars';
@@ -130,7 +132,8 @@ function exportEventsToCSV(events: (ScheduleEvent & { id: string })[]): string {
  * Calendar page for viewing and managing events
  */
 export default function CalendarPage() {
-    const { session } = useSession();
+    const session = useSession<Session>();
+    const { showNotification } = useSnackbar();
     const [tabValue, setTabValue] = React.useState(0);
     const [calendarView, setCalendarView] = React.useState<CalendarView>('month');
     const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(new Date());
@@ -152,11 +155,6 @@ export default function CalendarPage() {
     const [calendarMenuAnchor, setCalendarMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [allTags, setAllTags] = React.useState<string[]>([]); // All available tags from events
     const [allUsers, setAllUsers] = React.useState<any[]>([]); // All users for calendar sharing
-    const [snackbar, setSnackbar] = React.useState<{ open: boolean; message: string; severity: 'info' | 'success' | 'warning' | 'error' }>({
-        open: false,
-        message: '',
-        severity: 'success'
-    });
 
     // Form state
     const [formData, setFormData] = React.useState<Partial<ScheduleEvent> & { location?: Partial<EventLocation> }>({
@@ -256,7 +254,7 @@ export default function CalendarPage() {
             }
         } catch (error) {
             console.error('Error loading data:', error);
-            setSnackbar({ open: true, message: 'Failed to load calendars and events', severity: 'error' });
+            showNotification('Failed to load calendars and events', 'error');
         } finally {
             setLoading(false);
         }
@@ -372,12 +370,12 @@ export default function CalendarPage() {
     const handleSaveEvent = async () => {
         try {
             if (!formData.title || !formData.startDate) {
-                setSnackbar({ open: true, message: 'Title and start date are required', severity: 'error' });
+                showNotification('Title and start date are required', 'error');
                 return;
             }
 
             if (!formData.calendarId) {
-                setSnackbar({ open: true, message: 'Please select a calendar', severity: 'error' });
+                showNotification('Please select a calendar', 'error');
                 return;
             }
 
@@ -407,10 +405,10 @@ export default function CalendarPage() {
             await setEvent(editingEvent?.id || null, eventData);
             await loadCalendarsAndEvents();
             handleCloseDialog();
-            setSnackbar({ open: true, message: `Event ${editingEvent ? 'updated' : 'created'} successfully`, severity: 'success' });
+            showNotification(`Event ${editingEvent ? 'updated' : 'created'} successfully`, 'success');
         } catch (error) {
             console.error('Error saving event:', error);
-            setSnackbar({ open: true, message: 'Failed to save event', severity: 'error' });
+            showNotification('Failed to save event', 'error');
         }
     };
 
@@ -427,10 +425,10 @@ export default function CalendarPage() {
             await loadCalendarsAndEvents();
             setDeleteConfirmOpen(false);
             setEventToDelete(null);
-            setSnackbar({ open: true, message: 'Event deleted successfully', severity: 'success' });
+            showNotification('Event deleted successfully', 'success');
         } catch (error) {
             console.error('Error deleting event:', error);
-            setSnackbar({ open: true, message: 'Failed to delete event', severity: 'error' });
+            showNotification('Failed to delete event', 'error');
         }
     };
 
@@ -450,7 +448,7 @@ export default function CalendarPage() {
                     // Use personal calendar as default for imports
                     const defaultCalendar = calendars.find(cal => cal.type === 'personal') || calendars[0];
                     if (!defaultCalendar) {
-                        setSnackbar({ open: true, message: 'No calendar available for import', severity: 'error' });
+                        showNotification('No calendar available for import', 'error');
                         return;
                     }
 
@@ -472,14 +470,13 @@ export default function CalendarPage() {
                     }
 
                     await loadCalendarsAndEvents();
-                    setSnackbar({
-                        open: true,
-                        message: `Successfully imported ${successCount} of ${parsedEvents.length} events`,
-                        severity: successCount === parsedEvents.length ? 'success' : 'warning'
-                    });
+                    showNotification(
+                        `Successfully imported ${successCount} of ${parsedEvents.length} events`,
+                        successCount === parsedEvents.length ? 'success' : 'warning'
+                    );
                 } catch (error) {
                     console.error('Error parsing CSV:', error);
-                    setSnackbar({ open: true, message: 'Failed to parse CSV file', severity: 'error' });
+                    showNotification('Failed to parse CSV file', 'error');
                 }
             };
             reader.readAsText(file);
@@ -496,7 +493,7 @@ export default function CalendarPage() {
         a.download = `events_${format(new Date(), 'yyyy-MM-dd')}.csv`;
         a.click();
         URL.revokeObjectURL(url);
-        setSnackbar({ open: true, message: 'Events exported successfully', severity: 'success' });
+        showNotification('Events exported successfully', 'success');
     };
 
     const handleRangeSelect = (range: { from?: Date; to?: Date }) => {
@@ -524,7 +521,7 @@ export default function CalendarPage() {
 
     const handleCreateNewCalendar = async () => {
         if (!newCalendarName.trim()) {
-            setSnackbar({ open: true, message: 'Calendar name is required', severity: 'error' });
+            showNotification('Calendar name is required', 'error');
             return;
         }
 
@@ -582,12 +579,12 @@ export default function CalendarPage() {
             setNewCalendarDescription('');
             setNewCalendarColor(DEFAULT_CALENDAR_COLORS[0]);
             setNewCalendarPermissions([]);
-            setSnackbar({ open: true, message: 'Calendar created successfully', severity: 'success' });
+            showNotification('Calendar created successfully', 'success');
 
             return calendarId;
         } catch (error) {
             console.error('Error creating calendar:', error);
-            setSnackbar({ open: true, message: 'Failed to create calendar', severity: 'error' });
+            showNotification('Failed to create calendar', 'error');
         }
     };
 
@@ -758,7 +755,11 @@ export default function CalendarPage() {
                                                         filteredEvents.length > 0 ? (
                                                             <AnimatedList variant="slideUp" staggerDelay={40}>
                                                                 {filteredEvents.map(ev => {
-                                                                    const canEdit = canModifyEvent(ev, session?.user?.email, session?.user?.role);
+                                                                    const canEdit = canModifyEvent(
+                                                                        ev,
+                                                                        session?.user?.email ?? undefined,
+                                                                        session?.user?.role,
+                                                                    );
                                                                     const eventCalendar = calendars.find(cal => cal.id === ev.calendarId);
                                                                     return (
                                                                         <EventCard
@@ -791,7 +792,11 @@ export default function CalendarPage() {
                                         ) : filteredEvents.length > 0 ? (
                                             <AnimatedList variant="slideUp" staggerDelay={40}>
                                                 {filteredEvents.map(event => {
-                                                    const canEdit = canModifyEvent(event, session?.user?.email, session?.user?.role);
+                                                    const canEdit = canModifyEvent(
+                                                        event,
+                                                        session?.user?.email ?? undefined,
+                                                        session?.user?.role,
+                                                    );
                                                     const eventCalendar = calendars.find(cal => cal.id === event.calendarId);
                                                     return (
                                                         <EventCard
@@ -1139,22 +1144,6 @@ export default function CalendarPage() {
                                 </Button>
                             </DialogActions>
                         </Dialog>
-
-                        {/* Snackbar for notifications */}
-                        <Snackbar
-                            open={snackbar.open}
-                            autoHideDuration={6000}
-                            onClose={() => setSnackbar({ ...snackbar, open: false })}
-                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                        >
-                            <Alert
-                                onClose={() => setSnackbar({ ...snackbar, open: false })}
-                                severity={snackbar.severity}
-                                sx={{ width: '100%' }}
-                            >
-                                {snackbar.message}
-                            </Alert>
-                        </Snackbar>
 
                         {/* Calendar Date Range Dialog */}
                         <CalendarComponent

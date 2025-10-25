@@ -14,8 +14,6 @@ import {
     Divider,
     Switch,
     FormControlLabel,
-    Alert,
-    Snackbar,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -32,13 +30,15 @@ import {
     Visibility,
     VisibilityOff,
 } from '@mui/icons-material';
-import { useSession } from '../SessionContext';
+import { useSession } from '@toolpad/core';
+import { useSnackbar } from '../contexts/SnackbarContext';
 import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/profile';
 import { uploadAvatar, uploadBanner, deleteImage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
 import { ColorPickerDialog } from '../components';
 import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile } from '../types/profile';
+import type { Session } from '../types/session';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { firebaseAuth } from '../utils/firebase/firebaseConfig';
 
@@ -55,7 +55,8 @@ export const metadata: NavigationItem = {
  * Settings page for user preferences and profile management
  */
 export default function SettingsPage() {
-    const { session } = useSession();
+    const session = useSession<Session>();
+    const { showNotification } = useSnackbar();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -98,17 +99,6 @@ export default function SettingsPage() {
     });
     const [changingPassword, setChangingPassword] = useState(false);
 
-    // Snackbar state
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error' | 'info' | 'warning';
-    }>({
-        open: false,
-        message: '',
-        severity: 'success',
-    });
-
     // Load profile
     useEffect(() => {
         loadProfile();
@@ -135,14 +125,10 @@ export default function SettingsPage() {
             }
         } catch (error) {
             console.error('Error loading profile:', error);
-            showSnackbar('Failed to load profile', 'error');
+            showNotification('Failed to load profile', 'error');
         } finally {
             setLoading(false);
         }
-    };
-
-    const showSnackbar = (message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-        setSnackbar({ open: true, message, severity });
     };
 
     const handleInputChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -175,10 +161,10 @@ export default function SettingsPage() {
 
             await loadProfile();
             setEditing(false);
-            showSnackbar('Profile updated successfully', 'success');
+            showNotification('Profile updated successfully', 'success');
         } catch (error) {
             console.error('Error saving profile:', error);
-            showSnackbar('Failed to save profile', 'error');
+            showNotification('Failed to save profile', 'error');
         } finally {
             setSaving(false);
         }
@@ -225,10 +211,10 @@ export default function SettingsPage() {
             await setUserProfile(session.user.email, { avatar: downloadURL });
             await loadProfile();
 
-            showSnackbar('Avatar updated successfully', 'success');
+            showNotification('Avatar updated successfully', 'success');
         } catch (error: any) {
             console.error('Error uploading avatar:', error);
-            showSnackbar(error.message || 'Failed to upload avatar', 'error');
+            showNotification(error.message || 'Failed to upload avatar', 'error');
         } finally {
             setUploadingAvatar(false);
             if (avatarPreview) {
@@ -261,10 +247,10 @@ export default function SettingsPage() {
             await setUserProfile(session.user.email, { banner: downloadURL });
             await loadProfile();
 
-            showSnackbar('Banner updated successfully', 'success');
+            showNotification('Banner updated successfully', 'success');
         } catch (error: any) {
             console.error('Error uploading banner:', error);
-            showSnackbar(error.message || 'Failed to upload banner', 'error');
+            showNotification(error.message || 'Failed to upload banner', 'error');
         } finally {
             setUploadingBanner(false);
             if (bannerPreview) {
@@ -280,9 +266,9 @@ export default function SettingsPage() {
             try {
                 await setUserProfile(session.user.email, { preferences: { themeColor: color } });
                 await loadProfile();
-                showSnackbar('Theme color updated', 'success');
+                showNotification('Theme color updated', 'success');
             } catch (error) {
-                showSnackbar('Failed to update theme color', 'error');
+                showNotification('Failed to update theme color', 'error');
             }
         }
     };
@@ -292,17 +278,17 @@ export default function SettingsPage() {
 
         // Validation
         if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-            showSnackbar('Please fill in all password fields', 'error');
+            showNotification('Please fill in all password fields', 'error');
             return;
         }
 
         if (passwordData.newPassword !== passwordData.confirmPassword) {
-            showSnackbar('New passwords do not match', 'error');
+            showNotification('New passwords do not match', 'error');
             return;
         }
 
         if (passwordData.newPassword.length < 6) {
-            showSnackbar('Password must be at least 6 characters', 'error');
+            showNotification('Password must be at least 6 characters', 'error');
             return;
         }
 
@@ -326,13 +312,13 @@ export default function SettingsPage() {
                 confirmPassword: '',
             });
             setPasswordDialogOpen(false);
-            showSnackbar('Password changed successfully', 'success');
+            showNotification('Password changed successfully', 'success');
         } catch (error: any) {
             console.error('Error changing password:', error);
             if (error.code === 'auth/wrong-password') {
-                showSnackbar('Current password is incorrect', 'error');
+                showNotification('Current password is incorrect', 'error');
             } else {
-                showSnackbar('Failed to change password', 'error');
+                showNotification('Failed to change password', 'error');
             }
         } finally {
             setChangingPassword(false);
@@ -793,22 +779,6 @@ export default function SettingsPage() {
                         </Button>
                     </DialogActions>
                 </Dialog>
-
-                {/* Snackbar */}
-                <Snackbar
-                    open={snackbar.open}
-                    autoHideDuration={6000}
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                >
-                    <Alert
-                        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                        severity={snackbar.severity}
-                        sx={{ width: '100%' }}
-                    >
-                        {snackbar.message}
-                    </Alert>
-                </Snackbar>
             </Container>
         </AnimatedPage>
     );

@@ -1,10 +1,13 @@
+import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import { useSession } from '@toolpad/core';
 import { Outlet, Navigate, useLocation } from 'react-router';
 import { DashboardLayout, ThemeSwitcher } from '@toolpad/core/DashboardLayout';
 import { PageContainer } from '@toolpad/core/PageContainer';
 import { Account } from '@toolpad/core/Account';
-
-import { useSession } from '../SessionContext';
+import type { Session } from '../types/session';
 
 /**
  * CustomActions for the dashboard toolbar
@@ -34,10 +37,23 @@ function CustomAccount() {
  * Dashboard layout for the application
  */
 export default function Layout() {
-    const { session } = useSession();
+    const session = useSession<Session>();
     const location = useLocation();
 
-    if (!session) {
+    if (session?.loading) {
+        return (
+            <Stack alignItems="center" justifyContent="center" sx={{ minHeight: '100vh' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <CircularProgress size={32} />
+                    <Typography variant="body2" color="text.secondary">
+                        Preparing workspace...
+                    </Typography>
+                </Box>
+            </Stack>
+        );
+    }
+
+    if (!session?.user) {
         const redirectTo = `/sign-in?callbackUrl=${encodeURIComponent(location.pathname)}`;
         return <Navigate to={redirectTo} replace />;
     }

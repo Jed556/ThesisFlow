@@ -8,43 +8,40 @@ import { getUserRole } from './utils/roleUtils';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { navigationGroups } from './config/groups';
-import SessionContext from './SessionContext';
 import { Outlet } from 'react-router';
+import { SnackbarProvider, SnackbarContainer } from './components/Snackbar';
 
-import type { Authentication, Navigation } from '@toolpad/core/AppProvider';
-import type { Session } from './types/session';
+import type { Navigation } from '@toolpad/core/AppProvider';
+import type { Session, ExtendedAuthentication } from './types/session';
 import type { User } from 'firebase/auth';
 
 import CssBaseline from '@mui/material/CssBaseline';
-import appTheme from './theme';
-
+import theme from './theme';
 const BRANDING = {
     title: 'ThesisFlow',
 };
 
-const AUTHENTICATION: Authentication = {
-    signIn: signInWithGoogle,
-    signOut: authSignOut,
-};
-
 export default function App() {
-    const [session, setSession] = React.useState<Session | null>(null);
-    const [loading, setLoading] = React.useState(true);
+    const [sessionData, setSessionData] = React.useState<Session | null>(null);
+    const [sessionLoading, setSessionLoading] = React.useState(true);
     const [navigation, setNavigation] = React.useState<Navigation>([]);
-
-    const sessionContextValue = React.useMemo(
+    const setSession = React.useCallback((nextSession: Session | null) => {
+        setSessionData(nextSession);
+        setSessionLoading(nextSession?.loading ?? false);
+    }, []);
+    const authentication = React.useMemo<ExtendedAuthentication>(
         () => ({
-            session,
+            signIn: signInWithGoogle,
+            signOut: authSignOut,
             setSession,
-            loading,
         }),
-        [session, loading],
+        [setSession],
     );
 
     React.useEffect(() => {
         async function initializeNavigation() {
             try {
-                const userRole = session?.user?.role as any;
+                const userRole = sessionData?.user?.role as any;
                 const nav = await buildNavigation(navigationGroups, userRole);
                 setNavigation(nav);
             } catch (error) {
@@ -54,11 +51,13 @@ export default function App() {
         }
 
         initializeNavigation();
-    }, [session]);
+    }, [sessionData?.user?.role]);
 
     React.useEffect(() => {
+        setSessionLoading(true);
         const unsubscribe = onAuthStateChanged(async (user: User | null) => {
             if (user) {
+                setSession({ loading: true });
                 const email = user.email || '';
                 let userRole = getUserRole(email);
                 try {
@@ -79,28 +78,38 @@ export default function App() {
             } else {
                 setSession(null);
             }
-            setLoading(false);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [setSession]);
 
-    setCurrentAppTheme(appTheme); // Store theme for dev utils
+    const session = React.useMemo<Session | null>(() => {
+        if (sessionLoading) {
+            return { loading: true } as Session;
+        }
+        if (sessionData) {
+            return { ...sessionData, loading: false };
+        }
+        return null;
+    }, [sessionData, sessionLoading]);
+
+    setCurrentAppTheme(theme); // Store theme for dev utils
 
     return (
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <ReactRouterAppProvider
-                navigation={navigation}
-                branding={BRANDING}
-                session={session}
-                authentication={AUTHENTICATION}
-                theme={appTheme}
-            >
-                <CssBaseline />
-                <SessionContext.Provider value={sessionContextValue}>
+        <SnackbarProvider>
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <ReactRouterAppProvider
+                    navigation={navigation}
+                    branding={BRANDING}
+                    session={session}
+                    authentication={authentication}
+                    theme={theme}
+                >
+                    <CssBaseline />
                     <Outlet />
-                </SessionContext.Provider>
-            </ReactRouterAppProvider>
-        </LocalizationProvider>
+                    <SnackbarContainer />
+                </ReactRouterAppProvider>
+            </LocalizationProvider>
+        </SnackbarProvider>
     );
 }

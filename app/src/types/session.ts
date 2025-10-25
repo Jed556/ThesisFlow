@@ -1,23 +1,23 @@
-import type { UserProfile } from './profile';
+import type { Session as ToolpadSession, Authentication } from '@toolpad/core/AppProvider';
 
 /**
- * Session interface used throughout the app. We keep it small (Partial of UserProfile)
- * because the session doesn't need the full UserProfile shape.
+ * Extended session user shape with ThesisFlow specific metadata.
  */
-export interface Session {
-    user: {
-        name?: string;
-        email?: string;
-        image?: string;
-        role?: string;
-    };
+export interface ThesisFlowSessionUser extends NonNullable<ToolpadSession['user']> {
+    role?: string;
 }
 
 /**
- * Context for session management
+ * ThesisFlow session extends the base Toolpad session with additional user metadata.
  */
-export interface SessionContext {
-    session: Session | null;
-    setSession: (session: Session | null) => void;
-    loading: boolean;
+export interface Session extends ToolpadSession {
+    user?: ThesisFlowSessionUser;
+    loading?: boolean;
+}
+
+/**
+ * Extended authentication contract exposing a session setter for internal flows.
+ */
+export interface ExtendedAuthentication extends Authentication {
+    setSession?: (session: Session | null) => void;
 }

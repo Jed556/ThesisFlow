@@ -5,9 +5,11 @@ import { GridColDef, GridActionsCellItem, GridRowParams } from '@mui/x-data-grid
 import { DataGrid } from '../../components';
 import AnimatedPage from '../../components/Animate/AnimatedPage/AnimatedPage';
 import { GrowTransition } from '../../components/Animate/AnimatedDialog/AnimatedDialog';
-import { useSession } from '../../SessionContext';
+import { useSession } from '@toolpad/core';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
+import type { Session } from '../../types/session';
 import { getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar } from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount } from '../../utils/firebase/auth';
 import { parseUsers } from '../../utils/csvParsers';
@@ -58,7 +60,8 @@ const emptyFormData: UserFormData = {
  * Admin page for managing user profiles with a custom DataGrid implementation.
  */
 export default function AdminUsersPage() {
-    const { session } = useSession();
+    const session = useSession<Session>();
+    const { showNotification } = useSnackbar();
     const userRole = session?.user?.role;
 
     const [users, setUsers] = React.useState<UserProfile[]>([]);
@@ -76,17 +79,32 @@ export default function AdminUsersPage() {
         return users.filter(u => u.role === 'admin').length;
     }, [users]);
 
+    if (session?.loading) {
+        return (
+            <AnimatedPage variant="fade">
+                <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="h5" component="h1">
+                        Loading user management
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Please wait while we confirm your access level.
+                    </Typography>
+                </Box>
+            </AnimatedPage>
+        );
+    }
+
     const loadUsers = React.useCallback(async () => {
         try {
             setLoading(true);
             const allUsers = await getAllUsers();
             setUsers(allUsers);
         } catch (error) {
-            console.error('Failed to load users:', error);
+            showNotification('Failed to load users. Please try again.', 'error');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [showNotification]);
 
     React.useEffect(() => {
         loadUsers();
@@ -214,15 +232,15 @@ export default function AdminUsersPage() {
                 // Create personal calendar for the new user
                 try {
                     await createPersonalCalendar(email);
-                    console.log('Personal calendar created for new user:', email);
                 } catch (calendarError) {
-                    console.error('Failed to create personal calendar:', calendarError);
-                    // Don't fail the entire user creation if calendar creation fails
+                    showNotification('User created but calendar creation failed', 'warning');
                 }
 
                 // Show notification if role was changed to admin
                 if (isFirstUser && formData.role !== 'admin') {
-                    alert('First user created as admin. At least one admin account is required in the system.');
+                    showNotification('First user created as admin. At least one admin account is required in the system.', 'info', 8000);
+                } else {
+                    showNotification(`User ${newUser.firstName} ${newUser.lastName} created successfully`, 'success');
                 }
             } else {
                 // Update existing user
@@ -249,12 +267,13 @@ export default function AdminUsersPage() {
 
                 // setUserProfile now automatically cleans empty values
                 await setUserProfile(email, updatedUser);
+                showNotification(`User ${updatedUser.firstName} ${updatedUser.lastName} updated successfully`, 'success');
             }
 
             await loadUsers();
             handleCloseDialog();
         } catch (error) {
-            console.error('Failed to save user:', error);
+            showNotification('Failed to save user. Please try again.', 'error');
             setFormErrors({ email: 'Failed to save user. Please try again.' });
         } finally {
             setSaving(false);
@@ -266,7 +285,7 @@ export default function AdminUsersPage() {
 
         // Prevent deletion of last admin
         if (selectedUser.role === 'admin' && adminCount <= 1) {
-            alert('Cannot delete the last admin account. At least one admin must exist in the system.');
+            showNotification('Cannot delete the last admin account. At least one admin must exist in the system.', 'error', 8000);
             return;
         }
 
@@ -275,16 +294,16 @@ export default function AdminUsersPage() {
             // Delete Firebase Auth account first
             const authResult = await adminDeleteUserAccount({ email: selectedUser.email });
             if (!authResult.success) {
-                console.error('Failed to delete auth account:', authResult.message);
-                // Continue anyway to clean up Firestore
+                showNotification(`Auth deletion failed: ${authResult.message}. Continuing with profile cleanup.`, 'warning', 6000);
             }
 
             // Delete Firestore profile
             await deleteUserProfile(selectedUser.email);
+            showNotification(`User ${selectedUser.firstName} ${selectedUser.lastName} deleted successfully`, 'success');
             await loadUsers();
             handleCloseDialog();
         } catch (error) {
-            console.error('Failed to delete user:', error);
+            showNotification('Failed to delete user. Please try again.', 'error');
         } finally {
             setSaving(false);
         }
@@ -297,54 +316,76 @@ export default function AdminUsersPage() {
             const remainingAdmins = adminCount - deletedAdmins;
 
             if (remainingAdmins < 1) {
-                alert('Cannot delete all admin accounts. At least one admin must exist in the system.');
+                showNotification('Cannot delete all admin accounts. At least one admin must exist in the system.', 'error', 8000);
                 throw new Error('Cannot delete last admin');
             }
 
             // Delete all selected users (both auth and Firestore)
+            const errors: string[] = [];
             await Promise.all(
                 deletedUsers.map(async user => {
                     // Delete auth account
                     const authResult = await adminDeleteUserAccount({ email: user.email });
                     if (!authResult.success) {
-                        console.error(`Failed to delete auth for ${user.email}:`, authResult.message);
+                        errors.push(`${user.email}: ${authResult.message}`);
                     }
                     // Delete Firestore profile
                     return deleteUserProfile(user.email);
                 })
             );
+
             // Refresh the user list
             await loadUsers();
+
+            if (errors.length > 0) {
+                showNotification(
+                    `Deleted ${deletedUsers.length} user(s) with some auth errors`,
+                    'warning',
+                    6000,
+                    {
+                        label: 'View Details',
+                        onClick: () => showNotification(`Auth errors:\n${errors.join('\n')}`, 'info', 0)
+                    }
+                );
+            } else {
+                showNotification(`Successfully deleted ${deletedUsers.length} user(s)`, 'success');
+            }
         } catch (error) {
-            console.error('Failed to delete users:', error);
+            showNotification('Failed to delete users. Please try again.', 'error');
             throw error;
         }
     };
 
     const handleExport = (selectedUsers: UserProfile[]) => {
-        // Convert to CSV
-        const headers = ['ID', 'Email', 'First Name', 'Last Name', 'Role', 'Department', 'Phone', 'Last Active'];
-        const csvRows = selectedUsers.map(user => [
-            user.id,
-            user.email,
-            user.firstName,
-            user.lastName,
-            user.role,
-            user.department || '',
-            user.phone || '',
-            user.lastActive ? new Date(user.lastActive).toLocaleString() : 'Never'
-        ].join(','));
+        try {
+            // Convert to CSV
+            const headers = ['ID', 'Email', 'First Name', 'Last Name', 'Role', 'Department', 'Phone', 'Last Active'];
+            const csvRows = selectedUsers.map(user => [
+                user.id,
+                user.email,
+                user.firstName,
+                user.lastName,
+                user.role,
+                user.department || '',
+                user.phone || '',
+                user.lastActive ? new Date(user.lastActive).toLocaleString() : 'Never'
+            ].join(','));
 
-        const csv = [headers.join(','), ...csvRows].join('\n');
+            const csv = [headers.join(','), ...csvRows].join('\n');
 
-        // Download file
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+            // Download file
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+
+            showNotification(`Exported ${selectedUsers.length} user(s) to CSV`, 'success');
+        } catch (error) {
+            showNotification('Failed to export users to CSV', 'error');
+        }
     };
 
     const handleImport = async (file: File) => {
@@ -368,7 +409,15 @@ export default function AdminUsersPage() {
             }
 
             if (toImport.length === 0) {
-                alert(`No users to import.\n\nErrors:\n${errors.join('\n')}`);
+                showNotification(
+                    'No users to import',
+                    'warning',
+                    0,
+                    errors.length > 0 ? {
+                        label: 'View Errors',
+                        onClick: () => showNotification(`Import errors:\n${errors.join('\n')}`, 'error', 0)
+                    } : undefined
+                );
                 return;
             }
 
@@ -391,12 +440,21 @@ export default function AdminUsersPage() {
 
             await loadUsers();
 
-            const message = `Imported ${toImport.length} user(s).`;
-            if (errors.length) alert(`${message}\n\nErrors:\n${errors.join('\n')}`);
-            else alert(message);
+            if (errors.length) {
+                showNotification(
+                    `Imported ${toImport.length} user(s) with some errors`,
+                    'warning',
+                    6000,
+                    {
+                        label: 'View Errors',
+                        onClick: () => showNotification(`Import errors:\n${errors.join('\n')}`, 'error', 0)
+                    }
+                );
+            } else {
+                showNotification(`Successfully imported ${toImport.length} user(s)`, 'success');
+            }
         } catch (err) {
-            console.error('Import failed', err);
-            alert('Failed to import CSV. See console for details.');
+            showNotification('Failed to import CSV. Please check the file format and try again.', 'error');
         }
     };
 
@@ -404,7 +462,7 @@ export default function AdminUsersPage() {
         try {
             // Prevent changing the last admin to non-admin role
             if (oldRow.role === 'admin' && newRow.role !== 'admin' && adminCount <= 1) {
-                alert('Cannot change the last admin to a different role. At least one admin must exist in the system.');
+                showNotification('Cannot change the last admin to a different role. At least one admin must exist in the system.', 'error', 8000);
                 return oldRow;
             }
 
@@ -431,9 +489,10 @@ export default function AdminUsersPage() {
             // setUserProfile now automatically cleans empty values
             await setUserProfile(email, updatedUser);
             await loadUsers();
+            showNotification('User updated successfully', 'success', 3000);
             return updatedUser;
         } catch (error) {
-            console.error('Failed to update user:', error);
+            showNotification('Failed to update user. Please try again.', 'error');
             throw error;
         }
     };
@@ -568,7 +627,7 @@ export default function AdminUsersPage() {
                     enableAdd
                     enableQuickFilter
                     onRowUpdate={handleInlineUpdate}
-                    onRowUpdateError={(error) => console.error('Update failed:', error)}
+                    onRowUpdateError={(error) => showNotification('Update failed: ' + error.message, 'error')}
                     onRowsDelete={handleMultiDelete}
                     onExport={handleExport}
                     onImport={handleImport}

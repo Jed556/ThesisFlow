@@ -1,14 +1,16 @@
 import * as React from 'react';
-import { TextField, Button, Link, Alert, Typography, FormControl, IconButton, InputAdornment, InputLabel, OutlinedInput, Box, Chip, Stack } from '@mui/material';
+import { TextField, Button, Link, Alert, Typography, FormControl, IconButton, InputAdornment, InputLabel, OutlinedInput, Box, Chip, Stack, CircularProgress } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
 import { Navigate, useNavigate } from 'react-router';
-import { useSession } from '../SessionContext';
+import { useSession } from '@toolpad/core';
+import { AuthenticationContext } from '@toolpad/core/AppProvider';
+import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth';
 import { getAllUsers, getUserByEmail } from '../utils/firebase/firestore';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
-import type { Session } from '../types/session';
+import type { Session, ExtendedAuthentication } from '../types/session';
 import { AnimatedPage } from '../components';
 
 export const metadata: NavigationItem = {
@@ -214,7 +216,9 @@ function ForgotPasswordLink() {
  * Sign-in page
  */
 export default function SignIn() {
-    const { session, setSession } = useSession();
+    const session = useSession<Session>();
+    const authentication = React.useContext(AuthenticationContext) as ExtendedAuthentication | null;
+    const { showNotification } = useSnackbar();
     const navigate = useNavigate();
 
     // Form state for controlled components
@@ -230,15 +234,30 @@ export default function SignIn() {
                 if (!active) return;
                 setNoUsersState(existing.length === 0);
             } catch (err) {
-                console.warn('Failed to check existing users', err);
                 if (!active) return;
                 setNoUsersState(null);
+                showNotification('Unable to check existing users', 'warning');
             }
         })();
         return () => { active = false; };
-    }, []);
+    }, [showNotification]);
 
-    if (session) {
+    if (session?.loading) {
+        return (
+            <AnimatedPage variant="fade">
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+                    <Stack spacing={2} alignItems="center">
+                        <CircularProgress size={28} />
+                        <Typography variant="body2" color="text.secondary">
+                            Preparing your session...
+                        </Typography>
+                    </Stack>
+                </Box>
+            </AnimatedPage>
+        );
+    }
+
+    if (session?.user) {
         return <Navigate to="/" />;
     }
 
@@ -289,8 +308,9 @@ export default function SignIn() {
                                                                 role: 'developer',
                                                             },
                                                         };
-                                                        setSession(tmpSession);
+                                                        authentication?.setSession?.(tmpSession);
                                                         navigate('/dev-helper', { replace: true });
+                                                        showNotification('Signed in as developer', 'success', 3000);
                                                         return {};
                                                     } catch (e) {
                                                         // navigation error: fall back to normal flow
@@ -321,7 +341,7 @@ export default function SignIn() {
                                     }
                                 } catch (err) {
                                     // ignore and fallback to getUserRole
-                                    console.warn('Failed to read user profile for role detection', err);
+                                    showNotification('Using default role permissions', 'info', 3000);
                                 }
 
                                 const userSession: Session = {
@@ -332,19 +352,22 @@ export default function SignIn() {
                                         role: userRole,
                                     },
                                 };
-                                setSession(userSession);
+                                authentication?.setSession?.(userSession);
                                 navigate(callbackUrl || '/', { replace: true });
+                                showNotification(`Welcome back, ${result.user.displayName || email}!`, 'success', 4000);
                                 return {};
                             }
                             return { error: result?.error || 'Failed to sign in' };
                         } catch (error) {
                             if (typeof error === 'object' && error !== null && 'code' in error) {
-                                console.error('Sign-in error:', (error as { code: string }).code);
-                                if ((error as { code: string }).code === 'auth/invalid-credential') {
+                                const errorCode = (error as { code: string }).code;
+                                if (errorCode === 'auth/invalid-credential') {
+                                    showNotification('Invalid email or password', 'error');
                                     return { error: 'Invalid Credentials' };
                                 }
+                                showNotification(`Authentication error: ${errorCode}`, 'error');
                             } else {
-                                console.error('Sign-in error:', error);
+                                showNotification('An error occurred during sign in', 'error');
                             }
                             return { error: error instanceof Error ? error.message : 'An error occurred' };
                         }

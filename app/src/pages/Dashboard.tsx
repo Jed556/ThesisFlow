@@ -3,8 +3,9 @@ import Typography from '@mui/material/Typography';
 import { Box, Chip, Card, CardContent, Grid, FormControl, InputLabel, Select, MenuItem, LinearProgress, Skeleton, Paper } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { BarChart } from '@mui/x-charts/BarChart';
+import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../types/navigation';
-import { useSession } from '../SessionContext';
+import type { Session } from '../types/session';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
 import { mockAllTheses, mockUserProfiles } from '../data/mockData';
@@ -58,7 +59,7 @@ function calculateProgress(chapters: ThesisChapter[]): number {
  * Home dashboard page displaying charts, statistics, and thesis progress
  */
 export default function DashboardPage() {
-    const { session } = useSession();
+    const session = useSession<Session>();
     const userEmail = session?.user?.email;
     const userRole = session?.user?.role;
 

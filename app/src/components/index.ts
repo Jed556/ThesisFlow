@@ -31,3 +31,7 @@ export { ColorPickerDialog, type ColorPickerDialogProps } from './ColorPicker/Co
 export { default as AnimatedPage } from './Animate/AnimatedPage/AnimatedPage';
 export { default as AnimatedList } from './Animate/AnimatedList/AnimatedList';
 export { default as AnimatedDialog, FadeTransition, GrowTransition, SlideUpTransition, ZoomTransition } from './Animate/AnimatedDialog/AnimatedDialog';
+
+// Snackbar Notifications
+export { SnackbarProvider, useSnackbar, SnackbarContainer } from './Snackbar';
+export type { Notification, NotificationSeverity } from './Snackbar';
