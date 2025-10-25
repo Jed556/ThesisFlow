@@ -723,7 +723,9 @@ export default function CalendarPage() {
                                 <IconButton aria-label="toggle view" onClick={() => setTabValue(v => (v === 0 ? 1 : 0))}>
                                     {tabValue === 0 ? <ViewList /> : <CalendarToday />}
                                 </IconButton>
-                            </Box>                        {/* Calendar view content */}
+                            </Box>
+
+                            {/* Calendar view content */}
                             <Box>
                                 {tabValue === 0 ? (
                                     <Card>

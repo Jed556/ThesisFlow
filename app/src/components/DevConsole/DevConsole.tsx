@@ -148,7 +148,21 @@ export default function DevConsole({ logs, onSend, onClear, defaultExpanded = fa
 
                 <Collapse in={expanded} timeout="auto" unmountOnExit>
                     <Divider />
-                    <Box ref={logsRef} sx={{ maxHeight: 280, overflow: 'auto', px: 1, backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#0b1220' : '#0f1724', color: (theme) => theme.palette.getContrastText(theme.palette.background.paper), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace', fontSize: 13, py: 1 }}>
+                    <Box ref={logsRef} sx={[
+                        {
+                            maxHeight: 280,
+                            overflow: 'auto',
+                            px: 1,
+                            backgroundColor: '#0f1724',
+                            color: (theme) => theme.palette.getContrastText(theme.palette.background.paper),
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace',
+                            fontSize: 13,
+                            py: 1
+                        },
+                        (theme) => theme.applyStyles('dark', {
+                            backgroundColor: '#0b1220',
+                        }),
+                    ]}>
                         {logs.length === 0 ? (
                             <Box sx={{ px: 1, color: (theme) => theme.palette.text.disabled }}>No logs yet</Box>
                         ) : (
@@ -165,7 +179,18 @@ export default function DevConsole({ logs, onSend, onClear, defaultExpanded = fa
                         )}
                     </Box>
                     <Divider />
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#071019' : '#f5f7fa' }}>
+                    <Box sx={[
+                        {
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            p: 1,
+                            backgroundColor: '#f5f7fa'
+                        },
+                        (theme) => theme.applyStyles('dark', {
+                            backgroundColor: '#071019',
+                        }),
+                    ]}>
                         <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace', px: 1, color: "text.primary" }}>&gt;</Box>
                         <InputBase
                             sx={{ ml: 1, flex: 1, fontFamily: 'inherit' }}

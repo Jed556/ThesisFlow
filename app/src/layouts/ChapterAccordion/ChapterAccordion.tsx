@@ -91,7 +91,7 @@ export default function ChapterAccordion({ chapter, onUploadClick }: ChapterAcco
 
     return (
         <Accordion>
-            <AccordionSummary expandIcon={<ExpandMore />}>
+            <AccordionSummary expandIcon={<ExpandMore />} sx={{ bgcolor: 'background.paper' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
                     <Box sx={{ mr: 2 }}>
                         {getStatusIcon(chapter.status)}

@@ -96,20 +96,20 @@ export default function App() {
     setCurrentAppTheme(theme); // Store theme for dev utils
 
     return (
-        <SnackbarProvider>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <ReactRouterAppProvider
-                    navigation={navigation}
-                    branding={BRANDING}
-                    session={session}
-                    authentication={authentication}
-                    theme={theme}
-                >
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <ReactRouterAppProvider
+                navigation={navigation}
+                branding={BRANDING}
+                session={session}
+                authentication={authentication}
+                theme={theme}
+            >
+                <SnackbarProvider>
                     <CssBaseline />
                     <Outlet />
                     <SnackbarContainer />
-                </ReactRouterAppProvider>
-            </LocalizationProvider>
-        </SnackbarProvider>
+                </SnackbarProvider>
+            </ReactRouterAppProvider>
+        </LocalizationProvider>
     );
 }

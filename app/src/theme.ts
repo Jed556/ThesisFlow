@@ -1,5 +1,5 @@
+import { deepmerge } from '@mui/utils';
 import { createTheme } from '@mui/material/styles';
-import type { AppTheme } from '@toolpad/core/AppProvider';
 
 // Extend MUI theme types to include custom animation properties
 declare module '@mui/material/styles' {
@@ -33,186 +33,186 @@ declare module '@mui/material/styles' {
 }
 
 /**
- * Light mode color palette
- */
-const lightPalette = {
-    mode: 'light',
-    common: {
-        black: '#000',
-        white: '#fff'
-    },
-    primary: {
-        main: '#1976d2',
-        light: '#42a5f5',
-        dark: '#1565c0',
-        contrastText: '#fff'
-    },
-    secondary: {
-        main: '#9c27b0',
-        light: '#ba68c8',
-        dark: '#7b1fa2',
-        contrastText: '#fff'
-    },
-    error: {
-        main: '#d32f2f',
-        light: '#ef5350',
-        dark: '#c62828',
-        contrastText: '#fff'
-    },
-    warning: {
-        main: '#ed6c02',
-        light: '#ff9800',
-        dark: '#e65100',
-        contrastText: '#fff'
-    },
-    info: {
-        main: '#0288d1',
-        light: '#03a9f4',
-        dark: '#01579b',
-        contrastText: '#fff'
-    },
-    success: {
-        main: '#2e7d32',
-        light: '#4caf50',
-        dark: '#1b5e20',
-        contrastText: '#fff'
-    },
-    grey: {
-        50: '#fafafa',
-        100: '#f5f5f5',
-        200: '#eeeeee',
-        300: '#e0e0e0',
-        400: '#bdbdbd',
-        500: '#9e9e9e',
-        600: '#757575',
-        700: '#616161',
-        800: '#424242',
-        900: '#212121',
-        A100: '#f5f5f5',
-        A200: '#eeeeee',
-        A400: '#bdbdbd',
-        A700: '#616161'
-    },
-    contrastThreshold: 3,
-    tonalOffset: 0.2,
-    text: {
-        primary: 'rgba(0, 0, 0, 0.87)',
-        secondary: 'rgba(0, 0, 0, 0.6)',
-        disabled: 'rgba(0, 0, 0, 0.38)'
-    },
-    divider: 'rgba(0, 0, 0, 0.12)',
-    background: {
-        paper: '#fff',
-        default: '#fff'
-    },
-    action: {
-        active: 'rgba(0, 0, 0, 0.54)',
-        hover: 'rgba(0, 0, 0, 0.04)',
-        hoverOpacity: 0.04,
-        selected: 'rgba(0, 0, 0, 0.08)',
-        selectedOpacity: 0.08,
-        disabled: 'rgba(0, 0, 0, 0.26)',
-        disabledBackground: 'rgba(0, 0, 0, 0.12)',
-        disabledOpacity: 0.38,
-        focus: 'rgba(0, 0, 0, 0.12)',
-        focusOpacity: 0.12,
-        activatedOpacity: 0.12
-    }
-}
-
-/**
- * Dark mode color palette
- */
-const darkPalette = {
-    mode: "dark",
-    common: {
-        black: "#000",
-        white: "#fff"
-    },
-    primary: {
-        main: "#90caf9",
-        light: "#e3f2fd",
-        dark: "#42a5f5",
-        contrastText: "rgba(0, 0, 0, 0.87)"
-    },
-    secondary: {
-        main: "#ce93d8",
-        light: "#f3e5f5",
-        dark: "#ab47bc",
-        contrastText: "rgba(0, 0, 0, 0.87)"
-    },
-    error: {
-        main: "#f44336",
-        light: "#e57373",
-        dark: "#d32f2f",
-        contrastText: "#fff"
-    },
-    warning: {
-        main: "#ffa726",
-        light: "#ffb74d",
-        dark: "#f57c00",
-        contrastText: "rgba(0, 0, 0, 0.87)"
-    },
-    info: {
-        main: "#29b6f6",
-        light: "#4fc3f7",
-        dark: "#0288d1",
-        contrastText: "rgba(0, 0, 0, 0.87)"
-    },
-    success: {
-        main: "#66bb6a",
-        light: "#81c784",
-        dark: "#388e3c",
-        contrastText: "rgba(0, 0, 0, 0.87)"
-    },
-    grey: {
-        50: "#fafafa",
-        100: "#f5f5f5",
-        200: "#eeeeee",
-        300: "#e0e0e0",
-        400: "#bdbdbd",
-        500: "#9e9e9e",
-        600: "#757575",
-        700: "#616161",
-        800: "#424242",
-        900: "#212121",
-        A100: "#f5f5f5",
-        A200: "#eeeeee",
-        A400: "#bdbdbd",
-        A700: "#616161"
-    },
-    contrastThreshold: 3,
-    tonalOffset: 0.2,
-    text: {
-        primary: "#fff",
-        secondary: "rgba(255, 255, 255, 0.7)",
-        disabled: "rgba(255, 255, 255, 0.5)",
-    },
-    divider: "rgba(255, 255, 255, 0.12)",
-    background: {
-        paper: "#121212",
-        default: "#121212"
-    },
-    action: {
-        active: "#fff",
-        hover: "rgba(255, 255, 255, 0.08)",
-        hoverOpacity: 0.08,
-        selected: "rgba(255, 255, 255, 0.16)",
-        selectedOpacity: 0.16,
-        disabled: "rgba(255, 255, 255, 0.3)",
-        disabledBackground: "rgba(255, 255, 255, 0.12)",
-        disabledOpacity: 0.38,
-        focus: "rgba(255, 255, 255, 0.12)",
-        focusOpacity: 0.12,
-        activatedOpacity: 0.24
-    }
-}
-
-/**
  * Base application theme
  */
-const theme = createTheme({
-    colorSchemes: { light: true, dark: true },
+const base = createTheme({
+    cssVariables: {
+        colorSchemeSelector: 'data-toolpad-color-scheme',
+    },
+    colorSchemes: {
+        light: {
+            palette: {
+                mode: 'light',
+                common: {
+                    black: '#000',
+                    white: '#fff'
+                },
+                primary: {
+                    main: '#1976d2',
+                    light: '#42a5f5',
+                    dark: '#1565c0',
+                    contrastText: '#fff'
+                },
+                secondary: {
+                    main: '#9c27b0',
+                    light: '#ba68c8',
+                    dark: '#7b1fa2',
+                    contrastText: '#fff'
+                },
+                error: {
+                    main: '#d32f2f',
+                    light: '#ef5350',
+                    dark: '#c62828',
+                    contrastText: '#fff'
+                },
+                warning: {
+                    main: '#ed6c02',
+                    light: '#ff9800',
+                    dark: '#e65100',
+                    contrastText: '#fff'
+                },
+                info: {
+                    main: '#0288d1',
+                    light: '#03a9f4',
+                    dark: '#01579b',
+                    contrastText: '#fff'
+                },
+                success: {
+                    main: '#2e7d32',
+                    light: '#4caf50',
+                    dark: '#1b5e20',
+                    contrastText: '#fff'
+                },
+                grey: {
+                    50: '#fafafa',
+                    100: '#f5f5f5',
+                    200: '#eeeeee',
+                    300: '#e0e0e0',
+                    400: '#bdbdbd',
+                    500: '#9e9e9e',
+                    600: '#757575',
+                    700: '#616161',
+                    800: '#424242',
+                    900: '#212121',
+                    A100: '#f5f5f5',
+                    A200: '#eeeeee',
+                    A400: '#bdbdbd',
+                    A700: '#616161'
+                },
+                contrastThreshold: 3,
+                tonalOffset: 0.2,
+                text: {
+                    primary: 'rgba(0, 0, 0, 0.87)',
+                    secondary: 'rgba(0, 0, 0, 0.6)',
+                    disabled: 'rgba(0, 0, 0, 0.38)'
+                },
+                divider: 'rgba(0, 0, 0, 0.12)',
+                background: {
+                    paper: '#fff',
+                    default: '#fff'
+                },
+                action: {
+                    active: 'rgba(0, 0, 0, 0.54)',
+                    hover: 'rgba(0, 0, 0, 0.04)',
+                    hoverOpacity: 0.04,
+                    selected: 'rgba(0, 0, 0, 0.08)',
+                    selectedOpacity: 0.08,
+                    disabled: 'rgba(0, 0, 0, 0.26)',
+                    disabledBackground: 'rgba(0, 0, 0, 0.12)',
+                    disabledOpacity: 0.38,
+                    focus: 'rgba(0, 0, 0, 0.12)',
+                    focusOpacity: 0.12,
+                    activatedOpacity: 0.12
+                }
+            }
+        },
+        dark: {
+            palette: {
+                mode: "dark",
+                common: {
+                    black: "#000",
+                    white: "#fff"
+                },
+                primary: {
+                    main: "#90caf9",
+                    light: "#e3f2fd",
+                    dark: "#42a5f5",
+                    contrastText: "rgba(0, 0, 0, 0.87)"
+                },
+                secondary: {
+                    main: "#93d899ff",
+                    light: "#e6f5e5ff",
+                    dark: "#59bc47ff",
+                    contrastText: "rgba(0, 0, 0, 0.87)"
+                },
+                error: {
+                    main: "#f44336",
+                    light: "#e57373",
+                    dark: "#d32f2f",
+                    contrastText: "#fff"
+                },
+                warning: {
+                    main: "#ffa726",
+                    light: "#ffb74d",
+                    dark: "#f57c00",
+                    contrastText: "rgba(0, 0, 0, 0.87)"
+                },
+                info: {
+                    main: "#29b6f6",
+                    light: "#4fc3f7",
+                    dark: "#0288d1",
+                    contrastText: "rgba(0, 0, 0, 0.87)"
+                },
+                success: {
+                    main: "#66bb6a",
+                    light: "#81c784",
+                    dark: "#388e3c",
+                    contrastText: "rgba(0, 0, 0, 0.87)"
+                },
+                grey: {
+                    50: "#fafafa",
+                    100: "#f5f5f5",
+                    200: "#eeeeee",
+                    300: "#e0e0e0",
+                    400: "#bdbdbd",
+                    500: "#9e9e9e",
+                    600: "#757575",
+                    700: "#616161",
+                    800: "#424242",
+                    900: "#212121",
+                    A100: "#f5f5f5",
+                    A200: "#eeeeee",
+                    A400: "#bdbdbd",
+                    A700: "#616161"
+                },
+                contrastThreshold: 3,
+                tonalOffset: 0.2,
+                text: {
+                    primary: "#fff",
+                    secondary: "rgba(255, 255, 255, 0.7)",
+                    disabled: "rgba(255, 255, 255, 0.5)",
+                },
+                divider: "rgba(255, 255, 255, 0.12)",
+                background: {
+                    paper: "#0f0f0f",
+                    default: "#0f0f0f"
+                },
+                action: {
+                    active: "#fff",
+                    hover: "rgba(255, 255, 255, 0.08)",
+                    hoverOpacity: 0.08,
+                    selected: "rgba(255, 255, 255, 0.16)",
+                    selectedOpacity: 0.16,
+                    disabled: "rgba(255, 255, 255, 0.3)",
+                    disabledBackground: "rgba(255, 255, 255, 0.12)",
+                    disabledOpacity: 0.38,
+                    focus: "rgba(255, 255, 255, 0.12)",
+                    focusOpacity: 0.12,
+                    activatedOpacity: 0.24
+                }
+            }
+        }
+    },
     breakpoints: {
         values: {
             xs: 0,
@@ -417,12 +417,15 @@ const components = {
     MuiCssBaseline: {
         styleOverrides: {
             html: { height: '100%' },
-            body: { height: '100%', overflow: 'hidden' },
+            body: {
+                height: '100%',
+                overflow: 'hidden',
+            },
             '#root': {
                 height: '100%',
             },
             '.rdp-root': {
-                '--rdp-accent-color': theme.palette?.primary?.main,
+                '--rdp-accent-color': base.palette?.primary?.main,
             },
         },
     },
@@ -438,17 +441,17 @@ const components = {
             root: {
                 '& input': { cursor: 'text' },
                 '& .MuiOutlinedInput-root': {
-                    transition: theme.transitions.create(['border-color', 'box-shadow'], {
-                        duration: theme.transitions.duration.short,
-                        easing: theme.transitions.easing.easeInOut,
+                    transition: base.transitions.create(['border-color', 'box-shadow'], {
+                        duration: base.transitions.duration.short,
+                        easing: base.transitions.easing.easeInOut,
                     }),
                     '&:hover:not(.Mui-disabled) .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette?.primary?.main,
+                        borderColor: base.palette?.primary?.main,
                     },
                     '&.Mui-focused': {
-                        transition: theme.transitions.create(['border-color', 'box-shadow'], {
-                            duration: theme.transitions.duration.short,
-                            easing: theme.transitions.easing.emphasizedDecelerate,
+                        transition: base.transitions.create(['border-color', 'box-shadow'], {
+                            duration: base.transitions.duration.short,
+                            easing: base.transitions.easing.emphasizedDecelerate,
                         }),
                     },
                 },
@@ -458,27 +461,27 @@ const components = {
     MuiOutlinedInput: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create(['border-color', 'background-color'], {
-                    duration: theme.transitions.duration.short,
-                    easing: theme.transitions.easing.easeInOut,
+                transition: base.transitions.create(['border-color', 'background-color'], {
+                    duration: base.transitions.duration.short,
+                    easing: base.transitions.easing.easeInOut,
                 }),
                 '&:hover:not(.Mui-disabled) .MuiOutlinedInput-notchedOutline': {
-                    transition: theme.transitions.create(['border-color'], {
-                        duration: theme.transitions.duration.short,
-                        easing: theme.transitions.easing.emphasizedDecelerate,
+                    transition: base.transitions.create(['border-color'], {
+                        duration: base.transitions.duration.short,
+                        easing: base.transitions.easing.emphasizedDecelerate,
                     }),
                 },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    transition: theme.transitions.create(['border-color', 'border-width'], {
-                        duration: theme.transitions.duration.short,
-                        easing: theme.transitions.easing.emphasizedDecelerate,
+                    transition: base.transitions.create(['border-color', 'border-width'], {
+                        duration: base.transitions.duration.short,
+                        easing: base.transitions.easing.emphasizedDecelerate,
                     }),
                 },
             },
             notchedOutline: {
-                transition: theme.transitions.create(['border-color', 'border-width'], {
-                    duration: theme.transitions.duration.short,
-                    easing: theme.transitions.easing.easeInOut,
+                transition: base.transitions.create(['border-color', 'border-width'], {
+                    duration: base.transitions.duration.short,
+                    easing: base.transitions.easing.easeInOut,
                 }),
             },
         },
@@ -486,14 +489,14 @@ const components = {
     MuiInputBase: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create(['border-color', 'background-color'], {
-                    duration: theme.transitions.duration.short,
-                    easing: theme.transitions.easing.easeInOut,
+                transition: base.transitions.create(['border-color', 'background-color'], {
+                    duration: base.transitions.duration.short,
+                    easing: base.transitions.easing.easeInOut,
                 }),
                 '&.Mui-focused': {
-                    transition: theme.transitions.create(['border-color', 'background-color'], {
-                        duration: theme.transitions.duration.short,
-                        easing: theme.transitions.easing.emphasizedDecelerate,
+                    transition: base.transitions.create(['border-color', 'background-color'], {
+                        duration: base.transitions.duration.short,
+                        easing: base.transitions.easing.emphasizedDecelerate,
                     }),
                 },
             },
@@ -502,22 +505,22 @@ const components = {
     MuiButton: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create(
+                transition: base.transitions.create(
                     ['background-color', 'box-shadow', 'transform'],
                     {
-                        duration: theme.transitions.duration.short,
-                        easing: theme.transitions.easing.emphasizedDecelerate,
+                        duration: base.transitions.duration.short,
+                        easing: base.transitions.easing.emphasizedDecelerate,
                     }
                 ),
                 '&:hover': {
                     // transform: 'translateY(-1px)',
-                    boxShadow: theme.shadows?.[4],
+                    boxShadow: base.shadows?.[4],
                 },
                 '&:active': {
                     transform: 'translateY(0)',
-                    transition: theme.transitions.create('transform', {
-                        duration: theme.transitions.duration.shortest,
-                        easing: theme.transitions.easing.emphasizedAccelerate,
+                    transition: base.transitions.create('transform', {
+                        duration: base.transitions.duration.shortest,
+                        easing: base.transitions.easing.emphasizedAccelerate,
                     }),
                 },
             },
@@ -526,9 +529,9 @@ const components = {
     MuiPaper: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create(['box-shadow', 'transform', 'width', 'height'], {
-                    duration: theme.transitions.duration.short,
-                    easing: theme.transitions.easing.easeInOut,
+                transition: base.transitions.create(['box-shadow', 'transform', 'width', 'height'], {
+                    duration: base.transitions.duration.short,
+                    easing: base.transitions.easing.easeInOut,
                 }),
             },
         },
@@ -536,13 +539,13 @@ const components = {
     MuiCard: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create(['box-shadow', 'transform', 'width', 'height'], {
-                    duration: theme.transitions.duration.short,
-                    easing: theme.transitions.easing.emphasized,
+                transition: base.transitions.create(['box-shadow', 'transform', 'width', 'height'], {
+                    duration: base.transitions.duration.short,
+                    easing: base.transitions.easing.emphasized,
                 }),
                 '&:hover': {
                     // transform: 'translateY(-2px)',
-                    boxShadow: theme.shadows?.[8],
+                    boxShadow: base.shadows?.[8],
                 },
             },
         },
@@ -551,16 +554,16 @@ const components = {
         styleOverrides: {
             root: {
                 '& .MuiBackdrop-root': {
-                    transition: theme.transitions.create('opacity', {
-                        duration: theme.transitions.duration.enteringScreen,
-                        easing: theme.transitions.easing.easeInOut,
+                    transition: base.transitions.create('opacity', {
+                        duration: base.transitions.duration.enteringScreen,
+                        easing: base.transitions.easing.easeInOut,
                     }),
                 },
             },
             paper: {
-                transition: theme.transitions.create(['transform', 'opacity'], {
-                    duration: theme.transitions.duration.medium2,
-                    easing: theme.transitions.easing.emphasizedDecelerate,
+                transition: base.transitions.create(['transform', 'opacity'], {
+                    duration: base.transitions.duration.medium2,
+                    easing: base.transitions.easing.emphasizedDecelerate,
                 }),
             },
         },
@@ -568,9 +571,9 @@ const components = {
     MuiDrawer: {
         styleOverrides: {
             paper: {
-                transition: theme.transitions.create('transform', {
-                    duration: theme.transitions.duration.enteringScreen,
-                    easing: theme.transitions.easing.emphasized,
+                transition: base.transitions.create('transform', {
+                    duration: base.transitions.duration.enteringScreen,
+                    easing: base.transitions.easing.emphasized,
                 }) + ' !important',
             },
         },
@@ -578,10 +581,10 @@ const components = {
     MuiList: {
         styleOverrides: {
             root: {
-                gap: theme.spacing(1),
-                transition: theme.transitions.create(['width'], {
-                    duration: theme.transitions.duration.shorter,
-                    easing: theme.transitions.easing.easeInOut,
+                gap: base.spacing(1),
+                transition: base.transitions.create(['width'], {
+                    duration: base.transitions.duration.shorter,
+                    easing: base.transitions.easing.easeInOut,
                 })
             },
         },
@@ -591,7 +594,7 @@ const components = {
             root: {
                 height: 'auto',
                 overflow: 'hidden',
-                marginBottom: theme.spacing(0.5),
+                marginBottom: base.spacing(0.5),
             },
         },
     },
@@ -599,9 +602,9 @@ const components = {
         styleOverrides: {
             root: {
                 height: 'auto',
-                transition: theme.transitions.create(['background-color', 'transform'], {
-                    duration: theme.transitions.duration.shorter,
-                    easing: theme.transitions.easing.easeInOut,
+                transition: base.transitions.create(['background-color', 'transform'], {
+                    duration: base.transitions.duration.shorter,
+                    easing: base.transitions.easing.easeInOut,
                 }),
                 '&:hover': {
                     transform: 'scale(1.02) translateX(1px)',
@@ -612,22 +615,22 @@ const components = {
     MuiAccordion: {
         styleOverrides: {
             root: {
-                marginTop: theme.spacing(1),
-                marginBottom: theme.spacing(1),
-                borderRadius: theme.shape?.borderRadius ?? 8,
+                marginTop: base.spacing(1),
+                marginBottom: base.spacing(1),
+                borderRadius: base.shape?.borderRadius ?? 8,
                 '&:before, &:after': { display: 'none' },
-                boxShadow: theme.shadows?.[3] ?? 'none',
-                transition: theme.transitions.create(['margin', 'box-shadow'], {
-                    duration: theme.transitions.duration.standard,
-                    easing: theme.transitions.easing.emphasized,
+                boxShadow: base.shadows?.[3] ?? 'none',
+                transition: base.transitions.create(['margin', 'box-shadow'], {
+                    duration: base.transitions.duration.standard,
+                    easing: base.transitions.easing.emphasized,
                 }),
                 '&.Mui-expanded': {
-                    marginTop: theme.spacing(1),
-                    marginBottom: theme.spacing(1),
+                    marginTop: base.spacing(1),
+                    marginBottom: base.spacing(1),
                     minHeight: 80,
                 },
                 '&:first-of-type, &:last-of-type': {
-                    borderRadius: theme.shape?.borderRadius ?? 8,
+                    borderRadius: base.shape?.borderRadius ?? 8,
                 },
                 '&:first-of-type': {
                     marginTop: 0,
@@ -638,16 +641,16 @@ const components = {
     MuiAccordionSummary: {
         styleOverrides: {
             root: {
-                backgroundColor: theme.palette?.grey?.[900],
-                borderRadius: theme.shape?.borderRadius ?? 8,
+                backgroundColor: base.palette?.background?.paper,
+                borderRadius: base.shape?.borderRadius ?? 8,
                 position: 'sticky',
                 top: 0,
-                zIndex: (theme.zIndex?.appBar ?? 1100) - 1,
+                zIndex: (base.zIndex?.appBar ?? 1100) - 1,
                 cursor: 'pointer',
                 minHeight: 80,
-                transition: theme.transitions.create('background-color', {
-                    duration: theme.transitions.duration.shorter,
-                    easing: theme.transitions.easing.easeInOut,
+                transition: base.transitions.create('background-color', {
+                    duration: base.transitions.duration.shorter,
+                    easing: base.transitions.easing.easeInOut,
                 }),
                 '& .MuiTypography-root': {
                     cursor: 'pointer',
@@ -667,9 +670,9 @@ const components = {
     MuiChip: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create(['transform', 'box-shadow'], {
-                    duration: theme.transitions.duration.short,
-                    easing: theme.transitions.easing.emphasized,
+                transition: base.transitions.create(['transform', 'box-shadow'], {
+                    duration: base.transitions.duration.short,
+                    easing: base.transitions.easing.emphasized,
                 }),
                 // '&:hover': {
                 //     transform: 'scale(1.05)',
@@ -680,9 +683,9 @@ const components = {
     MuiIconButton: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create('transform', {
-                    duration: theme.transitions.duration.shortest,
-                    easing: theme.transitions.easing.emphasized,
+                transition: base.transitions.create('transform', {
+                    duration: base.transitions.duration.shortest,
+                    easing: base.transitions.easing.emphasized,
                 }),
                 '&:hover': {
                     transform: 'scale(1.1)',
@@ -696,9 +699,9 @@ const components = {
     MuiTableRow: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create('background-color', {
-                    duration: theme.transitions.duration.shorter,
-                    easing: theme.transitions.easing.easeInOut,
+                transition: base.transitions.create('background-color', {
+                    duration: base.transitions.duration.shorter,
+                    easing: base.transitions.easing.easeInOut,
                 }),
             },
         },
@@ -706,19 +709,15 @@ const components = {
     MuiAlert: {
         styleOverrides: {
             root: {
-                transition: theme.transitions.create(['opacity', 'transform'], {
-                    duration: theme.transitions.duration.standard,
-                    easing: theme.transitions.easing.emphasizedDecelerate,
+                transition: base.transitions.create(['opacity', 'transform'], {
+                    duration: base.transitions.duration.standard,
+                    easing: base.transitions.easing.emphasizedDecelerate,
                 }),
             },
         },
     },
 }
 
-const light = createTheme(theme, { palette: lightPalette, components });
-const dark = createTheme(theme, { palette: darkPalette, components });
+const theme = createTheme(deepmerge(base, { components }));
 
-const appTheme: AppTheme = { light, dark };
-
-export { light, dark, appTheme };
-export default appTheme;
+export default theme;
