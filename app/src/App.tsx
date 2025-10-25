@@ -10,6 +10,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { navigationGroups } from './config/groups';
 import { Outlet } from 'react-router';
 import { SnackbarProvider, SnackbarContainer } from './components/Snackbar';
+import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';
 
 import type { Navigation } from '@toolpad/core/AppProvider';
 import type { Session, ExtendedAuthentication } from './types/session';
@@ -21,14 +22,17 @@ const BRANDING = {
     title: 'ThesisFlow',
 };
 
-export default function App() {
+function AppContent() {
+    const { theme: customTheme } = useCustomTheme();
     const [sessionData, setSessionData] = React.useState<Session | null>(null);
     const [sessionLoading, setSessionLoading] = React.useState(true);
     const [navigation, setNavigation] = React.useState<Navigation>([]);
+
     const setSession = React.useCallback((nextSession: Session | null) => {
         setSessionData(nextSession);
         setSessionLoading(nextSession?.loading ?? false);
     }, []);
+
     const authentication = React.useMemo<ExtendedAuthentication>(
         () => ({
             signIn: signInWithGoogle,
@@ -93,23 +97,31 @@ export default function App() {
         return null;
     }, [sessionData, sessionLoading]);
 
-    setCurrentAppTheme(theme); // Store theme for dev utils
+    setCurrentAppTheme(customTheme); // Store theme for dev utils
 
     return (
+        <ReactRouterAppProvider
+            navigation={navigation}
+            branding={BRANDING}
+            session={session}
+            authentication={authentication}
+            theme={customTheme}
+        >
+            <CssBaseline />
+            <Outlet />
+            <SnackbarContainer />
+        </ReactRouterAppProvider>
+    );
+}
+
+export default function App() {
+    return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <ReactRouterAppProvider
-                navigation={navigation}
-                branding={BRANDING}
-                session={session}
-                authentication={authentication}
-                theme={theme}
-            >
+            <CustomThemeProvider>
                 <SnackbarProvider>
-                    <CssBaseline />
-                    <Outlet />
-                    <SnackbarContainer />
+                    <AppContent />
                 </SnackbarProvider>
-            </ReactRouterAppProvider>
+            </CustomThemeProvider>
         </LocalizationProvider>
     );
 }

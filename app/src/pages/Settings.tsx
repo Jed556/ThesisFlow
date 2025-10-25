@@ -18,6 +18,7 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    Chip,
 } from '@mui/material';
 import {
     Settings,
@@ -29,6 +30,8 @@ import {
     Lock,
     Visibility,
     VisibilityOff,
+    Palette,
+    CheckCircle,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
@@ -36,6 +39,7 @@ import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firesto
 import { uploadAvatar, uploadBanner, deleteImage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
 import { ColorPickerDialog } from '../components';
 import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
+import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile } from '../types/profile';
 import type { Session } from '../types/session';
@@ -57,6 +61,7 @@ export const metadata: NavigationItem = {
 export default function SettingsPage() {
     const session = useSession<Session>();
     const { showNotification } = useSnackbar();
+    const { updateThemeFromSeedColor, seedColor: currentThemeColor } = useCustomTheme();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -110,6 +115,7 @@ export default function SettingsPage() {
             const userProfile = await getCurrentUserProfile();
             if (userProfile) {
                 setProfile(userProfile);
+                const themeColor = userProfile.preferences?.themeColor || '#2196F3';
                 setFormData({
                     prefix: userProfile.prefix || '',
                     firstName: userProfile.firstName || '',
@@ -119,9 +125,12 @@ export default function SettingsPage() {
                     phone: userProfile.phone || '',
                     department: userProfile.department || '',
                     bio: userProfile.bio || '',
-                    themeColor: userProfile.preferences?.themeColor || '#2196F3',
+                    themeColor,
                     reduceAnimations: userProfile.preferences?.reduceAnimations || false,
                 });
+
+                // Apply the theme color from database
+                updateThemeFromSeedColor(themeColor);
             }
         } catch (error) {
             console.error('Error loading profile:', error);
@@ -158,6 +167,11 @@ export default function SettingsPage() {
                     reduceAnimations: formData.reduceAnimations,
                 }
             });
+
+            // Update theme if color changed
+            if (formData.themeColor !== currentThemeColor) {
+                updateThemeFromSeedColor(formData.themeColor);
+            }
 
             await loadProfile();
             setEditing(false);
@@ -262,14 +276,29 @@ export default function SettingsPage() {
 
     const handleThemeColorConfirm = async (color: string) => {
         setFormData(prev => ({ ...prev, themeColor: color }));
-        if (!editing && session?.user?.email) {
-            try {
-                await setUserProfile(session.user.email, { preferences: { themeColor: color } });
-                await loadProfile();
-                showNotification('Theme color updated', 'success');
-            } catch (error) {
-                showNotification('Failed to update theme color', 'error');
-            }
+        setColorPickerOpen(false);
+
+        if (!session?.user?.email) return;
+
+        try {
+            // Save to database
+            await setUserProfile(session.user.email, {
+                preferences: {
+                    themeColor: color,
+                    reduceAnimations: formData.reduceAnimations
+                }
+            });
+
+            // Update theme immediately
+            updateThemeFromSeedColor(color);
+
+            // Reload profile to ensure consistency
+            await loadProfile();
+
+            showNotification('Theme color updated successfully', 'success');
+        } catch (error) {
+            console.error('Error updating theme color:', error);
+            showNotification('Failed to update theme color', 'error');
         }
     };
 
@@ -603,30 +632,60 @@ export default function SettingsPage() {
                     <Stack spacing={3}>
                         {/* Theme Color */}
                         <Box>
-                            <Typography variant="subtitle2" gutterBottom>
-                                Theme Color
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                                <Palette fontSize="small" color="action" />
+                                <Typography variant="subtitle2">
+                                    Theme Color
+                                </Typography>
+                                {currentThemeColor && currentThemeColor === formData.themeColor && (
+                                    <Chip
+                                        icon={<CheckCircle />}
+                                        label="Active"
+                                        size="small"
+                                        color="success"
+                                        variant="outlined"
+                                    />
+                                )}
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                Pick a seed color to generate a Material 3 theme palette for your entire interface
                             </Typography>
                             <Stack direction="row" spacing={2} alignItems="center">
                                 <Box
                                     onClick={() => setColorPickerOpen(true)}
                                     sx={{
-                                        width: 60,
-                                        height: 40,
+                                        width: 80,
+                                        height: 56,
                                         bgcolor: formData.themeColor,
-                                        border: '2px solid',
-                                        borderColor: 'divider',
-                                        borderRadius: 1,
+                                        border: '3px solid',
+                                        borderColor: currentThemeColor === formData.themeColor ? 'primary.main' : 'divider',
+                                        borderRadius: 2,
                                         cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: 2,
                                         '&:hover': {
                                             borderColor: 'primary.main',
+                                            transform: 'scale(1.05)',
+                                            boxShadow: 4,
                                         },
                                     }}
                                 />
-                                <Typography variant="body2" color="text.secondary">
-                                    {formData.themeColor}
-                                </Typography>
-                                <Button size="small" onClick={() => setColorPickerOpen(true)}>
-                                    Change
+                                <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" fontWeight={600}>
+                                        {formData.themeColor.toUpperCase()}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {currentThemeColor === formData.themeColor
+                                            ? 'Currently applied to your interface'
+                                            : 'Click the color box to change'}
+                                    </Typography>
+                                </Box>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<Palette />}
+                                    onClick={() => setColorPickerOpen(true)}
+                                >
+                                    Customize
                                 </Button>
                             </Stack>
                         </Box>

@@ -26,9 +26,6 @@ export const ColorPickerDialog: React.FC<ColorPickerDialogProps> = ({
     onConfirm,
     cancelText = 'Cancel',
     confirmText = 'Select',
-    showHarmonies = true,
-    showShades = true,
-    showAccessibility = true,
 }) => {
     const [tempColor, setTempColor] = useState(value);
 
@@ -82,9 +79,6 @@ export const ColorPickerDialog: React.FC<ColorPickerDialogProps> = ({
                 <ColorPicker
                     value={tempColor}
                     onChange={setTempColor}
-                    showHarmonies={showHarmonies}
-                    showShades={showShades}
-                    showAccessibility={showAccessibility}
                 />
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2 }}>
