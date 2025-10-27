@@ -7,6 +7,7 @@ import type { UserRole } from '../types/profile';
 import Layout from '../layouts/Layout';
 import ErrorBoundary from '../layouts/ErrorBoundary';
 import NotFoundPage from '../layouts/NotFoundPage';
+import { isDevelopmentEnvironment } from './devUtils';
 
 // Type for page module with metadata
 interface PageModule {
@@ -53,6 +54,12 @@ async function discoverPages(): Promise<void> {
         try {
             const module = await pageModules[path]();
             if (module && typeof module === 'object' && 'default' in module && 'metadata' in module) {
+                const segment = resolveSegment(module.metadata as NavigationItem);
+                if (segment && segment.toLowerCase().startsWith('api/')) {
+                    if (isDevelopmentEnvironment())
+                        console.warn(`Skipping page ${pageName} because it resolves to API route segment "${segment}"`);
+                    return;
+                }
                 PAGE_REGISTRY[pageName] = {
                     default: module.default as React.ComponentType,
                     metadata: module.metadata as NavigationItem,
@@ -452,6 +459,12 @@ export async function buildRoutes(): Promise<RouteObject[]> {
  */
 export async function registerPage(segment: string, pageModule: PageModule): Promise<void> {
     await initializeRegistry();
+    const resolvedSegment = resolveSegment(pageModule.metadata);
+    if (resolvedSegment && resolvedSegment.toLowerCase().startsWith('api/')) {
+        if (isDevelopmentEnvironment())
+            console.warn(`Skipping dynamic registration for segment "${resolvedSegment}" because it points to an API route.`);
+        return;
+    }
     PAGE_REGISTRY[segment] = pageModule;
 }
 
