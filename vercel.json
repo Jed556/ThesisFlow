@@ -1,14 +1,5 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "app/package.json",
-            "use": "@vercel/static-build",
-            "config": {
-                "distDir": "dist"
-            }
-        }
-    ],
     "functions": {
         "api/src/**/*.ts": {
             "memory": 512,
