@@ -174,7 +174,7 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
             if (!apiSecret) {
                 return { success: false, message: 'Not authenticated and no API secret configured' };
             }
-            headers['x-api-secret'] = apiSecret;
+            headers['X-API-Secret'] = apiSecret;
         }
 
         // Call the admin API server
@@ -221,7 +221,7 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
             if (!apiSecret) {
                 return { success: false, message: 'Not authenticated and no API secret configured' };
             }
-            headers['x-api-secret'] = apiSecret;
+            headers['X-API-Secret'] = apiSecret;
         }
 
         // Call the admin API server
@@ -325,7 +325,7 @@ export async function adminCreateUserAccount(email: string, password: string): P
             if (!apiSecret) {
                 return { success: false, message: 'Not authenticated and no API secret configured' };
             }
-            headers['x-api-secret'] = apiSecret;
+            headers['X-API-Secret'] = apiSecret;
         }
 
         // Call the admin API server

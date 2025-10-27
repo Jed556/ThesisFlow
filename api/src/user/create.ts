@@ -1,0 +1,60 @@
+/**
+ * Create user endpoint
+ * Creates a new Firebase user with email and password
+ */
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { handleCors, errorResponse, successResponse } from '../utils';
+import { authenticate } from '../auth';
+import { auth } from '../firebase';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // Handle CORS
+    if (handleCors(req, res)) return;
+
+    // Only allow POST
+    if (req.method !== 'POST') {
+        return errorResponse(res, 'Method not allowed', 405);
+    }
+
+    // Authenticate
+    const authContext = await authenticate(req);
+    if (!authContext) {
+        return errorResponse(res, 'Unauthorized: Provide either Bearer token or X-API-Secret', 401);
+    }
+
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return errorResponse(res, 'Email and password are required', 400);
+    }
+
+    try {
+        // Check if user already exists
+        try {
+            await auth.getUserByEmail(email);
+            return successResponse(res, {}, 'User already exists');
+        } catch (notFoundError: any) {
+            // User doesn't exist, proceed with creation
+            if (notFoundError.code !== 'auth/user-not-found') {
+                throw notFoundError;
+            }
+        }
+
+        // Create the user using Admin SDK
+        const userRecord = await auth.createUser({
+            email,
+            password,
+            emailVerified: false,
+        });
+
+        console.log(`Created user: ${email}`);
+        return successResponse(
+            res,
+            { uid: userRecord.uid },
+            'User created successfully'
+        );
+    } catch (error: any) {
+        console.error(`Failed to create user: ${email}`, error);
+        return errorResponse(res, error?.message ?? 'Unable to create user', 500);
+    }
+}

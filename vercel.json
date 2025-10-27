@@ -1,0 +1,105 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "app/package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "dist"
+            }
+        }
+    ],
+    "functions": {
+        "api/src/**/*.ts": {
+            "memory": 512,
+            "maxDuration": 30
+        },
+        "api/src/health.ts": {
+            "memory": 256,
+            "maxDuration": 10
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/api/health",
+            "destination": "/api/src/health"
+        },
+        {
+            "source": "/api/users/create",
+            "destination": "/api/src/user/create"
+        },
+        {
+            "source": "/api/users/delete",
+            "destination": "/api/src/user/delete"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/app/$1"
+        }
+    ],
+    "headers": [
+        {
+            "source": "/api/users/create",
+            "headers": [
+                {
+                    "key": "Access-Control-Allow-Credentials",
+                    "value": "true"
+                },
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                },
+                {
+                    "key": "Access-Control-Allow-Methods",
+                    "value": "POST, OPTIONS"
+                },
+                {
+                    "key": "Access-Control-Allow-Headers",
+                    "value": "Content-Type, Authorization, X-API-Secret"
+                }
+            ]
+        },
+        {
+            "source": "/api/users/delete",
+            "headers": [
+                {
+                    "key": "Access-Control-Allow-Credentials",
+                    "value": "true"
+                },
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                },
+                {
+                    "key": "Access-Control-Allow-Methods",
+                    "value": "DELETE, OPTIONS"
+                },
+                {
+                    "key": "Access-Control-Allow-Headers",
+                    "value": "Content-Type, Authorization, X-API-Secret"
+                }
+            ]
+        },
+        {
+            "source": "/api/health",
+            "headers": [
+                {
+                    "key": "Access-Control-Allow-Credentials",
+                    "value": "true"
+                },
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                },
+                {
+                    "key": "Access-Control-Allow-Methods",
+                    "value": "GET, OPTIONS"
+                },
+                {
+                    "key": "Access-Control-Allow-Headers",
+                    "value": "Content-Type, Authorization, X-API-Secret"
+                }
+            ]
+        }
+    ]
+}
