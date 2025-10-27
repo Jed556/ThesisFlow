@@ -1,7 +1,4 @@
 {
-    "buildCommand": "npm install --prefix app && app/node_modules/.bin/vite build",
-    "outputDirectory": "app/build",
-    "framework": "vite",
     "functions": {
         "api/src/**/*.ts": {
             "memory": 512,
