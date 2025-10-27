@@ -18,16 +18,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Generate theme from seed color
     const theme = useMemo(() => {
         if (seedColor && isValidHexColor(seedColor)) {
-            return generateThemeFromSeedColor(seedColor);
+            console.log('🎨 Generating theme from seed color:', seedColor);
+            const generatedTheme = generateThemeFromSeedColor(seedColor);
+            return generatedTheme;
         }
+        console.log('🎨 Using default theme');
         return baseTheme;
     }, [seedColor]);
 
     const updateThemeFromSeedColor = (color: string) => {
         if (isValidHexColor(color)) {
+            console.log('🎨 Updating theme with color:', color);
             setSeedColor(color);
         } else {
-            console.warn('Invalid hex color provided:', color);
+            console.warn('❌ Invalid hex color provided:', color);
         }
     };
 

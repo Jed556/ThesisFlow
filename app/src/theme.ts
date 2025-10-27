@@ -1,8 +1,15 @@
 import { deepmerge } from '@mui/utils';
 import { createTheme } from '@mui/material/styles';
+import { Box } from '@mui/material';
 
 // Extend MUI theme types to include custom animation properties
 declare module '@mui/material/styles' {
+    interface Palette {
+        tertiary: Palette['primary'];
+    }
+    interface PaletteOptions {
+        tertiary?: PaletteOptions['primary'];
+    }
     interface Easing {
         // Material Design 3 easings
         smooth?: string;
@@ -57,6 +64,12 @@ const base = createTheme({
                     main: '#9c27b0',
                     light: '#ba68c8',
                     dark: '#7b1fa2',
+                    contrastText: '#fff'
+                },
+                tertiary: {
+                    main: '#7c4dff',
+                    light: '#b47cff',
+                    dark: '#3f1dcb',
                     contrastText: '#fff'
                 },
                 error: {
@@ -140,9 +153,15 @@ const base = createTheme({
                     contrastText: "rgba(0, 0, 0, 0.87)"
                 },
                 secondary: {
-                    main: "#93d899ff",
-                    light: "#e6f5e5ff",
-                    dark: "#59bc47ff",
+                    main: "#ce93d8",
+                    light: "#f3e5f5",
+                    dark: "#ab47bc",
+                    contrastText: "rgba(0, 0, 0, 0.87)"
+                },
+                tertiary: {
+                    main: "#bb86fc",
+                    light: "#e7b9ff",
+                    dark: "#8858c8",
                     contrastText: "rgba(0, 0, 0, 0.87)"
                 },
                 error: {
@@ -575,12 +594,20 @@ const components = {
                     duration: base.transitions.duration.enteringScreen,
                     easing: base.transitions.easing.emphasized,
                 }) + ' !important',
+                // Target only the first direct child Box component inside Drawer
+                '& > .MuiBox-root:first-of-type': {
+                    paddingTop: 0,
+                    paddingBottom: base.spacing(2),
+                    paddingLeft: base.spacing(2),
+                    paddingRight: base.spacing(2),
+                },
             },
         },
     },
     MuiList: {
         styleOverrides: {
             root: {
+                marginTop: base.spacing(1),
                 gap: base.spacing(1),
                 transition: base.transitions.create(['width'], {
                     duration: base.transitions.duration.shorter,
@@ -595,6 +622,10 @@ const components = {
                 height: 'auto',
                 overflow: 'hidden',
                 marginBottom: base.spacing(0.5),
+                // Add top margin to first ListItem if it's not preceded by a ListSubheader
+                '&:first-of-type:not(.MuiListSubheader-root + *)': {
+                    marginTop: base.spacing(2),
+                },
             },
         },
     },

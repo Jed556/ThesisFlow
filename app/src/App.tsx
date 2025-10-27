@@ -17,13 +17,12 @@ import type { Session, ExtendedAuthentication } from './types/session';
 import type { User } from 'firebase/auth';
 
 import CssBaseline from '@mui/material/CssBaseline';
-import theme from './theme';
 const BRANDING = {
     title: 'ThesisFlow',
 };
 
 function AppContent() {
-    const { theme: customTheme } = useCustomTheme();
+    const { theme: customTheme, updateThemeFromSeedColor, resetTheme } = useCustomTheme();
     const [sessionData, setSessionData] = React.useState<Session | null>(null);
     const [sessionLoading, setSessionLoading] = React.useState(true);
     const [navigation, setNavigation] = React.useState<Navigation>([]);
@@ -33,13 +32,19 @@ function AppContent() {
         setSessionLoading(nextSession?.loading ?? false);
     }, []);
 
+    const handleSignOut = React.useCallback(async () => {
+        // Reset theme to default before signing out
+        resetTheme();
+        await authSignOut();
+    }, [resetTheme]);
+
     const authentication = React.useMemo<ExtendedAuthentication>(
         () => ({
             signIn: signInWithGoogle,
-            signOut: authSignOut,
+            signOut: handleSignOut,
             setSession,
         }),
-        [setSession],
+        [handleSignOut, setSession],
     );
 
     React.useEffect(() => {
@@ -68,8 +73,18 @@ function AppContent() {
                     // prefer Firestore stored role when available
                     const profile = await getUserByEmail(email);
                     if (profile && profile.role) userRole = profile.role;
+
+                    // Apply user's theme preference on login
+                    if (profile?.preferences?.themeColor) {
+                        updateThemeFromSeedColor(profile.preferences.themeColor);
+                    } else {
+                        // Reset to default if no theme preference
+                        resetTheme();
+                    }
                 } catch (err) {
                     console.warn('Failed to fetch user profile for role:', err);
+                    // Reset to default theme on error
+                    resetTheme();
                 }
 
                 setSession({
@@ -80,12 +95,14 @@ function AppContent() {
                     },
                 });
             } else {
+                // Reset to default theme on logout
+                resetTheme();
                 setSession(null);
             }
         });
 
         return () => unsubscribe();
-    }, [setSession]);
+    }, [setSession, updateThemeFromSeedColor, resetTheme]);
 
     const session = React.useMemo<Session | null>(() => {
         if (sessionLoading) {

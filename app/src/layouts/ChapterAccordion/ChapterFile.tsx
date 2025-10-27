@@ -36,12 +36,12 @@ interface ChapterFileProps {
 const getFileIcon = (fileType: FileType) => {
     switch (fileType.toLowerCase()) {
         case 'pdf':
-            return <PictureAsPdf color="error" />;
+            return <PictureAsPdf sx={{ color: '#d32f2f' }} />; // Constant red for PDF
         case 'docx':
         case 'doc':
-            return <Description color="primary" />;
+            return <Description sx={{ color: '#1976d2' }} />; // Constant blue for Word docs
         default:
-            return <Description color="action" />;
+            return <Description sx={{ color: '#757575' }} />; // Constant grey for other files
     }
 };
 

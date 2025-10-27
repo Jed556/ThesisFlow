@@ -371,13 +371,17 @@ export default function SettingsPage() {
                     {/* Banner Section */}
                     <Box sx={{ position: 'relative' }}>
                         {isProfileLoading ? (
-                            <Skeleton variant="rectangular" sx={{ aspectRatio: '3/1', minHeight: '200px' }} />
+                            <Skeleton
+                                variant="rectangular"
+                                sx={{ width: '100%', aspectRatio: '3/1', minHeight: '200px' }}
+                            />
                         ) : (
                             <>
                                 <CardMedia
                                     component={profile?.banner ? 'img' : 'div'}
                                     image={profile?.banner || undefined}
                                     sx={{
+                                        width: '100%',
                                         aspectRatio: '3/1',
                                         minHeight: '200px',
                                         bgcolor: profile?.preferences?.themeColor || 'primary.main',
