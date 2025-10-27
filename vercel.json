@@ -1,5 +1,5 @@
 {
-    "buildCommand": "npm install --prefix app && npm run build --prefix app",
+    "buildCommand": "npm install --prefix app && app/node_modules/.bin/vite build",
     "outputDirectory": "app/build",
     "framework": "vite",
     "functions": {
