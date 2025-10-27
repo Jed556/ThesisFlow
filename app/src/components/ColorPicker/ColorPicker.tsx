@@ -221,7 +221,7 @@ const MaterialThemeSection: React.FC<MaterialThemeSectionProps> = ({ theme, onSe
             { label: 'Tertiary', palette: theme.palettes.tertiary },
             { label: 'Neutral', palette: theme.palettes.neutral },
             { label: 'Neutral Variant', palette: theme.palettes.neutralVariant },
-            { label: 'Error', palette: theme.palettes.error },
+            // { label: 'Error', palette: theme.palettes.error },
         ],
         [theme],
     );
@@ -234,9 +234,6 @@ const MaterialThemeSection: React.FC<MaterialThemeSectionProps> = ({ theme, onSe
             <Box>
                 <Typography variant="subtitle2" gutterBottom>
                     Material 3 Theme Builder
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    Generated tonal palettes and scheme previews inspired by the Material Theme Builder.
                 </Typography>
             </Box>
 

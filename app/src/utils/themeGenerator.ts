@@ -124,32 +124,6 @@ function buildPalette(
             dark: hexFromArgb(materialTheme.palettes.secondary.tone(isDark ? 40 : 30)),
             contrastText: colors.onSecondary,
         },
-        // Keep error colors constant (not affected by theme)
-        error: {
-            main: isDark ? '#f44336' : '#d32f2f',
-            light: isDark ? '#e57373' : '#ef5350',
-            dark: isDark ? '#d32f2f' : '#c62828',
-            contrastText: '#fff',
-        },
-        // Keep warning colors constant (not affected by theme)
-        warning: {
-            main: isDark ? '#ffa726' : '#ed6c02',
-            light: isDark ? '#ffb74d' : '#ff9800',
-            dark: isDark ? '#f57c00' : '#e65100',
-            contrastText: isDark ? 'rgba(0, 0, 0, 0.87)' : '#fff',
-        },
-        info: {
-            main: colors.tertiary,
-            light: colors.tertiaryContainer,
-            dark: hexFromArgb(materialTheme.palettes.tertiary.tone(isDark ? 40 : 30)),
-            contrastText: colors.onTertiary,
-        },
-        success: {
-            main: isDark ? '#66bb6a' : '#2e7d32',
-            light: isDark ? '#81c784' : '#4caf50',
-            dark: isDark ? '#388e3c' : '#1b5e20',
-            contrastText: isDark ? 'rgba(0, 0, 0, 0.87)' : '#fff',
-        },
         tertiary: {
             main: colors.tertiary,
             light: colors.tertiaryContainer,
