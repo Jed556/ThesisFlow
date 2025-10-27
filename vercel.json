@@ -1,5 +1,7 @@
 {
-    "version": 2,
+    "buildCommand": "npm install --prefix app && npm run build --prefix app",
+    "outputDirectory": "app/build",
+    "framework": "vite",
     "functions": {
         "api/src/**/*.ts": {
             "memory": 512,
