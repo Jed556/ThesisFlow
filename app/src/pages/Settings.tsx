@@ -129,8 +129,10 @@ export default function SettingsPage() {
                     reduceAnimations: userProfile.preferences?.reduceAnimations || false,
                 });
 
-                // Apply the theme color from database
-                updateThemeFromSeedColor(themeColor);
+                // Check if theme should be updated
+                if (currentThemeColor !== themeColor && currentThemeColor) {
+                    updateThemeFromSeedColor(themeColor);
+                }
             }
         } catch (error) {
             console.error('Error loading profile:', error);
@@ -281,6 +283,9 @@ export default function SettingsPage() {
         if (!session?.user?.email) return;
 
         try {
+            // Update theme immediately
+            updateThemeFromSeedColor(color);
+
             // Save to database
             await setUserProfile(session.user.email, {
                 preferences: {
@@ -288,12 +293,6 @@ export default function SettingsPage() {
                     reduceAnimations: formData.reduceAnimations
                 }
             });
-
-            // Update theme immediately
-            updateThemeFromSeedColor(color);
-
-            // Reload profile to ensure consistency
-            await loadProfile();
 
             showNotification('Theme color updated successfully', 'success');
         } catch (error) {
