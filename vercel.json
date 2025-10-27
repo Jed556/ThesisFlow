@@ -11,19 +11,19 @@
     "rewrites": [
         {
             "source": "/api/health",
-            "destination": "/api/src/health"
+            "destination": "/api/src/health.ts"
         },
         {
             "source": "/api/users/create",
-            "destination": "/api/src/user/create"
+            "destination": "/api/src/user/create.ts"
         },
         {
             "source": "/api/users/delete",
-            "destination": "/api/src/user/delete"
+            "destination": "/api/src/user/delete.ts"
         },
         {
             "source": "/(.*)",
-            "destination": "/app/$1"
+            "destination": "/app/index.html"
         }
     ],
     "headers": [
