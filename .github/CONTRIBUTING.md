@@ -45,6 +45,7 @@ type(scope?): subject
 - `ref`: Code changes that neither fix a bug nor add a feature
 - `test`: Adding or correcting tests
 - `chore`: Maintenance tasks
+- `build`: Changes that affect the build system or external dependencies
 
 ### Recommended scopes for ThesisFlow:
 - `ui`: Changes to the web user interface
@@ -53,19 +54,21 @@ type(scope?): subject
 - `ml`: Text-based machine learning, NLP, TF-IDF, or related code
 
 ### Examples:
-- `fix(ui): correct button alignment on mobile`
-- `feat(ui): implement user profile page`
-- `style(ui): update button colors for consistency`
-- `docs(ui): add usage instructions to README`
-- `fix(db): correct migration script`
-- `feat(db): add user roles table`
-- `chore(db): remove deprecated columns`
-- `chore(host): update deployment pipeline`
-- `feat(host): add Docker support for local development`
-- `ref(ml): improve tokenization and tfidf logic`
-- `feat(ml): add sentiment analysis module`
-- `test(ml): add tests for text vectorization`
-- `test(db): add integration tests for user queries`
+- `fix(ui): Correct button alignment on mobile`
+- `feat(ui): Implement user profile page`
+- `style(ui): Update button colors for consistency`
+- `docs(ui): Add usage instructions to README`
+- `fix(db): Correct migration script`
+- `feat(db): Add user roles table`
+- `chore(db): Remove deprecated columns`
+- `chore(host): Update deployment pipeline`
+- `feat(host): Add Docker support for local development`
+- `ref(ml): Improve tokenization and tfidf logic`
+- `feat(ml): Add sentiment analysis module`
+- `test(ml): Add tests for text vectorization`
+- `test(db): Add integration tests for user queries`
+- `build(host): Update CI/CD dependencies`
+- `build(ui): Upgrade frontend build tools`
 
 ## Rules:
 - Use the imperative mood in the subject line (e.g., "fix" not "fixed" or "fixes").
