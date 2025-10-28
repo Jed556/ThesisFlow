@@ -1,7 +1,7 @@
 {
     "framework": "vite",
     "functions": {
-        "api/src/**/*.ts": {
+        "api/**/*.ts": {
             "memory": 512,
             "maxDuration": 30
         }
@@ -9,15 +9,15 @@
     "rewrites": [
         {
             "source": "/api/health",
-            "destination": "/api/src/health.ts"
+            "destination": "/api/health.ts"
         },
         {
             "source": "/api/user/create",
-            "destination": "/api/src/user/create.ts"
+            "destination": "/api/user/create.ts"
         },
         {
             "source": "/api/user/delete",
-            "destination": "/api/src/user/delete.ts"
+            "destination": "/api/user/delete.ts"
         },
         {
             "source": "/(.*)",
