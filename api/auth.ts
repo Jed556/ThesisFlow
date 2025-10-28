@@ -1,7 +1,7 @@
 /**
  * Authentication utilities for Vercel serverless functions
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest } from '@vercel/node';
 import { auth } from './firebase';
 
 export interface AuthContext {
@@ -43,7 +43,7 @@ export async function verifyFirebaseToken(req: VercelRequest): Promise<AuthConte
  * Verify admin API secret (for server-to-server calls)
  */
 export function verifyApiSecret(req: VercelRequest): boolean {
-    const apiSecret = req.headers['X-API-Secret'];
+    const apiSecret = req.headers['x-api-secret'] ?? req.headers['X-API-Secret'];
     const expectedSecret = process.env.ADMIN_API_SECRET;
 
     if (!expectedSecret) {

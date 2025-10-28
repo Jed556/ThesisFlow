@@ -8,16 +8,8 @@
     },
     "rewrites": [
         {
-            "source": "/api/health",
-            "destination": "/api/health.ts"
-        },
-        {
-            "source": "/api/user/create",
-            "destination": "/api/user/create.ts"
-        },
-        {
-            "source": "/api/user/delete",
-            "destination": "/api/user/delete.ts"
+            "source": "/api/(.*)",
+            "destination": "/api/$1"
         },
         {
             "source": "/(.*)",
