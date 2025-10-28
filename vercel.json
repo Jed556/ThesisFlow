@@ -1,6 +1,5 @@
 {
-    "buildCommand": "npm install --prefix app && npm run build --prefix app",
-    "outputDirectory": "app/build",
+    "buildCommand": "cd app && npm install && npm run build",
     "framework": "vite",
     "functions": {
         "api/src/**/*.ts": {
