@@ -178,7 +178,7 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
         }
 
         // Call the admin API server
-        const response = await fetch(`${apiUrl}/api/admin/user/delete`, {
+        const response = await fetch(`${apiUrl}/api/user/delete`, {
             method: 'DELETE',
             headers,
             body: JSON.stringify(payload),
@@ -225,7 +225,7 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
         }
 
         // Call the admin API server
-        const response = await fetch(`${apiUrl}/api/admin/user/bulk-delete`, {
+        const response = await fetch(`${apiUrl}/api/user/bulk-delete`, {
             method: 'DELETE',
             headers,
             body: JSON.stringify({ users: payloads }),
@@ -329,7 +329,7 @@ export async function adminCreateUserAccount(email: string, password: string): P
         }
 
         // Call the admin API server
-        const response = await fetch(`${apiUrl}/api/admin/user/create`, {
+        const response = await fetch(`${apiUrl}/api/user/create`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ email, password }),

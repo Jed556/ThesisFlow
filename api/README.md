@@ -10,12 +10,12 @@ This directory contains the serverless API functions for ThesisFlow, deployed on
 - No authentication required
 
 ### User Management (Admin)
-- **POST** `/api/admin/users/create`
+- **POST** `/api/user/create`
   - Body: `{ email: string, password: string }`
   - Creates a new Firebase user
   - Requires admin authentication
 
-- **DELETE** `/api/admin/users/delete`
+- **DELETE** `/api/user/delete`
   - Body: `{ uid?: string, email?: string }`
   - Deletes a Firebase user by UID or email
   - Requires admin authentication

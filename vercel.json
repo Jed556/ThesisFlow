@@ -11,11 +11,11 @@
             "destination": "/api/src/health.ts"
         },
         {
-            "source": "/api/users/create",
+            "source": "/api/user/create",
             "destination": "/api/src/user/create.ts"
         },
         {
-            "source": "/api/users/delete",
+            "source": "/api/user/delete",
             "destination": "/api/src/user/delete.ts"
         },
         {
@@ -25,7 +25,7 @@
     ],
     "headers": [
         {
-            "source": "/api/users/create",
+            "source": "/api/user/create",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
@@ -46,7 +46,7 @@
             ]
         },
         {
-            "source": "/api/users/delete",
+            "source": "/api/user/delete",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
