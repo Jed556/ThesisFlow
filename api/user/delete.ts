@@ -3,9 +3,9 @@
  * Deletes a Firebase user by UID or email
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleCors, errorResponse, successResponse } from '../utils';
-import { authenticate } from '../auth';
-import { auth } from '../firebase';
+import { handleCors, errorResponse, successResponse } from '../../libs/utils';
+import { authenticate } from '../../libs/auth';
+import { auth } from '../../libs/firebase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Handle CORS
