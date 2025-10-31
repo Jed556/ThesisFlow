@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip, Stack, } from '@mui/material';
 import { People, Delete, Edit } from '@mui/icons-material';
-import { GridColDef, GridActionsCellItem, GridRowParams } from '@mui/x-data-grid';
+import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
+import { GridActionsCellItem } from '@mui/x-data-grid';
 import { AnimatedPage, GrowTransition } from '../../components/Animate';
 import { DataGrid } from '../../components/DataGrid';
 import { useSession } from '@toolpad/core';
@@ -585,6 +586,7 @@ export default function AdminUsersPage() {
 
     const getAdditionalActions = (params: GridRowParams<UserProfile>) => [
         <GridActionsCellItem
+            key="delete"
             icon={<Delete />}
             label="Delete"
             onClick={() => handleOpenDeleteDialog(params.row)}
