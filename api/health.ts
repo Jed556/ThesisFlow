@@ -3,7 +3,7 @@
  * Returns server status and timestamp
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleCors, successResponse } from './utils';
+import { handleCors, successResponse } from '../libs/utils.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Handle CORS

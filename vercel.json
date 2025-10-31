@@ -1,31 +1,43 @@
 {
-    "buildCommand": "cd app && npm install && npm run build",
     "framework": "vite",
     "functions": {
-        "api/src/**/*.ts": {
+        "api/**/*.ts": {
             "memory": 512,
             "maxDuration": 30
         }
     },
     "rewrites": [
         {
-            "source": "/api/health",
-            "destination": "/api/src/health.ts"
-        },
-        {
-            "source": "/api/user/create",
-            "destination": "/api/src/user/create.ts"
-        },
-        {
-            "source": "/api/user/delete",
-            "destination": "/api/src/user/delete.ts"
+            "source": "/api/(.*)",
+            "destination": "/api/$1"
         },
         {
             "source": "/(.*)",
-            "destination": "/app/index.html"
+            "destination": "/index.html"
         }
     ],
     "headers": [
+        {
+            "source": "/api/health",
+            "headers": [
+                {
+                    "key": "Access-Control-Allow-Credentials",
+                    "value": "true"
+                },
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                },
+                {
+                    "key": "Access-Control-Allow-Methods",
+                    "value": "GET, OPTIONS"
+                },
+                {
+                    "key": "Access-Control-Allow-Headers",
+                    "value": "Content-Type, Authorization, X-API-Secret"
+                }
+            ]
+        },
         {
             "source": "/api/user/create",
             "headers": [
@@ -61,27 +73,6 @@
                 {
                     "key": "Access-Control-Allow-Methods",
                     "value": "DELETE, OPTIONS"
-                },
-                {
-                    "key": "Access-Control-Allow-Headers",
-                    "value": "Content-Type, Authorization, X-API-Secret"
-                }
-            ]
-        },
-        {
-            "source": "/api/health",
-            "headers": [
-                {
-                    "key": "Access-Control-Allow-Credentials",
-                    "value": "true"
-                },
-                {
-                    "key": "Access-Control-Allow-Origin",
-                    "value": "*"
-                },
-                {
-                    "key": "Access-Control-Allow-Methods",
-                    "value": "GET, OPTIONS"
                 },
                 {
                     "key": "Access-Control-Allow-Headers",
