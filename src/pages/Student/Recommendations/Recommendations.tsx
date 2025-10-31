@@ -1,23 +1,13 @@
 import * as React from 'react';
 import {
-    Avatar,
-    Box,
-    Card,
-    CardContent,
-    Grid,
-    List,
-    ListItem,
-    ListItemAvatar,
-    ListItemText,
-    Stack,
-    Tab,
-    Tabs,
-    Typography,
+    Avatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle, Grid,
+    IconButton, List, ListItem, ListItemAvatar, ListItemText, Tab, Tabs, Typography,
 } from '@mui/material';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import SchoolIcon from '@mui/icons-material/School';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import StarRateIcon from '@mui/icons-material/StarRate';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
 import { type ProfileCardStat, ProfileCard } from '../../../components/Profile';
@@ -29,9 +19,10 @@ export const metadata: NavigationItem = {
     group: 'adviser-editor',
     index: 0,
     title: 'Recommendations',
-    segment: 'advisers',
+    segment: 'recommendation',
     icon: <PeopleAltIcon />,
     children: ['profile/:email'],
+    roles: ['student', 'admin'],
 };
 
 /**
@@ -61,11 +52,17 @@ function useMentorStats() {
  * In a real integration this would be backed by user-managed data.
  */
 const mentorExpertise: Record<string, string[]> = {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'jane.smith@university.edu': ['Machine Learning', 'UX Research', 'Educational Tech'],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'david.kim@university.edu': ['IoT', 'Security', 'Data Ethics'],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'lisa.wang@university.edu': ['NLP', 'Deep Learning', 'Model Evaluation'],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'mike.johnson@university.edu': ['Technical Writing', 'APA Formatting', 'Copy Editing'],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'emily.brown@university.edu': ['Academic Editing', 'Qualitative Review', 'Rubrics'],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'olivia.martinez@university.edu': ['Instructional Design', 'Accessibility'],
 };
 
@@ -74,11 +71,17 @@ const mentorExpertise: Record<string, string[]> = {
  * In a real integration this would be calculated based on student's thesis topic, methodology, etc.
  */
 const mentorCompatibility: Record<string, number> = {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'jane.smith@university.edu': 95,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'david.kim@university.edu': 88,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'lisa.wang@university.edu': 92,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'mike.johnson@university.edu': 87,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'emily.brown@university.edu': 90,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     'olivia.martinez@university.edu': 85,
 };
 
@@ -90,6 +93,7 @@ export default function AdviserEditorRecommendationsPage() {
     const location = useLocation();
     const mentorStats = useMentorStats();
     const [activeTab, setActiveTab] = React.useState(0);
+    const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
 
     // Check if we're on a child route (profile page)
     const isProfileRoute = location.pathname.includes('/profile/');
@@ -175,11 +179,22 @@ export default function AdviserEditorRecommendationsPage() {
 
     return (
         <AnimatedPage variant="fade">
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2, position: 'relative' }}>
                 <Tabs value={activeTab} onChange={handleTabChange} aria-label="mentor recommendations tabs">
                     <Tab label={`Advisers (${advisers.length})`} icon={<SchoolIcon />} iconPosition="start" />
                     <Tab label={`Editors (${editors.length})`} icon={<EditNoteIcon />} iconPosition="start" />
                 </Tabs>
+                <IconButton
+                    onClick={() => setInfoDialogOpen(true)}
+                    sx={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '30%',
+                    }}
+                    aria-label="How recommendations work"
+                >
+                    <InfoOutlinedIcon />
+                </IconButton>
             </Box>
 
             {/* Advisers Tab */}
@@ -226,44 +241,60 @@ export default function AdviserEditorRecommendationsPage() {
                 </Grid>
             )}
 
-            <Box sx={{ mt: 5 }}>
-                <Typography variant="h6" gutterBottom>How recommendations work</Typography>
-                <List dense>
-                    <ListItem>
-                        <ListItemAvatar>
-                            <Avatar>
-                                <PeopleAltIcon />
-                            </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                            primary="Profile insights"
-                            secondary="Tap into curated data about a mentor's expertise, departmental affiliation, and current engagements."
-                        />
-                    </ListItem>
-                    <ListItem>
-                        <ListItemAvatar>
-                            <Avatar>
-                                <SchoolIcon />
-                            </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                            primary="Balanced workloads"
-                            secondary="We highlight how many active theses each mentor currently handles to match availability."
-                        />
-                    </ListItem>
-                    <ListItem>
-                        <ListItemAvatar>
-                            <Avatar>
-                                <EditNoteIcon />
-                            </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                            primary="One-click profile access"
-                            secondary="Select a mentor to review their detailed profile, thesis history, and send a request."
-                        />
-                    </ListItem>
-                </List>
-            </Box>
+            <Dialog
+                open={infoDialogOpen}
+                onClose={() => setInfoDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>How recommendations work</DialogTitle>
+                <DialogContent>
+                    <List dense>
+                        <ListItem>
+                            <ListItemAvatar>
+                                <Avatar>
+                                    <PeopleAltIcon />
+                                </Avatar>
+                            </ListItemAvatar>
+                            <ListItemText
+                                primary="Profile insights"
+                                secondary={
+                                    "Tap into curated data about a mentor's expertise, departmental affiliation, " +
+                                    'and current engagements.'
+                                }
+                            />
+                        </ListItem>
+                        <ListItem>
+                            <ListItemAvatar>
+                                <Avatar>
+                                    <SchoolIcon />
+                                </Avatar>
+                            </ListItemAvatar>
+                            <ListItemText
+                                primary="Balanced workloads"
+                                secondary={
+                                    'We highlight how many active theses each mentor currently handles to match ' +
+                                    'availability.'
+                                }
+                            />
+                        </ListItem>
+                        <ListItem>
+                            <ListItemAvatar>
+                                <Avatar>
+                                    <EditNoteIcon />
+                                </Avatar>
+                            </ListItemAvatar>
+                            <ListItemText
+                                primary="One-click profile access"
+                                secondary={
+                                    'Select a mentor to review their detailed profile, thesis history, and send a ' +
+                                    'request.'
+                                }
+                            />
+                        </ListItem>
+                    </List>
+                </DialogContent>
+            </Dialog>
         </AnimatedPage>
     );
 }
