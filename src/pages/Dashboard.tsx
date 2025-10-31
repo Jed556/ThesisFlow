@@ -400,6 +400,7 @@ export default function DashboardPage() {
                                             { dataKey: 'revisionRequired', label: 'Revision Required', color: '#ff9800' },
                                             { dataKey: 'notSubmitted', label: 'Not Submitted', color: '#9e9e9e' }
                                         ]}
+                                        axisHighlight={{ x: 'none', y: 'none' }}
                                         width={500}
                                         height={300}
                                         slotProps={{
