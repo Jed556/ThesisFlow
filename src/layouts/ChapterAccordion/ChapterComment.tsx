@@ -5,8 +5,7 @@ import type { FileAttachment, FileCategory } from '../../types/file';
 import { getDisplayName, getAttachmentFiles, getDocumentNameByVersion } from '../../utils/dbUtils';
 import { getThesisRole, getThesisRoleDisplayText } from '../../utils/roleUtils';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
-import { formatFileSize } from '../../utils/fileUtils';
-import ChatBox from '../../components/Chat/ChatBox';
+import { ChatBox } from '../../components/Chat';
 
 /**
  * Parse size string (e.g., "1.2MB") to bytes

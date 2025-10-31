@@ -1,50 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Container,
-    Typography,
-    Paper,
-    Avatar,
-    CardMedia,
-    Skeleton,
-    Stack,
-    TextField,
-    Button,
-    IconButton,
-    Divider,
-    Switch,
-    FormControlLabel,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Chip,
+    Box, Container, Typography, Paper, Avatar, CardMedia, Skeleton, Stack, TextField, Button, IconButton,
+    Divider, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip,
 } from '@mui/material';
 import {
-    Settings,
-    PhotoCamera,
-    Person,
-    Edit,
-    Save,
-    Cancel,
-    Lock,
-    Visibility,
-    VisibilityOff,
-    Palette,
-    CheckCircle,
+    Settings, PhotoCamera, Person, Edit, Save, Cancel, Lock, Visibility, VisibilityOff, Palette, CheckCircle,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/profile';
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { uploadAvatar, uploadBanner, deleteImage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
-import { ColorPickerDialog } from '../components';
-import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
+import { firebaseAuth } from '../utils/firebase/firebaseConfig';
+import { ColorPickerDialog } from '../components/ColorPicker';
+import { AnimatedPage } from '../components/Animate';
 import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile } from '../types/profile';
 import type { Session } from '../types/session';
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { firebaseAuth } from '../utils/firebase/firebaseConfig';
 
 export const metadata: NavigationItem = {
     index: 100,

@@ -1,5 +1,8 @@
 import * as React from 'react';
-import { TextField, Button, Link, Alert, Typography, FormControl, IconButton, InputAdornment, InputLabel, OutlinedInput, Box, Chip, Stack, CircularProgress } from '@mui/material';
+import {
+    TextField, Button, Link, Alert, Typography, FormControl, IconButton, InputAdornment,
+    InputLabel, OutlinedInput, Box, Chip, Stack, CircularProgress
+} from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
 import { Navigate, useNavigate } from 'react-router';
@@ -11,7 +14,7 @@ import { getAllUsers, getUserByEmail } from '../utils/firebase/firestore';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
-import { AnimatedPage } from '../components';
+import { AnimatedPage } from '../components/Animate';
 
 export const metadata: NavigationItem = {
     title: 'Sign In',

@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Box, Card, CardContent, Typography, Chip, Stack, IconButton, Skeleton } from '@mui/material';
 import { AccessTime, LocationOn, CalendarMonth, Monitor, Edit, Delete } from '@mui/icons-material';
-import Avatar, { Name } from '../Avatar/Avatar';
-import { getDisplayName, getProfile } from '../../utils/dbUtils';
 import type { ScheduleEvent, EventStatus, Calendar as CalendarType } from '../../types/schedule';
+import { getDisplayName, getProfile } from '../../utils/dbUtils';
+import { Avatar, Name } from '../Avatar';
 
 const defaultEventColor = '#bdbdbd';
 const statusColors: Record<EventStatus, string> = {

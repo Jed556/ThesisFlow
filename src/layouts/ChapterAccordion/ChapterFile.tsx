@@ -1,6 +1,6 @@
 import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, Tooltip, Skeleton } from '@mui/material';
 import { PictureAsPdf, Description, Delete, Download, } from '@mui/icons-material';
-import Avatar, { Name } from '../../components/Avatar/Avatar';
+import { Avatar, Name } from '../../components/Avatar';
 import type { FileType } from '../../types/file';
 import { getChapterSubmissions, getDisplayName } from '../../utils/dbUtils';
 
