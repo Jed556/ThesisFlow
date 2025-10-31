@@ -58,6 +58,18 @@ export interface UserProfile {
      */
     bio?: string;
 
+    /**
+     * Capacity for advising theses (only for advisers)
+     * If 0 or undefined, not accepting advisees
+     */
+    adviserCapacity?: number;
+
+    /**
+     * Capacity for editing theses (only for editors)
+     * If 0 or undefined, not accepting editing assignments
+     */
+    editorCapacity?: number;
+
     preferences?: {
         /**
          * User's theme color preference (hex color)
@@ -72,4 +84,14 @@ export interface UserProfile {
      * User's last active date
      */
     lastActive?: Date;
+}
+
+/**
+ * Shared profile view types for timelines and related metadata.
+ */
+export interface HistoricalThesisEntry {
+    year: string;
+    title: string;
+    role: 'Adviser' | 'Editor' | 'Student' | 'Collaborator' | string;
+    outcome: string;
 }

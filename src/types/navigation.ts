@@ -3,7 +3,7 @@ export interface NavigationItem {
     group?: string; // Group identifier for dividers
     index?: number; // Index for ordering the item
     hidden?: boolean; // Indicates if the item is hidden in the sidebar
-    title?: string; // Title of the navigation item
+    title?: string | ((params?: Record<string, unknown>) => string); // Title of the navigation item (can be dynamic)
     segment?: string; // Unique identifier for the navigation item
     icon?: React.ReactNode; // Icon for the navigation item
     children?: string[]; // Segment identifiers of nested items
