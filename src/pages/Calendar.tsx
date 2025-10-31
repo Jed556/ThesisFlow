@@ -1,23 +1,18 @@
 import * as React from 'react';
 import {
-    Box, Card, CardContent, Typography, Chip, Grid, Button, IconButton,
-    FormControl, InputLabel, Select, MenuItem, TextField, Stack, Tooltip, Badge, Divider, List,
-    ListItem, ListItemText, ListItemAvatar, Autocomplete, Dialog, DialogTitle, DialogContent,
-    DialogActions, Menu, Checkbox, FormControlLabel
+    Box, Card, CardContent, Typography, Chip, Grid, Button, IconButton, FormControl, InputLabel, Select,
+    MenuItem, TextField, Stack, Tooltip, Badge, Divider, List, ListItem, ListItemText, ListItemAvatar,
+    Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Menu, Checkbox, FormControlLabel
 } from '@mui/material';
 import {
-    CalendarToday, Event, Schedule, FilterList, ViewModule, ViewList, ViewWeek, AccessTime, LocationOn, People,
-    PriorityHigh, Visibility, NotificationImportant, CheckCircle, Cancel, Warning, School, Book, Slideshow, Assignment,
-    Groups, BeachAccess, Add, Edit, Delete, Upload, Download, Close, AddCircle, ExpandMore
+    CalendarToday, ViewList, Add, Edit, Delete, Upload, Download, Close, AddCircle, ExpandMore
 } from '@mui/icons-material';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { Avatar, Name } from '../components';
-import { EventCard } from '../components';
-import { Calendar as CalendarComponent } from '../components';
-import AnimatedPage from '../components/Animate/AnimatedPage/AnimatedPage';
-import AnimatedList from '../components/Animate/AnimatedList/AnimatedList';
+import { Avatar, Name } from '../components/Avatar';
+import { EventCard, Calendar } from '../components/Calendar';
+import { AnimatedPage, AnimatedList } from '../components/Animate';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import type { NavigationItem } from '../types/navigation';
@@ -734,7 +729,7 @@ export default function CalendarPage() {
                                                 <Typography variant="h6">Calendar View</Typography>
                                             </Box>
                                             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
-                                                <CalendarComponent
+                                                <Calendar
                                                     events={events}
                                                     selected={selectedDate}
                                                     onSelect={(d) => {
@@ -1148,7 +1143,7 @@ export default function CalendarPage() {
                         </Dialog>
 
                         {/* Calendar Date Range Dialog */}
-                        <CalendarComponent
+                        <Calendar
                             events={[]}
                             onRangeSelect={handleDateRangeSelect}
                             dialogMode={true}

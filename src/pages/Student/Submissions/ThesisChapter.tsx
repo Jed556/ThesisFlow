@@ -4,9 +4,9 @@ import { Article, Upload, CloudUpload } from '@mui/icons-material';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisChapter } from '../../../types/thesis';
 import { mockThesisData } from '../../../data/mockData';
-import { ChapterAccordion } from '../../../components';
-import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
-import AnimatedList from '../../../components/Animate/AnimatedList/AnimatedList';
+import { AnimatedPage, AnimatedList } from '../../../components/Animate';
+import ChapterAccordion from '../../../layouts/ChapterAccordion/ChapterAccordion';
+
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 2,
