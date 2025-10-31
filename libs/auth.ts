@@ -2,7 +2,7 @@
  * Authentication utilities for Vercel serverless functions
  */
 import type { VercelRequest } from '@vercel/node';
-import { auth } from './firebase';
+import { auth } from './firebase.js';
 
 export interface AuthContext {
     user?: {

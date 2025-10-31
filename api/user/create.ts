@@ -3,9 +3,9 @@
  * Creates a new Firebase user with email and password
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleCors, errorResponse, successResponse } from '../../libs/utils';
-import { authenticate } from '../../libs/auth';
-import { auth } from '../../libs/firebase';
+import { handleCors, errorResponse, successResponse } from '../../libs/utils.js';
+import { authenticate } from '../../libs/auth.js';
+import { auth } from '../../libs/firebase.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Handle CORS
