@@ -1,8 +1,8 @@
 import * as React from 'react';
 import {
-    Alert, Autocomplete, Box, Button, Card, CardContent, Chip, Dialog, DialogActions,
-    DialogContent, DialogTitle, Divider, IconButton, MenuItem, Paper, Stack, Step,
-    StepLabel, Stepper, TextField, ToggleButton, ToggleButtonGroup, Typography,
+    Alert, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent,
+    DialogTitle, Divider, IconButton, MenuItem, Paper, Stack, Step, StepLabel,
+    Stepper, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -11,8 +11,6 @@ import AddIcon from '@mui/icons-material/Add';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import UploadIcon from '@mui/icons-material/Upload';
-import DownloadIcon from '@mui/icons-material/Download';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
 import { AnimatedPage, GrowTransition } from '../../components/Animate';
@@ -37,6 +35,7 @@ import {
     downloadCSV,
     readCSVFile,
 } from '../../utils/csvUtils';
+import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -445,10 +444,7 @@ export default function AdminFormManagementPage() {
         }
     };
 
-    const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
+    const handleImport = async (file: File) => {
         try {
             const csvContent = await readCSVFile(file);
             const importedForms = csvToFormTemplates(csvContent);
@@ -465,13 +461,9 @@ export default function AdminFormManagementPage() {
             // Reload data
             await loadData();
             showNotification(`Successfully imported ${importedForms.length} form(s)`, 'success');
-
-            // Reset file input
-            event.target.value = '';
         } catch (error) {
             console.error('Error importing forms:', error);
             showNotification('Failed to import forms from CSV', 'error');
-            event.target.value = '';
         }
     };
 
@@ -495,14 +487,7 @@ export default function AdminFormManagementPage() {
     if (userRole !== 'admin' && userRole !== 'developer') {
         return (
             <AnimatedPage variant="fade">
-                <Card>
-                    <CardContent>
-                        <Typography variant="h5">Not authorized</Typography>
-                        <Typography variant="body1">
-                            You need to be an administrator or developer to manage forms.
-                        </Typography>
-                    </CardContent>
-                </Card>
+                <UnauthorizedNotice description="You need to be an administrator or developer to manage forms." />
             </AnimatedPage>
         );
     }
@@ -510,32 +495,6 @@ export default function AdminFormManagementPage() {
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ width: '100%' }}>
-                <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-                    <input
-                        accept=".csv"
-                        style={{ display: 'none' }}
-                        id="import-forms-csv-file"
-                        type="file"
-                        onChange={handleImport}
-                    />
-                    <label htmlFor="import-forms-csv-file">
-                        <Button
-                            variant="outlined"
-                            component="span"
-                            startIcon={<UploadIcon />}
-                        >
-                            Import CSV
-                        </Button>
-                    </label>
-                    <Button
-                        variant="outlined"
-                        startIcon={<DownloadIcon />}
-                        onClick={() => handleExport(forms)}
-                        disabled={forms.length === 0}
-                    >
-                        Export All CSV
-                    </Button>
-                </Stack>
                 <DataGrid
                     rows={forms}
                     columns={columns}
@@ -549,12 +508,14 @@ export default function AdminFormManagementPage() {
                     additionalActions={getAdditionalActions}
                     enableMultiDelete
                     enableExport
+                    enableImport
                     enableRefresh
                     enableAdd
                     enableQuickFilter
                     onRefresh={loadData}
                     onAdd={handleOpenCreateDialog}
                     onExport={handleExport}
+                    onImport={handleImport}
                 />
 
                 {/* Form Builder Dialog */}

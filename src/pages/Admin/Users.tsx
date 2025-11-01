@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip, Stack, } from '@mui/material';
+import {
+    Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip, Stack
+} from '@mui/material';
 import { People, Delete, Edit } from '@mui/icons-material';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
@@ -10,7 +12,9 @@ import { useSnackbar } from '../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
 import type { Session } from '../../types/session';
-import { getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar } from '../../utils/firebase/firestore';
+import {
+    getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
+} from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount } from '../../utils/firebase/auth';
 import { parseUsers } from '../../utils/csvParsers';
 

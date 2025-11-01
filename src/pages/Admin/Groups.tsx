@@ -1,13 +1,11 @@
 import * as React from 'react';
 import {
-    Autocomplete, Box, Button, Card, CardContent, Chip, Dialog, DialogActions,
+    Autocomplete, Box, Button, Chip, Dialog, DialogActions,
     DialogContent, DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
 import GroupsIcon from '@mui/icons-material/Groups';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import UploadIcon from '@mui/icons-material/Upload';
-import DownloadIcon from '@mui/icons-material/Download';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
 import { AnimatedPage, GrowTransition } from '../../components/Animate';
@@ -32,6 +30,7 @@ import {
     downloadCSV,
     readCSVFile,
 } from '../../utils/csvUtils';
+import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -264,17 +263,14 @@ export default function AdminGroupManagementPage() {
         }
     };
 
-    const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
+    const handleImport = async (file: File) => {
         try {
             const csvContent = await readCSVFile(file);
             const importedGroups = csvToGroups(csvContent);
 
             // Import groups to Firestore
             for (const groupData of importedGroups) {
-                const groupId = `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const groupId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
                 await setGroup(groupId, {
                     id: groupId,
                     ...groupData,
@@ -284,13 +280,9 @@ export default function AdminGroupManagementPage() {
             // Reload data
             await loadData();
             showNotification(`Successfully imported ${importedGroups.length} group(s)`, 'success');
-
-            // Reset file input
-            event.target.value = '';
         } catch (error) {
             console.error('Error importing groups:', error);
             showNotification('Failed to import groups from CSV', 'error');
-            event.target.value = '';
         }
     };
 
@@ -390,14 +382,7 @@ export default function AdminGroupManagementPage() {
     if (userRole !== 'admin' && userRole !== 'developer') {
         return (
             <AnimatedPage variant="fade">
-                <Card>
-                    <CardContent>
-                        <Typography variant="h5">Not authorized</Typography>
-                        <Typography variant="body1">
-                            You need to be an administrator or developer to manage groups.
-                        </Typography>
-                    </CardContent>
-                </Card>
+                <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." />
             </AnimatedPage>
         );
     }
@@ -405,32 +390,6 @@ export default function AdminGroupManagementPage() {
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ width: '100%' }}>
-                <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-                    <input
-                        accept=".csv"
-                        style={{ display: 'none' }}
-                        id="import-csv-file"
-                        type="file"
-                        onChange={handleImport}
-                    />
-                    <label htmlFor="import-csv-file">
-                        <Button
-                            variant="outlined"
-                            component="span"
-                            startIcon={<UploadIcon />}
-                        >
-                            Import CSV
-                        </Button>
-                    </label>
-                    <Button
-                        variant="outlined"
-                        startIcon={<DownloadIcon />}
-                        onClick={() => handleExport(groups)}
-                        disabled={groups.length === 0}
-                    >
-                        Export All CSV
-                    </Button>
-                </Stack>
                 <DataGrid
                     rows={groups}
                     columns={columns}
@@ -445,11 +404,13 @@ export default function AdminGroupManagementPage() {
                     additionalActions={getAdditionalActions}
                     enableMultiDelete
                     enableExport
+                    enableImport
                     enableRefresh
                     enableAdd
                     enableQuickFilter
                     onRowsDelete={handleMultiDelete}
                     onExport={handleExport}
+                    onImport={handleImport}
                     onRefresh={loadData}
                     onAdd={handleOpenCreateDialog}
                 />
