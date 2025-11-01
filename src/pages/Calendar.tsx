@@ -746,6 +746,7 @@ export default function CalendarPage() {
                                                 <Box sx={{ width: { xs: '100%', md: '67%' } }}>
                                                     <Typography variant="subtitle1" gutterBottom>
                                                         {selectedRange
+                                                            // eslint-disable-next-line max-len
                                                             ? `Events from ${format(selectedRange.start, 'MMM d')} to ${format(selectedRange.end, 'MMM d')}`
                                                             : `Events on ${selectedDate ? selectedDate.toLocaleDateString() : '—'}`
                                                         }

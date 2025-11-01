@@ -214,7 +214,11 @@ export function formatLogTimestamp(
     string {
     // Determine relative string and whether the timestamp is ~1 day old
     const _now = now ?? new Date();
-    const rel = formatRelative(date, { style: options?.style ?? 'long', showSeconds: options?.showSeconds, omitAgo: options?.omitAgo }, _now);
+    const rel = formatRelative(
+        date,
+        { style: options?.style ?? 'long', showSeconds: options?.showSeconds, omitAgo: options?.omitAgo },
+        _now
+    );
 
     // Compute difference in days to detect the 1-day boundary precisely
     const diffMs = _now.getTime() - date.getTime();

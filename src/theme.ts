@@ -622,6 +622,7 @@ const components = {
                 overflow: 'hidden',
                 marginBottom: base.spacing(0.5),
                 // Add top margin to first ListItem not preceded by a ListSubheader & not nested inside collapsed sections or other ListItems
+                // eslint-disable-next-line max-len
                 '&:first-of-type:not(.MuiListSubheader-root + *):not(.MuiListItem-root .MuiListItem-root):not(.MuiCollapse-root .MuiListItem-root)': {
                     marginTop: base.spacing(2),
                 },

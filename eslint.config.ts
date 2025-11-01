@@ -51,10 +51,12 @@ export default defineConfig(
             "@typescript-eslint/dot-notation": "error",
             "@typescript-eslint/no-duplicate-enum-values": "error",
             "eqeqeq": ["error", "smart"],
+            "@typescript-eslint/array-type": "error",
             "@typescript-eslint/consistent-type-exports": "error",
             "no-empty-function": "off",
             "@typescript-eslint/no-empty-function": "error",
             "@typescript-eslint/no-empty-object-type": "error",
+            "@typescript-eslint/consistent-indexed-object-style": "error",
             "@typescript-eslint/no-deprecated": "error",
             "@typescript-eslint/consistent-type-imports": [
                 "error",
@@ -69,13 +71,12 @@ export default defineConfig(
                 "error",
                 {
                     "selector": "default",
-                    "format": ["camelCase", "PascalCase"],
-                    "leadingUnderscore": "allow",
-                    "trailingUnderscore": "allow",
+                    "format": null,
                 },
                 {
                     "selector": "variable",
                     "format": ["camelCase", "PascalCase", "UPPER_CASE"],
+                    "leadingUnderscore": "allow",
                 },
                 {
                     "selector": "function",
