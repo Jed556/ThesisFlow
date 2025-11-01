@@ -59,11 +59,9 @@ export async function compressImage(
                     height = (height * maxWidth) / width;
                     width = maxWidth;
                 }
-            } else {
-                if (height > maxHeight) {
-                    width = (width * maxHeight) / height;
-                    height = maxHeight;
-                }
+            } else if (height > maxHeight) {
+                width = (width * maxHeight) / height;
+                height = maxHeight;
             }
 
             canvas.width = width;

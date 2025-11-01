@@ -73,7 +73,7 @@ function Alerts() {
                             formContext.setPasswordValue(DEV_HELPER_PASSWORD);
                             return;
                         }
-                    } catch (e) { } // ignore env access issues and fall back to default
+                    } catch (error) { } // ignore env access issues and fall back to default
 
                 formContext.setPasswordValue('Password_123');
             }
@@ -236,7 +236,7 @@ export default function SignIn() {
                 const existing = await getAllUsers();
                 if (!active) return;
                 setNoUsersState(existing.length === 0);
-            } catch (err) {
+            } catch (error) {
                 if (!active) return;
                 setNoUsersState(null);
                 showNotification('Unable to check existing users', 'warning');
@@ -342,7 +342,7 @@ export default function SignIn() {
                                     if (profile && profile.role) {
                                         userRole = profile.role;
                                     }
-                                } catch (err) {
+                                } catch (error) {
                                     // ignore and fallback to getUserRole
                                     showNotification('Using default role permissions', 'info', 3000);
                                 }

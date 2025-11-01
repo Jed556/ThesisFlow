@@ -1,15 +1,8 @@
 import {
-    GoogleAuthProvider,
-    GithubAuthProvider,
-    signInWithPopup,
-    setPersistence,
-    browserSessionPersistence,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signOut,
+    GoogleAuthProvider, GithubAuthProvider, signInWithPopup, setPersistence, browserSessionPersistence,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
 } from 'firebase/auth';
-import { httpsCallable, HttpsCallableResult } from 'firebase/functions';
-import { firebaseAuth, firebaseFunctions } from './firebaseConfig';
+import { firebaseAuth } from './firebaseConfig';
 
 const googleProvider = new GoogleAuthProvider();
 const githubProvider = new GithubAuthProvider();
@@ -167,7 +160,7 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
         if (currentUser) {
             // Use Firebase ID token for authentication if user is signed in
             const idToken = await currentUser.getIdToken();
-            headers['Authorization'] = `Bearer ${idToken}`;
+            headers.Authorization = `Bearer ${idToken}`;
         } else {
             // Fall back to API secret for dev-helper or server-to-server calls
             const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
@@ -215,7 +208,7 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
         const currentUser = firebaseAuth.currentUser;
         if (currentUser) {
             const idToken = await currentUser.getIdToken();
-            headers['Authorization'] = `Bearer ${idToken}`;
+            headers.Authorization = `Bearer ${idToken}`;
         } else {
             const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
             if (!apiSecret) {
@@ -259,15 +252,16 @@ export const onAuthStateChanged = (callback: (user: any) => void) => {
  * @param password - User's password
  * @returns An object indicating success status and error message if any
  */
-export async function createAuthUser(email: string, password: string): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+export async function createAuthUser(email: string, password: string):
+    Promise<{ success: boolean; error?: string; skipped?: boolean }> {
     try {
         await createUserWithEmailAndPassword(firebaseAuth, email, password);
         // Sign out immediately so the created account doesn't remain the active session
         await signOut(firebaseAuth);
         return { success: true };
-    } catch (err: any) {
+    } catch (error: any) {
         // Common case: user already exists
-        const code = err?.code || err?.message || String(err);
+        const code = error?.code || error?.message || String(error);
         if (code && String(code).includes('auth/email-already-in-use')) {
             return { success: true, skipped: true };
         }
@@ -318,7 +312,7 @@ export async function adminCreateUserAccount(email: string, password: string): P
         if (currentUser) {
             // Use Firebase ID token for authentication if user is signed in
             const idToken = await currentUser.getIdToken();
-            headers['Authorization'] = `Bearer ${idToken}`;
+            headers.Authorization = `Bearer ${idToken}`;
         } else {
             // Fall back to API secret for dev-helper or server-to-server calls
             const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;

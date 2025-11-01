@@ -163,7 +163,6 @@ export async function updateGroup(groupId: string, updates: Partial<ThesisGroup>
         const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
 
         // Remove id, createdAt from updates
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id, createdAt, ...updateData } = updates as Partial<ThesisGroup>;
 
         await updateDoc(groupRef, {

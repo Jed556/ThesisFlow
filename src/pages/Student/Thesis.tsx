@@ -45,7 +45,7 @@ export default function ThesisPage() {
                                 email={member.email}
                                 initials={[Name.FIRST]}
                                 mode="chip"
-                                tooltip='email'
+                                tooltip="email"
                                 label={`${getDisplayName(member.email)} (${member.thesisRole})`}
                                 size="small"
                                 chipProps={{ variant: 'outlined', size: 'small' }}

@@ -1,5 +1,8 @@
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, updateDoc, deleteDoc, documentId } from 'firebase/firestore';
-import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
+import {
+    doc, setDoc, onSnapshot, collection, query, where, getDocs,
+    addDoc, getDoc, deleteDoc, documentId, type WithFieldValue,
+} from 'firebase/firestore';
+import { firebaseFirestore } from '../firebaseConfig';
 import { addEventToCalendar, removeEventFromCalendar } from './calendars';
 import { cleanData } from './firestore';
 
@@ -16,19 +19,22 @@ export async function setEvent(id: string | null, event: ScheduleEvent): Promise
     const cleanedData = cleanData(event);
 
     let eventId: string;
-    
+
     if (id) {
         const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
         await setDoc(ref, cleanedData, { merge: true });
         eventId = id;
     } else {
-        const ref = await addDoc(collection(firebaseFirestore, EVENTS_COLLECTION), cleanedData as any);
+        const ref = await addDoc(
+            collection(firebaseFirestore, EVENTS_COLLECTION),
+            cleanedData as WithFieldValue<ScheduleEvent>
+        );
         eventId = ref.id;
-        
+
         // Add event ID to calendar's eventIds array
         await addEventToCalendar(event.calendarId, eventId);
     }
-    
+
     return eventId;
 }
 
@@ -112,14 +118,14 @@ export async function getEventsByCalendar(calendarId: string): Promise<(Schedule
  */
 export async function deleteEvent(id: string): Promise<void> {
     if (!id) throw new Error('Event ID required');
-    
+
     // Get event to find its calendar ID
     const event = await getEventById(id);
     if (event) {
         // Remove event ID from calendar
         await removeEventFromCalendar(event.calendarId, id);
     }
-    
+
     // Delete the event
     const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
     await deleteDoc(ref);
@@ -134,12 +140,12 @@ export async function bulkDeleteEvents(ids: string[]): Promise<void> {
 
     // Fetch all events to get their calendar IDs
     const events = await Promise.all(ids.map(id => getEventById(id)));
-    
+
     // Remove event IDs from calendars
     const calendarUpdates = events
         .filter(event => event !== null)
         .map(event => removeEventFromCalendar(event!.calendarId, event!.id!));
-    
+
     await Promise.all(calendarUpdates);
 
     // Delete events

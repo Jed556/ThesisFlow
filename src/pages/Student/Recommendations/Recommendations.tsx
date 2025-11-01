@@ -258,10 +258,7 @@ export default function AdviserEditorRecommendationsPage() {
                             </ListItemAvatar>
                             <ListItemText
                                 primary="Profile insights"
-                                secondary={
-                                    "Tap into curated data about a mentor's expertise, departmental affiliation, " +
-                                    'and current engagements.'
-                                }
+                                secondary="Tap into curated data about a mentor's expertise, departmental affiliation, and current engagements."
                             />
                         </ListItem>
                         <ListItem>
@@ -272,10 +269,7 @@ export default function AdviserEditorRecommendationsPage() {
                             </ListItemAvatar>
                             <ListItemText
                                 primary="Balanced workloads"
-                                secondary={
-                                    'We highlight how many active theses each mentor currently handles to match ' +
-                                    'availability.'
-                                }
+                                secondary="We highlight how many active theses each mentor currently handles to match availability."
                             />
                         </ListItem>
                         <ListItem>
@@ -286,10 +280,7 @@ export default function AdviserEditorRecommendationsPage() {
                             </ListItemAvatar>
                             <ListItemText
                                 primary="One-click profile access"
-                                secondary={
-                                    'Select a mentor to review their detailed profile, thesis history, and send a ' +
-                                    'request.'
-                                }
+                                secondary="Select a mentor to review their detailed profile, thesis history, and send a request."
                             />
                         </ListItem>
                     </List>

@@ -50,7 +50,7 @@ function AppContent() {
     React.useEffect(() => {
         async function initializeNavigation() {
             try {
-                const userRole = sessionData?.user?.role as any;
+                const userRole = sessionData?.user?.role;
                 const nav = await buildNavigation(navigationGroups, userRole);
                 setNavigation(nav);
             } catch (error) {
@@ -81,8 +81,8 @@ function AppContent() {
                         // Reset to default if no theme preference
                         resetTheme();
                     }
-                } catch (err) {
-                    console.warn('Failed to fetch user profile for role:', err);
+                } catch (error) {
+                    console.warn('Failed to fetch user profile for role:', error);
                     // Reset to default theme on error
                     resetTheme();
                 }

@@ -65,7 +65,8 @@ export default function EditorThesisOverviewPage() {
     const assignments = React.useMemo(() => getReviewerAssignments('editor', editorEmail), [editorEmail]);
     const activeAssignment = assignments[0];
     const thesis = React.useMemo(() => activeAssignment ? getThesisBySlug(activeAssignment.thesisId) : undefined, [activeAssignment]);
-    const workspace = React.useMemo(() => activeAssignment ? getReviewerWorkspace(activeAssignment.thesisId) : undefined, [activeAssignment]);
+    const workspace = React.useMemo(() => activeAssignment ?
+        getReviewerWorkspace(activeAssignment.thesisId) : undefined, [activeAssignment]);
 
     const progress = React.useMemo(() => (thesis ? calculateThesisProgress(thesis) : 0), [thesis]);
     const recentFiles = React.useMemo(() => (workspace ? resolveAttachments(workspace.recentFileHashes) : []), [workspace]);
@@ -114,19 +115,23 @@ export default function EditorThesisOverviewPage() {
                                     </Box>
                                     <Stack spacing={1.5} sx={{ mt: 2 }}>
                                         <Typography variant="subtitle2">Students</Typography>
-                                        <Chip label={`${resolveDisplayName(thesis.leader)} (Leader)`} size="small" color="primary" variant="outlined" />
+                                        <Chip label={`${resolveDisplayName(thesis.leader)} (Leader)`}
+                                            size="small" color="primary" variant="outlined" />
                                         {thesis.members.length === 0 && (
                                             <Typography variant="body2" color="text.secondary">
                                                 No additional team members registered.
                                             </Typography>
                                         )}
                                         {thesis.members.map((memberEmail) => (
-                                            <Chip key={memberEmail} label={`${resolveDisplayName(memberEmail)} (Member)`} size="small" variant="outlined" />
+                                            <Chip key={memberEmail} label={`${resolveDisplayName(memberEmail)} (Member)`}
+                                                size="small" variant="outlined" />
                                         ))}
                                         <Divider sx={{ my: 1 }} />
                                         <Stack direction="row" spacing={1}>
-                                            <Chip label={`Adviser: ${resolveDisplayName(thesis.adviser)}`} size="small" color="default" />
-                                            <Chip label={`Editor: ${resolveDisplayName(thesis.editor)}`} size="small" color="info" />
+                                            <Chip label={`Adviser: ${resolveDisplayName(thesis.adviser)}`}
+                                                size="small" color="default" />
+                                            <Chip label={`Editor: ${resolveDisplayName(thesis.editor)}`}
+                                                size="small" color="info" />
                                         </Stack>
                                     </Stack>
                                 </CardContent>
@@ -175,7 +180,8 @@ export default function EditorThesisOverviewPage() {
                                                     <Chip
                                                         key={chapter.id}
                                                         label={`${chapter.title} – ${chapter.status.replace('_', ' ')}`}
-                                                        color={chapter.status === 'revision_required' ? 'warning' : chapter.status === 'under_review' ? 'info' : 'default'}
+                                                        color={chapter.status === 'revision_required' ?
+                                                            'warning' : chapter.status === 'under_review' ? 'info' : 'default'}
                                                         variant="outlined"
                                                     />
                                                 );
@@ -196,7 +202,7 @@ export default function EditorThesisOverviewPage() {
                                 </Stack>
                                 <Box sx={{ flexGrow: 1 }}>
                                     {chatMessages.length === 0 ? (
-                                        <Skeleton variant="rounded" height={320} />
+                                        <Skeleton variant='rounded' height={320} />
                                     ) : (
                                         <ChatBox
                                             currentUserId={editorEmail ?? ''}
@@ -204,7 +210,8 @@ export default function EditorThesisOverviewPage() {
                                             height={360}
                                             showInput={false}
                                             getDisplayName={resolveDisplayName}
-                                            getRoleDisplayText={(id) => (id === thesis.adviser ? 'Adviser' : id === thesis.editor ? 'Editor' : 'Contributor')}
+                                            getRoleDisplayText={(id) => (id === thesis.adviser ?
+                                                'Adviser' : id === thesis.editor ? 'Editor' : 'Contributor')}
                                         />
                                     )}
                                 </Box>

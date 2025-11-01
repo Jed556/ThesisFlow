@@ -93,7 +93,8 @@ export default function EditorAssignmentsPage() {
             flex: 0.6,
             renderCell: (params) => {
                 const value = params.value as string;
-                const palette: 'error' | 'warning' | 'default' = value === 'high' ? 'error' : value === 'medium' ? 'warning' : 'default';
+                const palette: 'error' | 'warning' | 'default' = value === 'high' ?
+                    'error' : value === 'medium' ? 'warning' : 'default';
                 return <Chip label={value} color={palette} size="small" />;
             },
         },

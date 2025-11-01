@@ -1,8 +1,8 @@
-import globals from "globals";
+import globals from 'globals';
 import eslint from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
-import pluginReact from "eslint-plugin-react";
+import pluginReact from 'eslint-plugin-react';
 
 export default defineConfig(
     // Base configuration
@@ -39,7 +39,7 @@ export default defineConfig(
         },
         rules: {
             "max-len": ["warn", {
-                "code": 130,
+                "code": 135,
                 "tabWidth": 4,
                 "comments": 200,
             }],
@@ -90,6 +90,7 @@ export default defineConfig(
             "quotes": ["error", "single", { avoidEscape: true }],
             "semi": ["error", "always"],
             "react/react-in-jsx-scope": "off",
+            "react/no-unescaped-entities": "off",
         },
     },
 

@@ -150,7 +150,6 @@ export async function updateFormTemplate(formId: string, updates: Partial<FormTe
         const formRef = doc(firebaseFirestore, COLLECTION_NAME, formId);
 
         // Remove id, createdAt from updates
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id, createdAt, ...updateData } = updates as Partial<FormTemplate>;
 
         await updateDoc(formRef, {

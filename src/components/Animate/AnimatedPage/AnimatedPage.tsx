@@ -45,7 +45,7 @@ export default function AnimatedPage({
     const getAnimationStyles = () => {
         const baseDuration = theme.transitions.duration[duration];
         // Use emphasizedDecelerate with fallback to easeOut for M3 entering animations
-        const easing = (theme.transitions.easing as any).emphasizedDecelerate || theme.transitions.easing.easeOut;
+        const easing = (theme.transitions.easing).emphasizedDecelerate || theme.transitions.easing.easeOut;
 
         const baseStyle = {
             transition: theme.transitions.create(['opacity', 'transform'], {

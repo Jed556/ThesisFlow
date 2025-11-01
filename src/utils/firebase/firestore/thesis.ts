@@ -1,5 +1,8 @@
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
+import {
+    doc, setDoc, collection, getDocs, addDoc,
+    getDoc, deleteDoc, type WithFieldValue,
+} from 'firebase/firestore';
+import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 
 import type { ThesisData } from '../../../types/thesis';
@@ -39,7 +42,10 @@ export async function setThesis(id: string | null, data: ThesisData): Promise<st
         await setDoc(ref, cleanedData, { merge: true });
         return id;
     } else {
-        const ref = await addDoc(collection(firebaseFirestore, THESES_COLLECTION), cleanedData as any);
+        const ref = await addDoc(
+            collection(firebaseFirestore, THESES_COLLECTION),
+            cleanedData as WithFieldValue<ThesisData>
+        );
         return ref.id;
     }
 }

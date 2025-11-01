@@ -323,7 +323,7 @@ export async function buildNavigation(navigationGroups: NavigationGroup[], userR
     });
 
     // Add any ungrouped pages to a default section
-    const ungroupedPages = groupedPages['default'] || [];
+    const ungroupedPages = groupedPages.default || [];
     if (ungroupedPages.length > 0) {
         if (navigation.length > 0) {
             navigation.push({ kind: 'divider' });

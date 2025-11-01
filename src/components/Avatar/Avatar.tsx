@@ -1,8 +1,6 @@
 import { Avatar as MuiAvatar, Chip, type AvatarProps as MuiAvatarProps, Tooltip, Skeleton } from '@mui/material';
-import React from 'react';
-import type { UserProfile } from '../../types/profile';
 import { getAvatarInitials, getInitialsFromFullName, findProfileByEmail, getDisplayName } from '../../utils/avatarUtils';
-import { mockUserProfiles } from '../../data/mockData';
+import type { UserProfile } from '../../types/profile';
 
 /**
  * Define which name parts to include for initials generation

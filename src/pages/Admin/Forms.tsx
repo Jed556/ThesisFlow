@@ -934,7 +934,7 @@ export default function AdminFormManagementPage() {
                                                                             requiresSignature: value === 'yes',
                                                                         })
                                                                     }
-                                                                    size="small"
+                                                                    size='small'
                                                                 >
                                                                     <ToggleButton value="yes">Yes</ToggleButton>
                                                                     <ToggleButton value="no">No</ToggleButton>
@@ -952,7 +952,7 @@ export default function AdminFormManagementPage() {
                                                                             required: value === 'yes',
                                                                         })
                                                                     }
-                                                                    size="small"
+                                                                    size='small'
                                                                 >
                                                                     <ToggleButton value="yes">Yes</ToggleButton>
                                                                     <ToggleButton value="no">No</ToggleButton>

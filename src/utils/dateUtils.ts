@@ -151,7 +151,8 @@ export function formatThesisDate(date: Date): string {
  * @param now - optional "now" date for testing or custom reference
  * @returns formatted relative time string
  */
-export function formatRelative(date: Date, options?: { style?: 'long' | 'short'; showSeconds?: boolean; omitAgo?: boolean }, now?: Date): string {
+export function formatRelative(date: Date, options?:
+    { style?: 'long' | 'short'; showSeconds?: boolean; omitAgo?: boolean }, now?: Date): string {
     const _now = now ?? new Date();
     const diffMs = _now.getTime() - date.getTime();
     const diffSeconds = Math.floor(diffMs / 1000);
@@ -207,7 +208,10 @@ export function formatRelative(date: Date, options?: { style?: 'long' | 'short';
  * @param now - optional "now" date for testing or custom reference
  * @returns string like '11:34 AM · 2m' or '11:34 AM · 2 minutes ago'
  */
-export function formatLogTimestamp(date: Date, options?: { style?: 'long' | 'short'; showSeconds?: boolean; omitAgo?: boolean }, now?: Date): string {
+export function formatLogTimestamp(
+    date: Date, options?: { style?: 'long' | 'short'; showSeconds?: boolean; omitAgo?: boolean },
+    now?: Date):
+    string {
     // Determine relative string and whether the timestamp is ~1 day old
     const _now = now ?? new Date();
     const rel = formatRelative(date, { style: options?.style ?? 'long', showSeconds: options?.showSeconds, omitAgo: options?.omitAgo }, _now);
@@ -274,7 +278,7 @@ export function useTick(conservative: boolean = false, ticksPerSecond: number = 
         // durationsSec[i] = product(multipliers[0..i]) where i corresponds to the multiplier index
         const durationsSec: number[] = [];
         let acc = 1;
-        for (let m of multipliers) {
+        for (const m of multipliers) {
             acc *= m;
             durationsSec.push(acc);
         }

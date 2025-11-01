@@ -128,7 +128,9 @@ export default function DashboardPage() {
                 }
             });
             return acc;
-        }, {} as Record<number, { chapter: string; approved: number; underReview: number; revisionRequired: number; notSubmitted: number; total: number }>);
+        }, {} as Record<number, {
+            chapter: string; approved: number; underReview: number; revisionRequired: number; notSubmitted: number; total: number
+        }>);
 
         // Calculate defense stage distribution
         const preTitle = filteredTheses.filter(t => t.overallStatus === 'Pre Title Defense').length;
@@ -238,7 +240,10 @@ export default function DashboardPage() {
                             {userThesis.chapters.map(chapter => {
                                 const statusInfo = getChapterStatusInfo(chapter.status);
                                 return (
-                                    <Box key={chapter.id} sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(33.333% - 8px)' }, minWidth: 0 }}>
+                                    <Box key={chapter.id} sx={{
+                                        flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(33.333% - 8px)' },
+                                        minWidth: 0
+                                    }}>
                                         <Paper sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                                             <Box sx={{ color: `${statusInfo.color}.main` }}>
                                                 {statusInfo.icon}
@@ -271,7 +276,10 @@ export default function DashboardPage() {
                             const progress = calculateProgress(thesis.chapters);
                             const leader = mockUserProfiles.find(u => u.email === thesis.leader);
                             return (
-                                <Box key={idx} sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 16px)', lg: '1 1 calc(33.333% - 16px)' }, minWidth: 0 }}>
+                                <Box key={idx} sx={{
+                                    flex: { xs: '1 1 100%', md: '1 1 calc(50% - 16px)', lg: '1 1 calc(33.333% - 16px)' },
+                                    minWidth: 0
+                                }}>
                                     <Card sx={{ height: '100%' }}>
                                         <CardContent>
                                             <Typography variant="subtitle1" fontWeight={600} gutterBottom noWrap>
@@ -285,7 +293,8 @@ export default function DashboardPage() {
                                                     <Typography variant="caption">Progress</Typography>
                                                     <Typography variant="caption" fontWeight="bold">{progress}%</Typography>
                                                 </Box>
-                                                <LinearProgress variant="determinate" value={progress} sx={{ height: 6, borderRadius: 3 }} />
+                                                <LinearProgress variant="determinate" value={progress}
+                                                    sx={{ height: 6, borderRadius: 3 }} />
                                             </Box>
                                             <Chip label={thesis.overallStatus} color="primary" size="small" />
                                         </CardContent>
@@ -302,7 +311,10 @@ export default function DashboardPage() {
                 <CardContent>
                     <Typography variant="h6" gutterBottom>Statistics Filters</Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 16px)', md: '1 1 calc(33.333% - 16px)' }, minWidth: 200 }}>
+                        <Box sx={{
+                            flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 16px)', md: '1 1 calc(33.333% - 16px)' },
+                            minWidth: 200
+                        }}>
                             <FormControl fullWidth size="small">
                                 <InputLabel>Group</InputLabel>
                                 <Select
@@ -319,7 +331,10 @@ export default function DashboardPage() {
                                 </Select>
                             </FormControl>
                         </Box>
-                        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 16px)', md: '1 1 calc(33.333% - 16px)' }, minWidth: 200 }}>
+                        <Box sx={{
+                            flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 16px)', md: '1 1 calc(33.333% - 16px)' },
+                            minWidth: 200
+                        }}>
                             <FormControl fullWidth size="small">
                                 <InputLabel>Defense Stage</InputLabel>
                                 <Select
