@@ -1,10 +1,11 @@
 import type { Session as ToolpadSession, Authentication } from '@toolpad/core/AppProvider';
+import type { UserRole } from './profile';
 
 /**
  * Extended session user shape with ThesisFlow specific metadata.
  */
 export interface ThesisFlowSessionUser extends NonNullable<ToolpadSession['user']> {
-    role?: string;
+    role?: UserRole;
 }
 
 /**

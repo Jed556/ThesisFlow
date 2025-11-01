@@ -81,4 +81,41 @@ type(scope?): subject
 - Reference related issues in your pull request description.
 - Be responsive to feedback and requested changes.
 
+## Code Style Guidelines
+
+### Quotes
+- Double quotes (`"`) for tag attributes and JSON.
+- Single quotes (`'`) for JavaScript/TypeScript strings.
+
+### Indentation
+- Use 4 spaces per indentation level.
+- No tabs.
+
+### Line Length
+- Limit lines to 135 characters.
+
+### Semicolons
+- Always use semicolons at the end of statements.
+
+### End of Line Sequence
+- Use LF (`\n`) for line endings.
+- Ensure files end with a single newline character.
+
+### Naming Conventions
+
+#### Files and Folders
+- Use `PascalCase` for React components and pages (e.g., `UserProfile.tsx`).
+- Use `camelCase` for utility functions and hooks (e.g., `useAuth.ts`).
+- Use `snake_case` for scripts and configuration files (e.g., `build_script.sh`).
+
+#### Variables and Functions
+- Use `camelCase` for variable and function names (e.g., `getUserData`).
+- Use `PascalCase` for class and component names (e.g., `UserProfile`).
+- Use `UPPER_SNAKE_CASE` for constants (e.g., `API_URL`).
+- You may use `_varName` for private variables within classes or modules.
+
+### Configuration
+- ESLint is configured for this project. You may customize the ESLint rules by modifying the `.eslint.config.ts` file along.
+- You may also configure other config files like `vercel.json`, `tsconfig.json`, and `vite.config.ts` as needed.
+
 Thank you for helping improve ThesisFlow!

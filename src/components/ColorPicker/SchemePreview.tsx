@@ -24,7 +24,10 @@ export function SchemePreview({ label, scheme, onSelect }: SchemePreviewProps) {
         { label: 'Secondary Container', background: scheme.secondaryContainer, foreground: scheme.onSecondaryContainer },
         { label: 'Tertiary', background: scheme.tertiary, foreground: scheme.onTertiary },
         { label: 'Surface', background: surface, foreground: onSurface, border: scheme.outlineVariant ?? outline },
-        { label: 'Surface Variant', background: scheme.surfaceVariant ?? surface, foreground: scheme.onSurfaceVariant ?? onSurface, border: scheme.outline ?? outline },
+        {
+            label: 'Surface Variant', background: scheme.surfaceVariant ?? surface,
+            foreground: scheme.onSurfaceVariant ?? onSurface, border: scheme.outline ?? outline
+        },
     ];
 
     const filteredCards = sampleCards.reduce<Array<{ label: string; background: string; foreground: string; border?: string }>>(

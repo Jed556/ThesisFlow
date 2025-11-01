@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, Paper, IconButton, Typography, Button, Collapse, Fade, Slide } from '@mui/material';
+import { Box, Paper, IconButton, Typography, Button, Fade, Slide } from '@mui/material';
 import {
     Close as CloseIcon,
     CheckCircle as SuccessIcon,

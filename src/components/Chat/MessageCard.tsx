@@ -158,7 +158,8 @@ const formatTimestamp = (timestamp: string | Date): string => {
     if (diffDays < 7) return `${diffDays}d ago`;
 
     // Older - show date
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+    return date.toLocaleDateString('en-US',
+        { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
 };
 
 /**
@@ -366,7 +367,8 @@ const MessageCard: React.FC<MessageCardProps> = ({
                                 mr: isUser ? (showAvatar ? 5 : 0) : 0,
                                 mb: 1,
                                 p: 1,
-                                borderLeft: theme => `3px solid ${isUser ? theme.palette.primary.contrastText : theme.palette.primary.main}`,
+                                borderLeft: theme => `3px solid ${isUser ?
+                                    theme.palette.primary.contrastText : theme.palette.primary.main}`,
                                 bgcolor: theme => isUser
                                     ? alpha(theme.palette.primary.contrastText, 0.1)
                                     : alpha(theme.palette.action.hover, 0.5),

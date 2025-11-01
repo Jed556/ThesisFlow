@@ -1,5 +1,8 @@
 import * as React from 'react';
-import { Box, IconButton, Button, ToggleButton, ToggleButtonGroup, Typography, Paper, Dialog, DialogTitle, DialogContent, DialogActions, Skeleton } from '@mui/material';
+import {
+    Box, IconButton, Button, ToggleButton, ToggleButtonGroup, Typography,
+    Paper, Dialog, DialogTitle, DialogContent, DialogActions, Skeleton
+} from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
 import type { ScheduleEvent } from '../../types/schedule';
@@ -194,7 +197,8 @@ export default function Calendar({
             }
             matrix.push(days);
             // stop early if we've passed the month
-            if (cursor.getFullYear() > last.getFullYear() || (cursor.getFullYear() === last.getFullYear() && cursor.getMonth() > last.getMonth())) break;
+            if (cursor.getFullYear() > last.getFullYear()
+                || (cursor.getFullYear() === last.getFullYear() && cursor.getMonth() > last.getMonth())) break;
         }
         return matrix;
     }
@@ -293,7 +297,9 @@ export default function Calendar({
                         {loading ? (
                             <Skeleton variant="text" width={150} height={32} />
                         ) : (
-                            <Typography variant="h6">{viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Typography>
+                            <Typography variant="h6">
+                                {viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}
+                            </Typography>
                         )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -306,13 +312,18 @@ export default function Calendar({
                         ) : (
                             <>
                                 {showToggle && (
-                                    <ToggleButtonGroup size="small" value={mode} exclusive onChange={(_, v) => v && handleModeToggle(v as 'single' | 'range')}>
+                                    <ToggleButtonGroup size="small" value={mode} exclusive
+                                        onChange={(_, v) => v && handleModeToggle(v as 'single' | 'range')}>
                                         <ToggleButton value="single">Single</ToggleButton>
                                         <ToggleButton value="range">Range</ToggleButton>
                                     </ToggleButtonGroup>
                                 )}
-                                <IconButton onClick={() => setViewMonth(addDays(viewMonth, -30))} size="small"><ArrowBackIosNew fontSize="small" /></IconButton>
-                                <IconButton onClick={() => setViewMonth(addDays(viewMonth, 30))} size="small"><ArrowForwardIos fontSize="small" /></IconButton>
+                                <IconButton onClick={() => setViewMonth(addDays(viewMonth, -30))} size="small">
+                                    <ArrowBackIosNew fontSize="small" />
+                                </IconButton>
+                                <IconButton onClick={() => setViewMonth(addDays(viewMonth, 30))} size="small">
+                                    <ArrowForwardIos fontSize="small" />
+                                </IconButton>
                             </>
                         )}
                     </Box>
@@ -335,7 +346,11 @@ export default function Calendar({
                     {loading ? (
                         // Show skeleton day cells while loading
                         Array.from({ length: 35 }).map((_, i) => (
-                            <Box key={i} sx={{ p: calendarGridPadding, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                            <Box key={i}
+                                sx={{
+                                    p: calendarGridPadding, display: 'flex', flexDirection: 'column',
+                                    alignItems: 'center', justifyContent: 'center'
+                                }}>
                                 <Skeleton
                                     variant="rectangular"
                                     width={calendarGridBoxSize - 10}
@@ -359,9 +374,22 @@ export default function Calendar({
                                         let segStart = 0;
                                         week.forEach((d, idx) => {
                                             const dayVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                                            const from = range.from ? new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate()).getTime() : undefined;
-                                            const to = range.to ? new Date(range.to.getFullYear(), range.to.getMonth(), range.to.getDate()).getTime() : undefined;
-                                            const isIn = (from !== undefined && to !== undefined && dayVal >= Math.min(from, to) && dayVal <= Math.max(from, to));
+                                            const from = range.from ?
+                                                new Date(
+                                                    range.from.getFullYear(),
+                                                    range.from.getMonth(),
+                                                    range.from.getDate()
+                                                ).getTime() : undefined;
+                                            const to = range.to ?
+                                                new Date(
+                                                    range.to.getFullYear(),
+                                                    range.to.getMonth(),
+                                                    range.to.getDate()
+                                                ).getTime() : undefined;
+                                            const isIn = (from !== undefined
+                                                && to !== undefined
+                                                && dayVal >= Math.min(from, to)
+                                                && dayVal <= Math.max(from, to));
                                             if (isIn && !inSeg) { inSeg = true; segStart = idx; }
                                             if (!isIn && inSeg) { inSeg = false; segs.push({ start: segStart, end: idx - 1 }); }
                                         });
@@ -409,7 +437,11 @@ export default function Calendar({
                                         return (
                                             <Box
                                                 key={key}
-                                                sx={{ p: calendarGridPadding, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative', gridRow: wi + 2, gridColumn: (day.getDay() + 1) }}
+                                                sx={{
+                                                    p: calendarGridPadding, display: 'flex', flexDirection: 'column',
+                                                    alignItems: 'center', justifyContent: 'center', zIndex: 1,
+                                                    position: 'relative', gridRow: wi + 2, gridColumn: (day.getDay() + 1)
+                                                }}
                                             >
                                                 <Button
                                                     onClick={() => handleDayClick(day)}
@@ -431,22 +463,33 @@ export default function Calendar({
                                                         justifyContent: 'center',
                                                         // Fill the button for single-selected day or range endpoints; interior in-range days remain unfilled.
                                                         bgcolor: isActive ? theme.palette.primary.main : undefined,
-                                                        color: isActive ? theme.palette.primary.contrastText : (inMonth ? undefined : theme.palette.text.disabled),
+                                                        color: isActive ?
+                                                            theme.palette.primary.contrastText : (inMonth ?
+                                                                undefined : theme.palette.text.disabled),
                                                         borderRadius: '50%',
                                                         p: 0,
                                                         boxSizing: 'border-box',
                                                         // Grey outline for today's date
                                                         border: isToday ? '1px solid grey' : undefined,
-                                                        '&:hover': { bgcolor: isSelectedSingle ? theme.palette.primary.dark : undefined }
+                                                        '&:hover': {
+                                                            bgcolor: isSelectedSingle ?
+                                                                theme.palette.primary.dark : undefined
+                                                        }
                                                     })}
                                                 >
-                                                    <Typography variant="body2" sx={{ lineHeight: 1 }}>{day.getDate()}</Typography>
+                                                    <Typography variant='body2' sx={{ lineHeight: 1 }}>
+                                                        {day.getDate()}
+                                                    </Typography>
                                                 </Button>
 
                                                 {/* Event badge inside the button container (absolute so it doesn't affect layout) */}
                                                 {todaysEvents.length > 0 && (
                                                     <Box sx={{ position: 'absolute', right: 2, top: 10, zIndex: 2 }}>
-                                                        <Box sx={(theme) => ({ width: 10, height: 10, borderRadius: '50%', backgroundColor: todaysEvents[0].color || theme.palette.primary.main, boxShadow: `0 0 0 3px ${alpha(theme.palette.background.default, 0.06)}` })} />
+                                                        <Box sx={(theme) => ({
+                                                            width: 10, height: 10, borderRadius: '50%',
+                                                            backgroundColor: todaysEvents[0].color || theme.palette.primary.main,
+                                                            boxShadow: `0 0 0 3px ${alpha(theme.palette.background.default, 0.06)}`
+                                                        })} />
                                                     </Box>
                                                 )}
                                             </Box>
@@ -465,9 +508,7 @@ export default function Calendar({
     if (dialogMode) {
         return (
             <Dialog
-                open={open}
-                onClose={onClose}
-                maxWidth="md"
+                open={open} onClose={onClose} maxWidth="md"
                 slotProps={{
                     paper: {
                         sx: {

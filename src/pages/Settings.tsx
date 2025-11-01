@@ -724,7 +724,7 @@ export default function SettingsPage() {
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
                                 label="Current Password"
-                                type={showPasswords.current ? 'text' : 'password'}
+                                type={showPasswords.current ? "text" : "password"}
                                 value={passwordData.currentPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))
@@ -746,7 +746,7 @@ export default function SettingsPage() {
                             />
                             <TextField
                                 label="New Password"
-                                type={showPasswords.new ? 'text' : 'password'}
+                                type={showPasswords.new ? "text" : "password"}
                                 value={passwordData.newPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))
@@ -769,7 +769,7 @@ export default function SettingsPage() {
                             />
                             <TextField
                                 label="Confirm New Password"
-                                type={showPasswords.confirm ? 'text' : 'password'}
+                                type={showPasswords.confirm ? "text" : "password"}
                                 value={passwordData.confirmPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))

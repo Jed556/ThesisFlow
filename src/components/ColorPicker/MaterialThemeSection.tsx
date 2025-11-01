@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { Stack } from '@mui/material';
-import { themeFromSourceColor, hexFromArgb } from '@material/material-color-utilities';
+import { type themeFromSourceColor, hexFromArgb } from '@material/material-color-utilities';
 import { TonalPaletteRow } from './TonalPaletteRow';
 import { SchemePreview } from './SchemePreview';
 
 type MaterialThemeResult = ReturnType<typeof themeFromSourceColor>;
 
-function convertSchemeToHex(scheme: { toJSON(): Record<string, number> }): Record<string, string> {
+function convertSchemeToHex(scheme: { toJSON: () => Record<string, number> }): Record<string, string> {
     const json = scheme.toJSON();
     return Object.fromEntries(
         Object.entries(json).map(([key, value]) => [key, hexFromArgb(value)])

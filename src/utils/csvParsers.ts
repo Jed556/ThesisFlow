@@ -13,14 +13,10 @@
 
 import type { UserProfile, UserRole } from '../types/profile';
 import type {
-    ScheduleEvent,
-    EventParticipant,
-    EventLocation,
-    EventReminder,
-    RecurrenceSettings,
+    ScheduleEvent, EventParticipant, EventLocation, ParticipantRole, ParticipantStatus, EventStatus
 } from '../types/schedule';
 import type { FileAttachment } from '../types/file';
-import type { ThesisData, ThesisChapter, ThesisComment } from '../types/thesis';
+import type { ThesisData, ThesisChapter } from '../types/thesis';
 
 // --- low level CSV parsing ---
 export function parseCsvText(csvText: string): { headers: string[]; rows: string[][] } {
@@ -96,6 +92,29 @@ function parseBoolean(raw?: string): boolean {
     return v === '1' || v === 'true' || v === 'yes' || v === 'y' || v === 't';
 }
 
+const parseParticipantRole = (value?: string): ParticipantRole => {
+    const normalized = value?.toLowerCase() as ParticipantRole | undefined;
+    const allowed: ParticipantRole[] = ['organizer', 'required', 'optional', 'observer'];
+    return normalized && allowed.includes(normalized) ? normalized : 'required';
+};
+
+const parseParticipantStatus = (value?: string): ParticipantStatus => {
+    const normalized = value?.toLowerCase() as ParticipantStatus | undefined;
+    const allowed: ParticipantStatus[] = ['pending', 'accepted', 'declined', 'tentative'];
+    return normalized && allowed.includes(normalized) ? normalized : 'pending';
+};
+
+const parseEventStatus = (value?: string): EventStatus => {
+    const normalized = value?.toLowerCase() as EventStatus | undefined;
+    const allowed: EventStatus[] = ['scheduled', 'confirmed', 'cancelled', 'completed', 'rescheduled'];
+    return normalized && allowed.includes(normalized) ? normalized : 'scheduled';
+};
+
+const parseFileCategory = (value?: string): FileAttachment['category'] | undefined => {
+    const normalized = value?.toLowerCase();
+    return normalized === 'submission' || normalized === 'attachment' ? normalized : undefined;
+};
+
 // helper to map headers to column index
 function mapHeaderIndexes(headers: string[]) {
     const map: Record<string, number> = {};
@@ -104,10 +123,12 @@ function mapHeaderIndexes(headers: string[]) {
 }
 
 // --- user parser ---
-export function parseUsers(csvText: string): { parsed: UserProfile[]; errors: string[] } {
+type ParsedCsvUser = UserProfile & { password?: string };
+
+export function parseUsers(csvText: string): { parsed: ParsedCsvUser[]; errors: string[] } {
     const { headers, rows } = parseCsvText(csvText);
     const headerMap = mapHeaderIndexes(headers);
-    const parsed: UserProfile[] = [];
+    const parsed: ParsedCsvUser[] = [];
     const errors: string[] = [];
 
     rows.forEach((row, idx) => {
@@ -139,12 +160,7 @@ export function parseUsers(csvText: string): { parsed: UserProfile[]; errors: st
             avatar: get('avatar') || undefined,
         };
 
-        // Attach password as a non-standard field if provided (for auth creation)
-        if (password) {
-            (user as any).password = password;
-        }
-
-        parsed.push(user);
+        parsed.push(password ? { ...user, password } : user);
     });
 
     // require at least one admin (useful for seeding flows)
@@ -178,9 +194,9 @@ export function parseEvents(csvText: string): { parsed: ScheduleEvent[]; errors:
             // support 'email:role:status' or just email
             const parts = p.split(':').map(s => s.trim());
             const email = parts[0] || '';
-            const role = (parts[1] as any) || 'required';
-            const status = (parts[2] as any) || 'pending';
-            return { email, role, status } as EventParticipant;
+            const role = parseParticipantRole(parts[1]);
+            const status = parseParticipantStatus(parts[2]);
+            return { email, role, status };
         }).filter(pp => pp.email);
 
         const isAllDay = parseBoolean(get('allDay') || get('isAllDay'));
@@ -190,7 +206,7 @@ export function parseEvents(csvText: string): { parsed: ScheduleEvent[]; errors:
             title,
             description: get('description') || undefined,
             calendarId: get('calendarId') || get('calendar_id') || 'default',
-            status: (get('status') as any) || 'scheduled',
+            status: parseEventStatus(get('status')),
             startDate,
             endDate,
             isAllDay,
@@ -240,8 +256,8 @@ export function parseFiles(csvText: string): { parsed: FileAttachment[]; errors:
 
         const file: FileAttachment = {
             name,
-            type: get('type') || undefined as any,
-            size: get('size') || undefined as any,
+            type: get('type') || 'unknown',
+            size: get('size') || '0',
             url,
             mimeType: get('mime') || get('mimeType') || undefined,
             thumbnail: get('thumbnail') || undefined,
@@ -249,7 +265,7 @@ export function parseFiles(csvText: string): { parsed: FileAttachment[]; errors:
             uploadDate: get('uploadDate') || new Date().toISOString(),
             metadata: undefined,
             author: author || '',
-            category: (get('category') as any) || undefined,
+            category: parseFileCategory(get('category')),
         };
 
         parsed.push(file);
@@ -288,15 +304,22 @@ export function parseTheses(csvText: string): { parsed: ThesisData[]; errors: st
                 // try parse JSON
                 const parsedJson = JSON.parse(chaptersRaw);
                 if (Array.isArray(parsedJson)) {
-                    chapters = parsedJson.map((c: any, i: number) => ({
-                        id: c.id ?? i + 1,
-                        title: c.title ?? `Chapter ${i + 1}`,
-                        status: c.status ?? 'not_submitted',
-                        submissionDate: c.submissionDate ?? null,
-                        lastModified: c.lastModified ?? null,
-                        submissions: Array.isArray(c.submissions) ? c.submissions : [],
-                        comments: Array.isArray(c.comments) ? c.comments : [],
-                    } as ThesisChapter));
+                    chapters = parsedJson.map((entry, i) => {
+                        const chapter = (typeof entry === 'object' && entry !== null ? entry : {}) as Partial<ThesisChapter>;
+                        return {
+                            id: typeof chapter.id === 'number' ? chapter.id : i + 1,
+                            title: typeof chapter.title === 'string' ? chapter.title : `Chapter ${i + 1}`,
+                            status: typeof chapter.status === 'string' ? chapter.status : 'not_submitted',
+                            submissionDate: typeof chapter.submissionDate === 'string' ? chapter.submissionDate : null,
+                            lastModified: typeof chapter.lastModified === 'string' ? chapter.lastModified : null,
+                            submissions: Array.isArray(chapter.submissions)
+                                ? chapter.submissions.map(item => String(item))
+                                : [],
+                            comments: Array.isArray(chapter.comments)
+                                ? (chapter.comments as ThesisChapter['comments'])
+                                : [],
+                        } satisfies ThesisChapter;
+                    });
                 }
             } else if (chaptersRaw) {
                 // semi-colon separated chapter titles
@@ -310,8 +333,9 @@ export function parseTheses(csvText: string): { parsed: ThesisData[]; errors: st
                     comments: [],
                 }));
             }
-        } catch (e) {
-            errors.push(`row ${idx + 2}: failed parsing chapters JSON`);
+        } catch (error) {
+            const detail = error instanceof Error ? `: ${error.message}` : '';
+            errors.push(`row ${idx + 2}: failed parsing chapters JSON${detail}`);
         }
 
         const thesis: ThesisData = {

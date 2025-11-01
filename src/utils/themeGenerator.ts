@@ -1,7 +1,20 @@
-import { themeFromSourceColor, argbFromHex, hexFromArgb, Scheme, TonalPalette } from '@material/material-color-utilities';
-import { createTheme, Theme, PaletteOptions } from '@mui/material/styles';
+import { themeFromSourceColor, argbFromHex, hexFromArgb } from '@material/material-color-utilities';
+import type { Scheme, TonalPalette } from '@material/material-color-utilities';
+import { createTheme } from '@mui/material/styles';
+import type { Theme, PaletteOptions } from '@mui/material/styles';
 import { deepmerge } from '@mui/utils';
 import baseTheme from '../theme';
+
+type Material3PaletteOptions = PaletteOptions & {
+    tertiary?: PaletteOptions['primary'];
+    surface?: string;
+    surfaceVariant?: string;
+    outline?: string;
+    outlineVariant?: string;
+    inverseSurface?: string;
+    inverseOnSurface?: string;
+    inversePrimary?: string;
+};
 
 /**
  * Converts a Material Color Utilities scheme to MUI palette colors
@@ -110,7 +123,7 @@ function buildPalette(
     mode: 'light' | 'dark',
 ) {
     const isDark = mode === 'dark';
-    const palette: PaletteOptions = {
+    const palette: Material3PaletteOptions = {
         mode,
         primary: {
             main: colors.primary,
@@ -129,7 +142,7 @@ function buildPalette(
             light: colors.tertiaryContainer,
             dark: hexFromArgb(materialTheme.palettes.tertiary.tone(isDark ? 40 : 30)),
             contrastText: colors.onTertiary,
-        } as any,
+        },
         background: {
             default: colors.background,
             paper: colors.surface,
@@ -144,13 +157,13 @@ function buildPalette(
         action: buildActionPalette(colors.onSurface, mode),
     };
 
-    (palette as any).surface = colors.surface;
-    (palette as any).surfaceVariant = colors.surfaceVariant;
-    (palette as any).outline = colors.outline;
-    (palette as any).outlineVariant = colors.outlineVariant;
-    (palette as any).inverseSurface = hexFromArgb(materialTheme.palettes.neutral.tone(isDark ? 90 : 20));
-    (palette as any).inverseOnSurface = hexFromArgb(materialTheme.palettes.neutral.tone(isDark ? 20 : 95));
-    (palette as any).inversePrimary = hexFromArgb(materialTheme.palettes.primary.tone(isDark ? 80 : 40));
+    palette.surface = colors.surface;
+    palette.surfaceVariant = colors.surfaceVariant;
+    palette.outline = colors.outline;
+    palette.outlineVariant = colors.outlineVariant;
+    palette.inverseSurface = hexFromArgb(materialTheme.palettes.neutral.tone(isDark ? 90 : 20));
+    palette.inverseOnSurface = hexFromArgb(materialTheme.palettes.neutral.tone(isDark ? 20 : 95));
+    palette.inversePrimary = hexFromArgb(materialTheme.palettes.primary.tone(isDark ? 80 : 40));
 
     return palette;
 }

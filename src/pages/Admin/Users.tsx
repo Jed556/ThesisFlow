@@ -1,7 +1,10 @@
 import * as React from 'react';
-import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip, Stack, } from '@mui/material';
-import { People, Delete, Edit } from '@mui/icons-material';
-import { GridColDef, GridActionsCellItem, GridRowParams } from '@mui/x-data-grid';
+import {
+    Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip, Stack
+} from '@mui/material';
+import { People, Delete } from '@mui/icons-material';
+import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
+import { GridActionsCellItem } from '@mui/x-data-grid';
 import { AnimatedPage, GrowTransition } from '../../components/Animate';
 import { DataGrid } from '../../components/DataGrid';
 import { useSession } from '@toolpad/core';
@@ -9,7 +12,9 @@ import { useSnackbar } from '../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
 import type { Session } from '../../types/session';
-import { getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar } from '../../utils/firebase/firestore';
+import {
+    getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
+} from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount } from '../../utils/firebase/auth';
 import { parseUsers } from '../../utils/csvParsers';
 
@@ -33,6 +38,8 @@ const ROLE_COLORS: Record<UserRole, 'default' | 'primary' | 'secondary' | 'error
     admin: 'error',
     developer: 'secondary',
 };
+
+type ImportedUser = UserProfile & { password?: string };
 
 interface UserFormData {
     id?: number;
@@ -118,25 +125,25 @@ export default function AdminUsersPage() {
         setDialogOpen(true);
     };
 
-    const handleOpenEditDialog = (user: UserProfile) => {
-        setEditMode(true);
-        setSelectedUser(user);
-        setFormData({
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            middleName: user.middleName,
-            lastName: user.lastName,
-            prefix: user.prefix,
-            suffix: user.suffix,
-            role: user.role,
-            department: user.department,
-            avatar: user.avatar,
-            phone: user.phone,
-        });
-        setFormErrors({});
-        setDialogOpen(true);
-    };
+    // const handleOpenEditDialog = (user: UserProfile) => {
+    //     setEditMode(true);
+    //     setSelectedUser(user);
+    //     setFormData({
+    //         id: user.id,
+    //         email: user.email,
+    //         firstName: user.firstName,
+    //         middleName: user.middleName,
+    //         lastName: user.lastName,
+    //         prefix: user.prefix,
+    //         suffix: user.suffix,
+    //         role: user.role,
+    //         department: user.department,
+    //         avatar: user.avatar,
+    //         phone: user.phone,
+    //     });
+    //     setFormErrors({});
+    //     setDialogOpen(true);
+    // };
 
     const handleOpenDeleteDialog = (user: UserProfile) => {
         setSelectedUser(user);
@@ -231,13 +238,13 @@ export default function AdminUsersPage() {
                 // Create personal calendar for the new user
                 try {
                     await createPersonalCalendar(email);
-                } catch (calendarError) {
+                } catch (error) {
                     showNotification('User created but calendar creation failed', 'warning');
                 }
 
                 // Show notification if role was changed to admin
                 if (isFirstUser && formData.role !== 'admin') {
-                    showNotification('First user created as admin. At least one admin account is required in the system.', 'info', 8000);
+                    showNotification('Created as Admin. At least one admin account is required in the system.', 'info', 8000);
                 } else {
                     showNotification(`User ${newUser.firstName} ${newUser.lastName} created successfully`, 'success');
                 }
@@ -396,15 +403,15 @@ export default function AdminUsersPage() {
             if (parseErrors.length) errors.push(...parseErrors.map(e => `Parse: ${e}`));
 
             // Filter out already-existing users and prepare to import
-            const toImport: (UserProfile & { password?: string })[] = [];
+            const toImport: ImportedUser[] = [];
             for (let i = 0; i < parsed.length; i++) {
                 const u = parsed[i];
-                const exists = await getUserByEmail(u.email.toLowerCase());
+                const exists = await getUserByEmail(u.email.toLowerCase().trim());
                 if (exists) {
                     errors.push(`Row ${i + 2}: user ${u.email} already exists`);
                     continue;
                 }
-                toImport.push(u as UserProfile & { password?: string });
+                toImport.push(u);
             }
 
             if (toImport.length === 0) {
@@ -422,19 +429,16 @@ export default function AdminUsersPage() {
 
             // Create auth accounts and Firestore profiles
             for (const user of toImport) {
-                const pwd = (user as any).password || DEFAULT_PASSWORD;
-                const authResult = await adminCreateUserAccount(user.email, pwd);
+                const { password: importPassword, ...profileNoPassword } = user;
+                const password = importPassword || DEFAULT_PASSWORD;
+                const authResult = await adminCreateUserAccount(user.email, password);
                 if (!authResult.success) {
                     errors.push(`Auth create failed for ${user.email}: ${authResult.message}`);
                     continue;
                 }
 
-                // Remove any password before saving profile
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { password: _pwd, ...profile } = user as any;
-
                 // setUserProfile now automatically cleans empty values
-                await setUserProfile(user.email, profile);
+                await setUserProfile(user.email, profileNoPassword);
             }
 
             await loadUsers();
@@ -452,7 +456,7 @@ export default function AdminUsersPage() {
             } else {
                 showNotification(`Successfully imported ${toImport.length} user(s)`, 'success');
             }
-        } catch (err) {
+        } catch (error) {
             showNotification('Failed to import CSV. Please check the file format and try again.', 'error');
         }
     };
@@ -461,7 +465,11 @@ export default function AdminUsersPage() {
         try {
             // Prevent changing the last admin to non-admin role
             if (oldRow.role === 'admin' && newRow.role !== 'admin' && adminCount <= 1) {
-                showNotification('Cannot change the last admin to a different role. At least one admin must exist in the system.', 'error', 8000);
+                showNotification(
+                    'Cannot change the last admin to a different role. At least one admin must exist in the system.',
+                    'error',
+                    8000
+                );
                 return oldRow;
             }
 
@@ -577,7 +585,7 @@ export default function AdminUsersPage() {
             },
             valueFormatter: (value) => {
                 if (!value) return 'Never';
-                const date = new Date(value as any);
+                const date = new Date(value as Date);
                 return date.toLocaleString();
             },
         },
@@ -585,6 +593,7 @@ export default function AdminUsersPage() {
 
     const getAdditionalActions = (params: GridRowParams<UserProfile>) => [
         <GridActionsCellItem
+            key="delete"
             icon={<Delete />}
             label="Delete"
             onClick={() => handleOpenDeleteDialog(params.row)}
@@ -635,7 +644,13 @@ export default function AdminUsersPage() {
                 />
 
                 {/* Create/Edit Dialog */}
-                <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth slots={{ transition: GrowTransition }}>
+                <Dialog
+                    open={dialogOpen}
+                    onClose={handleCloseDialog}
+                    maxWidth="sm"
+                    fullWidth
+                    slots={{ transition: GrowTransition }}
+                >
                     <DialogTitle>{editMode ? 'Edit User' : 'Create New User'}</DialogTitle>
                     <DialogContent>
                         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -699,12 +714,19 @@ export default function AdminUsersPage() {
                                 error={!!formErrors.role}
                                 helperText={
                                     formErrors.role ||
-                                    (users.length === 0 && !editMode ? 'First user will be created as admin' : '') ||
-                                    (editMode && selectedUser?.role === 'admin' && adminCount <= 1 ? 'Cannot change role of last admin account' : '')
+                                    (users.length === 0 && !editMode
+                                        ? 'First user will be created as admin'
+                                        : '') ||
+                                    (editMode && selectedUser?.role === 'admin' && adminCount <= 1
+                                        ? 'Cannot change role of last admin account'
+                                        : '')
                                 }
                                 required
                                 fullWidth
-                                disabled={(users.length === 0 && !editMode) || (editMode && selectedUser?.role === 'admin' && adminCount <= 1)}
+                                disabled={
+                                    (users.length === 0 && !editMode) ||
+                                    (editMode && selectedUser?.role === 'admin' && adminCount <= 1)
+                                }
                             >
                                 {ROLE_OPTIONS.map((role) => (
                                     <MenuItem key={role} value={role}>

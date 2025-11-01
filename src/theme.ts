@@ -1,6 +1,5 @@
 import { deepmerge } from '@mui/utils';
 import { createTheme } from '@mui/material/styles';
-import { Box } from '@mui/material';
 
 // Extend MUI theme types to include custom animation properties
 declare module '@mui/material/styles' {
@@ -141,91 +140,91 @@ const base = createTheme({
         },
         dark: {
             palette: {
-                mode: "dark",
+                mode: 'dark',
                 common: {
-                    black: "#000",
-                    white: "#fff"
+                    black: '#000',
+                    white: '#fff'
                 },
                 primary: {
-                    main: "#90caf9",
-                    light: "#e3f2fd",
-                    dark: "#42a5f5",
-                    contrastText: "rgba(0, 0, 0, 0.87)"
+                    main: '#90caf9',
+                    light: '#e3f2fd',
+                    dark: '#42a5f5',
+                    contrastText: 'rgba(0, 0, 0, 0.87)'
                 },
                 secondary: {
-                    main: "#ce93d8",
-                    light: "#f3e5f5",
-                    dark: "#ab47bc",
-                    contrastText: "rgba(0, 0, 0, 0.87)"
+                    main: '#ce93d8',
+                    light: '#f3e5f5',
+                    dark: '#ab47bc',
+                    contrastText: 'rgba(0, 0, 0, 0.87)'
                 },
                 tertiary: {
-                    main: "#bb86fc",
-                    light: "#e7b9ff",
-                    dark: "#8858c8",
-                    contrastText: "rgba(0, 0, 0, 0.87)"
+                    main: '#bb86fc',
+                    light: '#e7b9ff',
+                    dark: '#8858c8',
+                    contrastText: 'rgba(0, 0, 0, 0.87)'
                 },
                 error: {
-                    main: "#f44336",
-                    light: "#e57373",
-                    dark: "#d32f2f",
-                    contrastText: "#fff"
+                    main: '#f44336',
+                    light: '#e57373',
+                    dark: '#d32f2f',
+                    contrastText: '#fff'
                 },
                 warning: {
-                    main: "#ffa726",
-                    light: "#ffb74d",
-                    dark: "#f57c00",
-                    contrastText: "rgba(0, 0, 0, 0.87)"
+                    main: '#ffa726',
+                    light: '#ffb74d',
+                    dark: '#f57c00',
+                    contrastText: 'rgba(0, 0, 0, 0.87)'
                 },
                 info: {
-                    main: "#29b6f6",
-                    light: "#4fc3f7",
-                    dark: "#0288d1",
-                    contrastText: "rgba(0, 0, 0, 0.87)"
+                    main: '#29b6f6',
+                    light: '#4fc3f7',
+                    dark: '#0288d1',
+                    contrastText: 'rgba(0, 0, 0, 0.87)'
                 },
                 success: {
-                    main: "#66bb6a",
-                    light: "#81c784",
-                    dark: "#388e3c",
-                    contrastText: "rgba(0, 0, 0, 0.87)"
+                    main: '#66bb6a',
+                    light: '#81c784',
+                    dark: '#388e3c',
+                    contrastText: 'rgba(0, 0, 0, 0.87)'
                 },
                 grey: {
-                    50: "#fafafa",
-                    100: "#f5f5f5",
-                    200: "#eeeeee",
-                    300: "#e0e0e0",
-                    400: "#bdbdbd",
-                    500: "#9e9e9e",
-                    600: "#757575",
-                    700: "#616161",
-                    800: "#424242",
-                    900: "#212121",
-                    A100: "#f5f5f5",
-                    A200: "#eeeeee",
-                    A400: "#bdbdbd",
-                    A700: "#616161"
+                    50: '#fafafa',
+                    100: '#f5f5f5',
+                    200: '#eeeeee',
+                    300: '#e0e0e0',
+                    400: '#bdbdbd',
+                    500: '#9e9e9e',
+                    600: '#757575',
+                    700: '#616161',
+                    800: '#424242',
+                    900: '#212121',
+                    A100: '#f5f5f5',
+                    A200: '#eeeeee',
+                    A400: '#bdbdbd',
+                    A700: '#616161'
                 },
                 contrastThreshold: 3,
                 tonalOffset: 0.2,
                 text: {
-                    primary: "#fff",
-                    secondary: "rgba(255, 255, 255, 0.7)",
-                    disabled: "rgba(255, 255, 255, 0.5)",
+                    primary: '#fff',
+                    secondary: 'rgba(255, 255, 255, 0.7)',
+                    disabled: 'rgba(255, 255, 255, 0.5)',
                 },
-                divider: "rgba(255, 255, 255, 0.12)",
+                divider: 'rgba(255, 255, 255, 0.12)',
                 background: {
-                    paper: "#0f0f0f",
-                    default: "#0f0f0f"
+                    paper: '#0f0f0f',
+                    default: '#0f0f0f'
                 },
                 action: {
-                    active: "#fff",
-                    hover: "rgba(255, 255, 255, 0.08)",
+                    active: '#fff',
+                    hover: 'rgba(255, 255, 255, 0.08)',
                     hoverOpacity: 0.08,
-                    selected: "rgba(255, 255, 255, 0.16)",
+                    selected: 'rgba(255, 255, 255, 0.16)',
                     selectedOpacity: 0.16,
-                    disabled: "rgba(255, 255, 255, 0.3)",
-                    disabledBackground: "rgba(255, 255, 255, 0.12)",
+                    disabled: 'rgba(255, 255, 255, 0.3)',
+                    disabledBackground: 'rgba(255, 255, 255, 0.12)',
                     disabledOpacity: 0.38,
-                    focus: "rgba(255, 255, 255, 0.12)",
+                    focus: 'rgba(255, 255, 255, 0.12)',
                     focusOpacity: 0.12,
                     activatedOpacity: 0.24
                 }
@@ -245,148 +244,148 @@ const base = createTheme({
         borderRadius: 8
     },
     shadows: [
-        "none",
-        "0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0pxrgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12)",
-        "0px 3px 1px -2px rgba(0,0,0,0.2),0px 2px 2px 0pxrgba(0,0,0,0.14),0px 1px 5px 0px rgba(0,0,0,0.12)",
-        "0px 3px 3px -2px rgba(0,0,0,0.2),0px 3px 4px 0pxrgba(0,0,0,0.14),0px 1px 8px 0px rgba(0,0,0,0.12)",
-        "0px 2px 4px -1px rgba(0,0,0,0.2),0px 4px 5px 0pxrgba(0,0,0,0.14),0px 1px 10px 0px rgba(0,0,0,0.12)",
-        "0px 3px 5px -1px rgba(0,0,0,0.2),0px 5px 8px 0pxrgba(0,0,0,0.14),0px 1px 14px 0px rgba(0,0,0,0.12)",
-        "0px 3px 5px -1px rgba(0,0,0,0.2),0px 6px 10px 0pxrgba(0,0,0,0.14),0px 1px 18px 0px rgba(0,0,0,0.12)",
-        "0px 4px 5px -2px rgba(0,0,0,0.2),0px 7px 10px 1pxrgba(0,0,0,0.14),0px 2px 16px 1px rgba(0,0,0,0.12)",
-        "0px 5px 5px -3px rgba(0,0,0,0.2),0px 8px 10px 1pxrgba(0,0,0,0.14),0px 3px 14px 2px rgba(0,0,0,0.12)",
-        "0px 5px 6px -3px rgba(0,0,0,0.2),0px 9px 12px 1pxrgba(0,0,0,0.14),0px 3px 16px 2px rgba(0,0,0,0.12)",
-        "0px 6px 6px -3px rgba(0,0,0,0.2),0px 10px 14px 1pxrgba(0,0,0,0.14),0px 4px 18px 3px rgba(0,0,0,0.12)",
-        "0px 6px 7px -4px rgba(0,0,0,0.2),0px 11px 15px 1pxrgba(0,0,0,0.14),0px 4px 20px 3px rgba(0,0,0,0.12)",
-        "0px 7px 8px -4px rgba(0,0,0,0.2),0px 12px 17px 2pxrgba(0,0,0,0.14),0px 5px 22px 4px rgba(0,0,0,0.12)",
-        "0px 7px 8px -4px rgba(0,0,0,0.2),0px 13px 19px 2pxrgba(0,0,0,0.14),0px 5px 24px 4px rgba(0,0,0,0.12)",
-        "0px 7px 9px -4px rgba(0,0,0,0.2),0px 14px 21px 2pxrgba(0,0,0,0.14),0px 5px 26px 4px rgba(0,0,0,0.12)",
-        "0px 8px 9px -5px rgba(0,0,0,0.2),0px 15px 22px 2pxrgba(0,0,0,0.14),0px 6px 28px 5px rgba(0,0,0,0.12)",
-        "0px 8px 10px -5px rgba(0,0,0,0.2),0px 16px 24px 2pxrgba(0,0,0,0.14),0px 6px 30px 5px rgba(0,0,0,0.12)",
-        "0px 8px 11px -5px rgba(0,0,0,0.2),0px 17px 26px 2pxrgba(0,0,0,0.14),0px 6px 32px 5px rgba(0,0,0,0.12)",
-        "0px 9px 11px -5px rgba(0,0,0,0.2),0px 18px 28px 2pxrgba(0,0,0,0.14),0px 7px 34px 6px rgba(0,0,0,0.12)",
-        "0px 9px 12px -6px rgba(0,0,0,0.2),0px 19px 29px 2pxrgba(0,0,0,0.14),0px 7px 36px 6px rgba(0,0,0,0.12)",
-        "0px 10px 13px -6px rgba(0,0,0,0.2),0px 20px 31px 3pxrgba(0,0,0,0.14),0px 8px 38px 7px rgba(0,0,0,0.12)",
-        "0px 10px 13px -6px rgba(0,0,0,0.2),0px 21px 33px 3pxrgba(0,0,0,0.14),0px 8px 40px 7px rgba(0,0,0,0.12)",
-        "0px 10px 14px -6px rgba(0,0,0,0.2),0px 22px 35px 3pxrgba(0,0,0,0.14),0px 8px 42px 7px rgba(0,0,0,0.12)",
-        "0px 11px 14px -7px rgba(0,0,0,0.2),0px 23px 36px 3pxrgba(0,0,0,0.14),0px 9px 44px 8px rgba(0,0,0,0.12)",
-        "0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3pxrgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12)"
+        'none',
+        '0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0pxrgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12)',
+        '0px 3px 1px -2px rgba(0,0,0,0.2),0px 2px 2px 0pxrgba(0,0,0,0.14),0px 1px 5px 0px rgba(0,0,0,0.12)',
+        '0px 3px 3px -2px rgba(0,0,0,0.2),0px 3px 4px 0pxrgba(0,0,0,0.14),0px 1px 8px 0px rgba(0,0,0,0.12)',
+        '0px 2px 4px -1px rgba(0,0,0,0.2),0px 4px 5px 0pxrgba(0,0,0,0.14),0px 1px 10px 0px rgba(0,0,0,0.12)',
+        '0px 3px 5px -1px rgba(0,0,0,0.2),0px 5px 8px 0pxrgba(0,0,0,0.14),0px 1px 14px 0px rgba(0,0,0,0.12)',
+        '0px 3px 5px -1px rgba(0,0,0,0.2),0px 6px 10px 0pxrgba(0,0,0,0.14),0px 1px 18px 0px rgba(0,0,0,0.12)',
+        '0px 4px 5px -2px rgba(0,0,0,0.2),0px 7px 10px 1pxrgba(0,0,0,0.14),0px 2px 16px 1px rgba(0,0,0,0.12)',
+        '0px 5px 5px -3px rgba(0,0,0,0.2),0px 8px 10px 1pxrgba(0,0,0,0.14),0px 3px 14px 2px rgba(0,0,0,0.12)',
+        '0px 5px 6px -3px rgba(0,0,0,0.2),0px 9px 12px 1pxrgba(0,0,0,0.14),0px 3px 16px 2px rgba(0,0,0,0.12)',
+        '0px 6px 6px -3px rgba(0,0,0,0.2),0px 10px 14px 1pxrgba(0,0,0,0.14),0px 4px 18px 3px rgba(0,0,0,0.12)',
+        '0px 6px 7px -4px rgba(0,0,0,0.2),0px 11px 15px 1pxrgba(0,0,0,0.14),0px 4px 20px 3px rgba(0,0,0,0.12)',
+        '0px 7px 8px -4px rgba(0,0,0,0.2),0px 12px 17px 2pxrgba(0,0,0,0.14),0px 5px 22px 4px rgba(0,0,0,0.12)',
+        '0px 7px 8px -4px rgba(0,0,0,0.2),0px 13px 19px 2pxrgba(0,0,0,0.14),0px 5px 24px 4px rgba(0,0,0,0.12)',
+        '0px 7px 9px -4px rgba(0,0,0,0.2),0px 14px 21px 2pxrgba(0,0,0,0.14),0px 5px 26px 4px rgba(0,0,0,0.12)',
+        '0px 8px 9px -5px rgba(0,0,0,0.2),0px 15px 22px 2pxrgba(0,0,0,0.14),0px 6px 28px 5px rgba(0,0,0,0.12)',
+        '0px 8px 10px -5px rgba(0,0,0,0.2),0px 16px 24px 2pxrgba(0,0,0,0.14),0px 6px 30px 5px rgba(0,0,0,0.12)',
+        '0px 8px 11px -5px rgba(0,0,0,0.2),0px 17px 26px 2pxrgba(0,0,0,0.14),0px 6px 32px 5px rgba(0,0,0,0.12)',
+        '0px 9px 11px -5px rgba(0,0,0,0.2),0px 18px 28px 2pxrgba(0,0,0,0.14),0px 7px 34px 6px rgba(0,0,0,0.12)',
+        '0px 9px 12px -6px rgba(0,0,0,0.2),0px 19px 29px 2pxrgba(0,0,0,0.14),0px 7px 36px 6px rgba(0,0,0,0.12)',
+        '0px 10px 13px -6px rgba(0,0,0,0.2),0px 20px 31px 3pxrgba(0,0,0,0.14),0px 8px 38px 7px rgba(0,0,0,0.12)',
+        '0px 10px 13px -6px rgba(0,0,0,0.2),0px 21px 33px 3pxrgba(0,0,0,0.14),0px 8px 40px 7px rgba(0,0,0,0.12)',
+        '0px 10px 14px -6px rgba(0,0,0,0.2),0px 22px 35px 3pxrgba(0,0,0,0.14),0px 8px 42px 7px rgba(0,0,0,0.12)',
+        '0px 11px 14px -7px rgba(0,0,0,0.2),0px 23px 36px 3pxrgba(0,0,0,0.14),0px 9px 44px 8px rgba(0,0,0,0.12)',
+        '0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3pxrgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12)'
     ],
     typography: {
         htmlFontSize: 16,
-        fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+        fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
         fontSize: 14,
         fontWeightLight: 300,
         fontWeightRegular: 400,
         fontWeightMedium: 500,
         fontWeightBold: 700,
         h1: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 300,
-            fontSize: "6rem",
+            fontSize: '6rem',
             lineHeight: 1.167,
-            letterSpacing: "-0.01562em"
+            letterSpacing: '-0.01562em'
         },
         h2: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 300,
-            fontSize: "3.75rem",
+            fontSize: '3.75rem',
             lineHeight: 1.2,
-            letterSpacing: "-0.00833em"
+            letterSpacing: '-0.00833em'
         },
         h3: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "3rem",
+            fontSize: '3rem',
             lineHeight: 1.167,
-            letterSpacing: "0em"
+            letterSpacing: '0em'
         },
         h4: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "2.125rem",
+            fontSize: '2.125rem',
             lineHeight: 1.235,
-            letterSpacing: "0.00735em"
+            letterSpacing: '0.00735em'
         },
         h5: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "1.5rem",
+            fontSize: '1.5rem',
             lineHeight: 1.334,
-            letterSpacing: "0em"
+            letterSpacing: '0em'
         },
         h6: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 500,
-            fontSize: "1.25rem",
+            fontSize: '1.25rem',
             lineHeight: 1.6,
-            letterSpacing: "0.0075em"
+            letterSpacing: '0.0075em'
         },
         subtitle1: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "1rem",
+            fontSize: '1rem',
             lineHeight: 1.75,
-            letterSpacing: "0.00938em"
+            letterSpacing: '0.00938em'
         },
         subtitle2: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 500,
-            fontSize: "0.875rem",
+            fontSize: '0.875rem',
             lineHeight: 1.57,
-            letterSpacing: "0.00714em"
+            letterSpacing: '0.00714em'
         },
         body1: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "1rem",
+            fontSize: '1rem',
             lineHeight: 1.5,
-            letterSpacing: "0.00938em"
+            letterSpacing: '0.00938em'
         },
         body2: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "0.875rem",
+            fontSize: '0.875rem',
             lineHeight: 1.43,
-            letterSpacing: "0.01071em"
+            letterSpacing: '0.01071em'
         },
         button: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 500,
-            fontSize: "0.875rem",
+            fontSize: '0.875rem',
             lineHeight: 1.75,
-            letterSpacing: "0.02857em",
-            textTransform: "uppercase"
+            letterSpacing: '0.02857em',
+            textTransform: 'uppercase'
         },
         caption: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "0.75rem",
+            fontSize: '0.75rem',
             lineHeight: 1.66,
-            letterSpacing: "0.03333em"
+            letterSpacing: '0.03333em'
         },
         overline: {
-            fontFamily: "Roboto, Helvetica, Arial, sans-serif",
+            fontFamily: 'Roboto, Helvetica, Arial, sans-serif',
             fontWeight: 400,
-            fontSize: "0.75rem",
+            fontSize: '0.75rem',
             lineHeight: 2.66,
-            letterSpacing: "0.08333em",
-            textTransform: "uppercase"
+            letterSpacing: '0.08333em',
+            textTransform: 'uppercase'
         },
     },
     transitions: {
         easing: {
             // Standard Material Design easings
-            easeInOut: "cubic-bezier(0.4, 0, 0.2, 1)",
-            easeOut: "cubic-bezier(0.0, 0, 0.2, 1)",
-            easeIn: "cubic-bezier(0.4, 0, 1, 1)",
-            sharp: "cubic-bezier(0.4, 0, 0.6, 1)",
+            easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
+            easeOut: 'cubic-bezier(0.0, 0, 0.2, 1)',
+            easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
+            sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
             // Material Design 3 (M3) motion easings
             // https://m3.material.io/styles/motion/easing-and-duration/tokens-specs
-            smooth: "cubic-bezier(0.4, 0.0, 0.2, 1)", // Standard easing
-            emphasized: "cubic-bezier(0.2, 0.0, 0, 1.0)", // Emphasized easing for important transitions
-            emphasizedDecelerate: "cubic-bezier(0.05, 0.7, 0.1, 1.0)", // Entering elements
-            emphasizedAccelerate: "cubic-bezier(0.3, 0.0, 0.8, 0.15)", // Exiting elements
-            legacy: "cubic-bezier(0.4, 0.0, 0.6, 1)", // Legacy standard for compatibility
+            smooth: 'cubic-bezier(0.4, 0.0, 0.2, 1)', // Standard easing
+            emphasized: 'cubic-bezier(0.2, 0.0, 0, 1.0)', // Emphasized easing for important transitions
+            emphasizedDecelerate: 'cubic-bezier(0.05, 0.7, 0.1, 1.0)', // Entering elements
+            emphasizedAccelerate: 'cubic-bezier(0.3, 0.0, 0.8, 0.15)', // Exiting elements
+            legacy: 'cubic-bezier(0.4, 0.0, 0.6, 1)', // Legacy standard for compatibility
         },
         duration: {
             // Basic durations
@@ -623,6 +622,7 @@ const components = {
                 overflow: 'hidden',
                 marginBottom: base.spacing(0.5),
                 // Add top margin to first ListItem not preceded by a ListSubheader & not nested inside collapsed sections or other ListItems
+                // eslint-disable-next-line max-len
                 '&:first-of-type:not(.MuiListSubheader-root + *):not(.MuiListItem-root .MuiListItem-root):not(.MuiCollapse-root .MuiListItem-root)': {
                     marginTop: base.spacing(2),
                 },
@@ -747,7 +747,7 @@ const components = {
             },
         },
     },
-}
+};
 
 const theme = createTheme(deepmerge(base, { components }));
 

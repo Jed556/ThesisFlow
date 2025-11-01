@@ -357,7 +357,8 @@ export const mockUserProfiles: UserProfile[] = [
         lastName: "Smith",
         email: "jane.smith@university.edu",
         role: "adviser",
-        department: "Computer Science"
+        department: "Computer Science",
+        adviserCapacity: 5
     },
     {
         id: 3,
@@ -366,7 +367,8 @@ export const mockUserProfiles: UserProfile[] = [
         lastName: "Johnson",
         email: "mike.johnson@university.edu",
         role: "editor",
-        department: "Educational Technology"
+        department: "Educational Technology",
+        editorCapacity: 8
     },
     {
         id: 4,
@@ -399,7 +401,8 @@ export const mockUserProfiles: UserProfile[] = [
         lastName: "Kim",
         email: "david.kim@university.edu",
         role: "adviser",
-        department: "Educational Technology"
+        department: "Educational Technology",
+        adviserCapacity: 4
     },
     {
         id: 8,
@@ -408,7 +411,8 @@ export const mockUserProfiles: UserProfile[] = [
         lastName: "Brown",
         email: "emily.brown@university.edu",
         role: "editor",
-        department: "Computer Science"
+        department: "Computer Science",
+        editorCapacity: 0  // Not accepting editing assignments
     },
     {
         id: 9,
@@ -425,7 +429,8 @@ export const mockUserProfiles: UserProfile[] = [
         lastName: "Wang",
         email: "lisa.wang@university.edu",
         role: "adviser",
-        department: "Machine Learning"
+        department: "Machine Learning",
+        adviserCapacity: 6
     },
     {
         id: 11,
@@ -434,7 +439,8 @@ export const mockUserProfiles: UserProfile[] = [
         lastName: "Martinez",
         email: "olivia.martinez@university.edu",
         role: "editor",
-        department: "Digital Learning"
+        department: "Digital Learning",
+        editorCapacity: 7
     }
 ];
 

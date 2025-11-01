@@ -1,8 +1,11 @@
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import {
+    doc, setDoc, onSnapshot, collection, query, where,
+    getDocs, addDoc, getDoc, deleteDoc, type WithFieldValue,
+} from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 
-import type { Calendar, CalendarType } from '../../../types/schedule';
+import type { Calendar, CalendarPermission } from '../../../types/schedule';
 
 /** Firestore collection name for calendars */
 const CALENDARS_COLLECTION = 'calendars';
@@ -25,7 +28,10 @@ export async function setCalendar(id: string | null, calendar: Calendar): Promis
         await setDoc(ref, cleanedData, { merge: true });
         return id;
     } else {
-        const ref = await addDoc(collection(firebaseFirestore, CALENDARS_COLLECTION), cleanedData as any);
+        const ref = await addDoc(
+            collection(firebaseFirestore, CALENDARS_COLLECTION),
+            cleanedData as WithFieldValue<Calendar>
+        );
         return ref.id;
     }
 }
@@ -174,7 +180,7 @@ export async function createGroupCalendar(
     adviserEmails?: string[],
     editorEmails?: string[]
 ): Promise<string> {
-    const permissions: any[] = [
+    const permissions: CalendarPermission[] = [
         {
             groupId: groupId,
             canView: true,

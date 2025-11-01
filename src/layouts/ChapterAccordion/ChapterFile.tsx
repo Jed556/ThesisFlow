@@ -59,8 +59,8 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
     // If not loading and no files, show info alert
     if (!loading && submissionFiles.length === 0) {
         return (
-            <Alert severity="info" sx={{ mb: 2 }}>
-                No document uploaded yet. Click "Upload Document" to submit your chapter.
+            <Alert severity='info' sx={{ mb: 2 }}>
+                No document uploaded yet. Click 'Upload Document' to submit your chapter.
             </Alert>
         );
     }
@@ -74,7 +74,7 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
     const filesToRender = loading ? [1, 2] : sortedFiles;
 
     return (
-        <Card variant="outlined" sx={{ mb: 2 }}>
+        <Card variant='outlined' sx={{ mb: 2 }}>
             <CardContent sx={{ py: 2 }}>
                 <Stack spacing={3}>
                     {filesToRender.map((fileOrIndex, index) => {
@@ -92,18 +92,18 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                                     }}
                                 >
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                                        <Skeleton variant="circular" width={24} height={24} />
+                                        <Skeleton variant='circular' width={24} height={24} />
                                         <Box sx={{ flexGrow: 1 }}>
-                                            <Skeleton variant="text" width="60%" height={24} />
-                                            <Skeleton variant="text" width="40%" height={20} />
+                                            <Skeleton variant='text' width='60%' height={24} />
+                                            <Skeleton variant='text' width='40%' height={20} />
                                         </Box>
-                                        <Skeleton variant="rectangular" width={60} height={24} />
+                                        <Skeleton variant='rectangular' width={60} height={24} />
                                     </Box>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                                        <Skeleton variant="circular" width={28} height={28} />
+                                        <Skeleton variant='circular' width={28} height={28} />
                                         <Box sx={{ flexGrow: 1 }}>
-                                            <Skeleton variant="text" width="30%" height={20} />
-                                            <Skeleton variant="text" width="50%" height={16} />
+                                            <Skeleton variant='text' width='30%' height={20} />
+                                            <Skeleton variant='text' width='50%' height={16} />
                                         </Box>
                                     </Box>
                                 </Box>
@@ -240,7 +240,7 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                         return (
                             <Box key={file.url}>
                                 <Tooltip
-                                    title={(!selectedVersion && clickable) ? "Click on this document version to view feedback for that version. Click again to deselect and view all feedback." : ''}
+                                    title={(!selectedVersion && clickable) ? 'Click on this document version to view feedback for that version. Click again to deselect and view all feedback.' : ''}
                                     placement="top"
                                     arrow
                                     // Keep the tooltip wrapper mounted but disable hover when not applicable.

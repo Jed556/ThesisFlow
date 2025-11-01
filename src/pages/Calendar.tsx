@@ -243,8 +243,8 @@ export default function CalendarPage() {
                     const { getAllUsers } = await import('../utils/firebase/firestore');
                     const users = await getAllUsers();
                     setAllUsers(users);
-                } catch (err) {
-                    console.error('Failed to load users:', err);
+                } catch (error) {
+                    console.error('Failed to load users:', error);
                 }
             }
         } catch (error) {
@@ -459,8 +459,8 @@ export default function CalendarPage() {
                                 lastModified: new Date().toISOString()
                             } as ScheduleEvent);
                             successCount++;
-                        } catch (err) {
-                            console.error('Error importing event:', err);
+                        } catch (error) {
+                            console.error('Error importing event:', error);
                         }
                     }
 
@@ -622,14 +622,16 @@ export default function CalendarPage() {
                                 Add Event
                             </Button>
                             {(session?.user?.role === 'admin' || session?.user?.role === 'developer') && (
-                                <Button variant="contained" color="secondary" startIcon={<AddCircle />} onClick={() => setOpenNewCalendarDialog(true)}>
+                                <Button variant="contained" color="secondary" startIcon={<AddCircle />}
+                                    onClick={() => setOpenNewCalendarDialog(true)}>
                                     New Calendar
                                 </Button>
                             )}
                             <Button variant="outlined" startIcon={<Upload />} onClick={handleImportCSV}>
                                 Import CSV
                             </Button>
-                            <Button variant="outlined" startIcon={<Download />} onClick={handleExportCSV} disabled={filteredEvents.length === 0}>
+                            <Button variant="outlined" startIcon={<Download />} onClick={handleExportCSV}
+                                disabled={filteredEvents.length === 0}>
                                 Export CSV
                             </Button>
                         </Box>
@@ -662,7 +664,8 @@ export default function CalendarPage() {
                                             control={
                                                 <Checkbox
                                                     checked={selectedCalendarIds.length === calendars.length}
-                                                    indeterminate={selectedCalendarIds.length > 0 && selectedCalendarIds.length < calendars.length}
+                                                    indeterminate={selectedCalendarIds.length > 0
+                                                        && selectedCalendarIds.length < calendars.length}
                                                 />
                                             }
                                             label={<Typography variant="body2" fontWeight={600}>Select All</Typography>}
@@ -709,7 +712,7 @@ export default function CalendarPage() {
                                 />
                                 <Autocomplete
                                     multiple
-                                    options={["scheduled", "confirmed", "cancelled", "completed", "rescheduled"] as EventStatus[]}
+                                    options={['scheduled', 'confirmed', 'cancelled', 'completed', 'rescheduled'] as EventStatus[]}
                                     value={filterStatuses}
                                     onChange={(_, v) => setFilterStatuses(v)}
                                     renderInput={(params) => <TextField {...params} size="small" label="Status" />}
@@ -725,7 +728,8 @@ export default function CalendarPage() {
                                 {tabValue === 0 ? (
                                     <Card>
                                         <CardContent>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                            <Box
+                                                sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                                                 <Typography variant="h6">Calendar View</Typography>
                                             </Box>
                                             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
@@ -742,12 +746,15 @@ export default function CalendarPage() {
                                                 <Box sx={{ width: { xs: '100%', md: '67%' } }}>
                                                     <Typography variant="subtitle1" gutterBottom>
                                                         {selectedRange
+                                                            // eslint-disable-next-line max-len
                                                             ? `Events from ${format(selectedRange.start, 'MMM d')} to ${format(selectedRange.end, 'MMM d')}`
                                                             : `Events on ${selectedDate ? selectedDate.toLocaleDateString() : '—'}`
                                                         }
                                                     </Typography>
                                                     {loading ? (
-                                                        <Typography variant="body2" color="text.secondary">Loading events...</Typography>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Loading events...
+                                                        </Typography>
                                                     ) : selectedDate || selectedRange ? (
                                                         filteredEvents.length > 0 ? (
                                                             <AnimatedList variant="slideUp" staggerDelay={40}>
@@ -757,23 +764,30 @@ export default function CalendarPage() {
                                                                         session?.user?.email ?? undefined,
                                                                         session?.user?.role,
                                                                     );
-                                                                    const eventCalendar = calendars.find(cal => cal.id === ev.calendarId);
+                                                                    const eventCalendar =
+                                                                        calendars.find(cal => cal.id === ev.calendarId);
                                                                     return (
                                                                         <EventCard
                                                                             key={ev.id}
                                                                             event={ev}
                                                                             calendar={eventCalendar}
-                                                                            onEdit={canEdit ? () => handleOpenDialog(ev) : undefined}
-                                                                            onDelete={canEdit ? () => handleDeleteClick(ev) : undefined}
+                                                                            onEdit={canEdit ? () =>
+                                                                                handleOpenDialog(ev) : undefined}
+                                                                            onDelete={canEdit ? () =>
+                                                                                handleDeleteClick(ev) : undefined}
                                                                         />
                                                                     );
                                                                 })}
                                                             </AnimatedList>
                                                         ) : (
-                                                            <Typography variant="body2" color="text.secondary">No events for this selection.</Typography>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                No events for this selection.
+                                                            </Typography>
                                                         )
                                                     ) : (
-                                                        <Typography variant="body2" color="text.secondary">Select a date or range to see events.</Typography>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Select a date or range to see events.
+                                                        </Typography>
                                                     )}
                                                 </Box>
                                             </Box>
@@ -1022,7 +1036,8 @@ export default function CalendarPage() {
                                         options={allTags}
                                         value={formData.tags || []}
                                         onChange={(_, v) => setFormData({ ...formData, tags: v })}
-                                        renderInput={(params) => <TextField {...params} label="Tags" placeholder="Add or select tags..." />}
+                                        renderInput={(params) =>
+                                            <TextField {...params} label="Tags" placeholder="Add or select tags..." />}
                                     />
                                     <Box>
                                         <Typography variant="subtitle2" gutterBottom>Location</Typography>
@@ -1217,9 +1232,10 @@ export default function CalendarPage() {
                                                 if (typeof option === 'string') {
                                                     return <li {...props}>{option}</li>;
                                                 }
-                                                const fullName = [option.prefix, option.firstName, option.middleName, option.lastName, option.suffix]
-                                                    .filter(Boolean)
-                                                    .join(' ');
+                                                const fullName = [
+                                                    option.prefix, option.firstName, option.middleName,
+                                                    option.lastName, option.suffix
+                                                ].filter(Boolean).join(' ');
                                                 return (
                                                     <li {...props}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
@@ -1232,7 +1248,8 @@ export default function CalendarPage() {
                                                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                                                     {fullName || option.email}
                                                                 </Typography>
-                                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                                                <Typography variant="caption" color="text.secondary"
+                                                                    sx={{ display: 'block' }}>
                                                                     {option.email}
                                                                 </Typography>
                                                             </Box>

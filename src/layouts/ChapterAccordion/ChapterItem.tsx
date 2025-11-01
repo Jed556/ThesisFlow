@@ -29,7 +29,7 @@ export default function ChapterItem({ chapterId, comments }: ChapterItemProps) {
     const [commentSortOrder, setCommentSortOrder] = React.useState<'asc' | 'desc'>('asc'); // Default: latest at bottom
 
     // Mock current user - in real app this would come from session/auth context
-    const currentUserEmail = "john.doe@university.edu"; // Student email
+    const currentUserEmail = 'john.doe@university.edu'; // Student email
 
     /**
      * Get comments for a specific version

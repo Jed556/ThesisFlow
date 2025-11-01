@@ -1,49 +1,21 @@
 import * as React from 'react';
 import {
-    DataGrid as MuiDataGrid,
-    GridColDef,
-    GridRowsProp,
-    GridRowModesModel,
-    GridRowModes,
-    GridEventListener,
-    GridRowEditStopReasons,
-    GridSlots,
-    GridActionsCellItem,
-    GridRowParams,
-    GridValidRowModel,
-    GridRowId,
-    GridRowSelectionModel,
-    GridCallbackDetails,
-    GridColumnVisibilityModel,
-    Toolbar,
-    ToolbarButton,
-    ColumnsPanelTrigger,
-    FilterPanelTrigger,
-    ExportCsv,
-    ExportPrint,
-    useGridApiContext,
-    QuickFilter,
-    QuickFilterClear,
-    QuickFilterControl,
-    QuickFilterTrigger,
+    DataGrid as MuiDataGrid, GridRowModes, GridRowEditStopReasons, GridActionsCellItem, GridCallbackDetails,
+    GridColumnVisibilityModel, Toolbar, ToolbarButton, ColumnsPanelTrigger, FilterPanelTrigger, ExportPrint,
+    useGridApiContext, QuickFilter, QuickFilterClear, QuickFilterControl, QuickFilterTrigger,
 } from '@mui/x-data-grid';
-import { Paper, IconButton, Button, Stack, Tooltip, Box, TextField, InputAdornment, Menu, MenuItem, Divider, Badge } from '@mui/material';
+import type {
+    GridColDef, GridRowModesModel, GridEventListener, GridRowParams,
+    GridValidRowModel, GridRowId, GridRowSelectionModel, GridSlots,
+} from '@mui/x-data-grid';
+import { Paper, Tooltip, TextField, InputAdornment, Menu, MenuItem, Divider, Badge } from '@mui/material';
 import {
-    DragIndicator,
-    Edit,
-    Save,
-    Cancel,
-    Delete,
-    FileDownload,
-    Upload,
-    Refresh,
-    Add,
-    Search as SearchIcon,
-    CancelOutlined as CancelIcon,
-    ViewColumn as ViewColumnIcon,
-    FilterList as FilterListIcon,
+    DragIndicator, Edit, Save, Cancel, Delete, FileDownload, Upload, Refresh, Add, Search as SearchIcon,
+    CancelOutlined as CancelIcon, ViewColumn as ViewColumnIcon, FilterList as FilterListIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import type { SxProps } from '@mui/system';
+import type { Theme } from '@mui/material/styles';
 
 // Styled components for QuickFilter with smooth transitions
 type OwnerState = {
@@ -77,7 +49,7 @@ const StyledTextField = styled(TextField)<{
     transition: theme.transitions.create(['width', 'opacity']),
 }));
 
-export interface DataGridProps<T extends GridValidRowModel = any> {
+export interface DataGridProps<T extends GridValidRowModel> {
     /** Array of data rows to display */
     rows: T[];
     /** Column definitions (do not include actions column - it will be added automatically) */
@@ -143,9 +115,9 @@ export interface DataGridProps<T extends GridValidRowModel = any> {
     /** Additional slots for customization */
     slots?: Partial<GridSlots>;
     /** Additional sx styles for the Paper wrapper */
-    sx?: any;
+    sx?: SxProps<Theme>;
     /** Additional sx styles for the DataGrid itself */
-    gridSx?: any;
+    gridSx?: SxProps<Theme>;
     /** Callback when rows are selected */
     onRowSelectionChange?: (selectedIds: GridRowSelectionModel) => void;
 }/**
@@ -174,7 +146,7 @@ export interface DataGridProps<T extends GridValidRowModel = any> {
  *   onRowUpdate={handleUpdate}
  * />
  */
-export default function DataGrid<T extends GridValidRowModel = any>({
+export default function DataGrid<T extends GridValidRowModel>({
     rows,
     columns,
     loading = false,
@@ -401,12 +373,14 @@ export default function DataGrid<T extends GridValidRowModel = any>({
                         // Show Save and Cancel when in edit mode
                         return [
                             <GridActionsCellItem
+                                key="save"
                                 icon={<Save />}
                                 label="Save"
                                 onClick={handleSaveClick(params.id)}
                                 color="primary"
                             />,
                             <GridActionsCellItem
+                                key="cancel"
                                 icon={<Cancel />}
                                 label="Cancel"
                                 onClick={handleCancelClick(params.id)}

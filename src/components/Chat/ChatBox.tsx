@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Paper, Typography, Divider, Skeleton } from '@mui/material';
+import { Box, Typography, Divider, Skeleton } from '@mui/material';
 import MessageCard from './MessageCard';
 import ChatInput from './ChatInput';
 import AnimatedList from '../Animate/AnimatedList/AnimatedList';
 import type { ChatMessage, ChatAttachment, ChatBoxConfig } from '../../types/chat';
-import { formatDateGroup, groupMessagesByDate } from '../../utils/chatUtils';
+import { groupMessagesByDate } from '../../utils/chatUtils';
 
 /**
  * Props for the ChatBox component
@@ -136,9 +136,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     getAvatarColor,
     onAttachmentClick,
     onMessageClick,
-    emptyStateMessage = "No messages yet. Start the conversation!",
+    emptyStateMessage = 'No messages yet. Start the conversation!',
     isLoading = false,
-    loadingMessage = "Loading messages...",
+    loadingMessage = 'Loading messages...',
     animationStaggerDelay = 40,
     animationVariant = 'slideUp',
     onInputError,

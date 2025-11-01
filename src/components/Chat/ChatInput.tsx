@@ -149,7 +149,7 @@ const getAcceptString = (allowedTypes: FileCategory[]): string => {
  */
 const ChatInput: React.FC<ChatInputProps> = ({
     onSendMessage,
-    placeholder = "Type a message...",
+    placeholder = 'Type a message...',
     allowAttachments = true,
     allowedAttachmentTypes = ['image', 'video', 'document'],
     maxAttachmentSize = 10485760, // 10MB
@@ -319,7 +319,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
                                 mb: 0.5
                             }}
                         >
-                            Replying to {getDisplayName?.(replyToMessage.senderId) || replyToMessage.senderName || replyToMessage.senderId}
+                            Replying to {getDisplayName?.(replyToMessage.senderId)
+                                || replyToMessage.senderName || replyToMessage.senderId}
                         </Typography>
                         <Typography
                             variant="body2"
@@ -391,7 +392,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
                             onChange={handleFileSelect}
                             disabled={disabled || attachments.length >= maxAttachments}
                         />
-                        <Tooltip title={attachments.length >= maxAttachments ? `Maximum ${maxAttachments} attachments` : "Attach files"}>
+                        <Tooltip title={attachments.length >= maxAttachments ?
+                            `Maximum ${maxAttachments} attachments` : 'Attach files'}>
                             <span>
                                 <IconButton
                                     color="primary"

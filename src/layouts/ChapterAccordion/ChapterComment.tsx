@@ -234,8 +234,8 @@ export default function ChapterComment({
                                         <Chip
                                             className="version-chip"
                                             label={`v${version} • ${documentName}`}
-                                            color={isLatestVersion || isSelectedVersion ? "primary" : "default"}
-                                            variant={isSelectedVersion ? "filled" : "outlined"}
+                                            color={isLatestVersion || isSelectedVersion ? 'primary' : 'default'}
+                                            variant={isSelectedVersion ? 'filled' : 'outlined'}
                                             size="small"
                                             sx={{
                                                 mx: 2,

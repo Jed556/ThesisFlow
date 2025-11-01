@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, Paper, IconButton, Collapse, Divider, List, ListItem, ListItemText, TextField, Button, Tooltip, InputBase } from '@mui/material';
+import { Box, Paper, IconButton, Collapse, Divider, Button, Tooltip, InputBase } from '@mui/material';
 import { ExpandMore, ClearAll, Send, VerticalAlignBottom } from '@mui/icons-material';
 import { formatLogTimestamp, useTick } from '../../utils/dateUtils';
 
@@ -19,7 +19,17 @@ export interface DevConsoleProps {
     relativeOmitAgo?: boolean; // if true, omit the 'ago' suffix in relative times
 }
 
-export default function DevConsole({ logs, onSend, onClear, defaultExpanded = false, showSendButton = false, autoScroll = true, relativeStyle = 'short', relativeShowSeconds = false, relativeRealTime = true }: DevConsoleProps) {
+export default function DevConsole(
+    { logs,
+        onSend,
+        onClear,
+        defaultExpanded = false,
+        showSendButton = false,
+        autoScroll = true,
+        relativeStyle = 'short',
+        relativeShowSeconds = false,
+        relativeRealTime = true
+    }: DevConsoleProps) {
     const [expanded, setExpanded] = React.useState<boolean>(defaultExpanded);
     const [input, setInput] = React.useState('');
     const [autoScrollEnabled, setAutoScrollEnabled] = React.useState<boolean>(() => {
@@ -134,7 +144,7 @@ export default function DevConsole({ logs, onSend, onClear, defaultExpanded = fa
                         size="small"
                         aria-label={expanded ? 'collapse' : 'expand'}
                         onClick={() => setExpanded(e => !e)}
-                        sx={(theme) => ({ padding: 0.5 })}
+                        sx={() => ({ padding: 0.5 })}
                     >
                         <ExpandMore
                             fontSize="small"
@@ -168,11 +178,20 @@ export default function DevConsole({ logs, onSend, onClear, defaultExpanded = fa
                         ) : (
                             logs.map((l, i) => {
                                 const ts = logTimes[i] ?? new Date();
-                                const tsText = formatLogTimestamp(ts, { style: relativeStyle, omitAgo: relativeStyle === 'short', showSeconds: relativeShowSeconds }, now);
+                                const tsText = formatLogTimestamp(ts,
+                                    { style: relativeStyle, omitAgo: relativeStyle === 'short', showSeconds: relativeShowSeconds },
+                                    now);
                                 return (
-                                    <Box key={i} sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', px: 1, py: '2px' }}>
+                                    <Box key={i}
+                                        sx={{
+                                            display: 'flex', alignItems: 'baseline',
+                                            justifyContent: 'space-between', px: 1, py: '2px'
+                                        }}>
                                         <Box sx={{ whiteSpace: 'pre-wrap', color: '#cfd8dc', pr: 1 }}>{l}</Box>
-                                        <Box sx={{ ml: 1, pl: 1, color: (theme) => theme.palette.text.secondary, opacity: 0.6, fontSize: 12, whiteSpace: 'nowrap' }}>{tsText}</Box>
+                                        <Box sx={{
+                                            ml: 1, pl: 1, color: (theme) =>
+                                                theme.palette.text.secondary, opacity: 0.6, fontSize: 12, whiteSpace: 'nowrap'
+                                        }}>{tsText}</Box>
                                     </Box>
                                 );
                             })
@@ -191,7 +210,11 @@ export default function DevConsole({ logs, onSend, onClear, defaultExpanded = fa
                             backgroundColor: '#071019',
                         }),
                     ]}>
-                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace', px: 1, color: "text.primary" }}>&gt;</Box>
+                        <Box component="span"
+                            sx={{
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace',
+                                px: 1, color: 'text.primary'
+                            }}>&gt;</Box>
                         <InputBase
                             sx={{ ml: 1, flex: 1, fontFamily: 'inherit' }}
                             placeholder="Enter command (type 'clear')"

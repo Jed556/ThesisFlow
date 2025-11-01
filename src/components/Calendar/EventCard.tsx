@@ -68,7 +68,8 @@ export default function EventCard({
                         {loading ? (
                             <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 2 }} />
                         ) : (
-                            <Chip label={event.status} size="small" sx={{ backgroundColor: statusColors[event.status], color: 'white' }} />
+                            <Chip label={event.status} size="small"
+                                sx={{ backgroundColor: statusColors[event.status], color: 'white' }} />
                         )}
                         {!loading && onEdit && (
                             <IconButton size="small" onClick={onEdit} sx={{ ml: 0.5 }}>
@@ -87,7 +88,8 @@ export default function EventCard({
                 {loading ? (
                     <Skeleton variant="text" width="90%" height={20} sx={{ mb: 2 }} />
                 ) : (
-                    event.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{event.description}</Typography>
+                    event.description
+                    && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{event.description}</Typography>
                 )}
 
                 <Stack spacing={1.5} sx={{ mb: 2 }}>
@@ -192,7 +194,9 @@ export default function EventCard({
                 ) : (
                     Array.isArray(event.participants) && event.participants.length > 0 && (
                         <Box sx={{ mt: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Participants ({event.participants.length}):</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                Participants ({event.participants.length}):
+                            </Typography>
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                 {event.participants.slice(0, 5).map((participant, index) => (
                                     <Avatar
