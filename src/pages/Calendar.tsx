@@ -1,11 +1,11 @@
 import * as React from 'react';
 import {
-    Box, Card, CardContent, Typography, Chip, Grid, Button, IconButton, FormControl, InputLabel, Select,
-    MenuItem, TextField, Stack, Tooltip, Badge, Divider, List, ListItem, ListItemText, ListItemAvatar,
-    Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Menu, Checkbox, FormControlLabel
+    Box, Card, CardContent, Typography, Button, IconButton, FormControl, InputLabel, Select,
+    MenuItem, TextField, Stack, Tooltip, Divider, Autocomplete, Dialog, DialogTitle,
+    DialogContent, DialogActions, Menu, Checkbox, FormControlLabel
 } from '@mui/material';
 import {
-    CalendarToday, ViewList, Add, Edit, Delete, Upload, Download, Close, AddCircle, ExpandMore
+    CalendarToday, ViewList, Add, Upload, Download, AddCircle, ExpandMore
 } from '@mui/icons-material';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -17,10 +17,13 @@ import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
-import type { ScheduleEvent, EventStatus, CalendarView, EventLocation, Calendar as CalendarType } from '../types/schedule';
-import { format, isWithinInterval, parseISO } from 'date-fns';
-import { getUserCalendars, createPersonalCalendar, getEventIdsFromCalendars } from '../utils/firebase/firestore/calendars';
-import { setEvent, deleteEvent, bulkDeleteEvents, getEventsByIds } from '../utils/firebase/firestore/events';
+import type {
+    ScheduleEvent, EventStatus, EventLocation, Calendar as CalendarType, CalendarPermission
+} from '../types/schedule';
+import type { UserProfile } from '../types/profile';
+import { format, isWithinInterval } from 'date-fns';
+import { getUserCalendars, getEventIdsFromCalendars } from '../utils/firebase/firestore/calendars';
+import { setEvent, deleteEvent, getEventsByIds } from '../utils/firebase/firestore/events';
 
 export const metadata: NavigationItem = {
     index: 2,
@@ -42,14 +45,6 @@ const DEFAULT_CALENDAR_COLORS = [
 // Default fallback color for events
 const defaultEventColor = '#bdbdbd';
 
-// Event status colors
-const statusColors: Record<EventStatus, string> = {
-    scheduled: '#2196f3',
-    confirmed: '#4caf50',
-    cancelled: '#757575',
-    completed: '#388e3c',
-    rescheduled: '#ff9800'
-};
 
 /**
  * Check if user can edit/delete an event
@@ -72,7 +67,7 @@ function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<
 
     for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
-        const event: any = {};
+        const event: Partial<ScheduleEvent> = {};
 
         headers.forEach((header, index) => {
             const value = values[index];
@@ -87,7 +82,9 @@ function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<
             else if (header === 'enddate' || header === 'end') event.endDate = value;
             else if (header === 'color') event.color = value;
             else if (header === 'tags') event.tags = value.split(';').map(t => t.trim());
-            else if (header === 'location') event.location = { address: value, type: 'physical' };
+            else if (header === 'location') {
+                event.location = { address: value, type: 'physical' } as EventLocation;
+            }
         });
 
         // Use default calendar if not specified
@@ -130,7 +127,6 @@ export default function CalendarPage() {
     const session = useSession<Session>();
     const { showNotification } = useSnackbar();
     const [tabValue, setTabValue] = React.useState(0);
-    const [calendarView, setCalendarView] = React.useState<CalendarView>('month');
     const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(new Date());
     const [selectedRange, setSelectedRange] = React.useState<{ start: Date; end: Date } | null>(null);
     const [filterStatuses, setFilterStatuses] = React.useState<EventStatus[]>([]);
@@ -149,7 +145,7 @@ export default function CalendarPage() {
     const [openNewCalendarDialog, setOpenNewCalendarDialog] = React.useState(false);
     const [calendarMenuAnchor, setCalendarMenuAnchor] = React.useState<null | HTMLElement>(null);
     const [allTags, setAllTags] = React.useState<string[]>([]); // All available tags from events
-    const [allUsers, setAllUsers] = React.useState<any[]>([]); // All users for calendar sharing
+    const [allUsers, setAllUsers] = React.useState<UserProfile[]>([]); // All users for calendar sharing
 
     // Form state
     const [formData, setFormData] = React.useState<Partial<ScheduleEvent> & { location?: Partial<EventLocation> }>({
@@ -174,7 +170,7 @@ export default function CalendarPage() {
     const [newCalendarName, setNewCalendarName] = React.useState('');
     const [newCalendarColor, setNewCalendarColor] = React.useState(DEFAULT_CALENDAR_COLORS[0]);
     const [newCalendarDescription, setNewCalendarDescription] = React.useState('');
-    const [newCalendarPermissions, setNewCalendarPermissions] = React.useState<string[]>([]);
+    const [newCalendarPermissions, setNewCalendarPermissions] = React.useState<(string | UserProfile)[]>([]);
 
     // Color picker state for debouncing
     const [colorPickerValue, setColorPickerValue] = React.useState(defaultEventColor);
@@ -241,7 +237,7 @@ export default function CalendarPage() {
             if (session.user.role === 'admin' || session.user.role === 'developer') {
                 try {
                     const { getAllUsers } = await import('../utils/firebase/firestore');
-                    const users = await getAllUsers();
+                    const users: UserProfile[] = await getAllUsers();
                     setAllUsers(users);
                 } catch (error) {
                     console.error('Failed to load users:', error);
@@ -522,7 +518,7 @@ export default function CalendarPage() {
 
         try {
             // Build permissions array
-            const permissions: any[] = [
+            const permissions: CalendarPermission[] = [
                 {
                     userEmail: session?.user?.email || '',
                     canView: true,
@@ -532,13 +528,10 @@ export default function CalendarPage() {
             ];
 
             // Add additional people from the input
-            newCalendarPermissions.forEach((item: any) => {
-                let email = '';
-                if (typeof item === 'string') {
-                    email = item;
-                } else if (item && typeof item === 'object' && item.email) {
-                    email = item.email;
-                }
+            newCalendarPermissions.forEach((item) => {
+                const email = typeof item === 'string'
+                    ? item
+                    : item?.email;
 
                 if (email && email.includes('@')) {
                     permissions.push({
@@ -1218,12 +1211,12 @@ export default function CalendarPage() {
                                         </Box>
                                     </Box>
                                     {(session?.user?.role === 'admin' || session?.user?.role === 'developer') && (
-                                        <Autocomplete
+                                        <Autocomplete<UserProfile, true, false, true>
                                             multiple
                                             freeSolo
                                             options={allUsers}
                                             value={newCalendarPermissions}
-                                            onChange={(_, v) => setNewCalendarPermissions(v)}
+                                            onChange={(_, value) => setNewCalendarPermissions(value)}
                                             getOptionLabel={(option) => {
                                                 if (typeof option === 'string') return option;
                                                 return option.email || '';
