@@ -4,6 +4,22 @@ import {
 } from 'firebase/auth';
 import { firebaseAuth } from './firebaseConfig';
 
+/**
+ * Resolve the base URL for admin API calls, ensuring the default host includes the `/api` path.
+ */
+const resolveAdminApiBaseUrl = (): string => {
+    const envUrl = import.meta.env.VITE_ADMIN_API_URL?.trim();
+    if (envUrl && envUrl.length > 0) {
+        return envUrl.replace(/\/+$/, '');
+    }
+
+    const runtimeOrigin = typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'http://localhost:3001';
+
+    return `${runtimeOrigin.replace(/\/+$/, '')}/api`;
+};
+
 const googleProvider = new GoogleAuthProvider();
 const githubProvider = new GithubAuthProvider();
 
@@ -151,7 +167,7 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
     }
 
     try {
-        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
+        const apiUrl = resolveAdminApiBaseUrl();
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
@@ -171,7 +187,7 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
         }
 
         // Call the admin API server
-        const response = await fetch(`${apiUrl}/api/user/delete`, {
+        const response = await fetch(`${apiUrl}/user/delete`, {
             method: 'DELETE',
             headers,
             body: JSON.stringify(payload),
@@ -200,7 +216,7 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
     }
 
     try {
-        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
+        const apiUrl = resolveAdminApiBaseUrl();
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
@@ -218,7 +234,7 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
         }
 
         // Call the admin API server
-        const response = await fetch(`${apiUrl}/api/user/bulk-delete`, {
+        const response = await fetch(`${apiUrl}/user/bulk-delete`, {
             method: 'DELETE',
             headers,
             body: JSON.stringify({ users: payloads }),
@@ -270,14 +286,6 @@ export async function createAuthUser(email: string, password: string):
 }
 
 /**
- * Shape of the request payload for the admin create user callable function.
- */
-interface AdminCreateUserPayload {
-    email: string;
-    password: string;
-}
-
-/**
  * Response payload structure for the admin create user callable function.
  */
 interface AdminCreateUserResponse {
@@ -303,7 +311,7 @@ export async function adminCreateUserAccount(email: string, password: string): P
     }
 
     try {
-        const apiUrl = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3001';
+        const apiUrl = resolveAdminApiBaseUrl();
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
@@ -323,7 +331,7 @@ export async function adminCreateUserAccount(email: string, password: string): P
         }
 
         // Call the admin API server
-        const response = await fetch(`${apiUrl}/api/user/create`, {
+        const response = await fetch(`${apiUrl}/user/create`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ email, password }),
