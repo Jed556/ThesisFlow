@@ -44,10 +44,10 @@ export async function verifyFirebaseToken(req: VercelRequest): Promise<AuthConte
  */
 export function verifyApiSecret(req: VercelRequest): boolean {
     const apiSecret = req.headers['x-api-secret'] ?? req.headers['X-API-Secret'];
-    const expectedSecret = process.env.ADMIN_API_SECRET;
+    const expectedSecret = process.env.VITE_ADMIN_API_SECRET;
 
     if (!expectedSecret) {
-        console.error('ADMIN_API_SECRET not configured');
+        console.error('VITE_ADMIN_API_SECRET not configured');
         return false;
     }
 
