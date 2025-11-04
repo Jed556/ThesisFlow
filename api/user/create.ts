@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return errorResponse(res, 'Unauthorized: Provide either Bearer token or X-API-Secret', 401);
     }
 
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
 
     if (!email || !password) {
         return errorResponse(res, 'Email and password are required', 400);
@@ -32,8 +32,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         // Check if user already exists
         try {
-            await auth.getUserByEmail(email);
-            return successResponse(res, {}, 'User already exists');
+            const existingUser = await auth.getUserByEmail(email);
+            return successResponse(res, { uid: existingUser.uid }, 'User already exists');
         } catch (notFoundError: unknown) {
             // User doesn't exist, proceed with creation unless different error
             const { code } = getError(notFoundError);
@@ -48,6 +48,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             password,
             emailVerified: false,
         });
+
+        // Set custom claims if role is provided
+        if (role) {
+            await auth.setCustomUserClaims(userRecord.uid, { role });
+            console.log(`Set custom claims for user: ${email} with role: ${role}`);
+        }
 
         console.log(`Created user: ${email}`);
         return successResponse(

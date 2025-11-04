@@ -204,8 +204,12 @@ export default function AdminUsersPage() {
                     return;
                 }
 
+                // Force first user to be admin
+                const isFirstUser = users.length === 0;
+                const userRole = isFirstUser ? 'admin' : formData.role;
+
                 // Create Firebase Auth account first using Cloud Function (doesn't affect current session)
-                const authResult = await adminCreateUserAccount(email, DEFAULT_PASSWORD);
+                const authResult = await adminCreateUserAccount(email, DEFAULT_PASSWORD, userRole);
                 if (!authResult.success) {
                     setFormErrors({ email: `Failed to create auth account: ${authResult.message}` });
                     setSaving(false);
@@ -213,10 +217,6 @@ export default function AdminUsersPage() {
                 }
 
                 const nextId = users.reduce((max, user) => Math.max(max, user.id ?? 0), 0) + 1;
-
-                // Force first user to be admin
-                const isFirstUser = users.length === 0;
-                const userRole = isFirstUser ? 'admin' : formData.role;
 
                 const newUser: UserProfile = {
                     id: nextId,
