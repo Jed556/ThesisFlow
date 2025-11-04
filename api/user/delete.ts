@@ -4,6 +4,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { handleCors, errorResponse, successResponse } from '../utils.js';
+import { getError } from '../../utils/errorUtils.js';
 import { authenticate } from '../auth.js';
 import { auth } from '../firebase.js';
 
@@ -38,8 +39,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         console.log(`Deleted user: ${uid || email}`);
         return successResponse(res, {}, 'User deleted successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Unable to delete user');
         console.error(`Failed to delete user: ${uid || email}`, error);
-        return errorResponse(res, error?.message ?? 'Unable to delete user', 500);
+        return errorResponse(res, message, 500);
     }
 }

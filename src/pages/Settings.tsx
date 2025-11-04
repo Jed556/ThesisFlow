@@ -15,6 +15,7 @@ import { firebaseAuth } from '../utils/firebase/firebaseConfig';
 import { ColorPickerDialog } from '../components/ColorPicker';
 import { AnimatedPage } from '../components/Animate';
 import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
+import { getError } from '../../utils/errorUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile } from '../types/profile';
 import type { Session } from '../types/session';
@@ -107,9 +108,10 @@ export default function SettingsPage() {
                     updateThemeFromSeedColor(themeColor);
                 }
             }
-        } catch (error) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to load profile');
             console.error('Error loading profile:', error);
-            showNotification('Failed to load profile', 'error');
+            showNotification(message, 'error');
         } finally {
             setLoading(false);
         }
@@ -151,9 +153,10 @@ export default function SettingsPage() {
             await loadProfile();
             setEditing(false);
             showNotification('Profile updated successfully', 'success');
-        } catch (error) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to save profile');
             console.error('Error saving profile:', error);
-            showNotification('Failed to save profile', 'error');
+            showNotification(message, 'error');
         } finally {
             setSaving(false);
         }
@@ -201,9 +204,10 @@ export default function SettingsPage() {
             await loadProfile();
 
             showNotification('Avatar updated successfully', 'success');
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to upload avatar');
             console.error('Error uploading avatar:', error);
-            showNotification(error.message || 'Failed to upload avatar', 'error');
+            showNotification(message, 'error');
         } finally {
             setUploadingAvatar(false);
             if (avatarPreview) {
@@ -237,9 +241,10 @@ export default function SettingsPage() {
             await loadProfile();
 
             showNotification('Banner updated successfully', 'success');
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to upload banner');
             console.error('Error uploading banner:', error);
-            showNotification(error.message || 'Failed to upload banner', 'error');
+            showNotification(message, 'error');
         } finally {
             setUploadingBanner(false);
             if (bannerPreview) {
@@ -268,9 +273,10 @@ export default function SettingsPage() {
             });
 
             showNotification('Theme color updated successfully', 'success');
-        } catch (error) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to update theme color');
             console.error('Error updating theme color:', error);
-            showNotification('Failed to update theme color', 'error');
+            showNotification(message, 'error');
         }
     };
 
@@ -314,12 +320,13 @@ export default function SettingsPage() {
             });
             setPasswordDialogOpen(false);
             showNotification('Password changed successfully', 'success');
-        } catch (error: any) {
-            console.error('Error changing password:', error);
-            if (error.code === 'auth/wrong-password') {
+        } catch (error: unknown) {
+            const parsedError = getError(error, 'Failed to change password');
+            console.error('Error changing password:', parsedError);
+            if (parsedError.code === 'auth/wrong-password') {
                 showNotification('Current password is incorrect', 'error');
             } else {
-                showNotification('Failed to change password', 'error');
+                showNotification(parsedError.message, 'error');
             }
         } finally {
             setChangingPassword(false);
@@ -724,29 +731,31 @@ export default function SettingsPage() {
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
                                 label="Current Password"
-                                type={showPasswords.current ? "text" : "password"}
+                                type={showPasswords.current ? 'text' : 'password'}
                                 value={passwordData.currentPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))
                                 }
                                 fullWidth
                                 disabled={changingPassword}
-                                InputProps={{
-                                    endAdornment: (
-                                        <IconButton
-                                            onClick={() =>
-                                                setShowPasswords(prev => ({ ...prev, current: !prev.current }))
-                                            }
-                                            edge="end"
-                                        >
-                                            {showPasswords.current ? <VisibilityOff /> : <Visibility />}
-                                        </IconButton>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() =>
+                                                    setShowPasswords(prev => ({ ...prev, current: !prev.current }))
+                                                }
+                                                edge="end"
+                                            >
+                                                {showPasswords.current ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }
                                 }}
                             />
                             <TextField
                                 label="New Password"
-                                type={showPasswords.new ? "text" : "password"}
+                                type={showPasswords.new ? 'text' : 'password'}
                                 value={passwordData.newPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))
@@ -754,22 +763,24 @@ export default function SettingsPage() {
                                 fullWidth
                                 disabled={changingPassword}
                                 helperText="Must be at least 6 characters"
-                                InputProps={{
-                                    endAdornment: (
-                                        <IconButton
-                                            onClick={() =>
-                                                setShowPasswords(prev => ({ ...prev, new: !prev.new }))
-                                            }
-                                            edge="end"
-                                        >
-                                            {showPasswords.new ? <VisibilityOff /> : <Visibility />}
-                                        </IconButton>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() =>
+                                                    setShowPasswords(prev => ({ ...prev, new: !prev.new }))
+                                                }
+                                                edge="end"
+                                            >
+                                                {showPasswords.new ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }
                                 }}
                             />
                             <TextField
                                 label="Confirm New Password"
-                                type={showPasswords.confirm ? "text" : "password"}
+                                type={showPasswords.confirm ? 'text' : 'password'}
                                 value={passwordData.confirmPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))
@@ -786,17 +797,19 @@ export default function SettingsPage() {
                                         ? 'Passwords do not match'
                                         : ''
                                 }
-                                InputProps={{
-                                    endAdornment: (
-                                        <IconButton
-                                            onClick={() =>
-                                                setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))
-                                            }
-                                            edge="end"
-                                        >
-                                            {showPasswords.confirm ? <VisibilityOff /> : <Visibility />}
-                                        </IconButton>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() =>
+                                                    setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))
+                                                }
+                                                edge="end"
+                                            >
+                                                {showPasswords.confirm ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }
                                 }}
                             />
                         </Stack>

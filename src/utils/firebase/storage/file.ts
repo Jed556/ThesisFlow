@@ -1,5 +1,6 @@
-import { ref, deleteObject, getDownloadURL } from 'firebase/storage';
+import { ref, deleteObject } from 'firebase/storage';
 import { firebaseStorage } from '../firebaseConfig';
+import { getError } from '../../../../utils/errorUtils';
 
 /**
  * Allowed image types for upload
@@ -110,10 +111,11 @@ export async function deleteImage(imageUrl: string): Promise<void> {
         const storageRef = ref(firebaseStorage, path);
 
         await deleteObject(storageRef);
-    } catch (error: any) {
+    } catch (error: unknown) {
         // Ignore not found errors (image already deleted)
-        if (error?.code !== 'storage/object-not-found') {
-            throw new Error(`Failed to delete image: ${error?.message ?? String(error)}`);
+        const { code, message } = getError(error, 'Failed to delete image');
+        if (code !== 'storage/object-not-found') {
+            throw new Error(`Failed to delete image: ${message}`);
         }
     }
 }

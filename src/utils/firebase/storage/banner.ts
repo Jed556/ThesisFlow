@@ -1,6 +1,7 @@
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { firebaseStorage, firebaseAuth } from '../firebaseConfig';
 import { validateImageFile, compressImage } from './file';
+import { getError } from '../../../../utils/errorUtils';
 
 /**
  * Maximum file size for banner images (10MB)
@@ -47,7 +48,8 @@ export async function uploadBanner(file: File, userEmail?: string): Promise<stri
         // Get download URL
         const downloadURL = await getDownloadURL(storageRef);
         return downloadURL;
-    } catch (error: any) {
-        throw new Error(`Failed to upload banner: ${error?.message ?? String(error)}`);
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to upload banner');
+        throw new Error(`Failed to upload banner: ${message}`);
     }
 }

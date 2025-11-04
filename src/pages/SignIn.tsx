@@ -73,7 +73,9 @@ function Alerts() {
                             formContext.setPasswordValue(DEV_HELPER_PASSWORD);
                             return;
                         }
-                    } catch (error) { } // ignore env access issues and fall back to default
+                    } catch (error) {
+                        console.warn('DEV helper env parsing failed in handleDevClick', error);
+                    }
 
                 formContext.setPasswordValue('Password_123');
             }

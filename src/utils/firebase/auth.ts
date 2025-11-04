@@ -1,8 +1,9 @@
 import {
     GoogleAuthProvider, GithubAuthProvider, signInWithPopup, setPersistence, browserSessionPersistence,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, type User,
 } from 'firebase/auth';
 import { firebaseAuth } from './firebaseConfig';
+import { getError } from '../../../utils/errorUtils';
 
 /**
  * Resolve the base URL for admin API calls, ensuring the default host includes the `/api` path.
@@ -39,11 +40,12 @@ export async function signInWithGoogle() {
                 error: null,
             };
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to sign in with Google');
         return {
             success: false,
             user: null,
-            error: error.message,
+            error: message,
         };
     }
 };
@@ -64,11 +66,12 @@ export async function signInWithGithub() {
                 error: null,
             };
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to sign in with GitHub');
         return {
             success: false,
             user: null,
-            error: error.message,
+            error: message,
         };
     }
 };
@@ -91,11 +94,12 @@ export async function signInWithCredentials(email: string, password: string) {
                 error: null,
             };
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to sign in with email/password');
         return {
             success: false,
             user: null,
-            error: error.message || 'Failed to sign in with email/password',
+            error: message,
         };
     }
 }
@@ -108,10 +112,11 @@ export async function authSignOut() {
     try {
         await signOut(firebaseAuth);
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to sign out');
         return {
             success: false,
-            error: error.message,
+            error: message,
         };
     }
 };
@@ -128,10 +133,11 @@ export async function authDelete() {
             return { success: true };
         }
         return { success: false, error: 'No user is currently signed in.' };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to delete current user');
         return {
             success: false,
-            error: error.message,
+            error: message,
         };
     }
 };
@@ -195,8 +201,8 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
 
         const result = await response.json();
         return result;
-    } catch (error: any) {
-        const message = error?.message ?? 'Failed to delete user account. Ensure you have admin privileges.';
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to delete user account. Ensure you have admin privileges.');
         return { success: false, message };
     }
 }
@@ -242,8 +248,8 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
 
         const result = await response.json();
         return result;
-    } catch (error: any) {
-        const message = error?.message ?? 'Failed to bulk delete user accounts. Ensure you have admin privileges.';
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to bulk delete user accounts. Ensure you have admin privileges.');
         return { success: false, message };
     }
 }
@@ -255,7 +261,7 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
  * @param callback Callback function to handle user state changes
  * @returns Unsubscribe function to stop listening for auth state changes
  */
-export const onAuthStateChanged = (callback: (user: any) => void) => {
+export const onAuthStateChanged = (callback: (user: User | null) => void) => {
     return firebaseAuth.onAuthStateChanged(callback);
 };
 
@@ -275,13 +281,17 @@ export async function createAuthUser(email: string, password: string):
         // Sign out immediately so the created account doesn't remain the active session
         await signOut(firebaseAuth);
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const details = getError(error);
+        const identifier = details.code ?? details.message;
         // Common case: user already exists
-        const code = error?.code || error?.message || String(error);
-        if (code && String(code).includes('auth/email-already-in-use')) {
+        if (identifier && String(identifier).includes('auth/email-already-in-use')) {
             return { success: true, skipped: true };
         }
-        return { success: false, error: String(code) };
+        return {
+            success: false,
+            error: String(identifier ?? 'Failed to create auth user'),
+        };
     }
 }
 
@@ -339,8 +349,8 @@ export async function adminCreateUserAccount(email: string, password: string): P
 
         const result = await response.json();
         return result;
-    } catch (error: any) {
-        const message = error?.message ?? 'Failed to create user account. Ensure you have admin privileges.';
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to create user account. Ensure you have admin privileges.');
         return { success: false, message };
     }
 }

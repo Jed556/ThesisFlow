@@ -4,6 +4,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { handleCors, errorResponse, successResponse } from '../utils.js';
+import { getError } from '../../utils/errorUtils.js';
 import { authenticate } from '../auth.js';
 import { auth } from '../firebase.js';
 
@@ -33,9 +34,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
             await auth.getUserByEmail(email);
             return successResponse(res, {}, 'User already exists');
-        } catch (notFoundError: any) {
-            // User doesn't exist, proceed with creation
-            if (notFoundError.code !== 'auth/user-not-found') {
+        } catch (notFoundError: unknown) {
+            // User doesn't exist, proceed with creation unless different error
+            const { code } = getError(notFoundError);
+            if (code !== 'auth/user-not-found') {
                 throw notFoundError;
             }
         }
@@ -53,8 +55,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             { uid: userRecord.uid },
             'User created successfully'
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Unable to create user');
         console.error(`Failed to create user: ${email}`, error);
-        return errorResponse(res, error?.message ?? 'Unable to create user', 500);
+        return errorResponse(res, message, 500);
     }
 }
