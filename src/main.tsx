@@ -5,6 +5,7 @@ import App from './App';
 import ErrorBoundary from './layouts/ErrorBoundary';
 import { buildRoutes } from './utils/navBuilder';
 import { attachDevUtilsToWindow, setCurrentRoutes, setCurrentRouter } from './utils/devUtils';
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 attachDevUtilsToWindow(); // Attach dev utilities to window for console access
 
@@ -48,6 +49,7 @@ function AppWithRouter() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
+        <SpeedInsights />
         <AppWithRouter />
     </React.StrictMode>,
 );
