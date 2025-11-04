@@ -148,9 +148,15 @@ interface AdminCreateUserResponse {
  * @param email - Email address for the new user
  * @param password - Password for the new user
  * @param role - Optional role to set as a custom claim (e.g., 'admin', 'student', 'adviser')
+ * @param uid - Optional custom UID (must be unique, will be auto-generated if not provided)
  * @returns Result indicating success or failure along with an optional message and uid
  */
-export async function adminCreateUserAccount(email: string, password: string, role?: string): Promise<AdminCreateUserResponse> {
+export async function adminCreateUserAccount(
+    email: string,
+    password: string,
+    role?: string,
+    uid?: string
+): Promise<AdminCreateUserResponse> {
     if (!email || !password) {
         return { success: false, message: 'Email and password are required.' };
     }
@@ -179,7 +185,7 @@ export async function adminCreateUserAccount(email: string, password: string, ro
         const response = await fetch(`${apiUrl}/user/create`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ email, password, role }),
+            body: JSON.stringify({ email, password, role, uid }),
         });
 
         const result = await response.json();

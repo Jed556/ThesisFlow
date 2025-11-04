@@ -216,10 +216,7 @@ export default function AdminUsersPage() {
                     return;
                 }
 
-                const nextId = users.reduce((max, user) => Math.max(max, user.id ?? 0), 0) + 1;
-
                 const newUser: UserProfile = {
-                    id: nextId,
                     uid: authResult.uid,
                     email,
                     firstName: formData.firstName.trim(),
@@ -386,7 +383,7 @@ export default function AdminUsersPage() {
             // Convert to CSV
             const headers = ['ID', 'Email', 'First Name', 'Last Name', 'Role', 'Department', 'Phone', 'Last Active'];
             const csvRows = selectedUsers.map(user => [
-                user.id,
+                user.uid,
                 user.email,
                 user.firstName,
                 user.lastName,

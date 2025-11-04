@@ -23,14 +23,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return errorResponse(res, 'Unauthorized: Provide either Bearer token or X-API-Secret', 401);
     }
 
-    const { email, password, role } = req.body;
+    const { email, password, role, uid: customUid } = req.body;
 
     if (!email || !password) {
         return errorResponse(res, 'Email and password are required', 400);
     }
 
     try {
-        // Check if user already exists
+        // Check if user already exists by email
         try {
             const existingUser = await auth.getUserByEmail(email);
             return successResponse(res, { uid: existingUser.uid }, 'User already exists');
@@ -42,8 +42,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         }
 
-        // Create the user using Admin SDK
+        // If custom UID provided, check if it's already in use
+        if (customUid) {
+            try {
+                await auth.getUser(customUid);
+                return errorResponse(res, 'Custom UID already exists', 409);
+            } catch (uidError: unknown) {
+                const { code } = getError(uidError);
+                if (code !== 'auth/user-not-found') {
+                    throw uidError;
+                }
+                // UID doesn't exist, good to proceed
+            }
+        }
+
+        // Create the user using Admin SDK with optional custom UID
         const userRecord = await auth.createUser({
+            uid: customUid, // If undefined, Firebase will auto-generate
             email,
             password,
             emailVerified: false,
