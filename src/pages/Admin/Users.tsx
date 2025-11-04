@@ -15,7 +15,7 @@ import type { Session } from '../../types/session';
 import {
     getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
 } from '../../utils/firebase/firestore';
-import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth';
+import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
 import { parseUsers } from '../../utils/csvParsers';
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
@@ -501,6 +501,7 @@ export default function AdminUsersPage() {
             const email = newRow.email.toLowerCase().trim();
             const emailChanged = email !== oldRow.email;
             const roleChanged = newRow.role !== oldRow.role;
+            let updatedUser: UserProfile = { ...newRow };
 
             // Update Firebase Auth if email or role changed
             if ((emailChanged || roleChanged) && oldRow.uid) {
@@ -511,34 +512,35 @@ export default function AdminUsersPage() {
                         role: roleChanged ? newRow.role : undefined,
                     });
 
-                    if (!authResult.success) {
-                        showNotification(`Auth update failed: ${authResult.message}. Continuing with profile update.`, 'warning', 4000);
+                    if (authResult.success) {
+                        // Handle email change in Firestore
+                        if (emailChanged) {
+                            await deleteUserProfile(oldRow.email);
+                        }
+
+                        updatedUser = {
+                            ...newRow,
+                            email,
+                            firstName: newRow.firstName.trim(),
+                            middleName: newRow.middleName?.trim(),
+                            lastName: newRow.lastName.trim(),
+                            prefix: newRow.prefix?.trim(),
+                            suffix: newRow.suffix?.trim(),
+                            department: newRow.department?.trim(),
+                            avatar: newRow.avatar?.trim(),
+                            phone: newRow.phone?.trim(),
+                        };
+
+                        // setUserProfile now automatically cleans empty values
+                        await setUserProfile(email, updatedUser);
+                    } else {
+                        showNotification(`Auth update failed: ${authResult.message}.`, 'warning', 4000);
                     }
                 } catch (error) {
-                    showNotification('Failed to update Firebase Auth. Continuing with profile update.', 'warning', 4000);
+                    showNotification('Failed to update user profile.', 'warning', 4000);
                 }
             }
 
-            // Handle email change in Firestore
-            if (emailChanged) {
-                await deleteUserProfile(oldRow.email);
-            }
-
-            const updatedUser: UserProfile = {
-                ...newRow,
-                email,
-                firstName: newRow.firstName.trim(),
-                middleName: newRow.middleName?.trim(),
-                lastName: newRow.lastName.trim(),
-                prefix: newRow.prefix?.trim(),
-                suffix: newRow.suffix?.trim(),
-                department: newRow.department?.trim(),
-                avatar: newRow.avatar?.trim(),
-                phone: newRow.phone?.trim(),
-            };
-
-            // setUserProfile now automatically cleans empty values
-            await setUserProfile(email, updatedUser);
             await loadUsers();
             showNotification('User updated successfully', 'success', 3000);
             return updatedUser;
