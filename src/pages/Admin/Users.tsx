@@ -15,7 +15,7 @@ import type { Session } from '../../types/session';
 import {
     getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
 } from '../../utils/firebase/firestore';
-import { adminCreateUserAccount, adminDeleteUserAccount } from '../../utils/firebase/auth';
+import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth';
 import { parseUsers } from '../../utils/csvParsers';
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
@@ -220,6 +220,7 @@ export default function AdminUsersPage() {
 
                 const newUser: UserProfile = {
                     id: nextId,
+                    uid: authResult.uid,
                     email,
                     firstName: formData.firstName.trim(),
                     middleName: formData.middleName?.trim(),
@@ -266,13 +267,31 @@ export default function AdminUsersPage() {
                     phone: formData.phone?.trim(),
                 };
 
-                // Handle email change
-                if (email !== selectedUser.email) {
-                    await deleteUserProfile(selectedUser.email);
+                // Update Firebase Auth if email or role changed
+                const emailChanged = email !== selectedUser.email;
+                const roleChanged = formData.role !== selectedUser.role;
+
+                if (emailChanged || roleChanged) {
+                    // Get the user's UID first
+                    try {
+                        const authResult = await adminUpdateUserAccount({
+                            uid: selectedUser.uid || '', // We'll need to store UID in the profile
+                            email: emailChanged ? email : undefined,
+                            role: roleChanged ? formData.role : undefined,
+                        });
+
+                        if (authResult.success) {
+                            await deleteUserProfile(selectedUser.email);
+                            await setUserProfile(email, updatedUser);
+                        } else {
+                            showNotification(`Auth update failed: ${authResult.message}.`, 'error', 6000);
+                        }
+                    } catch (error) {
+                        showNotification('Failed to update User.', 'error', 6000);
+                    }
                 }
 
                 // setUserProfile now automatically cleans empty values
-                await setUserProfile(email, updatedUser);
                 showNotification(`User ${updatedUser.firstName} ${updatedUser.lastName} updated successfully`, 'success');
             }
 
@@ -431,14 +450,20 @@ export default function AdminUsersPage() {
             for (const user of toImport) {
                 const { password: importPassword, ...profileNoPassword } = user;
                 const password = importPassword || DEFAULT_PASSWORD;
-                const authResult = await adminCreateUserAccount(user.email, password);
+                const authResult = await adminCreateUserAccount(user.email, password, user.role);
                 if (!authResult.success) {
                     errors.push(`Auth create failed for ${user.email}: ${authResult.message}`);
                     continue;
                 }
 
+                // Store the UID in the profile
+                const profileWithUid = {
+                    ...profileNoPassword,
+                    uid: authResult.uid,
+                };
+
                 // setUserProfile now automatically cleans empty values
-                await setUserProfile(user.email, profileNoPassword);
+                await setUserProfile(user.email, profileWithUid);
             }
 
             await loadUsers();
@@ -474,9 +499,28 @@ export default function AdminUsersPage() {
             }
 
             const email = newRow.email.toLowerCase().trim();
+            const emailChanged = email !== oldRow.email;
+            const roleChanged = newRow.role !== oldRow.role;
 
-            // Handle email change
-            if (email !== oldRow.email) {
+            // Update Firebase Auth if email or role changed
+            if ((emailChanged || roleChanged) && oldRow.uid) {
+                try {
+                    const authResult = await adminUpdateUserAccount({
+                        uid: oldRow.uid,
+                        email: emailChanged ? email : undefined,
+                        role: roleChanged ? newRow.role : undefined,
+                    });
+
+                    if (!authResult.success) {
+                        showNotification(`Auth update failed: ${authResult.message}. Continuing with profile update.`, 'warning', 4000);
+                    }
+                } catch (error) {
+                    showNotification('Failed to update Firebase Auth. Continuing with profile update.', 'warning', 4000);
+                }
+            }
+
+            // Handle email change in Firestore
+            if (emailChanged) {
                 await deleteUserProfile(oldRow.email);
             }
 

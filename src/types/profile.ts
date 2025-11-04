@@ -10,6 +10,10 @@ export interface UserProfile {
      */
     id: number;
     /**
+     * Firebase Auth UID (optional, used for admin operations)
+     */
+    uid?: string;
+    /**
      * User's name prefix (e.g., "Dr.", "Prof.", "Mr.", "Ms.")
      */
     prefix?: string;

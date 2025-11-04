@@ -355,3 +355,81 @@ export async function adminCreateUserAccount(email: string, password: string, ro
         return { success: false, message };
     }
 }
+
+/**
+ * Payload for updating a user account
+ */
+interface AdminUpdateUserPayload {
+    uid: string;
+    email?: string;
+    password?: string;
+    role?: string;
+}
+
+/**
+ * Response payload structure for the admin update user function.
+ */
+interface AdminUpdateUserResponse {
+    success: boolean;
+    uid?: string;
+    email?: string;
+    emailUpdated?: boolean;
+    passwordUpdated?: boolean;
+    roleUpdated?: boolean;
+    message?: string;
+}
+
+/**
+ * Update an existing Firebase Auth user using the admin API server.
+ * Can update email, password, and/or role (custom claim).
+ *
+ * This can only be successfully executed by authenticated administrators.
+ * The API validates admin privileges before updating the specified user.
+ *
+ * @param payload - Update payload containing uid and optional email, password, and/or role
+ * @returns Result indicating success or failure along with update details
+ */
+export async function adminUpdateUserAccount(payload: AdminUpdateUserPayload): Promise<AdminUpdateUserResponse> {
+    if (!payload.uid) {
+        return { success: false, message: 'User UID is required.' };
+    }
+
+    // At least one field must be provided for update
+    if (!payload.email && !payload.password && payload.role === undefined) {
+        return { success: false, message: 'At least one field (email, password, or role) must be provided for update.' };
+    }
+
+    try {
+        const apiUrl = resolveAdminApiBaseUrl();
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        const currentUser = firebaseAuth.currentUser;
+        if (currentUser) {
+            // Use Firebase ID token for authentication if user is signed in
+            const idToken = await currentUser.getIdToken();
+            headers.Authorization = `Bearer ${idToken}`;
+        } else {
+            // Fall back to API secret for dev-helper or server-to-server calls
+            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
+            if (!apiSecret) {
+                return { success: false, message: 'Not authenticated and no API secret configured' };
+            }
+            headers['X-API-Secret'] = apiSecret;
+        }
+
+        // Call the admin API server
+        const response = await fetch(`${apiUrl}/user/update`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+        return result;
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to update user account. Ensure you have admin privileges.');
+        return { success: false, message };
+    }
+}
