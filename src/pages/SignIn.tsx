@@ -9,7 +9,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
-import { signInWithCredentials } from '../utils/firebase/auth';
+import { signInWithCredentials } from '../utils/firebase/auth/client';
 import { getAllUsers, getUserByEmail } from '../utils/firebase/firestore';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
