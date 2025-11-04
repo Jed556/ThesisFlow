@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
-    DataGrid as MuiDataGrid, GridRowModes, GridRowEditStopReasons, GridActionsCellItem, GridCallbackDetails,
-    GridColumnVisibilityModel, Toolbar, ToolbarButton, ColumnsPanelTrigger, FilterPanelTrigger, ExportPrint,
+    DataGrid as MuiDataGrid, GridRowModes, GridRowEditStopReasons, GridActionsCellItem,
+    Toolbar, ToolbarButton, ColumnsPanelTrigger, FilterPanelTrigger, ExportPrint,
     useGridApiContext, QuickFilter, QuickFilterClear, QuickFilterControl, QuickFilterTrigger,
 } from '@mui/x-data-grid';
 import type {

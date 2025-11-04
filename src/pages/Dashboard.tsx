@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Typography from '@mui/material/Typography';
 import {
-    Box, Chip, Card, CardContent, Grid, FormControl, InputLabel, Select, MenuItem, LinearProgress, Skeleton, Paper
+    Box, Chip, Card, CardContent, FormControl, InputLabel, Select, MenuItem, LinearProgress, Paper
 } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { BarChart } from '@mui/x-charts/BarChart';
@@ -11,7 +11,7 @@ import type { Session } from '../types/session';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import { AnimatedPage } from '../components/Animate';
 import { mockAllTheses, mockUserProfiles } from '../data/mockData';
-import type { ThesisData, ThesisChapter } from '../types/thesis';
+import type { ThesisChapter } from '../types/thesis';
 import { CheckCircle, Schedule, Warning, Block } from '@mui/icons-material';
 
 export const metadata: NavigationItem = {

@@ -8,7 +8,7 @@
 export function cleanData<T extends object>(data: T): Partial<T> {
     const cleaned: Partial<T> = {};
 
-    for (const key of Object.keys(data) as Array<keyof T>) {
+    for (const key of Object.keys(data) as (keyof T)[]) {
         const value = data[key];
         // Keep the value if it's not null, not undefined, and not an empty string
         if (value !== null && value !== undefined && value !== '') {
