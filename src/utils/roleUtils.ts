@@ -5,56 +5,54 @@
 
 import type { ThesisRole } from '../types/thesis';
 import type { UserRole } from '../types/profile';
-import { mockThesisData } from '../data/mockData';/**
+import { mockThesisData } from '../data/mockData';
+import { firebaseAuth, firebaseFirestore } from './firebase/firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
 
 /**
- * Determines system-wide user role based on email domain or specific email addresses
- * This is a simple implementation - in a real application, you would
- * fetch this from your backend/database or JWT token
+ * Determines system-wide user role from Firebase Auth custom claims or Firestore
+ * Prioritizes Auth token claims over Firestore data for better performance and security
+ * @param email - Optional email parameter for backwards compatibility (not used, uses current user)
+ * @param forceRefresh - Whether to force refresh the ID token to get latest claims
+ * @returns Promise resolving to the user's role
  */
-export function getUserRole(email: string): UserRole {
-    // Admin users - you can add specific admin emails here
-    const adminEmails = [
-        'admin@thesisflow.com',
-        'jed556@gmail.com', // Add your admin email
-        // Add more admin emails as needed
-    ];
+export async function getUserRole(email?: string, forceRefresh: boolean = true): Promise<UserRole> {
+    const user = firebaseAuth.currentUser;
 
-    // Editor users - you can add specific editor emails here
-    const editorEmails = [
-        'editor@thesisflow.com',
-        // Add more editor emails as needed
-    ];
-
-    // Adviser users - you can add specific adviser emails here
-    const adviserEmails = [
-        'adviser@thesisflow.com',
-        // Add more adviser emails as needed
-    ];
-
-    // Check for specific admin emails
-    if (adminEmails.includes(email.toLowerCase())) {
-        return 'admin';
+    if (!user) {
+        console.warn('No user is signed in');
+        return 'student'; // Default role
     }
 
-    // Check for specific editor emails
-    if (editorEmails.includes(email.toLowerCase())) {
-        return 'editor';
-    }
+    try {
+        // First, try to get role from Auth custom claims (fastest and most secure)
+        const idTokenResult = await user.getIdTokenResult(forceRefresh);
 
-    // Check for specific adviser emails
-    if (adviserEmails.includes(email.toLowerCase())) {
-        return 'adviser';
-    }
+        if (idTokenResult.claims.role) {
+            const role = idTokenResult.claims.role as UserRole;
+            return role;
+        }
 
-    // You can also check by domain
-    // For example, all emails from @admin.thesisflow.com are admins
-    if (email.toLowerCase().endsWith('@admin.thesisflow.com')) {
-        return 'admin';
-    }
+        // Fallback to Firestore if no claim exists
+        const userEmail = user.email;
+        if (userEmail) {
+            const userDocRef = doc(firebaseFirestore, 'users', encodeURIComponent(userEmail));
+            const docSnap = await getDoc(userDocRef);
 
-    // Default role is 'student'
-    return 'student';
+            if (docSnap.exists()) {
+                const userData = docSnap.data();
+                if (userData.role) {
+                    return userData.role as UserRole;
+                }
+            }
+        }
+
+        console.warn('No role found in Auth claims or Firestore, defaulting to student');
+        return 'student'; // Default role
+    } catch (error) {
+        console.error('Error getting user role:', error);
+        return 'student'; // Default role on error
+    }
 }
 
 /**

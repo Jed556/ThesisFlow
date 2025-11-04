@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { authSignOut, signInWithGoogle, onAuthStateChanged } from './utils/firebase/auth';
+import { authSignOut, signInWithGoogle, onAuthStateChanged } from './utils/firebase/auth/client';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { getUserByEmail } from './utils/firebase/firestore';
 import { setCurrentAppTheme } from './utils/devUtils';
@@ -9,7 +9,7 @@ import { ReactRouterAppProvider } from '@toolpad/core/react-router';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { navigationGroups } from './config/groups';
 import { Outlet } from 'react-router';
-import { SnackbarProvider, SnackbarContainer } from './components/Snackbar';
+import { SnackbarProvider, SnackbarContainer, useSnackbar } from './components/Snackbar';
 import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';
 
 import type { Navigation } from '@toolpad/core/AppProvider';
@@ -23,6 +23,7 @@ const BRANDING = {
 
 function AppContent() {
     const { theme: customTheme, updateThemeFromSeedColor, resetTheme } = useCustomTheme();
+    const { showNotification } = useSnackbar();
     const [sessionData, setSessionData] = React.useState<Session | null>(null);
     const [sessionLoading, setSessionLoading] = React.useState(true);
     const [navigation, setNavigation] = React.useState<Navigation>([]);
@@ -68,11 +69,28 @@ function AppContent() {
             if (user) {
                 setSession({ loading: true });
                 const email = user.email || '';
-                let userRole = getUserRole(email);
+
                 try {
-                    // prefer Firestore stored role when available
+                    // Get role from Auth claims first, then fall back to Firestore
+                    let userRole = await getUserRole(undefined, true); // Force refresh to get latest claims
+
+                    // Fetch user profile for additional data
                     const profile = await getUserByEmail(email);
-                    if (profile && profile.role) userRole = profile.role;
+
+                    // Prefer Firestore role if Auth claims don't exist (backwards compatibility)
+                    if (profile && profile.role && !userRole) {
+                        userRole = profile.role;
+                    }
+
+                    // If we still don't have a valid role, don't create session
+                    if (!userRole) {
+                        console.error('Unable to determine user role');
+                        showNotification('Unable to load user role. Please contact an administrator.', 'error', 0);
+                        await authSignOut();
+                        resetTheme();
+                        setSession(null);
+                        return;
+                    }
 
                     // Apply user's theme preference on login
                     if (profile?.preferences?.themeColor) {
@@ -81,19 +99,21 @@ function AppContent() {
                         // Reset to default if no theme preference
                         resetTheme();
                     }
-                } catch (error) {
-                    console.warn('Failed to fetch user profile for role:', error);
-                    // Reset to default theme on error
-                    resetTheme();
-                }
 
-                setSession({
-                    user: {
-                        email: email,
-                        image: user.photoURL || '',
-                        role: userRole,
-                    },
-                });
+                    setSession({
+                        user: {
+                            email: email,
+                            image: user.photoURL || '',
+                            role: userRole,
+                        },
+                    });
+                } catch (error) {
+                    console.error('Failed to initialize session:', error);
+                    showNotification('Failed to load user profile. Please try signing in again.', 'error', 0);
+                    await authSignOut();
+                    resetTheme();
+                    setSession(null);
+                }
             } else {
                 // Reset to default theme on logout
                 resetTheme();
@@ -102,7 +122,7 @@ function AppContent() {
         });
 
         return () => unsubscribe();
-    }, [setSession, updateThemeFromSeedColor, resetTheme]);
+    }, [setSession, updateThemeFromSeedColor, resetTheme, showNotification]);
 
     const session = React.useMemo<Session | null>(() => {
         if (sessionLoading) {
