@@ -15,12 +15,13 @@ export const FILE_SIZE_LIMITS = {
 } as const;
 
 // Supported file types by category
-export const SUPPORTED_FILE_TYPES = {
-    document: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt', 'rtf'],
+export const SUPPORTED_FILE_TYPES: Record<FileCategory, readonly FileType[]> = {
+    document: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt', 'rtf', 'csv', 'json', 'xml', 'md'],
     image: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'tiff'],
     video: ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', '3gp'],
     audio: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'],
-    archive: ['zip', 'rar', '7z', 'tar', 'gz']
+    archive: ['zip', 'rar', '7z', 'tar', 'gz'],
+    other: []
 } as const;
 
 /**
@@ -39,13 +40,13 @@ export function getFileExtension(filename: string): string {
  * @returns The file category
  */
 export function getFileCategory(extension: string): FileCategory {
-    const ext = extension.toLowerCase();
+    const ext = extension.toLowerCase() as FileType;
 
-    if (SUPPORTED_FILE_TYPES.document.includes(ext as any)) return 'document';
-    if (SUPPORTED_FILE_TYPES.image.includes(ext as any)) return 'image';
-    if (SUPPORTED_FILE_TYPES.video.includes(ext as any)) return 'video';
-    if (SUPPORTED_FILE_TYPES.audio.includes(ext as any)) return 'audio';
-    if (SUPPORTED_FILE_TYPES.archive.includes(ext as any)) return 'archive';
+    if ((SUPPORTED_FILE_TYPES.document as readonly string[]).includes(ext)) return 'document';
+    if ((SUPPORTED_FILE_TYPES.image as readonly string[]).includes(ext)) return 'image';
+    if ((SUPPORTED_FILE_TYPES.video as readonly string[]).includes(ext)) return 'video';
+    if ((SUPPORTED_FILE_TYPES.audio as readonly string[]).includes(ext)) return 'audio';
+    if ((SUPPORTED_FILE_TYPES.archive as readonly string[]).includes(ext)) return 'archive';
 
     return 'other';
 }
@@ -105,8 +106,8 @@ export function validateFile(file: File): { isValid: boolean; error?: string } {
  * @returns True if the file type is safe, false otherwise
  */
 function isSafeFileType(extension: string): boolean {
-    const safeExtensions = ['txt', 'csv', 'json', 'xml', 'md'];
-    return safeExtensions.includes(extension.toLowerCase());
+    const safeExtensions: readonly FileType[] = ['txt', 'csv', 'json', 'xml', 'md'];
+    return (safeExtensions as readonly string[]).includes(extension.toLowerCase());
 }
 
 /**

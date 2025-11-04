@@ -9,6 +9,7 @@
 export type FileType =
     // Documents
     | 'pdf' | 'docx' | 'doc' | 'xlsx' | 'xls' | 'pptx' | 'ppt' | 'txt' | 'rtf'
+    | 'csv' | 'json' | 'xml' | 'md'
     // Images
     | 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'svg' | 'webp' | 'tiff'
     // Videos
@@ -17,7 +18,7 @@ export type FileType =
     | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma'
     // Archives
     | 'zip' | 'rar' | '7z' | 'tar' | 'gz'
-    // Other
+    // Other safe types
     | string;
 
 /**

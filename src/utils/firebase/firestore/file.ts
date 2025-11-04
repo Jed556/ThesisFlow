@@ -1,5 +1,5 @@
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
+import { doc, setDoc, collection, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
+import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 
 import type { FileAttachment } from '../../../types/file';
