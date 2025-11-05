@@ -18,13 +18,9 @@ import type { Session } from '../../types/session';
 import type { UserProfile } from '../../types/profile';
 import { getAllUsers } from '../../utils/firebase/firestore';
 import {
-    getAllGroups,
-    createGroup,
-    updateGroup,
-    deleteGroup,
-    setGroup,
+    getAllGroups, createGroup, updateGroup, deleteGroup, setGroup,
 } from '../../utils/firebase/firestore';
-import { importGroupsFromCsv, exportGroupsToCsv } from '../../utils/csv';
+import { importGroupsFromCsv, exportGroupsToCsv } from '../../utils/csv/group';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 
 export const metadata: NavigationItem = {

@@ -16,7 +16,7 @@ import {
     getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
 } from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
-import { importUsersFromCsv } from '../../utils/csv/user';
+import { importUsersFromCsv, exportUsersToCsv } from '../../utils/csv/user';
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
@@ -388,30 +388,17 @@ export default function AdminUsersPage() {
 
     const handleExport = (selectedUsers: UserProfile[]) => {
         try {
-            // Convert to CSV
-            const headers = ['ID', 'Email', 'First Name', 'Last Name', 'Role', 'Department', 'Phone', 'Last Active'];
-            const csvRows = selectedUsers.map(user => [
-                user.uid,
-                user.email,
-                user.name.first,
-                user.name.last,
-                user.role,
-                user.department || '',
-                user.phone || '',
-                user.lastActive ? new Date(user.lastActive).toLocaleString() : 'Never'
-            ].join(','));
-
-            const csv = [headers.join(','), ...csvRows].join('\n');
-
-            // Download file
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-
+            const csvText = exportUsersToCsv(selectedUsers);
+            const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `users-export-${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
             showNotification(`Exported ${selectedUsers.length} user(s) to CSV`, 'success');
         } catch (error) {
             showNotification('Failed to export users to CSV', 'error');
