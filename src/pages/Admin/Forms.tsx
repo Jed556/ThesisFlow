@@ -29,12 +29,7 @@ import {
     setFormTemplate,
 } from '../../utils/firebase/firestore';
 import { getAllGroups } from '../../utils/firebase/firestore';
-import {
-    formTemplatesToCSV,
-    csvToFormTemplates,
-    downloadCSV,
-    readCSVFile,
-} from '../../utils/csvUtils';
+import { importFormsFromCsv, exportFormsToCsv } from '../../utils/csv/form';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 
 export const metadata: NavigationItem = {
@@ -435,8 +430,17 @@ export default function AdminFormManagementPage() {
 
     const handleExport = (selectedForms: FormTemplate[]) => {
         try {
-            const csv = formTemplatesToCSV(selectedForms);
-            downloadCSV(csv, `forms-export-${new Date().toISOString().split('T')[0]}.csv`);
+            const csvText = exportFormsToCsv(selectedForms);
+            const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `forms-export-${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
             showNotification(`Exported ${selectedForms.length} form(s) to CSV`, 'success');
         } catch (error) {
             console.error('Error exporting forms:', error);
@@ -446,21 +450,29 @@ export default function AdminFormManagementPage() {
 
     const handleImport = async (file: File) => {
         try {
-            const csvContent = await readCSVFile(file);
-            const importedForms = csvToFormTemplates(csvContent);
+            const text = await file.text();
+            const { parsed: importedForms, errors: parseErrors } = importFormsFromCsv(text);
+
+            const errors: string[] = [];
+            if (parseErrors.length) errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
 
             // Import forms to Firestore
             for (const formData of importedForms) {
                 const formId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
                 await setFormTemplate(formId, {
-                    id: formId,
                     ...formData,
+                    id: formId,
                 });
             }
 
             // Reload data
             await loadData();
-            showNotification(`Successfully imported ${importedForms.length} form(s)`, 'success');
+            
+            if (errors.length > 0) {
+                showNotification(`Imported ${importedForms.length} form(s) with ${errors.length} warning(s)`, 'warning');
+            } else {
+                showNotification(`Successfully imported ${importedForms.length} form(s)`, 'success');
+            }
         } catch (error) {
             console.error('Error importing forms:', error);
             showNotification('Failed to import forms from CSV', 'error');
