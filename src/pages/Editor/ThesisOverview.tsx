@@ -49,9 +49,9 @@ function resolveAttachments(hashes: string[]): FileAttachment[] {
 /**
  * Build display name for chat participants.
  */
-function resolveDisplayName(email: string | undefined): string {
-    if (!email) return 'Unknown user';
-    return getDisplayName(email) || email;
+function resolveDisplayName(uid: string | undefined): string {
+    if (!uid) return 'Unknown user';
+    return getDisplayName(uid) || uid;
 }
 
 const DEFAULT_EMPTY_MESSAGE = 'Select or request an assignment to view thesis activity.';
@@ -122,8 +122,8 @@ export default function EditorThesisOverviewPage() {
                                                 No additional team members registered.
                                             </Typography>
                                         )}
-                                        {thesis.members.map((memberEmail) => (
-                                            <Chip key={memberEmail} label={`${resolveDisplayName(memberEmail)} (Member)`}
+                                        {thesis.members.map((memberUid) => (
+                                            <Chip key={memberUid} label={`${resolveDisplayName(memberUid)} (Member)`}
                                                 size="small" variant="outlined" />
                                         ))}
                                         <Divider sx={{ my: 1 }} />

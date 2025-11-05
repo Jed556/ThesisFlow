@@ -10,7 +10,7 @@ import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
-import { getAllUsers, getUserByEmail } from '../utils/firebase/firestore';
+import { getAllUsers, getUserById } from '../utils/firebase/firestore';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
@@ -308,6 +308,7 @@ export default function SignIn() {
                                                     try {
                                                         const tmpSession: Session = {
                                                             user: {
+                                                                uid: 'dev556',
                                                                 name,
                                                                 email,
                                                                 role: 'developer',
@@ -336,30 +337,25 @@ export default function SignIn() {
                             }
 
                             if (result?.success && result?.user) {
-                                const email = result.user.email || '';
-                                let userRole;
+                                const profile = await getUserById(result.user.uid);
 
-                                try {
-                                    const profile = await getUserByEmail(email);
-                                    if (profile && profile.role) {
-                                        userRole = profile.role;
-                                    }
-                                } catch (error) {
-                                    // ignore and fallback to getUserRole
-                                    showNotification('Using default role permissions', 'info', 3000);
+                                if (!profile) {
+                                    showNotification('User profile not found. Contact an administrator.', 'error', 0);
+                                    return { error: 'User profile not found' };
                                 }
 
                                 const userSession: Session = {
                                     user: {
-                                        name: result.user.displayName || '',
-                                        email: email,
-                                        image: result.user.photoURL || '',
-                                        role: userRole,
+                                        uid: profile.uid || result.user.uid,
+                                        name: `${profile.firstName} ${profile.lastName}`.trim(),
+                                        email: profile.email,
+                                        image: profile.avatar || '',
+                                        role: profile.role,
                                     },
                                 };
                                 authentication?.setSession?.(userSession);
                                 navigate(callbackUrl || '/', { replace: true });
-                                showNotification(`Welcome back, ${result.user.displayName || email}!`, 'success', 4000);
+                                showNotification(`Welcome back, ${profile.firstName}!`, 'success', 4000);
                                 return {};
                             }
                             return { error: result?.error || 'Failed to sign in' };

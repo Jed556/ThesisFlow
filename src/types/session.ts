@@ -5,7 +5,8 @@ import type { UserRole } from './profile';
  * Extended session user shape with ThesisFlow specific metadata.
  */
 export interface ThesisFlowSessionUser extends NonNullable<ToolpadSession['user']> {
-    role?: UserRole;
+    uid: string;
+    role: UserRole;
 }
 
 /**

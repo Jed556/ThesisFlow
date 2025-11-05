@@ -13,7 +13,7 @@ export type ThesisRoleDisplay = 'Student (Leader)' | 'Student (Member)' | 'Advis
  * Thesis comment/feedback
  */
 export interface ThesisComment {
-    author: string;
+    author: string; // Firebase UID of author
     date: string;
     comment: string;
     attachments: string[]; // Array of file hashes referencing mockFileRegistry
@@ -38,10 +38,10 @@ export interface ThesisChapter {
  */
 export interface ThesisData {
     title: string;
-    leader: string;
-    members: string[];
-    adviser: string;
-    editor: string;
+    leader: string; // Firebase UID
+    members: string[]; // Firebase UIDs
+    adviser: string; // Firebase UID
+    editor: string; // Firebase UID
     submissionDate: string;
     lastUpdated: string;
     overallStatus: string;

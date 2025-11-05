@@ -235,7 +235,11 @@ export default function AdminUsersPage() {
 
                 // Create personal calendar for the new user
                 try {
-                    await createPersonalCalendar(email);
+                    if (authResult.uid) {
+                        await createPersonalCalendar(authResult.uid);
+                    } else {
+                        console.warn('User created but UID not available for calendar creation');
+                    }
                 } catch (error) {
                     showNotification('User created but calendar creation failed', 'warning');
                 }

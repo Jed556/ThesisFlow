@@ -62,7 +62,7 @@ function calculateProgress(chapters: ThesisChapter[]): number {
  */
 export default function DashboardPage() {
     const session = useSession<Session>();
-    const userEmail = session?.user?.email;
+    const userUid = session?.user?.uid;
     const userRole = session?.user?.role;
 
     // Filters
@@ -149,24 +149,24 @@ export default function DashboardPage() {
 
     // Get user's thesis (for students)
     const userThesis = React.useMemo(() => {
-        if (userRole === 'student' && userEmail) {
+        if (userRole === 'student' && userUid) {
             return mockAllTheses.find(t =>
-                t.leader === userEmail || t.members.includes(userEmail)
+                t.leader === userUid || t.members.includes(userUid)
             );
         }
         return null;
-    }, [userEmail, userRole]);
+    }, [userUid, userRole]);
 
     // Get theses for advisers/editors
     const managedTheses = React.useMemo(() => {
-        if ((userRole === 'adviser' || userRole === 'editor') && userEmail) {
+        if ((userRole === 'adviser' || userRole === 'editor') && userUid) {
             return mockAllTheses.filter(t =>
-                (userRole === 'adviser' && t.adviser === userEmail) ||
-                (userRole === 'editor' && t.editor === userEmail)
+                (userRole === 'adviser' && t.adviser === userUid) ||
+                (userRole === 'editor' && t.editor === userUid)
             );
         }
         return [];
-    }, [userEmail, userRole]);
+    }, [userUid, userRole]);
 
     return (
         <AnimatedPage variant="slideUp">
@@ -274,7 +274,7 @@ export default function DashboardPage() {
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                         {managedTheses.map((thesis, idx) => {
                             const progress = calculateProgress(thesis.chapters);
-                            const leader = mockUserProfiles.find(u => u.email === thesis.leader);
+                            const leader = mockUserProfiles.find(u => u.uid === thesis.leader);
                             return (
                                 <Box key={idx} sx={{
                                     flex: { xs: '1 1 100%', md: '1 1 calc(50% - 16px)', lg: '1 1 calc(33.333% - 16px)' },

@@ -6,10 +6,6 @@ export type UserRole = 'student' | 'editor' | 'adviser' | 'admin' | 'developer';
  */
 export interface UserProfile {
     /**
-     * User's unique identifier
-     */
-    id: number;
-    /**
      * Firebase Auth UID (optional, used for admin operations)
      */
     uid?: string;

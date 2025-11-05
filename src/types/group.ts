@@ -5,10 +5,10 @@ export interface ThesisGroup {
     id: string;
     name: string;
     description?: string;
-    leader: string; // Email of the group leader
-    members: string[]; // Array of member emails
-    adviser?: string; // Email of the assigned adviser
-    editor?: string; // Email of the assigned editor
+    leader: string; // Firebase UID of the group leader
+    members: string[]; // Array of member Firebase UIDs
+    adviser?: string; // Firebase UID of the assigned adviser
+    editor?: string; // Firebase UID of the assigned editor
     createdAt: string;
     updatedAt: string;
     status: 'active' | 'inactive' | 'completed' | 'archived';

@@ -97,13 +97,13 @@ export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boole
 // ==================================================
 
 /**
- * Get user's thesis-specific role by email from thesis data context
+ * Get user's thesis-specific role by uid from thesis data context
  */
-export function getThesisRole(email: string): ThesisRole {
-    if (email === mockThesisData.leader) return 'leader';
-    if (mockThesisData.members.includes(email)) return 'member';
-    if (email === mockThesisData.adviser) return 'adviser';
-    if (email === mockThesisData.editor) return 'editor';
+export function getThesisRole(uid: string): ThesisRole {
+    if (uid === mockThesisData.leader) return 'leader';
+    if (mockThesisData.members.includes(uid)) return 'member';
+    if (uid === mockThesisData.adviser) return 'adviser';
+    if (uid === mockThesisData.editor) return 'editor';
     return 'unknown';
 }
 

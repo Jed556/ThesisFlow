@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { authSignOut, signInWithGoogle, onAuthStateChanged } from './utils/firebase/auth/client';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { getUserByEmail } from './utils/firebase/firestore';
+import { getUserById } from './utils/firebase/firestore/profile';
 import { setCurrentAppTheme } from './utils/devUtils';
 import { buildNavigation } from './utils/navBuilder';
 import { getUserRole } from './utils/roleUtils';
@@ -68,14 +68,13 @@ function AppContent() {
         const unsubscribe = onAuthStateChanged(async (user: User | null) => {
             if (user) {
                 setSession({ loading: true });
-                const email = user.email || '';
 
                 try {
                     // Get role from Auth claims first, then fall back to Firestore
                     let userRole = await getUserRole(undefined, true); // Force refresh to get latest claims
 
                     // Fetch user profile for additional data
-                    const profile = await getUserByEmail(email);
+                    const profile = await getUserById(user.uid);
 
                     // Prefer Firestore role if Auth claims don't exist (backwards compatibility)
                     if (profile && profile.role && !userRole) {
@@ -102,7 +101,8 @@ function AppContent() {
 
                     setSession({
                         user: {
-                            email: email,
+                            uid: user.uid,
+                            email: user.email || '',
                             image: user.photoURL || '',
                             role: userRole,
                         },

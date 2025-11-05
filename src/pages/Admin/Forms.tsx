@@ -258,7 +258,7 @@ export default function AdminFormManagementPage() {
                 audience: builderState.template.audience!,
                 fields: builderState.fields.map((f, idx) => ({ ...f, id: f.id || `field-${idx}` })),
                 status: builderState.template.status!,
-                createdBy: selectedForm?.createdBy || session?.user?.email || '',
+                createdBy: selectedForm?.createdBy || session?.user?.uid || '',
                 tags: builderState.template.tags,
                 reviewerNotes: builderState.template.reviewerNotes,
                 dueInDays: builderState.template.dueInDays,
