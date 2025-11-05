@@ -1,11 +1,14 @@
-import { ref, deleteObject } from 'firebase/storage';
-import { firebaseStorage } from '../firebaseConfig';
-import { getError } from '../../../../utils/errorUtils';
+/**
+ * Image file storage utilities
+ * Handles image validation, compression, and upload
+ */
+
+import { ALLOWED_MIME_TYPES, IMAGE_COMPRESSION } from '../../../config/files';
 
 /**
  * Allowed image types for upload
  */
-export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+export const ALLOWED_IMAGE_TYPES = ALLOWED_MIME_TYPES.image;
 
 /**
  * Validate image file before upload
@@ -14,10 +17,10 @@ export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'ima
  * @returns Validation result with error message if invalid
  */
 export function validateImageFile(file: File, maxSize: number): { valid: boolean; error?: string } {
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type as typeof ALLOWED_IMAGE_TYPES[number])) {
         return {
             valid: false,
-            error: `Invalid file type. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+            error: 'Invalid file type. Allowed types: JPG, PNG, WebP, GIF',
         };
     }
 
@@ -37,14 +40,14 @@ export function validateImageFile(file: File, maxSize: number): { valid: boolean
  * @param file - Original image file
  * @param maxWidth - Maximum width for compressed image
  * @param maxHeight - Maximum height for compressed image
- * @param quality - JPEG quality (0-1)
+ * @param quality - JPEG quality (0-1), defaults to 0.85
  * @returns Compressed image blob
  */
 export async function compressImage(
     file: File,
-    maxWidth: number,
-    maxHeight: number,
-    quality: number = 0.85
+    maxWidth: number = IMAGE_COMPRESSION.preview.maxWidth,
+    maxHeight: number = IMAGE_COMPRESSION.preview.maxHeight,
+    quality: number = IMAGE_COMPRESSION.preview.quality
 ): Promise<Blob> {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -93,32 +96,7 @@ export async function compressImage(
     });
 }
 
-/**
- * Delete an image from storage using its URL
- * @param imageUrl - Full download URL of the image
- */
-export async function deleteImage(imageUrl: string): Promise<void> {
-    try {
-        // Extract storage path from URL
-        const url = new URL(imageUrl);
-        const pathMatch = url.pathname.match(/\/o\/(.+?)(\?|$)/);
 
-        if (!pathMatch) {
-            throw new Error('Invalid storage URL');
-        }
-
-        const path = decodeURIComponent(pathMatch[1]);
-        const storageRef = ref(firebaseStorage, path);
-
-        await deleteObject(storageRef);
-    } catch (error: unknown) {
-        // Ignore not found errors (image already deleted)
-        const { code, message } = getError(error, 'Failed to delete image');
-        if (code !== 'storage/object-not-found') {
-            throw new Error(`Failed to delete image: ${message}`);
-        }
-    }
-}
 
 /**
  * Create a preview URL for an image file

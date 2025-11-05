@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Typography, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Alert } from '@mui/material';
+import { Typography, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Alert, CircularProgress } from '@mui/material';
 import { Article, Upload, CloudUpload } from '@mui/icons-material';
+import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisChapter } from '../../../types/thesis';
+import type { Session } from '../../../types/session';
 import { mockThesisData } from '../../../data/mockData';
 import { AnimatedPage, AnimatedList } from '../../../components/Animate';
 import ChapterAccordion from '../../../layouts/ChapterAccordion/ChapterAccordion';
+import { uploadThesisFile, validateThesisDocument } from '../../../utils/firebase/storage/thesis';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -23,10 +26,13 @@ export const metadata: NavigationItem = {
  * Page for managing and uploading thesis chapter submissions and feedback
  */
 export default function ThesisChaptersPage() {
+    const session = useSession() as Session;
     const [uploadDialog, setUploadDialog] = useState(false);
     const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
     const [uploadError, setUploadError] = useState<string>('');
+    const [uploading, setUploading] = useState(false);
+    const [uploadSuccess, setUploadSuccess] = useState(false);
     const [chapterTitle, setChapterTitle] = useState('');
 
     const handleUploadClick = (chapterId: number, chapterTitle: string) => {
@@ -41,18 +47,10 @@ export default function ThesisChaptersPage() {
         const file = event.target.files?.[0];
         if (!file) return;
 
-        // Validate file type (PDF or DOCX only)
-        const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-        if (!allowedTypes.includes(file.type)) {
-            setUploadError('Only PDF and DOCX files are allowed.');
-            setUploadedFile(null);
-            return;
-        }
-
-        // Validate file size (max 10MB)
-        const maxSize = 10 * 1024 * 1024; // 10MB
-        if (file.size > maxSize) {
-            setUploadError('File size must be less than 10MB.');
+        // Use the validation from thesis storage utils
+        const validation = validateThesisDocument(file);
+        if (!validation.isValid) {
+            setUploadError(validation.error || 'Invalid file');
             setUploadedFile(null);
             return;
         }
@@ -61,18 +59,45 @@ export default function ThesisChaptersPage() {
         setUploadedFile(file);
     };
 
-    const handleUploadSubmit = () => {
-        if (!uploadedFile || !selectedChapter) return;
+    const handleUploadSubmit = async () => {
+        if (!uploadedFile || !selectedChapter || !session?.user?.uid) {
+            setUploadError('Missing required information');
+            return;
+        }
 
-        // Here you would typically upload the file to your backend
-        console.log('Uploading file:', uploadedFile.name, 'for chapter:', selectedChapter);
+        setUploading(true);
+        setUploadError('');
 
-        // Mock success - close dialog
-        setUploadDialog(false);
-        setUploadedFile(null);
-        setSelectedChapter(null);
+        try {
+            // Upload file to Firebase Storage
+            const result = await uploadThesisFile({
+                file: uploadedFile,
+                userUid: session.user.uid,
+                thesisId: 'thesis_001', // TODO: Get from thesis context when available
+                chapterId: selectedChapter,
+                category: 'submission',
+                metadata: {
+                    chapterTitle: chapterTitle
+                }
+            });
 
-        // You could show a success message here
+            console.log('File uploaded successfully:', result.url);
+            setUploadSuccess(true);
+
+            // Close dialog after short delay
+            setTimeout(() => {
+                setUploadDialog(false);
+                setUploadedFile(null);
+                setSelectedChapter(null);
+                setUploadSuccess(false);
+                // TODO: Refresh chapter data
+            }, 1500);
+        } catch (error) {
+            console.error('Upload error:', error);
+            setUploadError(error instanceof Error ? error.message : 'Failed to upload file');
+        } finally {
+            setUploading(false);
+        }
     };
 
     const handleCloseDialog = () => {
@@ -113,12 +138,18 @@ export default function ThesisChaptersPage() {
                 </DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Upload your chapter document in PDF or DOCX format (max 10MB).
+                        Upload your chapter document in PDF or DOCX format (max 50MB).
                     </Typography>
 
                     {uploadError && (
                         <Alert severity="error" sx={{ mb: 2 }}>
                             {uploadError}
+                        </Alert>
+                    )}
+
+                    {uploadSuccess && (
+                        <Alert severity="success" sx={{ mb: 2 }}>
+                            File uploaded successfully!
                         </Alert>
                     )}
 
@@ -154,16 +185,16 @@ export default function ThesisChaptersPage() {
                     </Box>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={handleCloseDialog}>
+                    <Button onClick={handleCloseDialog} disabled={uploading}>
                         Cancel
                     </Button>
                     <Button
                         onClick={handleUploadSubmit}
                         variant="contained"
-                        disabled={!uploadedFile}
-                        startIcon={<Upload />}
+                        disabled={!uploadedFile || uploading}
+                        startIcon={uploading ? <CircularProgress size={20} /> : <Upload />}
                     >
-                        Upload
+                        {uploading ? 'Uploading...' : 'Upload'}
                     </Button>
                 </DialogActions>
             </Dialog>

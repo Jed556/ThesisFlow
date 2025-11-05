@@ -286,7 +286,7 @@ export default function DashboardPage() {
                                                 {thesis.title}
                                             </Typography>
                                             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                                Leader: {leader ? `${leader.firstName} ${leader.lastName}` : thesis.leader}
+                                                Leader: {leader ? `${leader.name.first} ${leader.name.last}` : thesis.leader}
                                             </Typography>
                                             <Box sx={{ mb: 1 }}>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>

@@ -3,7 +3,8 @@ import { School } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisChapter } from '../../types/thesis';
 import { mockThesisData } from '../../data/mockData';
-import { getThesisTeamMembers, getDisplayName } from '../../utils/dbUtils';
+import { getDisplayName } from '../../utils/firebase/firestore/profile';
+import { getThesisTeamMembers } from '../../utils/thesisUtils';
 import { AnimatedPage, AnimatedList } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
 
@@ -41,8 +42,8 @@ export default function ThesisPage() {
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                         {teamMembers.map((member) => (
                             <Avatar
-                                key={member.id}
-                                email={member.email}
+                                key={member.uid}
+                                uid={member.uid}
                                 initials={[Name.FIRST]}
                                 mode="chip"
                                 tooltip="email"

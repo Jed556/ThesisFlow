@@ -16,7 +16,7 @@ import ChatBox from '../../components/Chat/ChatBox';
 import type { ChatMessage } from '../../types/chat';
 import { getReviewerAssignments, getReviewerWorkspace, getThesisBySlug } from '../../data/reviewerWorkspace';
 import { mockFileRegistry } from '../../data/mockData';
-import { getDisplayName } from '../../utils/dbUtils';
+import { getDisplayName } from '../../utils/firebase/firestore/profile';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',

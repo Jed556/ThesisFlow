@@ -10,7 +10,7 @@ import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
-import { getAllUsers, getUserById } from '../utils/firebase/firestore';
+import { getAllUsers, getUserById } from '../utils/firebase/firestore/profile';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
@@ -347,7 +347,7 @@ export default function SignIn() {
                                 const userSession: Session = {
                                     user: {
                                         uid: profile.uid || result.user.uid,
-                                        name: `${profile.firstName} ${profile.lastName}`.trim(),
+                                        name: `${profile.name.first} ${profile.name.last}`.trim(),
                                         email: profile.email,
                                         image: profile.avatar || '',
                                         role: profile.role,
@@ -355,7 +355,7 @@ export default function SignIn() {
                                 };
                                 authentication?.setSession?.(userSession);
                                 navigate(callbackUrl || '/', { replace: true });
-                                showNotification(`Welcome back, ${profile.firstName}!`, 'success', 4000);
+                                showNotification(`Welcome back, ${profile.name.first}!`, 'success', 4000);
                                 return {};
                             }
                             return { error: result?.error || 'Failed to sign in' };

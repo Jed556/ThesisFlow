@@ -24,12 +24,7 @@ import {
     deleteGroup,
     setGroup,
 } from '../../utils/firebase/firestore';
-import {
-    groupsToCSV,
-    csvToGroups,
-    downloadCSV,
-    readCSVFile,
-} from '../../utils/csvUtils';
+import { importGroupsFromCsv, exportGroupsToCsv } from '../../utils/csv';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 
 export const metadata: NavigationItem = {
@@ -254,8 +249,17 @@ export default function AdminGroupManagementPage() {
 
     const handleExport = (selectedGroups: ThesisGroup[]) => {
         try {
-            const csv = groupsToCSV(selectedGroups);
-            downloadCSV(csv, `groups-export-${new Date().toISOString().split('T')[0]}.csv`);
+            const csvText = exportGroupsToCsv(selectedGroups);
+            const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `groups-export-${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
             showNotification(`Exported ${selectedGroups.length} group(s) to CSV`, 'success');
         } catch (error) {
             console.error('Error exporting groups:', error);
@@ -265,21 +269,29 @@ export default function AdminGroupManagementPage() {
 
     const handleImport = async (file: File) => {
         try {
-            const csvContent = await readCSVFile(file);
-            const importedGroups = csvToGroups(csvContent);
+            const text = await file.text();
+            const { parsed: importedGroups, errors: parseErrors } = importGroupsFromCsv(text);
+
+            const errors: string[] = [];
+            if (parseErrors.length) errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
 
             // Import groups to Firestore
             for (const groupData of importedGroups) {
                 const groupId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
                 await setGroup(groupId, {
-                    id: groupId,
                     ...groupData,
+                    id: groupId,
                 });
             }
 
             // Reload data
             await loadData();
-            showNotification(`Successfully imported ${importedGroups.length} group(s)`, 'success');
+
+            if (errors.length > 0) {
+                showNotification(`Imported ${importedGroups.length} group(s) with ${errors.length} warning(s)`, 'warning');
+            } else {
+                showNotification(`Successfully imported ${importedGroups.length} group(s)`, 'success');
+            }
         } catch (error) {
             console.error('Error importing groups:', error);
             showNotification('Failed to import groups from CSV', 'error');
@@ -309,7 +321,7 @@ export default function AdminGroupManagementPage() {
             editable: false,
             valueGetter: (value) => {
                 const user = users.find((u) => u.email === value);
-                return user ? `${user.firstName} ${user.lastName}` : value;
+                return user ? `${user.name.first} ${user.name.last}` : value;
             },
         },
         {
@@ -331,7 +343,7 @@ export default function AdminGroupManagementPage() {
             valueGetter: (value) => {
                 if (!value) return '—';
                 const user = users.find((u) => u.email === value);
-                return user ? `${user.firstName} ${user.lastName}` : value;
+                return user ? `${user.name.first} ${user.name.last}` : value;
             },
         },
         {
@@ -343,7 +355,7 @@ export default function AdminGroupManagementPage() {
             valueGetter: (value) => {
                 if (!value) return '—';
                 const user = users.find((u) => u.email === value);
-                return user ? `${user.firstName} ${user.lastName}` : value;
+                return user ? `${user.name.first} ${user.name.last}` : value;
             },
         },
         {
@@ -461,7 +473,7 @@ export default function AdminGroupManagementPage() {
 
                             <Autocomplete
                                 options={students}
-                                getOptionLabel={(option) => `${option.firstName} ${option.lastName} (${option.email})`}
+                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
                                 value={students.find((u) => u.email === formData.leader) || null}
                                 onChange={(_, newValue) => setFormData({ ...formData, leader: newValue?.email || '' })}
                                 renderInput={(params) => (
@@ -478,7 +490,7 @@ export default function AdminGroupManagementPage() {
                             <Autocomplete
                                 multiple
                                 options={students}
-                                getOptionLabel={(option) => `${option.firstName} ${option.lastName} (${option.email})`}
+                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
                                 value={students.filter((u) => formData.members.includes(u.email))}
                                 onChange={(_, newValue) =>
                                     setFormData({ ...formData, members: newValue.map((u) => u.email) })
@@ -488,7 +500,7 @@ export default function AdminGroupManagementPage() {
 
                             <Autocomplete
                                 options={advisers}
-                                getOptionLabel={(option) => `${option.firstName} ${option.lastName} (${option.email})`}
+                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
                                 value={advisers.find((u) => u.email === formData.adviser) || null}
                                 onChange={(_, newValue) => setFormData({ ...formData, adviser: newValue?.email || '' })}
                                 renderInput={(params) => <TextField {...params} label="Adviser (Optional)" />}
@@ -496,7 +508,7 @@ export default function AdminGroupManagementPage() {
 
                             <Autocomplete
                                 options={editors}
-                                getOptionLabel={(option) => `${option.firstName} ${option.lastName} (${option.email})`}
+                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
                                 value={editors.find((u) => u.email === formData.editor) || null}
                                 onChange={(_, newValue) => setFormData({ ...formData, editor: newValue?.email || '' })}
                                 renderInput={(params) => <TextField {...params} label="Editor (Optional)" />}

@@ -6,6 +6,7 @@ import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 
 import type { ThesisData } from '../../../types/thesis';
+import type { UserProfile } from '../../../types/profile';
 
 /** Firestore collection name used for user documents */
 const THESES_COLLECTION = 'theses';
@@ -73,4 +74,79 @@ export async function bulkDeleteTheses(ids: string[]): Promise<void> {
     });
 
     await Promise.all(deletePromises);
+}
+
+/**
+ * Get all thesis team members (leader, members, adviser, editor) with their profiles
+ * @param thesisId - Thesis document ID
+ * @returns Array of user profiles with thesis roles
+ */
+export async function getThesisTeamMembers(thesisId: string): Promise<(UserProfile & { thesisRole: string })[]> {
+    const thesis = await getThesisById(thesisId);
+    if (!thesis) return [];
+
+    const { getUserById } = await import('./profile');
+    const teamMembers: (UserProfile & { thesisRole: string })[] = [];
+
+    // Add leader (student)
+    if (thesis.leader) {
+        const leader = await getUserById(thesis.leader);
+        if (leader) {
+            teamMembers.push({
+                ...leader,
+                thesisRole: 'Leader'
+            });
+        }
+    }
+
+    // Add other members (students)
+    if (thesis.members && thesis.members.length > 0) {
+        for (const memberUid of thesis.members) {
+            const member = await getUserById(memberUid);
+            if (member) {
+                teamMembers.push({
+                    ...member,
+                    thesisRole: 'Member'
+                });
+            }
+        }
+    }
+
+    // Add adviser
+    if (thesis.adviser) {
+        const adviser = await getUserById(thesis.adviser);
+        if (adviser) {
+            teamMembers.push({
+                ...adviser,
+                thesisRole: 'Adviser'
+            });
+        }
+    }
+
+    // Add editor
+    if (thesis.editor) {
+        const editor = await getUserById(thesis.editor);
+        if (editor) {
+            teamMembers.push({
+                ...editor,
+                thesisRole: 'Editor'
+            });
+        }
+    }
+
+    return teamMembers;
+}
+
+/**
+ * Calculate thesis progress based on approved chapters
+ * @param thesisId - Thesis document ID
+ * @returns Progress percentage (0-100)
+ */
+export async function calculateThesisProgress(thesisId: string): Promise<number> {
+    const thesis = await getThesisById(thesisId);
+    if (!thesis || !thesis.chapters || thesis.chapters.length === 0) return 0;
+
+    const total = thesis.chapters.length;
+    const approved = thesis.chapters.filter(ch => ch.status === 'approved').length;
+    return (approved / total) * 100;
 }

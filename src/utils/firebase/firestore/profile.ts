@@ -60,10 +60,10 @@ export async function getUserById(uid: string): Promise<UserProfile | null> {
  * @param value - Value to match
  * @returns Array of matching UserProfile documents
  */
-export async function findUserByField(field: string, value: any): Promise<UserProfile[]> {
+export async function findUserByField(field: string, value: unknown): Promise<UserProfile[]> {
     const q = query(collection(firebaseFirestore, USERS_COLLECTION), where(field, '==', value));
     const snap = await getDocs(q);
-    return snap.docs.map(d => d.data() as UserProfile);
+    return snap.docs.map((doc) => doc.data() as UserProfile);
 }
 
 /**
@@ -139,12 +139,10 @@ export async function bulkDeleteUserProfiles(uids: string[]): Promise<void> {
  * @returns Unsubscribe function
  */
 export function onUserProfile(uid: string, callback: (profile: UserProfile | null) => void) {
-    if (!uid) return () => { };
-    const id = encodeURIComponent(uid);
-    const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
-    return onSnapshot(ref, snap => {
-        if (!snap.exists()) return callback(null);
-        callback(snap.data() as UserProfile);
+    if (!uid) return () => { /* No-op unsubscribe */ };
+    const docRef = doc(firebaseFirestore, USERS_COLLECTION, uid);
+    return onSnapshot(docRef, (snap) => {
+        callback(snap.exists() ? (snap.data() as UserProfile) : null);
     });
 }
 
@@ -156,7 +154,7 @@ export function onUserProfile(uid: string, callback: (profile: UserProfile | nul
  */
 export function onCurrentUserProfile(callback: (profile: UserProfile | null) => void) {
     const uid = getCurrentUserId();
-    if (!uid) return () => { };
+    if (!uid) return () => { /* No-op unsubscribe */ };
     return onUserProfile(uid, callback);
 }
 
@@ -177,24 +175,23 @@ export async function getProfile(uid: string): Promise<UserProfile | undefined> 
  */
 export async function getDisplayName(uid: string): Promise<string> {
     const profile = await getProfile(uid);
-    if (!profile) return uid; // Fallback to UID if profile not found
+
+    if (!profile) {
+        return uid;
+    }
 
     const parts: string[] = [];
 
-    if (profile.prefix) {
-        parts.push(profile.prefix);
+    if (profile.name.prefix) {
+        parts.push(profile.name.prefix);
     }
-
-    parts.push(profile.firstName);
-
-    if (profile.middleName) {
-        parts.push(profile.middleName);
+    parts.push(profile.name.first);
+    if (profile.name.middle) {
+        parts.push(profile.name.middle);
     }
-
-    parts.push(profile.lastName);
-
-    if (profile.suffix) {
-        parts.push(profile.suffix);
+    parts.push(profile.name.last);
+    if (profile.name.suffix) {
+        parts.push(profile.name.suffix);
     }
 
     return parts.join(' ');

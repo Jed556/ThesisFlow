@@ -15,7 +15,7 @@ import type { ThesisData } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import { getReviewerAssignments, getReviewerWorkspace, getThesisBySlug } from '../../data/reviewerWorkspace';
 import { mockFileRegistry } from '../../data/mockData';
-import { getDisplayName } from '../../utils/dbUtils';
+import { getDisplayName } from '../../utils/firebase/firestore/profile';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',

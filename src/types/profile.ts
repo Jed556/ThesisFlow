@@ -1,6 +1,29 @@
 // User role types - System-wide roles
 export type UserRole = 'student' | 'editor' | 'adviser' | 'admin' | 'developer';
 
+export interface UserName {
+    /**
+     * User's name prefix (e.g., "Dr.", "Prof.", "Mr.", "Ms.")
+     */
+    prefix?: string;
+    /**
+     * User's first name
+     */
+    first: string;
+    /**
+     * User's middle name or initial
+     */
+    middle?: string;
+    /**
+     * User's last name
+     */
+    last: string;
+    /**
+     * User's name suffix (e.g., "Jr.", "Sr.", "III", "Ph.D.")
+        */
+    suffix?: string;
+}
+
 /**
  * Interface for user profiles in the ThesisFlow system
  */
@@ -10,25 +33,9 @@ export interface UserProfile {
      */
     uid?: string;
     /**
-     * User's name prefix (e.g., "Dr.", "Prof.", "Mr.", "Ms.")
+     * User's name
      */
-    prefix?: string;
-    /**
-     * User's first name
-     */
-    firstName: string;
-    /**
-     * User's middle name or initial
-     */
-    middleName?: string;
-    /**
-     * User's last name
-     */
-    lastName: string;
-    /**
-     * User's name suffix (e.g., "Jr.", "Sr.", "III", "Ph.D.")
-        */
-    suffix?: string;
+    name: UserName;
     /**
      * User's email address
      */

@@ -1,7 +1,7 @@
 import { Typography, Box, Chip, Accordion, AccordionSummary, AccordionDetails, Button, } from '@mui/material';
 import { ExpandMore, CheckCircle, Pending, Cancel, Schedule, Upload, CloudUpload, } from '@mui/icons-material';
 import type { StatusColor, ThesisChapter } from '../../types/thesis';
-import { getChapterSubmissions } from '../../utils/dbUtils';
+import { getChapterSubmissions } from '../../utils/fileUtils';
 import ChapterItem from './ChapterItem';
 
 /**

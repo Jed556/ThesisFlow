@@ -16,7 +16,7 @@ import {
     getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
 } from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
-import { parseUsers } from '../../utils/csvParsers';
+import { importUsersFromCsv } from '../../utils/csv/user';
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
@@ -219,11 +219,13 @@ export default function AdminUsersPage() {
                 const newUser: UserProfile = {
                     uid: authResult.uid,
                     email,
-                    firstName: formData.firstName.trim(),
-                    middleName: formData.middleName?.trim(),
-                    lastName: formData.lastName.trim(),
-                    prefix: formData.prefix?.trim(),
-                    suffix: formData.suffix?.trim(),
+                    name: {
+                        prefix: formData.prefix?.trim(),
+                        first: formData.firstName.trim(),
+                        middle: formData.middleName?.trim(),
+                        last: formData.lastName.trim(),
+                        suffix: formData.suffix?.trim(),
+                    },
                     role: userRole,
                     department: formData.department?.trim(),
                     avatar: formData.avatar?.trim(),
@@ -248,7 +250,7 @@ export default function AdminUsersPage() {
                 if (isFirstUser && formData.role !== 'admin') {
                     showNotification('Created as Admin. At least one admin account is required in the system.', 'info', 8000);
                 } else {
-                    showNotification(`User ${newUser.firstName} ${newUser.lastName} created successfully`, 'success');
+                    showNotification(`User ${newUser.name.first} ${newUser.name.last} created successfully`, 'success');
                 }
             } else {
                 // Update existing user
@@ -257,11 +259,13 @@ export default function AdminUsersPage() {
                 const updatedUser: UserProfile = {
                     ...selectedUser,
                     email,
-                    firstName: formData.firstName.trim(),
-                    middleName: formData.middleName?.trim(),
-                    lastName: formData.lastName.trim(),
-                    prefix: formData.prefix?.trim(),
-                    suffix: formData.suffix?.trim(),
+                    name: {
+                        prefix: formData.prefix?.trim(),
+                        first: formData.firstName.trim(),
+                        middle: formData.middleName?.trim(),
+                        last: formData.lastName.trim(),
+                        suffix: formData.suffix?.trim(),
+                    },
                     role: formData.role,
                     department: formData.department?.trim(),
                     avatar: formData.avatar?.trim(),
@@ -293,7 +297,7 @@ export default function AdminUsersPage() {
                 }
 
                 // setUserProfile now automatically cleans empty values
-                showNotification(`User ${updatedUser.firstName} ${updatedUser.lastName} updated successfully`, 'success');
+                showNotification(`User ${updatedUser.name.first} ${updatedUser.name.last} updated successfully`, 'success');
             }
 
             await loadUsers();
@@ -325,7 +329,7 @@ export default function AdminUsersPage() {
 
             // Delete Firestore profile
             await deleteUserProfile(selectedUser.email);
-            showNotification(`User ${selectedUser.firstName} ${selectedUser.lastName} deleted successfully`, 'success');
+            showNotification(`User ${selectedUser.name.first} ${selectedUser.name.last} deleted successfully`, 'success');
             await loadUsers();
             handleCloseDialog();
         } catch (error) {
@@ -389,8 +393,8 @@ export default function AdminUsersPage() {
             const csvRows = selectedUsers.map(user => [
                 user.uid,
                 user.email,
-                user.firstName,
-                user.lastName,
+                user.name.first,
+                user.name.last,
                 user.role,
                 user.department || '',
                 user.phone || '',
@@ -417,10 +421,10 @@ export default function AdminUsersPage() {
     const handleImport = async (file: File) => {
         try {
             const text = await file.text();
-            const { parsed, errors: parseErrors } = parseUsers(text);
+            const { parsed, errors: parseErrors } = importUsersFromCsv(text);
 
             const errors: string[] = [];
-            if (parseErrors.length) errors.push(...parseErrors.map(e => `Parse: ${e}`));
+            if (parseErrors.length) errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
 
             // Filter out already-existing users and prepare to import
             const toImport: ImportedUser[] = [];
@@ -522,11 +526,13 @@ export default function AdminUsersPage() {
                         updatedUser = {
                             ...newRow,
                             email,
-                            firstName: newRow.firstName.trim(),
-                            middleName: newRow.middleName?.trim(),
-                            lastName: newRow.lastName.trim(),
-                            prefix: newRow.prefix?.trim(),
-                            suffix: newRow.suffix?.trim(),
+                            name: {
+                                first: newRow.name.first.trim(),
+                                middle: newRow.name.middle?.trim(),
+                                last: newRow.name.last.trim(),
+                                prefix: newRow.name.prefix?.trim(),
+                                suffix: newRow.name.suffix?.trim(),
+                            },
                             department: newRow.department?.trim(),
                             avatar: newRow.avatar?.trim(),
                             phone: newRow.phone?.trim(),

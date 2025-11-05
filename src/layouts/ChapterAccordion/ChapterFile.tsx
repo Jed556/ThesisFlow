@@ -2,7 +2,8 @@ import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, Too
 import { PictureAsPdf, Description, Delete, Download, } from '@mui/icons-material';
 import { Avatar, Name } from '../../components/Avatar';
 import type { FileType } from '../../types/file';
-import { getChapterSubmissions, getDisplayName } from '../../utils/dbUtils';
+import { getDisplayName } from '../../utils/firebase/firestore/profile';
+import { getChapterSubmissions } from '../../utils/fileUtils';
 
 /**
  * Props for the ChapterFile component
@@ -57,7 +58,7 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
     const submissionFiles = loading ? [] : getChapterSubmissions(chapterId);
 
     // If not loading and no files, show info alert
-    if (!loading && submissionFiles.length === 0) {
+    if (!loading && !submissionFiles.length === 0) {
         return (
             <Alert severity='info' sx={{ mb: 2 }}>
                 No document uploaded yet. Click 'Upload Document' to submit your chapter.
@@ -111,7 +112,7 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                         }
 
                         // Render actual file
-                        const file = fileOrIndex as any;
+                        const file = fileOrIndex as FileAttachment;
                         const isCurrentVersion = index === 0; // Most recent file is current
                         const version = sortedFiles.length - index; // Calculate version number
                         const isSelected = selectedVersion === version;
@@ -119,7 +120,7 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                         const authorName = getDisplayName(file.author);
                         const clickable = Boolean(onVersionSelect);
 
-                        const fileBoxSx = (theme: any) => ({
+                        const fileBoxSx = () => ({
                             p: 2,
                             border: 2,
                             borderColor: isSelected ? 'secondary.main' : isCurrentVersion ? 'primary.main' : 'divider',
@@ -128,7 +129,8 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                             position: 'relative',
                             cursor: clickable ? 'pointer' : 'default',
                             // Smooth transition for border, background, and opacity changes
-                            transition: 'border-color short easeInOut, background-color short easeInOut, opacity calc(short * 0.9) easeInOut',
+                            transition:
+                                'border-color short easeInOut, background-color short easeInOut, opacity calc(short * 0.9) easeInOut',
                             opacity: isSelected ? 1 : 0.995,
                             '&:hover': clickable
                                 ? {
@@ -163,7 +165,8 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                                             transform: 'translateY(-50%)',
                                             fontSize: '0.7rem',
                                             zIndex: 1,
-                                            transition: 'background-color short easeInOut, color short easeInOut, transform calc(short * 0.9) easeInOut',
+                                            transition:
+                                                'background-color short easeInOut, color short easeInOut, transform calc(short * 0.9) easeInOut',
                                             '& .MuiChip-label': {
                                                 paddingLeft: theme.spacing(1),
                                                 paddingRight: theme.spacing(1),
@@ -187,7 +190,8 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                                         zIndex: 1,
                                         opacity: isSelected ? 1 : 0,
                                         pointerEvents: isSelected ? 'auto' : 'none',
-                                        transition: 'opacity short easeInOut, transform calc(short * 0.9) easeInOut, background-color short easeInOut, color short easeInOut',
+                                        transition:
+                                            'opacity short easeInOut, transform calc(short * 0.9) easeInOut, background-color short easeInOut, color short easeInOut',
                                         '& .MuiChip-label': {
                                             paddingLeft: theme.spacing(1),
                                             paddingRight: theme.spacing(1),

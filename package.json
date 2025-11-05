@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "1.26.6",
+    "version": "2.0.0",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -42,6 +42,6 @@
         "jiti": "^2.6.1",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.46.3",
-        "vite": "^7.1.12"
+        "vite": "^7.2.0"
     }
 }

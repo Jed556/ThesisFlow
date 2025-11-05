@@ -1,5 +1,4 @@
 import type { UserProfile } from '../types/profile';
-import { getProfile } from './dbUtils';
 
 /**
  * Utility functions for avatar generation and user name handling
@@ -24,7 +23,7 @@ export const getAvatarInitials = (firstName: string, lastName: string): string =
  * @returns Two-letter initials string in uppercase
  */
 export const getProfileInitials = (profile: UserProfile): string => {
-    return getAvatarInitials(profile.firstName, profile.lastName);
+    return getAvatarInitials(profile.name.first, profile.name.last);
 };
 
 /**
@@ -64,32 +63,21 @@ export const getInitialsFromFullName = (fullName: string): string => {
 export const getDisplayName = (profile: UserProfile): string => {
     const parts: string[] = [];
 
-    if (profile.prefix) {
-        parts.push(profile.prefix);
+    if (profile.name.prefix) {
+        parts.push(profile.name.prefix);
     }
 
-    parts.push(profile.firstName);
+    parts.push(profile.name.first);
 
-    if (profile.middleName) {
-        parts.push(profile.middleName);
+    if (profile.name.middle) {
+        parts.push(profile.name.middle);
     }
 
-    parts.push(profile.lastName);
+    parts.push(profile.name.last);
 
-    if (profile.suffix) {
-        parts.push(profile.suffix);
+    if (profile.name.suffix) {
+        parts.push(profile.name.suffix);
     }
 
     return parts.join(' ');
-};
-
-/**
- * Helper function to find a user profile by email
- * @param email - Email address to search for
- * @returns UserProfile object or null if not found
- * 
- * @internal
- */
-export const findProfileByEmail = (email: string): UserProfile | null => {
-    return getProfile(email) || null;
 };

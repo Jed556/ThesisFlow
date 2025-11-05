@@ -10,7 +10,7 @@ import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/profile';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { uploadAvatar, uploadBanner, deleteImage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
+import { uploadAvatar, uploadBanner, deleteFileFromStorage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
 import { firebaseAuth } from '../utils/firebase/firebaseConfig';
 import { ColorPickerDialog } from '../components/ColorPicker';
 import { AnimatedPage } from '../components/Animate';
@@ -91,11 +91,11 @@ export default function SettingsPage() {
                 setProfile(userProfile);
                 const themeColor = userProfile.preferences?.themeColor || '#2196F3';
                 setFormData({
-                    prefix: userProfile.prefix || '',
-                    firstName: userProfile.firstName || '',
-                    middleName: userProfile.middleName || '',
-                    lastName: userProfile.lastName || '',
-                    suffix: userProfile.suffix || '',
+                    prefix: userProfile.name.prefix || '',
+                    firstName: userProfile.name.first || '',
+                    middleName: userProfile.name.middle || '',
+                    lastName: userProfile.name.last || '',
+                    suffix: userProfile.name.suffix || '',
                     phone: userProfile.phone || '',
                     department: userProfile.department || '',
                     bio: userProfile.bio || '',
@@ -131,11 +131,13 @@ export default function SettingsPage() {
         try {
             setSaving(true);
             await setUserProfile(session.user.email, {
-                prefix: formData.prefix,
-                firstName: formData.firstName,
-                middleName: formData.middleName,
-                lastName: formData.lastName,
-                suffix: formData.suffix,
+                name: {
+                    prefix: formData.prefix,
+                    first: formData.firstName,
+                    middle: formData.middleName,
+                    last: formData.lastName,
+                    suffix: formData.suffix,
+                },
                 phone: formData.phone,
                 department: formData.department,
                 bio: formData.bio,
@@ -165,11 +167,11 @@ export default function SettingsPage() {
     const handleCancel = () => {
         if (profile) {
             setFormData({
-                prefix: profile.prefix || '',
-                firstName: profile.firstName || '',
-                middleName: profile.middleName || '',
-                lastName: profile.lastName || '',
-                suffix: profile.suffix || '',
+                prefix: profile.name.prefix || '',
+                firstName: profile.name.first || '',
+                middleName: profile.name.middle || '',
+                lastName: profile.name.last || '',
+                suffix: profile.name.suffix || '',
                 phone: profile.phone || '',
                 department: profile.department || '',
                 bio: profile.bio || '',
@@ -196,7 +198,7 @@ export default function SettingsPage() {
 
             // Delete old avatar if exists
             if (profile?.avatar) {
-                await deleteImage(profile.avatar).catch(console.error);
+                await deleteFileFromStorage(profile.avatar).catch(console.error);
             }
 
             // Update profile
@@ -233,7 +235,7 @@ export default function SettingsPage() {
 
             // Delete old banner if exists
             if (profile?.banner) {
-                await deleteImage(profile.banner).catch(console.error);
+                await deleteFileFromStorage(profile.banner).catch(console.error);
             }
 
             // Update profile
