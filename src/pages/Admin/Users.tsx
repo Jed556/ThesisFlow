@@ -499,7 +499,7 @@ export default function AdminUsersPage() {
     const columns: GridColDef[] = [
         {
             field: 'id',
-            headerName: 'ID',
+            headerName: 'UID',
             width: 70,
             type: 'number',
             editable: false,
@@ -512,26 +512,36 @@ export default function AdminUsersPage() {
             editable: true,
         },
         {
-            field: 'fullName',
-            headerName: 'Full Name',
+            field: 'namePrefix',
+            headerName: 'Prefix',
             flex: 1,
-            minWidth: 200,
-            editable: false,
-            valueGetter: (value, row) => {
-                const parts = [row.prefix, row.firstName, row.middleName, row.lastName, row.suffix].filter(Boolean);
-                return parts.join(' ');
-            },
+            minWidth: 150,
+            editable: true,
         },
         {
-            field: 'firstName',
+            field: 'nameFirst',
             headerName: 'First Name',
             flex: 1,
             minWidth: 150,
             editable: true,
         },
         {
-            field: 'lastName',
+            field: 'nameMiddle',
+            headerName: 'Middle Name',
+            flex: 1,
+            minWidth: 150,
+            editable: true,
+        },
+        {
+            field: 'nameLast',
             headerName: 'Last Name',
+            flex: 1,
+            minWidth: 150,
+            editable: true,
+        },
+        {
+            field: 'nameSuffix',
+            headerName: 'Suffix',
             flex: 1,
             minWidth: 150,
             editable: true,
@@ -609,7 +619,15 @@ export default function AdminUsersPage() {
         <AnimatedPage variant="fade">
             <Box sx={{ width: '100%' }}>
                 <DataGrid
-                    rows={users.map(user => ({ ...user, id: user.uid }))}
+                    rows={users.map(user => ({
+                        ...user,
+                        id: user.uid,
+                        namePrefix: user.name.prefix || '',
+                        nameFirst: user.name.first,
+                        nameMiddle: user.name.middle || '',
+                        nameLast: user.name.last,
+                        nameSuffix: user.name.suffix || '',
+                    }))}
                     columns={columns}
                     loading={loading}
                     initialPage={0}
@@ -647,11 +665,11 @@ export default function AdminUsersPage() {
                     <DialogContent>
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
-                                label="Student No."
+                                label="User ID"
                                 value={formData.uid.trim()}
                                 onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
                                 error={!!formErrors.uid}
-                                helperText={formErrors.uid || 'Unique student number or identifier'}
+                                helperText={formErrors.uid || 'Unique user identifier'}
                                 required
                                 fullWidth
                                 disabled={editMode}
