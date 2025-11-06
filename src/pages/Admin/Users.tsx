@@ -13,7 +13,7 @@ import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
 import type { Session } from '../../types/session';
 import {
-    getAllUsers, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
+    getAllUsers, getUserById, setUserProfile, deleteUserProfile, createPersonalCalendar
 } from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../utils/csv/user';
@@ -41,24 +41,13 @@ const ROLE_COLORS: Record<UserRole, 'default' | 'primary' | 'secondary' | 'error
 
 type ImportedUser = UserProfile & { password?: string };
 
-interface UserFormData {
-    id?: number;
-    email: string;
-    firstName: string;
-    middleName?: string;
-    lastName: string;
-    prefix?: string;
-    suffix?: string;
-    role: UserRole;
-    department?: string;
-    avatar?: string;
-    phone?: string;
-}
-
-const emptyFormData: UserFormData = {
+const emptyFormData: UserProfile = {
+    uid: '',
     email: '',
-    firstName: '',
-    lastName: '',
+    name: {
+        first: '',
+        last: '',
+    },
     role: 'student',
 };
 
@@ -75,9 +64,9 @@ export default function AdminUsersPage() {
     const [dialogOpen, setDialogOpen] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
     const [editMode, setEditMode] = React.useState(false);
-    const [formData, setFormData] = React.useState<UserFormData>(emptyFormData);
+    const [formData, setFormData] = React.useState<UserProfile>(emptyFormData);
     const [selectedUser, setSelectedUser] = React.useState<UserProfile | null>(null);
-    const [formErrors, setFormErrors] = React.useState<Partial<Record<keyof UserFormData, string>>>({});
+    const [formErrors, setFormErrors] = React.useState<Partial<Record<keyof UserProfile | 'name.first' | 'name.last', string>>>({});
     const [saving, setSaving] = React.useState(false);
 
     // Calculate admin count for deletion protection
@@ -125,26 +114,6 @@ export default function AdminUsersPage() {
         setDialogOpen(true);
     };
 
-    // const handleOpenEditDialog = (user: UserProfile) => {
-    //     setEditMode(true);
-    //     setSelectedUser(user);
-    //     setFormData({
-    //         id: user.id,
-    //         email: user.email,
-    //         firstName: user.firstName,
-    //         middleName: user.middleName,
-    //         lastName: user.lastName,
-    //         prefix: user.prefix,
-    //         suffix: user.suffix,
-    //         role: user.role,
-    //         department: user.department,
-    //         avatar: user.avatar,
-    //         phone: user.phone,
-    //     });
-    //     setFormErrors({});
-    //     setDialogOpen(true);
-    // };
-
     const handleOpenDeleteDialog = (user: UserProfile) => {
         setSelectedUser(user);
         setDeleteDialogOpen(true);
@@ -159,7 +128,11 @@ export default function AdminUsersPage() {
     };
 
     const validateForm = (): boolean => {
-        const errors: Partial<Record<keyof UserFormData, string>> = {};
+        const errors: Partial<Record<keyof UserProfile | 'name.first' | 'name.last', string>> = {};
+
+        if (!formData.uid.trim()) {
+            errors.uid = 'Student No. is required';
+        }
 
         if (!formData.email.trim()) {
             errors.email = 'Email is required';
@@ -167,12 +140,12 @@ export default function AdminUsersPage() {
             errors.email = 'Enter a valid email address';
         }
 
-        if (!formData.firstName.trim()) {
-            errors.firstName = 'First name is required';
+        if (!formData.name.first.trim()) {
+            errors['name.first'] = 'First name is required';
         }
 
-        if (!formData.lastName.trim()) {
-            errors.lastName = 'Last name is required';
+        if (!formData.name.last.trim()) {
+            errors['name.last'] = 'Last name is required';
         }
 
         if (!formData.role) {
@@ -193,11 +166,11 @@ export default function AdminUsersPage() {
 
         setSaving(true);
         try {
-            const email = formData.email.toLowerCase().trim();
+            const uid = formData.uid.toLowerCase().trim();
 
             if (!editMode) {
                 // Create new user
-                const existing = await getUserByEmail(email);
+                const existing = await getUserById(uid);
                 if (existing) {
                     setFormErrors({ email: 'A user with this email already exists' });
                     setSaving(false);
@@ -209,7 +182,7 @@ export default function AdminUsersPage() {
                 const userRole = isFirstUser ? 'admin' : formData.role;
 
                 // Create Firebase Auth account first using Cloud Function (doesn't affect current session)
-                const authResult = await adminCreateUserAccount(email, DEFAULT_PASSWORD, userRole);
+                const authResult = await adminCreateUserAccount(uid, DEFAULT_PASSWORD, userRole);
                 if (!authResult.success) {
                     setFormErrors({ email: `Failed to create auth account: ${authResult.message}` });
                     setSaving(false);
@@ -217,14 +190,15 @@ export default function AdminUsersPage() {
                 }
 
                 const newUser: UserProfile = {
-                    uid: authResult.uid,
-                    email,
+                    ...formData,
+                    uid: formData.uid.trim(),
+                    email: formData.email.trim(),
                     name: {
-                        prefix: formData.prefix?.trim(),
-                        first: formData.firstName.trim(),
-                        middle: formData.middleName?.trim(),
-                        last: formData.lastName.trim(),
-                        suffix: formData.suffix?.trim(),
+                        prefix: formData.name.prefix?.trim(),
+                        first: formData.name.first.trim(),
+                        middle: formData.name.middle?.trim(),
+                        last: formData.name.last.trim(),
+                        suffix: formData.name.suffix?.trim(),
                     },
                     role: userRole,
                     department: formData.department?.trim(),
@@ -233,12 +207,12 @@ export default function AdminUsersPage() {
                 };
 
                 // setUserProfile now automatically cleans empty values
-                await setUserProfile(email, newUser);
+                await setUserProfile(uid, newUser);
 
                 // Create personal calendar for the new user
                 try {
-                    if (authResult.uid) {
-                        await createPersonalCalendar(authResult.uid);
+                    if (formData.uid.trim()) {
+                        await createPersonalCalendar(formData.uid.trim());
                     } else {
                         console.warn('User created but UID not available for calendar creation');
                     }
@@ -255,16 +229,15 @@ export default function AdminUsersPage() {
             } else {
                 // Update existing user
                 if (!selectedUser) return;
-
                 const updatedUser: UserProfile = {
-                    ...selectedUser,
-                    email,
+                    ...formData,
+                    email: formData.email.trim(),
                     name: {
-                        prefix: formData.prefix?.trim(),
-                        first: formData.firstName.trim(),
-                        middle: formData.middleName?.trim(),
-                        last: formData.lastName.trim(),
-                        suffix: formData.suffix?.trim(),
+                        prefix: formData.name.prefix?.trim(),
+                        first: formData.name.first.trim(),
+                        middle: formData.name.middle?.trim(),
+                        last: formData.name.last.trim(),
+                        suffix: formData.name.suffix?.trim(),
                     },
                     role: formData.role,
                     department: formData.department?.trim(),
@@ -273,21 +246,21 @@ export default function AdminUsersPage() {
                 };
 
                 // Update Firebase Auth if email or role changed
-                const emailChanged = email !== selectedUser.email;
+                const emailChanged = formData.email.trim() !== selectedUser.email;
                 const roleChanged = formData.role !== selectedUser.role;
 
                 if (emailChanged || roleChanged) {
                     // Get the user's UID first
                     try {
                         const authResult = await adminUpdateUserAccount({
-                            uid: selectedUser.uid || '', // We'll need to store UID in the profile
-                            email: emailChanged ? email : undefined,
+                            uid: selectedUser.uid, // We'll need to store UID in the profile
+                            email: emailChanged ? formData.email.trim() : undefined,
                             role: roleChanged ? formData.role : undefined,
                         });
 
                         if (authResult.success) {
                             await deleteUserProfile(selectedUser.email);
-                            await setUserProfile(email, updatedUser);
+                            await setUserProfile(selectedUser.uid, updatedUser);
                         } else {
                             showNotification(`Auth update failed: ${authResult.message}.`, 'error', 6000);
                         }
@@ -417,7 +390,7 @@ export default function AdminUsersPage() {
             const toImport: ImportedUser[] = [];
             for (let i = 0; i < parsed.length; i++) {
                 const u = parsed[i];
-                const exists = await getUserByEmail(u.email.toLowerCase().trim());
+                const exists = await getUserById(u.uid.toLowerCase().trim());
                 if (exists) {
                     errors.push(`Row ${i + 2}: user ${u.email} already exists`);
                     continue;
@@ -695,6 +668,16 @@ export default function AdminUsersPage() {
                     <DialogContent>
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
+                                label="Student No."
+                                value={formData.uid}
+                                onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
+                                error={!!formErrors.uid}
+                                helperText={formErrors.uid || 'Unique student number or identifier'}
+                                required
+                                fullWidth
+                                disabled={editMode}
+                            />
+                            <TextField
                                 label="Email"
                                 type="email"
                                 value={formData.email}
@@ -707,41 +690,41 @@ export default function AdminUsersPage() {
                             <Stack direction="row" spacing={2}>
                                 <TextField
                                     label="Prefix"
-                                    value={formData.prefix || ''}
-                                    onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
+                                    value={formData.name.prefix || ''}
+                                    onChange={(e) => setFormData({ ...formData, name: { ...formData.name, prefix: e.target.value } })}
                                     sx={{ width: 100 }}
                                     placeholder="Dr."
                                 />
                                 <TextField
                                     label="First Name"
-                                    value={formData.firstName}
-                                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                                    error={!!formErrors.firstName}
-                                    helperText={formErrors.firstName}
+                                    value={formData.name.first}
+                                    onChange={(e) => setFormData({ ...formData, name: { ...formData.name, first: e.target.value } })}
+                                    error={!!formErrors['name.first']}
+                                    helperText={formErrors['name.first']}
                                     required
                                     fullWidth
                                 />
                             </Stack>
                             <TextField
                                 label="Middle Name"
-                                value={formData.middleName || ''}
-                                onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                                value={formData.name.middle || ''}
+                                onChange={(e) => setFormData({ ...formData, name: { ...formData.name, middle: e.target.value } })}
                                 fullWidth
                             />
                             <Stack direction="row" spacing={2}>
                                 <TextField
                                     label="Last Name"
-                                    value={formData.lastName}
-                                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                                    error={!!formErrors.lastName}
-                                    helperText={formErrors.lastName}
+                                    value={formData.name.last}
+                                    onChange={(e) => setFormData({ ...formData, name: { ...formData.name, last: e.target.value } })}
+                                    error={!!formErrors['name.last']}
+                                    helperText={formErrors['name.last']}
                                     required
                                     fullWidth
                                 />
                                 <TextField
                                     label="Suffix"
-                                    value={formData.suffix || ''}
-                                    onChange={(e) => setFormData({ ...formData, suffix: e.target.value })}
+                                    value={formData.name.suffix || ''}
+                                    onChange={(e) => setFormData({ ...formData, name: { ...formData.name, suffix: e.target.value } })}
                                     sx={{ width: 100 }}
                                     placeholder="Jr."
                                 />

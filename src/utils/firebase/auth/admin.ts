@@ -145,20 +145,20 @@ interface AdminCreateUserResponse {
  * This can only be successfully executed by authenticated administrators.
  * The API validates admin privileges before creating the specified user.
  *
+ * @param uid - Optional custom UID (must be unique, will be auto-generated if not provided)
  * @param email - Email address for the new user
  * @param password - Password for the new user
  * @param role - Optional role to set as a custom claim (e.g., 'admin', 'student', 'adviser')
- * @param uid - Optional custom UID (must be unique, will be auto-generated if not provided)
  * @returns Result indicating success or failure along with an optional message and uid
  */
 export async function adminCreateUserAccount(
+    uid: string,
     email: string,
     password: string,
     role?: string,
-    uid?: string
 ): Promise<AdminCreateUserResponse> {
-    if (!email || !password) {
-        return { success: false, message: 'Email and password are required.' };
+    if (!uid || !email || !password) {
+        return { success: false, message: 'UID, email, and password are required.' };
     }
 
     try {

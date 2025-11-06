@@ -31,7 +31,7 @@ export interface UserProfile {
     /**
      * Firebase Auth UID (optional, used for admin operations)
      */
-    uid?: string;
+    uid: string;
     /**
      * User's name
      */
