@@ -13,7 +13,7 @@ import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole } from '../../types/profile';
 import type { Session } from '../../types/session';
 import {
-    getAllUsers, getUserById, setUserProfile, deleteUserProfile, createPersonalCalendar
+    getAllUsers, getUserById, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
 } from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../utils/csv/user';
@@ -130,21 +130,21 @@ export default function AdminUsersPage() {
     const validateForm = (): boolean => {
         const errors: Partial<Record<keyof UserProfile | 'name.first' | 'name.last', string>> = {};
 
-        if (!formData.uid.trim()) {
+        if (!formData.uid) {
             errors.uid = 'Student No. is required';
         }
 
-        if (!formData.email.trim()) {
+        if (!formData.email) {
             errors.email = 'Email is required';
         } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) {
             errors.email = 'Enter a valid email address';
         }
 
-        if (!formData.name.first.trim()) {
+        if (!formData.name.first) {
             errors['name.first'] = 'First name is required';
         }
 
-        if (!formData.name.last.trim()) {
+        if (!formData.name.last) {
             errors['name.last'] = 'Last name is required';
         }
 
@@ -166,12 +166,18 @@ export default function AdminUsersPage() {
 
         setSaving(true);
         try {
-            const uid = formData.uid.toLowerCase().trim();
+            const { uid, email, name, role, department, avatar, phone } = formData;
 
             if (!editMode) {
                 // Create new user
-                const existing = await getUserById(uid);
-                if (existing) {
+                const existingID = await getUserById(uid);
+                if (existingID) {
+                    setFormErrors({ uid: 'A user with this ID already exists' });
+                    setSaving(false);
+                    return;
+                }
+                const existingEmail = await getUserByEmail(email);
+                if (existingEmail) {
                     setFormErrors({ email: 'A user with this email already exists' });
                     setSaving(false);
                     return;
@@ -179,10 +185,10 @@ export default function AdminUsersPage() {
 
                 // Force first user to be admin
                 const isFirstUser = users.length === 0;
-                const userRole = isFirstUser ? 'admin' : formData.role;
+                const userRole = isFirstUser ? 'admin' : role;
 
                 // Create Firebase Auth account first using Cloud Function (doesn't affect current session)
-                const authResult = await adminCreateUserAccount(uid, DEFAULT_PASSWORD, userRole);
+                const authResult = await adminCreateUserAccount(uid, email, DEFAULT_PASSWORD, userRole);
                 if (!authResult.success) {
                     setFormErrors({ email: `Failed to create auth account: ${authResult.message}` });
                     setSaving(false);
@@ -190,20 +196,7 @@ export default function AdminUsersPage() {
                 }
 
                 const newUser: UserProfile = {
-                    ...formData,
-                    uid: formData.uid.trim(),
-                    email: formData.email.trim(),
-                    name: {
-                        prefix: formData.name.prefix?.trim(),
-                        first: formData.name.first.trim(),
-                        middle: formData.name.middle?.trim(),
-                        last: formData.name.last.trim(),
-                        suffix: formData.name.suffix?.trim(),
-                    },
-                    role: userRole,
-                    department: formData.department?.trim(),
-                    avatar: formData.avatar?.trim(),
-                    phone: formData.phone?.trim(),
+                    ...formData, role: userRole,
                 };
 
                 // setUserProfile now automatically cleans empty values
@@ -211,8 +204,8 @@ export default function AdminUsersPage() {
 
                 // Create personal calendar for the new user
                 try {
-                    if (formData.uid.trim()) {
-                        await createPersonalCalendar(formData.uid.trim());
+                    if (uid) {
+                        await createPersonalCalendar(uid);
                     } else {
                         console.warn('User created but UID not available for calendar creation');
                     }
@@ -221,7 +214,7 @@ export default function AdminUsersPage() {
                 }
 
                 // Show notification if role was changed to admin
-                if (isFirstUser && formData.role !== 'admin') {
+                if (isFirstUser && role !== 'admin') {
                     showNotification('Created as Admin. At least one admin account is required in the system.', 'info', 8000);
                 } else {
                     showNotification(`User ${newUser.name.first} ${newUser.name.last} created successfully`, 'success');
@@ -229,33 +222,19 @@ export default function AdminUsersPage() {
             } else {
                 // Update existing user
                 if (!selectedUser) return;
-                const updatedUser: UserProfile = {
-                    ...formData,
-                    email: formData.email.trim(),
-                    name: {
-                        prefix: formData.name.prefix?.trim(),
-                        first: formData.name.first.trim(),
-                        middle: formData.name.middle?.trim(),
-                        last: formData.name.last.trim(),
-                        suffix: formData.name.suffix?.trim(),
-                    },
-                    role: formData.role,
-                    department: formData.department?.trim(),
-                    avatar: formData.avatar?.trim(),
-                    phone: formData.phone?.trim(),
-                };
+                const updatedUser: UserProfile = formData;
 
                 // Update Firebase Auth if email or role changed
-                const emailChanged = formData.email.trim() !== selectedUser.email;
-                const roleChanged = formData.role !== selectedUser.role;
+                const emailChanged = email !== selectedUser.email;
+                const roleChanged = role !== selectedUser.role;
 
                 if (emailChanged || roleChanged) {
                     // Get the user's UID first
                     try {
                         const authResult = await adminUpdateUserAccount({
                             uid: selectedUser.uid, // We'll need to store UID in the profile
-                            email: emailChanged ? formData.email.trim() : undefined,
-                            role: roleChanged ? formData.role : undefined,
+                            email: emailChanged ? email : undefined,
+                            role: roleChanged ? role : undefined,
                         });
 
                         if (authResult.success) {
@@ -390,7 +369,7 @@ export default function AdminUsersPage() {
             const toImport: ImportedUser[] = [];
             for (let i = 0; i < parsed.length; i++) {
                 const u = parsed[i];
-                const exists = await getUserById(u.uid.toLowerCase().trim());
+                const exists = await getUserById(u.uid);
                 if (exists) {
                     errors.push(`Row ${i + 2}: user ${u.email} already exists`);
                     continue;
@@ -463,7 +442,7 @@ export default function AdminUsersPage() {
                 return oldRow;
             }
 
-            const email = newRow.email.toLowerCase().trim();
+            const email = newRow.email;
             const emailChanged = email !== oldRow.email;
             const roleChanged = newRow.role !== oldRow.role;
             let updatedUser: UserProfile = { ...newRow };
@@ -487,15 +466,15 @@ export default function AdminUsersPage() {
                             ...newRow,
                             email,
                             name: {
-                                first: newRow.name.first.trim(),
-                                middle: newRow.name.middle?.trim(),
-                                last: newRow.name.last.trim(),
-                                prefix: newRow.name.prefix?.trim(),
-                                suffix: newRow.name.suffix?.trim(),
+                                first: newRow.name.first,
+                                middle: newRow.name.middle,
+                                last: newRow.name.last,
+                                prefix: newRow.name.prefix,
+                                suffix: newRow.name.suffix,
                             },
-                            department: newRow.department?.trim(),
-                            avatar: newRow.avatar?.trim(),
-                            phone: newRow.phone?.trim(),
+                            department: newRow.department,
+                            avatar: newRow.avatar,
+                            phone: newRow.phone,
                         };
 
                         // setUserProfile now automatically cleans empty values
@@ -669,7 +648,7 @@ export default function AdminUsersPage() {
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
                                 label="Student No."
-                                value={formData.uid}
+                                value={formData.uid.trim()}
                                 onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
                                 error={!!formErrors.uid}
                                 helperText={formErrors.uid || 'Unique student number or identifier'}
@@ -680,7 +659,7 @@ export default function AdminUsersPage() {
                             <TextField
                                 label="Email"
                                 type="email"
-                                value={formData.email}
+                                value={formData.email.trim()}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 error={!!formErrors.email}
                                 helperText={formErrors.email}
@@ -690,14 +669,14 @@ export default function AdminUsersPage() {
                             <Stack direction="row" spacing={2}>
                                 <TextField
                                     label="Prefix"
-                                    value={formData.name.prefix || ''}
+                                    value={formData.name.prefix?.trim() || ''}
                                     onChange={(e) => setFormData({ ...formData, name: { ...formData.name, prefix: e.target.value } })}
                                     sx={{ width: 100 }}
                                     placeholder="Dr."
                                 />
                                 <TextField
                                     label="First Name"
-                                    value={formData.name.first}
+                                    value={formData.name.first.trim()}
                                     onChange={(e) => setFormData({ ...formData, name: { ...formData.name, first: e.target.value } })}
                                     error={!!formErrors['name.first']}
                                     helperText={formErrors['name.first']}
@@ -707,14 +686,14 @@ export default function AdminUsersPage() {
                             </Stack>
                             <TextField
                                 label="Middle Name"
-                                value={formData.name.middle || ''}
+                                value={formData.name.middle?.trim() || ''}
                                 onChange={(e) => setFormData({ ...formData, name: { ...formData.name, middle: e.target.value } })}
                                 fullWidth
                             />
                             <Stack direction="row" spacing={2}>
                                 <TextField
                                     label="Last Name"
-                                    value={formData.name.last}
+                                    value={formData.name.last.trim()}
                                     onChange={(e) => setFormData({ ...formData, name: { ...formData.name, last: e.target.value } })}
                                     error={!!formErrors['name.last']}
                                     helperText={formErrors['name.last']}
@@ -723,7 +702,7 @@ export default function AdminUsersPage() {
                                 />
                                 <TextField
                                     label="Suffix"
-                                    value={formData.name.suffix || ''}
+                                    value={formData.name.suffix?.trim() || ''}
                                     onChange={(e) => setFormData({ ...formData, name: { ...formData.name, suffix: e.target.value } })}
                                     sx={{ width: 100 }}
                                     placeholder="Jr."
@@ -764,21 +743,21 @@ export default function AdminUsersPage() {
                             </TextField>
                             <TextField
                                 label="Department"
-                                value={formData.department || ''}
+                                value={formData.department?.trim() || ''}
                                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                                 fullWidth
                             />
                             <TextField
                                 label="Phone"
                                 type="tel"
-                                value={formData.phone || ''}
+                                value={formData.phone?.trim() || ''}
                                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                 fullWidth
                                 placeholder="+1 (555) 123-4567"
                             />
                             <TextField
                                 label="Avatar URL"
-                                value={formData.avatar || ''}
+                                value={formData.avatar?.trim() || ''}
                                 onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
                                 fullWidth
                                 placeholder="https://example.com/avatar.jpg"
