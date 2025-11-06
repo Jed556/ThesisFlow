@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Box, Card, CardContent, Typography, Chip, Stack, IconButton, Skeleton } from '@mui/material';
 import { AccessTime, LocationOn, CalendarMonth, Monitor, Edit, Delete } from '@mui/icons-material';
 import type { ScheduleEvent, EventStatus, Calendar as CalendarType } from '../../types/schedule';
-import { AvatarParticipants } from '../Avatar';
+import { AvatarGroup } from '../Avatar';
 
 const defaultEventColor = '#bdbdbd';
 const statusColors: Record<EventStatus, string> = {
@@ -196,9 +196,9 @@ export default function EventCard({
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                                 Participants ({event.participants.length}):
                             </Typography>
-                            <AvatarParticipants
+                            <AvatarGroup
                                 participants={event.participants}
-                                maxVisible={5}
+                                max={5}
                                 size="medium"
                                 showRole={true}
                             />

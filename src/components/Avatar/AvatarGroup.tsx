@@ -1,5 +1,5 @@
 import { Tooltip } from '@mui/material';
-import AvatarGroup from '@mui/material/AvatarGroup';
+import MuiAvatarGroup from '@mui/material/AvatarGroup';
 import { Avatar } from './index';
 
 /**
@@ -12,9 +12,9 @@ interface Participant {
 }
 
 /**
- * Props for AvatarParticipants component
+ * Props for AvatarGroup component
  */
-interface AvatarParticipantsProps {
+interface AvatarGroupProps {
     /**
      * Array of participants to display
      */
@@ -42,25 +42,24 @@ interface AvatarParticipantsProps {
 }
 
 /**
- * AvatarParticipants component displays a list of participant avatars
+ * AvatarGroup component displays a list of participant avatars
  * using MUI's AvatarGroup for consistent styling and overflow handling
  */
-export default function AvatarParticipants({
+export default function AvatarGroup({
     participants,
     max = 5,
     size = 'medium',
     spacing = 'medium',
     showRole = true
-}: AvatarParticipantsProps) {
+}: AvatarGroupProps) {
     if (!participants || participants.length === 0) {
         return null;
     }
 
     return (
-        <AvatarGroup
+        <MuiAvatarGroup
             max={max}
             spacing={spacing}
-            total={participants.length}
         >
             {participants.map((participant, index) => {
                 const tooltipText = showRole && participant.role
@@ -69,16 +68,16 @@ export default function AvatarParticipants({
 
                 return (
                     <Tooltip key={participant.uid || index} title={tooltipText} arrow>
-                            <Avatar
-                                uid={participant.uid}
-                                size={size}
-                                sx={{
-                                    ...(participant.status === 'declined' && { opacity: 0.5 })
-                                }}
-                            />
+                        <Avatar
+                            uid={participant.uid}
+                            size={size}
+                            sx={{
+                                ...(participant.status === 'declined' && { opacity: 0.5 })
+                            }}
+                        />
                     </Tooltip>
                 );
             })}
-        </AvatarGroup>
+        </MuiAvatarGroup>
     );
 }
