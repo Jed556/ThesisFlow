@@ -609,7 +609,7 @@ export default function AdminUsersPage() {
         <AnimatedPage variant="fade">
             <Box sx={{ width: '100%' }}>
                 <DataGrid
-                    rows={users}
+                    rows={users.map(user => ({ ...user, id: user.uid }))}
                     columns={columns}
                     loading={loading}
                     initialPage={0}
