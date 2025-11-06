@@ -1,8 +1,9 @@
 import * as React from 'react';
 import {
-    Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip, Stack
+    Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+    TextField, MenuItem, Chip, Stack, Avatar, IconButton, CircularProgress
 } from '@mui/material';
-import { People, Delete } from '@mui/icons-material';
+import { People, Delete, PhotoCamera, Close } from '@mui/icons-material';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
 import { AnimatedPage, GrowTransition } from '../../components/Animate';
@@ -17,6 +18,7 @@ import {
 } from '../../utils/firebase/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../utils/csv/user';
+import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../utils/avatarUtils';
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
@@ -68,6 +70,9 @@ export default function AdminUsersPage() {
     const [selectedUser, setSelectedUser] = React.useState<UserProfile | null>(null);
     const [formErrors, setFormErrors] = React.useState<Partial<Record<keyof UserProfile | 'name.first' | 'name.last', string>>>({});
     const [saving, setSaving] = React.useState(false);
+    const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+    const [avatarPreview, setAvatarPreview] = React.useState<string>('');
+    const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
 
     // Calculate admin count for deletion protection
     const adminCount = React.useMemo(() => {
@@ -105,7 +110,7 @@ export default function AdminUsersPage() {
         loadUsers();
     }, [loadUsers]);
 
-    const handleOpenCreateDialog = () => {
+    function handleOpenCreateDialog() {
         setEditMode(false);
         // If this is the first user, force admin role
         const isFirstUser = users.length === 0;
@@ -114,20 +119,72 @@ export default function AdminUsersPage() {
         setDialogOpen(true);
     };
 
-    const handleOpenDeleteDialog = (user: UserProfile) => {
+    function handleOpenDeleteDialog(user: UserProfile) {
         setSelectedUser(user);
         setDeleteDialogOpen(true);
     };
 
-    const handleCloseDialog = () => {
+    function handleCloseDialog() {
         setDialogOpen(false);
         setDeleteDialogOpen(false);
         setSelectedUser(null);
         setFormData(emptyFormData);
         setFormErrors({});
+        setAvatarFile(null);
+        setAvatarPreview('');
     };
 
-    const validateForm = (): boolean => {
+    async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        // Validate file
+        const validation = validateAvatarFile(file);
+        if (!validation.valid) {
+            showNotification(validation.error!, 'error');
+            return;
+        }
+
+        setAvatarFile(file);
+
+        // Create preview
+        try {
+            const previewUrl = await createAvatarPreview(file);
+            setAvatarPreview(previewUrl);
+        } catch (error) {
+            showNotification('Failed to create preview', 'error');
+        }
+    };
+
+    async function handleAvatarUpload(
+        avatarFile: File,
+        uid: string,
+        userProfile: UserProfile,
+        onUploadingChange: (uploading: boolean) => void
+    ) {
+        try {
+            onUploadingChange(true);
+            await uploadAvatar(avatarFile, uid, userProfile);
+            showNotification('Avatar uploaded successfully', 'success', 3000);
+        } catch (error) {
+            // Avatar upload failed, but user is already created - just warn
+            showNotification(
+                `User created but avatar upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                'warning',
+                6000
+            );
+        } finally {
+            onUploadingChange(false);
+        }
+    };
+
+    function handleRemoveAvatar() {
+        setAvatarFile(null);
+        setAvatarPreview('');
+        setFormData({ ...formData, avatar: '' });
+    };
+
+    function validateForm(): boolean {
         const errors: Partial<Record<keyof UserProfile | 'name.first' | 'name.last', string>> = {};
 
         if (!formData.uid) {
@@ -161,12 +218,13 @@ export default function AdminUsersPage() {
         return Object.keys(errors).length === 0;
     };
 
-    const handleSave = async () => {
+    async function handleSave() {
         if (!validateForm()) return;
 
         setSaving(true);
+
         try {
-            const { uid, email, name, role, department, avatar, phone } = formData;
+            const { uid, email, role } = formData;
 
             if (!editMode) {
                 // Create new user
@@ -187,20 +245,40 @@ export default function AdminUsersPage() {
                 const isFirstUser = users.length === 0;
                 const userRole = isFirstUser ? 'admin' : role;
 
-                // Create Firebase Auth account first using Cloud Function (doesn't affect current session)
+                // STEP 1: Create Firebase Auth account first
                 const authResult = await adminCreateUserAccount(uid, email, DEFAULT_PASSWORD, userRole);
                 if (!authResult.success) {
+                    // Step 1 failed - do nothing, just show error and return
                     setFormErrors({ email: `Failed to create auth account: ${authResult.message}` });
                     setSaving(false);
                     return;
                 }
 
+                // STEP 2: Create Firestore entry
                 const newUser: UserProfile = {
-                    ...formData, role: userRole,
+                    ...formData,
+                    role: userRole,
+                    avatar: formData.avatar, // Keep existing avatar URL if any
                 };
 
-                // setUserProfile now automatically cleans empty values
-                await setUserProfile(uid, newUser);
+                try {
+                    await setUserProfile(uid, newUser);
+                } catch (error) {
+                    // Step 2 failed - delete auth account to avoid orphaned accounts
+                    showNotification('Failed to create user profile. Rolling back...', 'error');
+                    try {
+                        await adminDeleteUserAccount({ uid });
+                    } catch (deleteError) {
+                        showNotification('Failed to rollback auth account. Manual cleanup may be required.', 'error', 0);
+                    }
+                    setSaving(false);
+                    return;
+                }
+
+                // STEP 3: Upload avatar (assume this won't fail, but handle gracefully)
+                if (avatarFile) {
+                    await handleAvatarUpload(avatarFile, uid, newUser, setUploadingAvatar);
+                }
 
                 // Create personal calendar for the new user
                 try {
@@ -222,23 +300,44 @@ export default function AdminUsersPage() {
             } else {
                 // Update existing user
                 if (!selectedUser) return;
-                const updatedUser: UserProfile = formData;
+
+                // For updates, upload avatar first if changed
+                let avatarUrl = formData.avatar;
+                if (avatarFile) {
+                    try {
+                        setUploadingAvatar(true);
+                        avatarUrl = await uploadAvatar(avatarFile, selectedUser.uid, formData);
+                        showNotification('Avatar uploaded successfully', 'success', 3000);
+                    } catch (error) {
+                        showNotification(
+                            `Avatar upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                            'warning'
+                        );
+                        // Continue with update even if avatar fails
+                    } finally {
+                        setUploadingAvatar(false);
+                    }
+                }
+
+                const updatedUser: UserProfile = {
+                    ...formData,
+                    avatar: avatarUrl,
+                };
 
                 // Update Firebase Auth if email or role changed
                 const emailChanged = email !== selectedUser.email;
                 const roleChanged = role !== selectedUser.role;
 
                 if (emailChanged || roleChanged) {
-                    // Get the user's UID first
                     try {
                         const authResult = await adminUpdateUserAccount({
-                            uid: selectedUser.uid, // We'll need to store UID in the profile
+                            uid: selectedUser.uid,
                             email: emailChanged ? email : undefined,
                             role: roleChanged ? role : undefined,
                         });
 
                         if (authResult.success) {
-                            await deleteUserProfile(selectedUser.email);
+                            await deleteUserProfile(selectedUser.uid);
                             await setUserProfile(selectedUser.uid, updatedUser);
                         } else {
                             showNotification(`Auth update failed: ${authResult.message}.`, 'error', 6000);
@@ -246,9 +345,11 @@ export default function AdminUsersPage() {
                     } catch (error) {
                         showNotification('Failed to update User.', 'error', 6000);
                     }
+                } else {
+                    // Just update the profile
+                    await setUserProfile(selectedUser.uid, updatedUser);
                 }
 
-                // setUserProfile now automatically cleans empty values
                 showNotification(`User ${updatedUser.name.first} ${updatedUser.name.last} updated successfully`, 'success');
             }
 
@@ -291,7 +392,7 @@ export default function AdminUsersPage() {
         }
     };
 
-    const handleMultiDelete = async (deletedUsers: UserProfile[]) => {
+    async function handleMultiDelete(deletedUsers: UserProfile[]) {
         try {
             // Count how many admins would remain after deletion
             const deletedAdmins = deletedUsers.filter(u => u.role === 'admin').length;
@@ -338,7 +439,7 @@ export default function AdminUsersPage() {
         }
     };
 
-    const handleExport = (selectedUsers: UserProfile[]) => {
+    function handleExport(selectedUsers: UserProfile[]) {
         try {
             const csvText = exportUsersToCsv(selectedUsers);
             const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
@@ -357,7 +458,7 @@ export default function AdminUsersPage() {
         }
     };
 
-    const handleImport = async (file: File) => {
+    async function handleImport(file: File) {
         try {
             const text = await file.text();
             const { parsed, errors: parseErrors } = importUsersFromCsv(text);
@@ -500,7 +601,7 @@ export default function AdminUsersPage() {
         {
             field: 'id',
             headerName: 'UID',
-            width: 70,
+            width: 100,
             type: 'number',
             editable: false,
         },
@@ -515,7 +616,7 @@ export default function AdminUsersPage() {
             field: 'namePrefix',
             headerName: 'Prefix',
             flex: 1,
-            minWidth: 150,
+            minWidth: 100,
             editable: true,
         },
         {
@@ -543,13 +644,13 @@ export default function AdminUsersPage() {
             field: 'nameSuffix',
             headerName: 'Suffix',
             flex: 1,
-            minWidth: 150,
+            minWidth: 130,
             editable: true,
         },
         {
             field: 'role',
             headerName: 'Role',
-            width: 130,
+            width: 100,
             type: 'singleSelect',
             valueOptions: ROLE_OPTIONS,
             editable: true,
@@ -664,6 +765,62 @@ export default function AdminUsersPage() {
                     <DialogTitle>{editMode ? 'Edit User' : 'Create New User'}</DialogTitle>
                     <DialogContent>
                         <Stack spacing={2} sx={{ mt: 1 }}>
+                            {/* Avatar Upload Section */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
+                                <Box sx={{ position: 'relative' }}>
+                                    <Avatar
+                                        src={avatarPreview || formData.avatar}
+                                        sx={{ width: 120, height: 120 }}
+                                    >
+                                        {!avatarPreview && !formData.avatar && formData.name.first?.[0]?.toUpperCase()}
+                                    </Avatar>
+                                    {uploadingAvatar && (
+                                        <CircularProgress
+                                            size={24}
+                                            sx={{
+                                                position: 'absolute',
+                                                top: '50%',
+                                                left: '50%',
+                                                marginTop: '-12px',
+                                                marginLeft: '-12px',
+                                            }}
+                                        />
+                                    )}
+                                    {(avatarPreview || formData.avatar) && !uploadingAvatar && (
+                                        <IconButton
+                                            size="small"
+                                            sx={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                right: 0,
+                                                bgcolor: 'background.paper',
+                                                '&:hover': { bgcolor: 'error.light' },
+                                            }}
+                                            onClick={handleRemoveAvatar}
+                                        >
+                                            <Close fontSize="small" />
+                                        </IconButton>
+                                    )}
+                                </Box>
+                                <Button
+                                    variant="outlined"
+                                    component="label"
+                                    startIcon={<PhotoCamera />}
+                                    disabled={uploadingAvatar}
+                                >
+                                    {avatarPreview || formData.avatar ? 'Change Avatar' : 'Upload Avatar'}
+                                    <input
+                                        type="file"
+                                        hidden
+                                        accept="image/*"
+                                        onChange={handleAvatarChange}
+                                    />
+                                </Button>
+                                <Typography variant="caption" color="text.secondary">
+                                    Recommended: Square image, max 10MB
+                                </Typography>
+                            </Box>
+
                             <TextField
                                 label="User ID"
                                 value={formData.uid.trim()}
@@ -773,19 +930,18 @@ export default function AdminUsersPage() {
                                 fullWidth
                                 placeholder="+1 (555) 123-4567"
                             />
-                            <TextField
-                                label="Avatar URL"
-                                value={formData.avatar?.trim() || ''}
-                                onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
-                                fullWidth
-                                placeholder="https://example.com/avatar.jpg"
-                            />
                         </Stack>
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={handleCloseDialog} disabled={saving}>Cancel</Button>
-                        <Button onClick={handleSave} variant="contained" disabled={saving}>
-                            {saving ? 'Saving...' : editMode ? 'Save Changes' : 'Create User'}
+                        <Button onClick={handleCloseDialog} disabled={saving || uploadingAvatar}>Cancel</Button>
+                        <Button onClick={handleSave} variant="contained" disabled={saving || uploadingAvatar}>
+                            {uploadingAvatar
+                                ? 'Uploading Avatar...'
+                                : saving
+                                    ? 'Saving...'
+                                    : editMode
+                                        ? 'Save Changes'
+                                        : 'Create User'}
                         </Button>
                     </DialogActions>
                 </Dialog>

@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Container, Typography, Paper, Avatar, CardMedia, Skeleton, Stack, TextField, Button, IconButton,
+    Box, Container, Typography, Paper, CardMedia, Skeleton, Stack, TextField, Button, IconButton,
     Divider, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip,
 } from '@mui/material';
 import {
-    Settings, PhotoCamera, Person, Edit, Save, Cancel, Lock, Visibility, VisibilityOff, Palette, CheckCircle,
+    Settings, PhotoCamera, Edit, Save, Cancel, Lock, Visibility, VisibilityOff, Palette, CheckCircle,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/profile';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { uploadAvatar, uploadBanner, deleteFileFromStorage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
+import { uploadBanner, deleteFileFromStorage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
+import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../utils/avatarUtils';
 import { firebaseAuth } from '../utils/firebase/firebaseConfig';
 import { ColorPickerDialog } from '../components/ColorPicker';
 import { AnimatedPage } from '../components/Animate';
 import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
 import { getError } from '../../utils/errorUtils';
+import Avatar from '../components/Avatar';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile } from '../types/profile';
 import type { Session } from '../types/session';
@@ -182,27 +184,30 @@ export default function SettingsPage() {
         setEditing(false);
     };
 
-    const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file || !session?.user?.email) return;
+    const handleAvatarChange = async (file: File) => {
+        if (!session?.user?.uid || !profile) return;
+
+        // Validate file
+        const validation = validateAvatarFile(file);
+        if (!validation.valid) {
+            showNotification(validation.error!, 'error');
+            return;
+        }
 
         try {
             setUploadingAvatar(true);
 
             // Create preview
-            const preview = createImagePreview(file);
+            const preview = await createAvatarPreview(file);
             setAvatarPreview(preview);
 
-            // Upload to Firebase Storage
-            const downloadURL = await uploadAvatar(file, session.user.email);
-
             // Delete old avatar if exists
-            if (profile?.avatar) {
+            if (profile.avatar) {
                 await deleteFileFromStorage(profile.avatar).catch(console.error);
             }
 
-            // Update profile
-            await setUserProfile(session.user.email, { avatar: downloadURL });
+            // Upload and update profile
+            await uploadAvatar(file, session.user.uid, profile);
             await loadProfile();
 
             showNotification('Avatar updated successfully', 'success');
@@ -396,70 +401,31 @@ export default function SettingsPage() {
                         )}
 
                         {/* Avatar - Overlapping */}
-                        {isProfileLoading ? (
-                            <Skeleton
-                                variant="circular"
-                                sx={{
-                                    position: 'absolute',
-                                    left: { xs: '50%', sm: 32 },
-                                    bottom: { xs: -70, sm: -60 },
-                                    transform: { xs: 'translateX(-50%)', sm: 'none' },
-                                    width: { xs: 140, sm: 160 },
-                                    height: { xs: 140, sm: 160 },
-                                    border: '5px solid',
-                                    borderColor: 'background.paper',
-                                    zIndex: 2,
-                                }}
-                            />
-                        ) : (
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    left: { xs: '50%', sm: 32 },
-                                    bottom: { xs: -70, sm: -60 },
-                                    transform: { xs: 'translateX(-50%)', sm: 'none' },
-                                    zIndex: 2,
-                                }}
-                            >
+                        <Box
+                            sx={{
+                                position: 'absolute',
+                                left: { xs: '50%', sm: 32 },
+                                bottom: { xs: -70, sm: -60 },
+                                transform: { xs: 'translateX(-50%)', sm: 'none' },
+                                zIndex: 2,
+                            }}
+                        >
+                            {session?.user?.uid && (
                                 <Avatar
-                                    src={avatarPreview || profile?.avatar}
+                                    uid={session.user.uid}
+                                    size={160}
+                                    loading={isProfileLoading}
+                                    editable={true}
+                                    uploading={uploadingAvatar}
+                                    onAvatarChange={handleAvatarChange}
                                     sx={{
-                                        width: { xs: 140, sm: 160 },
-                                        height: { xs: 140, sm: 160 },
                                         bgcolor: 'primary.main',
                                         border: '5px solid',
                                         borderColor: 'background.paper',
                                     }}
-                                >
-                                    {!profile?.avatar && <Person sx={{ fontSize: 64 }} />}
-                                </Avatar>
-                                <input
-                                    accept="image/*"
-                                    style={{ display: 'none' }}
-                                    id="avatar-upload"
-                                    type="file"
-                                    onChange={handleAvatarUpload}
-                                    disabled={uploadingAvatar}
                                 />
-                                <label htmlFor="avatar-upload">
-                                    <IconButton
-                                        component="span"
-                                        disabled={uploadingAvatar}
-                                        sx={{
-                                            position: 'absolute',
-                                            bottom: 0,
-                                            right: 0,
-                                            bgcolor: 'background.paper',
-                                            border: '2px solid',
-                                            borderColor: 'divider',
-                                            '&:hover': { bgcolor: 'background.default' },
-                                        }}
-                                    >
-                                        <PhotoCamera fontSize="small" />
-                                    </IconButton>
-                                </label>
-                            </Box>
-                        )}
+                            )}
+                        </Box>
                     </Box>
 
                     {/* Profile Info */}

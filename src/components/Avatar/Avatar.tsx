@@ -6,6 +6,9 @@ import MuiAvatar, { type AvatarProps as MuiAvatarProps } from '@mui/material/Ava
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import Skeleton from '@mui/material/Skeleton';
+import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
+import PhotoCamera from '@mui/icons-material/PhotoCamera';
 
 /**
  * Define which name parts to include for initials generation
@@ -120,6 +123,25 @@ export interface AvatarProps {
      * @default false
      */
     loading?: boolean;
+
+    /**
+     * Enable edit mode - shows edit button on lower right corner
+     * @default false
+     */
+    editable?: boolean;
+
+    /**
+     * Callback when avatar file is selected for upload
+     * Only called when `editable` is true
+     */
+    onAvatarChange?: (file: File) => void;
+
+    /**
+     * Whether avatar upload is in progress
+     * Shows loading state on edit button
+     * @default false
+     */
+    uploading?: boolean;
 }
 
 // Size mappings for predefined sizes
@@ -191,12 +213,17 @@ function generateInitials(profile: UserProfile, config: InitialsConfig): string 
  * @param tooltip - Quick tooltip selection ('email', 'full', 'none')
  * @param tooltipText - Optional custom tooltip text (overrides `tooltip`)
  * @param loading - Whether the avatar is still loading
+ * @param editable - Enable edit mode with edit button
+ * @param onAvatarChange - Callback when avatar file is selected
+ * @param uploading - Whether avatar upload is in progress
  */
 export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 'default',
-    label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, loading = false }: AvatarProps) {
+    label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, loading = false,
+    editable = false, onAvatarChange, uploading = false }: AvatarProps) {
     const [resolvedProfile, setResolvedProfile] = React.useState<UserProfile | null>(null);
     const [displayName, setDisplayName] = React.useState<string>('');
     const [isLoading, setIsLoading] = React.useState(true);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // Fetch profile and display name
     React.useEffect(() => {
@@ -229,13 +256,28 @@ export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 
         };
     }, [uid]);
 
+    // Handle file input change
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file && onAvatarChange) {
+            onAvatarChange(file);
+        }
+        // Reset input so same file can be selected again
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
     // Generate avatar initials
     const avatarInitials = resolvedProfile ? generateInitials(resolvedProfile, initials) : '??';
 
     // Calculate avatar size
-    const avatarSize = typeof size === 'number'
-        ? { width: size, height: size, fontSize: `${size * 0.4}px` }
-        : sizeMap[size];
+    const avatarSize = typeof size === 'number' ?
+        { width: size, height: size, fontSize: `${size * 0.4}px` } : sizeMap[size];
+
+    // Calculate edit button size based on avatar size
+    const editButtonSize = typeof size === 'number' ?
+        size * 0.25 : { small: 20, medium: 24, large: 28 }[size as 'small' | 'medium' | 'large'];
 
     // Create the avatar element with embedded skeleton
     const avatarCore = (loading || isLoading) ? (
@@ -259,6 +301,49 @@ export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 
         </MuiAvatar>
     );
 
+    // Wrap avatar with container for edit button when editable
+    const avatarWithEdit = editable ? (
+        <Box sx={{ position: 'relative', display: 'inline-block' }}>
+            {avatarCore}
+            <input
+                ref={fileInputRef}
+                accept="image/*"
+                style={{ display: 'none' }}
+                id={`avatar-upload-${uid}`}
+                type="file"
+                onChange={handleFileChange}
+                disabled={uploading || loading || isLoading}
+            />
+            <label htmlFor={`avatar-upload-${uid}`}>
+                <IconButton
+                    component="span"
+                    disabled={uploading || loading || isLoading}
+                    size="small"
+                    sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        bgcolor: 'background.paper',
+                        border: '2px solid',
+                        borderColor: 'divider',
+                        width: editButtonSize,
+                        height: editButtonSize,
+                        '&:hover': {
+                            bgcolor: 'primary.main',
+                            color: 'primary.contrastText',
+                            borderColor: 'primary.main',
+                        },
+                        '&.Mui-disabled': {
+                            bgcolor: 'action.disabledBackground',
+                        },
+                    }}
+                >
+                    <PhotoCamera sx={{ fontSize: editButtonSize * 0.6 }} />
+                </IconButton>
+            </label>
+        </Box>
+    ) : avatarCore;
+
     // Tooltip logic: `tooltipText` takes precedence. Otherwise compute from `tooltip`.
     let finalTooltip: string | undefined = undefined;
     if (tooltipText) {
@@ -272,13 +357,14 @@ export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 
     const avatarElement = finalTooltip
         ? (
             <Tooltip title={finalTooltip} arrow>
-                {avatarCore}
+                {avatarWithEdit}
             </Tooltip>
         )
-        : avatarCore;
+        : avatarWithEdit;
 
     // Return chip mode if requested
     if (mode === 'chip') {
+        // Note: Editable mode is not supported in chip mode
         const chipCore = (
             <Chip
                 avatar={avatarCore}
