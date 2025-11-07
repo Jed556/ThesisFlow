@@ -120,3 +120,142 @@ function computeCompatibility(profile: UserProfile, stats: ThesisRoleStats, role
     const total = baseScore + availabilityScore + skillsScore + recencyScore - penalty;
     return Math.max(0, Math.min(100, Math.round(total)));
 }
+
+const DEFAULT_STOPWORDS = new Set([
+    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'have', 'in',
+    'is', 'it', 'of', 'on', 'or', 'that', 'the', 'this', 'to', 'with',
+]);
+
+function normalizeWord(raw: string): string | null {
+    const cleaned = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleaned || DEFAULT_STOPWORDS.has(cleaned)) {
+        return null;
+    }
+    return cleaned;
+}
+
+function tokenize(text: string | undefined | null): string[] {
+    if (!text) {
+        return [];
+    }
+    const candidateWords = text.split(/\s+/g);
+    const tokens = candidateWords
+        .map(normalizeWord)
+        .filter((token): token is string => Boolean(token));
+    return tokens;
+}
+
+function computeTermFrequency(tokens: string[]): Map<string, number> {
+    const tf = new Map<string, number>();
+    tokens.forEach((token) => {
+        tf.set(token, (tf.get(token) ?? 0) + 1);
+    });
+    return tf;
+}
+
+function computeInverseDocumentFrequency(documents: string[][]): Map<string, number> {
+    const docCount = documents.length;
+    const df = new Map<string, number>();
+
+    documents.forEach((tokens) => {
+        const seen = new Set<string>();
+        tokens.forEach((token) => {
+            if (!seen.has(token)) {
+                seen.add(token);
+                df.set(token, (df.get(token) ?? 0) + 1);
+            }
+        });
+    });
+
+    const idf = new Map<string, number>();
+    df.forEach((count, token) => {
+        idf.set(token, Math.log((docCount + 1) / (count + 1)) + 1);
+    });
+
+    return idf;
+}
+
+function buildTfidfVector(tf: Map<string, number>, idf: Map<string, number>): Map<string, number> {
+    const tfidf = new Map<string, number>();
+    tf.forEach((frequency, token) => {
+        const idfWeight = idf.get(token) ?? 0;
+        const tfWeight = 1 + Math.log(frequency);
+        tfidf.set(token, tfWeight * idfWeight);
+    });
+    return tfidf;
+}
+
+function toVectorMagnitude(vector: Map<string, number>): number {
+    let sumSquares = 0;
+    vector.forEach((value) => {
+        sumSquares += value * value;
+    });
+    return Math.sqrt(sumSquares);
+}
+
+function cosineSimilarity(vectorA: Map<string, number>, vectorB: Map<string, number>): number {
+    let dot = 0;
+    vectorA.forEach((value, token) => {
+        const other = vectorB.get(token);
+        if (other !== undefined) {
+            dot += value * other;
+        }
+    });
+    const magnitude = toVectorMagnitude(vectorA) * toVectorMagnitude(vectorB);
+    if (magnitude === 0) {
+        return 0;
+    }
+    return dot / magnitude;
+}
+
+export interface ResearchDocument {
+    uid: string;
+    profile: UserProfile;
+    text: string;
+}
+
+export interface ResearchMatch {
+    uid: string;
+    profile: UserProfile;
+    similarity: number;
+}
+
+/**
+ * Computes research-fit recommendations using a TF-IDF + cosine similarity pipeline.
+ * @param studentText - Combined research title/abstract or similar student submission text
+ * @param mentors - Array of mentor documents with textual metadata to compare against
+ * @returns Mentor matches sorted by similarity in descending order
+ */
+export function rankMentorsByResearchFit(studentText: string, mentors: ResearchDocument[]): ResearchMatch[] {
+    const sanitizedStudentText = studentText ?? '';
+    const mentorTexts = mentors.map((document) => document.text ?? '');
+
+    // Tokenization
+    const studentTokens = tokenize(sanitizedStudentText);
+    const mentorTokens = mentorTexts.map((text) => tokenize(text));
+
+    // Term Frequency (TF)
+    const studentTf = computeTermFrequency(studentTokens);
+    const mentorTf = mentorTokens.map((tokens) => computeTermFrequency(tokens));
+
+    // Inverse Document Frequency (IDF)
+    const idf = computeInverseDocumentFrequency([studentTokens, ...mentorTokens]);
+
+    // TF-IDF Vectorization
+    const studentVector = buildTfidfVector(studentTf, idf);
+    const mentorVectors = mentorTf.map((tf) => buildTfidfVector(tf, idf));
+
+    // Similarity Scoring
+    const matches = mentors.map((mentor, index) => {
+        const similarity = cosineSimilarity(studentVector, mentorVectors[index]);
+        return {
+            uid: mentor.uid,
+            profile: mentor.profile,
+            similarity,
+        } satisfies ResearchMatch;
+    });
+
+    matches.sort((a, b) => b.similarity - a.similarity);
+
+    return matches;
+}
