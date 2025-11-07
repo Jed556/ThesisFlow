@@ -1,11 +1,12 @@
 import * as React from 'react';
 import {
-    Avatar, Box, Card, CardActionArea, CardContent, Chip, Divider, IconButton, Stack, Typography,
+    Box, Card, CardActionArea, CardContent, Chip, Divider, IconButton, Stack, Typography,
 } from '@mui/material';
 import EmailIcon from '@mui/icons-material/Email';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import TwitterIcon from '@mui/icons-material/Twitter';
+import Avatar from '../Avatar';
 import type { UserProfile } from '../../types/profile';
 
 /**
@@ -111,17 +112,30 @@ export default function ProfileCard({
 }: ProfileCardProps) {
     const hasContent = stats.length > 0 || showEmail || socialLinks.length > 0;
 
+    const formattedName = React.useMemo(() => {
+        const parts: string[] = [];
+        if (profile.name.prefix) {
+            parts.push(profile.name.prefix);
+        }
+        parts.push(profile.name.first);
+        if (profile.name.middle) {
+            parts.push(profile.name.middle);
+        }
+        parts.push(profile.name.last);
+        if (profile.name.suffix) {
+            parts.push(profile.name.suffix);
+        }
+        return parts.join(' ');
+    }, [profile.name]);
+
     const cardContent = (
         <CardContent>
             {/* Header with avatar and name */}
             <Stack direction="row" spacing={2} alignItems="center">
-                <Avatar src={profile.avatar} sx={{ width: 48, height: 48 }}>
-                    {profile.firstName.charAt(0)}
-                </Avatar>
+                <Avatar uid={profile.uid} size={48} tooltip="full" sx={{ flexShrink: 0 }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="h6" component="div" noWrap>
-                        {profile.prefix ? `${profile.prefix} ` : ''}
-                        {profile.firstName} {profile.lastName}
+                        {formattedName}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" noWrap>
                         {roleLabel && `${roleLabel} · `}

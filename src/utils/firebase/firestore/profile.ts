@@ -1,4 +1,4 @@
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, addDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection, query, where, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
 import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
 import { cleanData } from './firestore';
 

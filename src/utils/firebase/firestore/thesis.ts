@@ -4,9 +4,11 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
+import { getUserById } from './profile';
 
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
+import type { ReviewerAssignment, ReviewerRole } from '../../../types/reviewer';
 
 /** Firestore collection name used for user documents */
 const THESES_COLLECTION = 'theses';
@@ -84,8 +86,6 @@ export async function bulkDeleteTheses(ids: string[]): Promise<void> {
 export async function getThesisTeamMembers(thesisId: string): Promise<(UserProfile & { thesisRole: string })[]> {
     const thesis = await getThesisById(thesisId);
     if (!thesis) return [];
-
-    const { getUserById } = await import('./profile');
     const teamMembers: (UserProfile & { thesisRole: string })[] = [];
 
     // Add leader (student)
@@ -149,4 +149,103 @@ export async function calculateThesisProgress(thesisId: string): Promise<number>
     const total = thesis.chapters.length;
     const approved = thesis.chapters.filter(ch => ch.status === 'approved').length;
     return (approved / total) * 100;
+}
+
+function computeProgressRatio(thesis: ThesisData): number {
+    if (!thesis.chapters || thesis.chapters.length === 0) {
+        return 0;
+    }
+    const approved = thesis.chapters.filter(chapter => chapter.status === 'approved').length;
+    return approved / thesis.chapters.length;
+}
+
+function determinePriority(progressRatio: number, lastUpdated?: string): ReviewerAssignment['priority'] {
+    if (progressRatio <= 0.4) {
+        return 'high';
+    }
+    if (progressRatio <= 0.75) {
+        return 'medium';
+    }
+    if (lastUpdated) {
+        const updatedDate = new Date(lastUpdated);
+        if (!Number.isNaN(updatedDate.getTime())) {
+            const diffDays = (Date.now() - updatedDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (diffDays > 21) {
+                return 'medium';
+            }
+        }
+    }
+    return 'low';
+}
+
+function normalizeTimestamp(value?: string): string {
+    if (!value) {
+        return new Date().toISOString();
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return new Date().toISOString();
+    }
+    return parsed.toISOString();
+}
+
+export async function getReviewerAssignmentsForUser(role: ReviewerRole, userUid?: string | null): Promise<ReviewerAssignment[]> {
+    if (!userUid) {
+        return [];
+    }
+
+    const theses = await getAllTheses();
+    const relevant = theses.filter((thesis) => (
+        role === 'adviser' ? thesis.adviser === userUid : thesis.editor === userUid
+    ));
+
+    if (relevant.length === 0) {
+        return [];
+    }
+
+    const userIds = new Set<string>();
+
+    relevant.forEach((thesis) => {
+        if (thesis.leader) userIds.add(thesis.leader);
+        thesis.members?.forEach((member) => userIds.add(member));
+        if (thesis.adviser) userIds.add(thesis.adviser);
+        if (thesis.editor) userIds.add(thesis.editor);
+    });
+
+    const userProfiles = new Map<string, UserProfile>();
+    await Promise.all(Array.from(userIds).map(async (uid) => {
+        const profile = await getUserById(uid);
+        if (profile) {
+            userProfiles.set(uid, profile);
+        }
+    }));
+
+    return relevant.map((thesis) => {
+        const progressRatio = computeProgressRatio(thesis);
+        const studentEmails = [thesis.leader, ...(thesis.members ?? [])]
+            .map((uid) => userProfiles.get(uid)?.email)
+            .filter((email): email is string => Boolean(email));
+
+        const assignedUid = role === 'adviser' ? thesis.adviser : thesis.editor;
+        const assignedEmail = assignedUid ? userProfiles.get(assignedUid)?.email : undefined;
+
+        const counterpartUid = role === 'adviser' ? thesis.editor : thesis.adviser;
+        const counterpartEmail = counterpartUid ? userProfiles.get(counterpartUid)?.email : undefined;
+
+        const assignedTo = [assignedEmail, counterpartEmail].filter((email): email is string => Boolean(email));
+
+        return {
+            id: thesis.id,
+            thesisId: thesis.id,
+            thesisTitle: thesis.title,
+            role,
+            stage: thesis.overallStatus ?? 'In Progress',
+            progress: progressRatio,
+            dueDate: undefined,
+            assignedTo,
+            priority: determinePriority(progressRatio, thesis.lastUpdated),
+            lastUpdated: normalizeTimestamp(thesis.lastUpdated ?? thesis.submissionDate),
+            studentEmails,
+        } satisfies ReviewerAssignment;
+    });
 }

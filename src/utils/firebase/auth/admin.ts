@@ -1,21 +1,5 @@
-import { firebaseAuth } from '../firebaseConfig';
+import { resolveAdminApiBaseUrl, buildAdminApiHeaders } from '../api';
 import { getError } from '../../../../utils/errorUtils';
-
-/**
- * Resolve the base URL for admin API calls, ensuring the default host includes the `/api` path.
- */
-const resolveAdminApiBaseUrl = (): string => {
-    const envUrl = import.meta.env.VITE_ADMIN_API_URL?.trim();
-    if (envUrl && envUrl.length > 0) {
-        return envUrl.replace(/\/+$/, '');
-    }
-
-    const runtimeOrigin = typeof window !== 'undefined' && window.location?.origin
-        ? window.location.origin
-        : 'http://localhost:3001';
-
-    return `${runtimeOrigin.replace(/\/+$/, '')}/api`;
-};
 
 /**
  * Shape of the request payload for the admin delete callable function.
@@ -49,23 +33,7 @@ export async function adminDeleteUserAccount(payload: AdminDeleteUserPayload): P
 
     try {
         const apiUrl = resolveAdminApiBaseUrl();
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-
-        const currentUser = firebaseAuth.currentUser;
-        if (currentUser) {
-            // Use Firebase ID token for authentication if user is signed in
-            const idToken = await currentUser.getIdToken();
-            headers.Authorization = `Bearer ${idToken}`;
-        } else {
-            // Fall back to API secret for dev-helper or server-to-server calls
-            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
-            if (!apiSecret) {
-                return { success: false, message: 'Not authenticated and no API secret configured' };
-            }
-            headers['X-API-Secret'] = apiSecret;
-        }
+        const headers = await buildAdminApiHeaders();
 
         // Call the admin API server
         const response = await fetch(`${apiUrl}/user/delete`, {
@@ -98,21 +66,7 @@ export async function adminBulkDeleteUserAccounts(payloads: AdminDeleteUserPaylo
 
     try {
         const apiUrl = resolveAdminApiBaseUrl();
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-
-        const currentUser = firebaseAuth.currentUser;
-        if (currentUser) {
-            const idToken = await currentUser.getIdToken();
-            headers.Authorization = `Bearer ${idToken}`;
-        } else {
-            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
-            if (!apiSecret) {
-                return { success: false, message: 'Not authenticated and no API secret configured' };
-            }
-            headers['X-API-Secret'] = apiSecret;
-        }
+        const headers = await buildAdminApiHeaders();
 
         // Call the admin API server
         const response = await fetch(`${apiUrl}/user/bulk-delete`, {
@@ -163,23 +117,7 @@ export async function adminCreateUserAccount(
 
     try {
         const apiUrl = resolveAdminApiBaseUrl();
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-
-        const currentUser = firebaseAuth.currentUser;
-        if (currentUser) {
-            // Use Firebase ID token for authentication if user is signed in
-            const idToken = await currentUser.getIdToken();
-            headers.Authorization = `Bearer ${idToken}`;
-        } else {
-            // Fall back to API secret for dev-helper or server-to-server calls
-            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
-            if (!apiSecret) {
-                return { success: false, message: 'Not authenticated and no API secret configured' };
-            }
-            headers['X-API-Secret'] = apiSecret;
-        }
+        const headers = await buildAdminApiHeaders();
 
         // Call the admin API server
         const response = await fetch(`${apiUrl}/user/create`, {
@@ -241,23 +179,7 @@ export async function adminUpdateUserAccount(payload: AdminUpdateUserPayload): P
 
     try {
         const apiUrl = resolveAdminApiBaseUrl();
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-
-        const currentUser = firebaseAuth.currentUser;
-        if (currentUser) {
-            // Use Firebase ID token for authentication if user is signed in
-            const idToken = await currentUser.getIdToken();
-            headers.Authorization = `Bearer ${idToken}`;
-        } else {
-            // Fall back to API secret for dev-helper or server-to-server calls
-            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET;
-            if (!apiSecret) {
-                return { success: false, message: 'Not authenticated and no API secret configured' };
-            }
-            headers['X-API-Secret'] = apiSecret;
-        }
+        const headers = await buildAdminApiHeaders();
 
         // Call the admin API server
         const response = await fetch(`${apiUrl}/user/update`, {

@@ -1,7 +1,9 @@
 import { Box, Chip, Stack, Divider } from '@mui/material';
+import { useState, useEffect } from 'react';
 import type { ThesisComment } from '../../types/thesis';
 import type { ChatMessage } from '../../types/chat';
-import type { FileAttachment, FileCategory } from '../../types/file';
+import type { FileAttachment } from '../../types/file';
+import type { ThesisRole } from '../../types/thesis';
 import { getDisplayName } from '../../utils/firebase/firestore/profile';
 import { getAttachmentFiles, getDocumentNameByVersion } from '../../utils/fileUtils';
 import { getThesisRole, getThesisRoleDisplayText } from '../../utils/roleUtils';
@@ -105,55 +107,108 @@ export default function ChapterComment({
     currentUserEmail,
     showVersionDividers = true
 }: ChapterCommentProps) {
+    // State to store prepared chat messages
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [groupedMessages, setGroupedMessages] = useState<Record<number, ChatMessage[]>>({});
+    // State to store user data
+    const [userRoles, setUserRoles] = useState<Map<string, ThesisRole>>(new Map());
+    const [displayNames, setDisplayNames] = useState<Map<string, string>>(new Map());
+    const [roleDisplayTexts, setRoleDisplayTexts] = useState<Map<string, string>>(new Map());
+
+    // Fetch and prepare all data
+    useEffect(() => {
+        const prepareData = async () => {
+            const roles = new Map<string, ThesisRole>();
+            const names = new Map<string, string>();
+            const roleTexts = new Map<string, string>();
+            const uniqueAuthors = Array.from(new Set(comments.map(c => c.author)));
+            
+            // Fetch user data
+            await Promise.all(
+                uniqueAuthors.map(async (author) => {
+                    const [role, displayName, roleText] = await Promise.all([
+                        getThesisRole(author),
+                        getDisplayName(author),
+                        getThesisRoleDisplayText(author)
+                    ]);
+                    roles.set(author, role);
+                    names.set(author, displayName);
+                    roleTexts.set(author, roleText);
+                })
+            );
+            
+            setUserRoles(roles);
+            setDisplayNames(names);
+            setRoleDisplayTexts(roleTexts);
+
+            // Prepare chat messages with enriched attachments
+            const preparedMessages: ChatMessage[] = await Promise.all(
+                comments.map(async (comment, index) => {
+                    const message = thesisCommentToChatMessage(comment, index);
+                    const attachmentFiles = await getAttachmentFiles(comment.attachments);
+                    const enrichedAttachments: FileAttachment[] = attachmentFiles.map((file, fileIndex) => ({
+                        id: comment.attachments[fileIndex] || `att-${index}-${fileIndex}`,
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        url: comment.attachments[fileIndex] || file.url,
+                        mimeType: file.type,
+                        uploadDate: comment.date,
+                        author: comment.author,
+                        category: file.category
+                    }));
+
+                    return {
+                        ...message,
+                        attachments: enrichedAttachments,
+                        senderRole: roles.get(comment.author) || 'unknown'
+                    };
+                })
+            );
+
+            setChatMessages(preparedMessages);
+
+            // Group by version if needed
+            if (groupByVersion) {
+                const grouped = comments.reduce((acc, comment, index) => {
+                    const version = comment.version;
+                    if (version !== undefined) {
+                        if (!acc[version]) {
+                            acc[version] = [];
+                        }
+                        acc[version].push(preparedMessages[index]);
+                    }
+                    return acc;
+                }, {} as Record<number, ChatMessage[]>);
+                
+                setGroupedMessages(grouped);
+            }
+        };
+
+        prepareData();
+    }, [comments, groupByVersion]);
 
     if (comments.length === 0) {
         return null;
     }
 
-    // Convert thesis comments to chat messages
-    const chatMessages: ChatMessage[] = comments.map((comment, index) => {
-        const message = thesisCommentToChatMessage(comment, index);
+    // Helper to get cached data
+    const getCachedRole = (uid: string): ThesisRole => {
+        return userRoles.get(uid) || 'unknown';
+    };
 
-        // Enrich with attachment details from mockFileRegistry
-        const attachmentFiles = getAttachmentFiles(comment.attachments);
-        const enrichedAttachments: FileAttachment[] = attachmentFiles.map((file, fileIndex) => {
-            const fileCategory: FileCategory = file.category === 'attachment' ? 'document' : 'other';
-            return {
-                id: comment.attachments[fileIndex] || `att-${index}-${fileIndex}`,
-                name: file.name,
-                type: file.type,
-                size: file.size,
-                url: comment.attachments[fileIndex] || file.url,
-                mimeType: file.type,
-                uploadDate: comment.date,
-                author: comment.author,
-                category: file.category
-            };
-        });
+    const getCachedDisplayName = (uid: string): string => {
+        return displayNames.get(uid) || uid;
+    };
 
-        return {
-            ...message,
-            attachments: enrichedAttachments,
-            senderRole: getThesisRole(comment.author)
-        };
-    });
+    const getCachedRoleDisplayText = (uid: string): string => {
+        return roleDisplayTexts.get(uid) || 'Unknown';
+    };
 
     // If groupByVersion is true, group messages by their version
     if (groupByVersion) {
-        // Group comments by version
-        const groupedComments = comments.reduce((acc, comment) => {
-            const version = comment.version;
-            if (version !== undefined) {
-                if (!acc[version]) {
-                    acc[version] = [];
-                }
-                acc[version].push(comment);
-            }
-            return acc;
-        }, {} as Record<number, ThesisComment[]>);
-
         // Sort versions based on versionSort prop
-        const sortedVersions = Object.keys(groupedComments)
+        const sortedVersions = Object.keys(groupedMessages)
             .map(Number)
             .sort((a, b) => {
                 if (versionSort === 'asc') {
@@ -172,42 +227,14 @@ export default function ChapterComment({
             <Box>
                 <Stack spacing={3}>
                     {filteredVersions.map((version) => {
-                        const versionComments = groupedComments[version];
+                        const versionChatMessages = groupedMessages[version] || [];
                         const documentName = getDocumentNameByVersion(chapterId, version);
 
                         // Find the actual latest version (highest version number)
-                        const allVersions = Object.keys(groupedComments).map(Number);
+                        const allVersions = Object.keys(groupedMessages).map(Number);
                         const actualLatestVersion = Math.max(...allVersions);
                         const isLatestVersion = version === actualLatestVersion;
                         const isSelectedVersion = versionSelected === version;
-
-                        // Convert version comments to chat messages
-                        const versionChatMessages: ChatMessage[] = versionComments.map((comment, index) => {
-                            const message = thesisCommentToChatMessage(comment, index);
-
-                            // Enrich with attachment details
-                            const attachmentFiles = getAttachmentFiles(comment.attachments);
-                            const enrichedAttachments: FileAttachment[] = attachmentFiles.map((file, fileIndex) => {
-                                const fileCategory: FileCategory = file.category === 'attachment' ? 'document' : 'other';
-                                return {
-                                    id: comment.attachments[fileIndex] || `att-${version}-${index}-${fileIndex}`,
-                                    name: file.name,
-                                    type: file.type,
-                                    size: file.size,
-                                    url: comment.attachments[fileIndex] || file.url,
-                                    mimeType: file.type,
-                                    uploadDate: comment.date,
-                                    author: comment.author,
-                                    category: file.category
-                                };
-                            });
-
-                            return {
-                                ...message,
-                                attachments: enrichedAttachments,
-                                senderRole: getThesisRole(comment.author)
-                            };
-                        });
 
                         return (
                             <Box key={version}>
@@ -267,10 +294,10 @@ export default function ChapterComment({
                                         sortOrder: commentSort,
                                         allowAttachments: false
                                     }}
-                                    getDisplayName={(senderId) => getDisplayName(senderId)}
-                                    getRoleDisplayText={(senderId) => getThesisRoleDisplayText(senderId)}
+                                    getDisplayName={(senderId) => getCachedDisplayName(senderId)}
+                                    getRoleDisplayText={(senderId) => getCachedRoleDisplayText(senderId)}
                                     getAvatarColor={(senderId) => {
-                                        const role = getThesisRole(senderId);
+                                        const role = getCachedRole(senderId);
                                         return role === 'adviser' ? 'primary.main' : 'secondary.main';
                                     }}
                                     animationStaggerDelay={40}
@@ -300,10 +327,10 @@ export default function ChapterComment({
                 sortOrder: commentSort,
                 allowAttachments: false
             }}
-            getDisplayName={(senderId) => getDisplayName(senderId)}
-            getRoleDisplayText={(senderId) => getThesisRoleDisplayText(senderId)}
+            getDisplayName={(senderId) => getCachedDisplayName(senderId)}
+            getRoleDisplayText={(senderId) => getCachedRoleDisplayText(senderId)}
             getAvatarColor={(senderId) => {
-                const role = getThesisRole(senderId);
+                const role = getCachedRole(senderId);
                 return role === 'adviser' ? 'primary.main' : 'secondary.main';
             }}
             animationStaggerDelay={40}

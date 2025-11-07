@@ -1,12 +1,27 @@
-import { Typography, Paper, Box, Chip, Card, CardContent, LinearProgress, Stack } from '@mui/material';
+import * as React from 'react';
+import {
+    Alert,
+    Box,
+    Card,
+    CardContent,
+    Chip,
+    LinearProgress,
+    Paper,
+    Skeleton,
+    Stack,
+    Typography,
+} from '@mui/material';
 import { School } from '@mui/icons-material';
+import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
-import type { ThesisChapter } from '../../types/thesis';
-import { mockThesisData } from '../../data/mockData';
-import { getDisplayName } from '../../utils/firebase/firestore/profile';
-import { getThesisTeamMembers } from '../../utils/thesisUtils';
-import { AnimatedPage, AnimatedList } from '../../components/Animate';
+import type { Session } from '../../types/session';
+import type { ThesisChapter, ThesisData } from '../../types/thesis';
+import type { UserProfile } from '../../types/profile';
+import { AnimatedList, AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
+import { calculateProgress, getThesisTeamMembers } from '../../utils/thesisUtils';
+import { getAllTheses } from '../../utils/firebase/firestore/thesis';
+import { normalizeDateInput } from '../../utils/dateUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -15,26 +30,182 @@ export const metadata: NavigationItem = {
     segment: 'thesis',
     icon: <School />,
     roles: ['student', 'admin'],
-}; const calculateProgress = () => {
-    const total = mockThesisData.chapters.length;
-    const approved = mockThesisData.chapters.filter((ch: ThesisChapter) => ch.status === 'approved').length;
-    return (approved / total) * 100;
 };
 
+type ThesisRecord = ThesisData & { id: string };
+
+type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembers>> extends (infer Member)[]
+    ? Member
+    : never;
+
+function formatUserName(name: UserProfile['name']): string {
+    const parts = [name.prefix, name.first, name.middle, name.last, name.suffix].filter((value): value is string => Boolean(value));
+    return parts.join(' ');
+}
+
+function getStatusColor(status: ThesisChapter['status']): 'success' | 'warning' | 'error' | 'default' {
+    if (status === 'approved') return 'success';
+    if (status === 'under_review') return 'warning';
+    if (status === 'revision_required') return 'error';
+    return 'default';
+}
+
+function formatDateLabel(value?: string | null): string {
+    const date = normalizeDateInput(value ?? undefined);
+    return date ? date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+}
+
 /**
- * Main thesis overview page for students, showing progress, chapters, and team members
+ * Main thesis overview page for students, showing progress, chapters, and team members.
  */
 export default function ThesisPage() {
-    const progress = calculateProgress();
-    const teamMembers = getThesisTeamMembers(); return (
+    const session = useSession<Session>();
+    const userUid = session?.user?.uid;
+
+    const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
+    const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>([]);
+    const [progress, setProgress] = React.useState<number>(0);
+    const [loading, setLoading] = React.useState<boolean>(true);
+    const [error, setError] = React.useState<string | null>(null);
+    const [hasNoThesis, setHasNoThesis] = React.useState<boolean>(false);
+
+    React.useEffect(() => {
+        let active = true;
+
+        async function loadThesis() {
+            if (!userUid) {
+                if (active) {
+                    setThesis(null);
+                    setTeamMembers([]);
+                    setProgress(0);
+                    setHasNoThesis(false);
+                    setLoading(false);
+                }
+                return;
+            }
+
+            setLoading(true);
+            setError(null);
+            setHasNoThesis(false);
+
+            try {
+                const allTheses = await getAllTheses();
+                if (!active) return;
+
+                const match = allTheses.find((item) => item.leader === userUid || item.members?.includes(userUid));
+
+                if (!match) {
+                    if (active) {
+                        setThesis(null);
+                        setTeamMembers([]);
+                        setProgress(0);
+                        setHasNoThesis(true);
+                    }
+                    return;
+                }
+
+                setThesis(match);
+
+                const [members, progressValue] = await Promise.all([
+                    getThesisTeamMembers(match.id),
+                    calculateProgress(match.id),
+                ]);
+
+                if (!active) return;
+
+                setTeamMembers(members);
+                setProgress(progressValue);
+            } catch (err) {
+                console.error('Error loading thesis data:', err);
+                if (active) {
+                    setError('Failed to load thesis data. Please try again later.');
+                    setThesis(null);
+                    setTeamMembers([]);
+                    setProgress(0);
+                    setHasNoThesis(false);
+                }
+            } finally {
+                if (active) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        void loadThesis();
+
+        return () => {
+            active = false;
+        };
+    }, [userUid]);
+
+    if (session?.loading) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Paper sx={{ p: 3, mb: 3 }}>
+                    <Skeleton variant="text" width={260} height={42} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={32} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={10} sx={{ mt: 2 }} />
+                </Paper>
+            </AnimatedPage>
+        );
+    }
+
+    if (loading) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Paper sx={{ p: 3, mb: 3 }}>
+                    <Skeleton variant="text" width={260} height={42} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={32} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={10} sx={{ mt: 2 }} />
+                </Paper>
+                <Skeleton variant="text" width={180} height={32} sx={{ mb: 2 }} />
+                <Stack spacing={2}>
+                    {Array.from({ length: 3 }).map((_, idx) => (
+                        <Skeleton key={idx} variant="rectangular" height={96} />
+                    ))}
+                </Stack>
+            </AnimatedPage>
+        );
+    }
+
+    if (!userUid) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Alert severity="info">Sign in to view your thesis details.</Alert>
+            </AnimatedPage>
+        );
+    }
+
+    if (error) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Alert severity="error">{error}</Alert>
+            </AnimatedPage>
+        );
+    }
+
+    if (hasNoThesis || !thesis) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Alert severity="info">No thesis record found for your account yet.</Alert>
+            </AnimatedPage>
+        );
+    }
+
+    const formattedSubmissionDate = formatDateLabel(thesis.submissionDate);
+    const formattedLastUpdated = formatDateLabel(thesis.lastUpdated);
+
+    return (
         <AnimatedPage variant="slideUp">
-            {/* Thesis Header (with members section) */}
             <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h4" gutterBottom>
-                    {mockThesisData.title}
+                    {thesis.title}
                 </Typography>
 
-                {/* Group Members Section - moved below title */}
                 <Box sx={{ mt: 2, mb: 3 }}>
                     <Typography variant="h6" gutterBottom>
                         Research Group Members
@@ -47,26 +218,33 @@ export default function ThesisPage() {
                                 initials={[Name.FIRST]}
                                 mode="chip"
                                 tooltip="email"
-                                label={`${getDisplayName(member.email)} (${member.thesisRole})`}
+                                label={`${formatUserName(member.name)} (${member.thesisRole})`}
                                 size="small"
                                 chipProps={{ variant: 'outlined', size: 'small' }}
                             />
                         ))}
+                        {teamMembers.length === 0 && (
+                            <Typography variant="body2" color="text.secondary">
+                                No team members listed yet.
+                            </Typography>
+                        )}
                     </Stack>
                 </Box>
 
                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, mt: 2 }}>
                     <Box sx={{ flex: 1 }}>
                         <Typography variant="body1">
-                            <strong>Submission Date:</strong> {mockThesisData.submissionDate}
+                            <strong>Submission Date:</strong> {formattedSubmissionDate}
                         </Typography>
                         <Typography variant="body1">
-                            <strong>Last Updated:</strong> {mockThesisData.lastUpdated}
+                            <strong>Last Updated:</strong> {formattedLastUpdated}
+                        </Typography>
+                        <Typography variant="body1">
+                            <strong>Status:</strong> {thesis.overallStatus ?? 'In Progress'}
                         </Typography>
                     </Box>
                 </Box>
 
-                {/* Progress Bar */}
                 <Box sx={{ mt: 3 }}>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                         Overall Progress: {Math.round(progress)}% Complete
@@ -79,41 +257,50 @@ export default function ThesisPage() {
                 </Box>
             </Paper>
 
-            {/* Chapters Overview */}
-            <Typography variant="h5" sx={{ mb: 2 }}>Chapters</Typography>
+            <Typography variant="h5" sx={{ mb: 2 }}>
+                Chapters
+            </Typography>
 
             <AnimatedList variant="slideUp" staggerDelay={50}>
-                {mockThesisData.chapters.map((chapter: ThesisChapter) => (
-                    <Card key={chapter.id} sx={{ mb: 2 }}>
+                {(thesis.chapters ?? []).map((chapter) => {
+                    const commentsCount = chapter.comments?.length ?? 0;
+                    return (
+                        <Card key={chapter.id} sx={{ mb: 2 }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                    <Typography variant="h6">{chapter.title}</Typography>
+                                    <Chip
+                                        label={chapter.status.replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                                        color={getStatusColor(chapter.status)}
+                                        size="small"
+                                    />
+                                </Box>
+
+                                {chapter.submissionDate && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Last submitted: {formatDateLabel(chapter.submissionDate)}
+                                    </Typography>
+                                )}
+
+                                {commentsCount > 0 && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        {commentsCount} feedback(s) received
+                                    </Typography>
+                                )}
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+
+                {(thesis.chapters ?? []).length === 0 && (
+                    <Card variant="outlined" sx={{ mb: 2 }}>
                         <CardContent>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="h6">{chapter.title}</Typography>
-                                <Chip
-                                    label={chapter.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                    color={
-                                        chapter.status === 'approved' ? 'success' :
-                                            chapter.status === 'under_review' ? 'warning' :
-                                                chapter.status === 'revision_required' ? 'error' :
-                                                    'default'
-                                    }
-                                    size="small"
-                                />
-                            </Box>
-
-                            {chapter.submissionDate && (
-                                <Typography variant="body2" color="text.secondary">
-                                    Last submitted: {chapter.submissionDate}
-                                </Typography>
-                            )}
-
-                            {chapter.comments.length > 0 && (
-                                <Typography variant="body2" color="text.secondary">
-                                    {chapter.comments.length} feedback(s) received
-                                </Typography>
-                            )}
+                            <Typography variant="body2" color="text.secondary">
+                                No chapters have been added yet.
+                            </Typography>
                         </CardContent>
                     </Card>
-                ))}
+                )}
             </AnimatedList>
         </AnimatedPage>
     );

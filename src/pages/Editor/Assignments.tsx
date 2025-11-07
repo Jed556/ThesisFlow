@@ -14,7 +14,7 @@ import type { Session } from '../../types/session';
 import { AnimatedPage } from '../../components/Animate';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useSession } from '@toolpad/core';
-import { getReviewerAssignments } from '../../data/reviewerWorkspace';
+import { getReviewerAssignmentsForUser } from '../../utils/firebase/firestore/thesis';
 import type { ReviewerAssignment } from '../../types/reviewer';
 
 export const metadata: NavigationItem = {
@@ -38,9 +38,39 @@ function toPercent(value: number): string {
  */
 export default function EditorAssignmentsPage() {
     const session = useSession<Session>();
-    // Ensure null is converted to undefined so the argument matches expected type
-    const editorEmail: string | undefined = session?.user?.email ?? undefined;
-    const assignments = React.useMemo(() => getReviewerAssignments('editor', editorEmail), [editorEmail]);
+    const editorUid = session?.user?.uid;
+    const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    React.useEffect(() => {
+        let active = true;
+
+        async function loadAssignments() {
+            if (!editorUid) {
+                setAssignments([]);
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const data = await getReviewerAssignmentsForUser('editor', editorUid);
+                if (active) {
+                    setAssignments(data);
+                }
+            } finally {
+                if (active) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        void loadAssignments();
+
+        return () => {
+            active = false;
+        };
+    }, [editorUid]);
 
     const columns = React.useMemo<GridColDef<ReviewerAssignment>[]>(() => [
         {
@@ -143,6 +173,7 @@ export default function EditorAssignmentsPage() {
                     disableRowSelectionOnClick
                     sx={{ borderRadius: 2, border: 'none' }}
                     getRowHeight={() => 'auto'}
+                    loading={loading}
                     initialState={{
                         sorting: { sortModel: [{ field: 'dueDate', sort: 'asc' }] },
                         pagination: { paginationModel: { pageSize: 7 } },

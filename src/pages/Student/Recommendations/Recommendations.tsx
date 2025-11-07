@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
-    Avatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle, Grid,
-    IconButton, List, ListItem, ListItemAvatar, ListItemText, Tab, Tabs, Typography,
+    Avatar as MuiAvatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle, Grid, Alert,
+    IconButton, List, ListItem, ListItemAvatar, ListItemText, Tab, Tabs, Typography, Skeleton
 } from '@mui/material';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import SchoolIcon from '@mui/icons-material/School';
@@ -12,8 +12,11 @@ import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
 import { type ProfileCardStat, ProfileCard } from '../../../components/Profile';
 import type { NavigationItem } from '../../../types/navigation';
-import { mockAllTheses, mockUserProfiles } from '../../../data/mockData';
+import { getAllUsers } from '../../../utils/firebase/firestore/profile';
+import { getAllTheses } from '../../../utils/firebase/firestore/thesis';
+import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import type { UserProfile } from '../../../types/profile';
+import type { ThesisData } from '../../../types/thesis';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',
@@ -21,68 +24,8 @@ export const metadata: NavigationItem = {
     title: 'Recommendations',
     segment: 'recommendation',
     icon: <PeopleAltIcon />,
-    children: ['profile/:email'],
+    children: ['profile/:uid'],
     roles: ['student', 'admin'],
-};
-
-/**
- * Build helper lookup for quick thesis counts by mentor email.
- */
-function useMentorStats() {
-    return React.useMemo(() => {
-        const stats = new Map<string, { adviserCount: number; editorCount: number }>();
-        mockAllTheses.forEach((thesis) => {
-            if (thesis.adviser) {
-                const record = stats.get(thesis.adviser) ?? { adviserCount: 0, editorCount: 0 };
-                record.adviserCount += 1;
-                stats.set(thesis.adviser, record);
-            }
-            if (thesis.editor) {
-                const record = stats.get(thesis.editor) ?? { adviserCount: 0, editorCount: 0 };
-                record.editorCount += 1;
-                stats.set(thesis.editor, record);
-            }
-        });
-        return stats;
-    }, []);
-}
-
-/**
- * Static mapping of expertise tags per mentor email.
- * In a real integration this would be backed by user-managed data.
- */
-const mentorExpertise: Record<string, string[]> = {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'jane.smith@university.edu': ['Machine Learning', 'UX Research', 'Educational Tech'],
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'david.kim@university.edu': ['IoT', 'Security', 'Data Ethics'],
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'lisa.wang@university.edu': ['NLP', 'Deep Learning', 'Model Evaluation'],
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'mike.johnson@university.edu': ['Technical Writing', 'APA Formatting', 'Copy Editing'],
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'emily.brown@university.edu': ['Academic Editing', 'Qualitative Review', 'Rubrics'],
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'olivia.martinez@university.edu': ['Instructional Design', 'Accessibility'],
-};
-
-/**
- * Static mapping of compatibility scores (0-100)
- * In a real integration this would be calculated based on student's thesis topic, methodology, etc.
- */
-const mentorCompatibility: Record<string, number> = {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'jane.smith@university.edu': 95,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'david.kim@university.edu': 88,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'lisa.wang@university.edu': 92,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'mike.johnson@university.edu': 87,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'emily.brown@university.edu': 90,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'olivia.martinez@university.edu': 85,
 };
 
 /**
@@ -91,9 +34,63 @@ const mentorCompatibility: Record<string, number> = {
 export default function AdviserEditorRecommendationsPage() {
     const navigate = useNavigate();
     const location = useLocation();
-    const mentorStats = useMentorStats();
     const [activeTab, setActiveTab] = React.useState(0);
     const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
+    const [profiles, setProfiles] = React.useState<UserProfile[]>([]);
+    const [theses, setTheses] = React.useState<(ThesisData & { id: string })[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        let mounted = true;
+
+        async function loadData() {
+            try {
+                setLoading(true);
+                setError(null);
+                const [userProfiles, thesisData] = await Promise.all([
+                    getAllUsers(),
+                    getAllTheses(),
+                ]);
+                if (!mounted) return;
+                setProfiles(userProfiles);
+                setTheses(thesisData);
+            } catch (err) {
+                if (!mounted) return;
+                console.error('Error loading mentor recommendations:', err);
+                setError('Failed to load mentor recommendations. Please try again later.');
+            } finally {
+                if (mounted) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        loadData();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const thesisStats = React.useMemo(() => aggregateThesisStats(theses), [theses]);
+    const advisers = React.useMemo(
+        () => profiles.filter((profile) => profile.role === 'adviser'),
+        [profiles]
+    );
+    const editors = React.useMemo(
+        () => profiles.filter((profile) => profile.role === 'editor'),
+        [profiles]
+    );
+
+    const adviserCards = React.useMemo(
+        () => computeMentorCards(advisers, 'adviser', thesisStats),
+        [advisers, thesisStats]
+    );
+    const editorCards = React.useMemo(
+        () => computeMentorCards(editors, 'editor', thesisStats),
+        [editors, thesisStats]
+    );
 
     // Check if we're on a child route (profile page)
     const isProfileRoute = location.pathname.includes('/profile/');
@@ -103,86 +100,86 @@ export default function AdviserEditorRecommendationsPage() {
         return <Outlet />;
     }
 
-    const advisers = React.useMemo(
-        () => mockUserProfiles.filter((profile) => profile.role === 'adviser'),
-        []
-    );
-    const editors = React.useMemo(
-        () => mockUserProfiles.filter((profile) => profile.role === 'editor'),
-        []
-    );
+    if (loading) {
+        return (
+            <AnimatedPage variant="fade">
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <Skeleton variant="text" width={220} height={42} />
+                    <Grid container spacing={2}>
+                        {Array.from({ length: 6 }).map((_, idx) => (
+                            <Grid key={idx} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                <Card variant="outlined" sx={{ height: '100%' }}>
+                                    <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <Skeleton variant="circular" width={48} height={48} />
+                                        <Skeleton variant="text" width="70%" />
+                                        <Skeleton variant="rectangular" width="100%" height={80} />
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+            </AnimatedPage>
+        );
+    }
+
+    if (error) {
+        return (
+            <AnimatedPage variant="fade">
+                <Alert severity="error" sx={{ maxWidth: 520 }}>
+                    {error}
+                </Alert>
+            </AnimatedPage>
+        );
+    }
 
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
     };
 
-    const handleOpenProfile = (profile: UserProfile) => {
-        navigate(`profile/${encodeURIComponent(profile.email)}`);
-    };
+    const handleOpenProfile = React.useCallback((profile: UserProfile) => {
+        navigate(`profile/${profile.uid}`);
+    }, [navigate]);
 
-    const renderMentorCard = (profile: UserProfile, roleLabel: 'Adviser' | 'Editor') => {
-        const stats = mentorStats.get(profile.email) ?? { adviserCount: 0, editorCount: 0 };
-        const expertise = mentorExpertise[profile.email] ?? [];
-        const compatibility = mentorCompatibility[profile.email] ?? 75;
-
-        // Determine capacity limits
-        const adviserLimit = profile.adviserCapacity ?? 0;
-        const editorLimit = profile.editorCapacity ?? 0;
-
-        // Only show stats if accepting (limit > 0)
-        const showAdvising = adviserLimit > 0;
-        const showEditing = editorLimit > 0;
-
-        // Build stats array
-        const cardStats: ProfileCardStat[] = [];
-
-        if (showAdvising) {
-            cardStats.push({
-                label: 'Advising',
-                value: `${stats.adviserCount}/${adviserLimit}`,
-            });
-        }
-
-        if (showEditing) {
-            cardStats.push({
-                label: 'Editing',
-                value: `${stats.editorCount}/${editorLimit}`,
-            });
-        }
-
-        cardStats.push({
-            label: 'Compatibility',
-            value: `${compatibility}%`,
-            color: 'primary.main',
-        });
-
-        cardStats.push({
-            label: 'Rating',
-            value: `4.${profile.id % 3 + 2}`,
-            icon: <StarRateIcon sx={{ fontSize: 18, color: 'warning.main' }} />,
-        });
+    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor') => {
+        const cardStats: ProfileCardStat[] = [
+            {
+                label: 'Active Teams',
+                value: model.activeCount,
+            },
+            {
+                label: 'Open Slots',
+                value: model.capacity > 0 ? `${model.openSlots}/${model.capacity}` : 'Not accepting',
+            },
+            {
+                label: 'Compatibility',
+                value: `${model.compatibility}%`,
+                icon: <StarRateIcon sx={{ fontSize: 18, color: 'warning.main' }} />,
+                color: 'primary.main',
+            },
+        ];
 
         return (
             <ProfileCard
-                key={profile.email}
-                profile={profile}
+                key={model.profile.uid}
+                profile={model.profile}
                 roleLabel={roleLabel}
-                skills={expertise}
+                skills={model.profile.skills ?? []}
                 stats={cardStats}
-                cornerNumber={profile.id}
-                showSkills={true}
-                showDivider={true}
-                onClick={() => handleOpenProfile(profile)}
+                cornerNumber={model.rank}
+                showDivider
+                showSkills={(model.profile.skills?.length ?? 0) > 0}
+                onClick={() => handleOpenProfile(model.profile)}
             />
         );
-    };
+    }, [handleOpenProfile]);
 
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2, position: 'relative' }}>
                 <Tabs value={activeTab} onChange={handleTabChange} aria-label="mentor recommendations tabs">
-                    <Tab label={`Advisers (${advisers.length})`} icon={<SchoolIcon />} iconPosition="start" />
-                    <Tab label={`Editors (${editors.length})`} icon={<EditNoteIcon />} iconPosition="start" />
+                    <Tab label={`Advisers (${adviserCards.length})`} icon={<SchoolIcon />} iconPosition="start" />
+                    <Tab label={`Editors (${editorCards.length})`} icon={<EditNoteIcon />} iconPosition="start" />
                 </Tabs>
                 <IconButton
                     onClick={() => setInfoDialogOpen(true)}
@@ -200,12 +197,12 @@ export default function AdviserEditorRecommendationsPage() {
             {/* Advisers Tab */}
             {activeTab === 0 && (
                 <Grid container spacing={2}>
-                    {advisers.map((profile) => (
-                        <Grid key={profile.email} size={{ xs: 12, sm: 6, lg: 4 }}>
-                            {renderMentorCard(profile, 'Adviser')}
+                    {adviserCards.map((card) => (
+                        <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                            {renderMentorCard(card, 'Adviser')}
                         </Grid>
                     ))}
-                    {advisers.length === 0 && (
+                    {adviserCards.length === 0 && (
                         <Grid size={{ xs: 12 }}>
                             <Card variant="outlined">
                                 <CardContent>
@@ -222,12 +219,12 @@ export default function AdviserEditorRecommendationsPage() {
             {/* Editors Tab */}
             {activeTab === 1 && (
                 <Grid container spacing={2}>
-                    {editors.map((profile) => (
-                        <Grid key={profile.email} size={{ xs: 12, sm: 6, lg: 4 }}>
-                            {renderMentorCard(profile, 'Editor')}
+                    {editorCards.map((card) => (
+                        <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                            {renderMentorCard(card, 'Editor')}
                         </Grid>
                     ))}
-                    {editors.length === 0 && (
+                    {editorCards.length === 0 && (
                         <Grid size={{ xs: 12 }}>
                             <Card variant="outlined">
                                 <CardContent>
@@ -252,20 +249,25 @@ export default function AdviserEditorRecommendationsPage() {
                     <List dense>
                         <ListItem>
                             <ListItemAvatar>
-                                <Avatar>
+                                <MuiAvatar>
                                     <PeopleAltIcon />
-                                </Avatar>
+                                </MuiAvatar>
                             </ListItemAvatar>
                             <ListItemText
                                 primary="Profile insights"
-                                secondary="Tap into curated data about a mentor's expertise, departmental affiliation, and current engagements."
+                                secondary={(
+                                    <Typography variant="body2" color="text.secondary">
+                                        Tap into curated data about a mentor's expertise, departmental affiliation,
+                                        and current engagements.
+                                    </Typography>
+                                )}
                             />
                         </ListItem>
                         <ListItem>
                             <ListItemAvatar>
-                                <Avatar>
+                                <MuiAvatar>
                                     <SchoolIcon />
-                                </Avatar>
+                                </MuiAvatar>
                             </ListItemAvatar>
                             <ListItemText
                                 primary="Balanced workloads"
@@ -274,9 +276,9 @@ export default function AdviserEditorRecommendationsPage() {
                         </ListItem>
                         <ListItem>
                             <ListItemAvatar>
-                                <Avatar>
+                                <MuiAvatar>
                                     <EditNoteIcon />
-                                </Avatar>
+                                </MuiAvatar>
                             </ListItemAvatar>
                             <ListItemText
                                 primary="One-click profile access"

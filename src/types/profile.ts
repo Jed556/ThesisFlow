@@ -66,6 +66,11 @@ export interface UserProfile {
     bio?: string;
 
     /**
+     * Expertise areas or skills (for advisers and editors)
+     */
+    skills?: string[];
+
+    /**
      * Capacity for advising theses (only for advisers)
      * If 0 or undefined, not accepting advisees
      */

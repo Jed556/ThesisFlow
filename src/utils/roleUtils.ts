@@ -3,11 +3,10 @@
  * Handles both system-wide authentication roles and thesis-specific contextual roles
  */
 
-import type { ThesisRole } from '../types/thesis';
+import type { ThesisRole, ThesisData } from '../types/thesis';
 import type { UserRole } from '../types/profile';
-import { mockThesisData } from '../data/mockData';
 import { firebaseAuth, firebaseFirestore } from './firebase/firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
@@ -97,21 +96,69 @@ export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boole
 // ==================================================
 
 /**
- * Get user's thesis-specific role by uid from thesis data context
+ * Get thesis by user UID from Firestore
+ * Searches for a thesis where the user is leader, member, adviser, or editor
  */
-export function getThesisRole(uid: string): ThesisRole {
-    if (uid === mockThesisData.leader) return 'leader';
-    if (mockThesisData.members.includes(uid)) return 'member';
-    if (uid === mockThesisData.adviser) return 'adviser';
-    if (uid === mockThesisData.editor) return 'editor';
+async function getThesisByUserUid(uid: string): Promise<ThesisData | null> {
+    try {
+        const thesesRef = collection(firebaseFirestore, 'theses');
+        
+        // Query for theses where user is leader
+        const leaderQuery = query(thesesRef, where('leader', '==', uid));
+        const leaderSnap = await getDocs(leaderQuery);
+        if (!leaderSnap.empty) {
+            return leaderSnap.docs[0].data() as ThesisData;
+        }
+
+        // Query for theses where user is in members array
+        const memberQuery = query(thesesRef, where('members', 'array-contains', uid));
+        const memberSnap = await getDocs(memberQuery);
+        if (!memberSnap.empty) {
+            return memberSnap.docs[0].data() as ThesisData;
+        }
+
+        // Query for theses where user is adviser
+        const adviserQuery = query(thesesRef, where('adviser', '==', uid));
+        const adviserSnap = await getDocs(adviserQuery);
+        if (!adviserSnap.empty) {
+            return adviserSnap.docs[0].data() as ThesisData;
+        }
+
+        // Query for theses where user is editor
+        const editorQuery = query(thesesRef, where('editor', '==', uid));
+        const editorSnap = await getDocs(editorQuery);
+        if (!editorSnap.empty) {
+            return editorSnap.docs[0].data() as ThesisData;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error getting thesis by user UID:', error);
+        return null;
+    }
+}
+
+/**
+ * Get user's thesis-specific role by uid from Firestore thesis data
+ */
+export async function getThesisRole(uid: string): Promise<ThesisRole> {
+    const thesis = await getThesisByUserUid(uid);
+    
+    if (!thesis) return 'unknown';
+    
+    if (uid === thesis.leader) return 'leader';
+    if (thesis.members.includes(uid)) return 'member';
+    if (uid === thesis.adviser) return 'adviser';
+    if (uid === thesis.editor) return 'editor';
+    
     return 'unknown';
 }
 
 /**
  * Get thesis role display text
  */
-export function getThesisRoleDisplayText(email: string): string {
-    const role = getThesisRole(email);
+export async function getThesisRoleDisplayText(uid: string): Promise<string> {
+    const role = await getThesisRole(uid);
     switch (role) {
         case 'leader': return 'Student (Leader)';
         case 'member': return 'Student (Member)';
@@ -124,7 +171,7 @@ export function getThesisRoleDisplayText(email: string): string {
 /**
  * Check if user is a student in thesis context (leader or member)
  */
-export function isThesisStudent(email: string): boolean {
-    const role = getThesisRole(email);
+export async function isThesisStudent(uid: string): Promise<boolean> {
+    const role = await getThesisRole(uid);
     return role === 'leader' || role === 'member';
 }

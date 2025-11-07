@@ -7,7 +7,7 @@ import type { NavigationItem } from '../../types/navigation';
 import type { ReviewerAssignment } from '../../types/reviewer';
 import type { Session } from '../../types/session';
 import { AnimatedPage } from '../../components/Animate';
-import { getReviewerAssignments } from '../../data/reviewerWorkspace';
+import { getReviewerAssignmentsForUser } from '../../utils/firebase/firestore/thesis';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',
@@ -24,11 +24,39 @@ function toPercent(value: number): string {
 
 export default function AdviserAssignmentsPage() {
     const session = useSession<Session>();
-    const adviserEmail = session?.user?.email;
-    const assignments = React.useMemo(
-        () => getReviewerAssignments('adviser', adviserEmail ?? undefined),
-        [adviserEmail],
-    );
+    const adviserUid = session?.user?.uid;
+    const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    React.useEffect(() => {
+        let active = true;
+
+        async function loadAssignments() {
+            if (!adviserUid) {
+                setAssignments([]);
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const data = await getReviewerAssignmentsForUser('adviser', adviserUid);
+                if (active) {
+                    setAssignments(data);
+                }
+            } finally {
+                if (active) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        void loadAssignments();
+
+        return () => {
+            active = false;
+        };
+    }, [adviserUid]);
 
     const columns = React.useMemo<GridColDef<ReviewerAssignment>[]>(
         () => [
@@ -146,6 +174,7 @@ export default function AdviserAssignmentsPage() {
                     disableRowSelectionOnClick
                     sx={{ borderRadius: 2, border: 'none' }}
                     getRowHeight={() => 'auto'}
+                    loading={loading}
                     initialState={{
                         sorting: { sortModel: [{ field: 'dueDate', sort: 'asc' }] },
                         pagination: { paginationModel: { pageSize: 7 } },

@@ -6,6 +6,33 @@ import * as React from 'react';
  */
 
 /**
+ * Normalizes supported date inputs (Date, ISO strings, Firestore timestamps) into Date instances.
+ * @param value - Date-like input to normalize
+ * @returns A Date instance or null if the value cannot be normalized
+ */
+export function normalizeDateInput(value: unknown): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' || value instanceof String) {
+        const parsed = new Date(value as string);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (typeof value === 'object') {
+        const maybeTimestamp = value as { seconds?: number; nanoseconds?: number; toDate?: () => Date };
+        if (typeof maybeTimestamp?.toDate === 'function') {
+            const date = maybeTimestamp.toDate();
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+        if (typeof maybeTimestamp?.seconds === 'number') {
+            const millis = maybeTimestamp.seconds * 1000 + (maybeTimestamp.nanoseconds ?? 0) / 1_000_000;
+            const date = new Date(millis);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+    }
+    return null;
+}
+
+/**
  * Returns the start of the day (midnight) for a given date
  * @param date - Date object
  * @returns - Timestamp of the start of the day

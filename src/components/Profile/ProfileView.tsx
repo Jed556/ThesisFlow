@@ -2,12 +2,14 @@ import * as React from 'react';
 import {
     Box, Button, Card, CardContent, Chip, Divider, Grid, List, ListItem,
     ListItemAvatar, ListItemText, Paper, Stack, Typography,
+    Avatar as MuiAvatar,
 } from '@mui/material';
 import EmailIcon from '@mui/icons-material/Email';
 import ApartmentIcon from '@mui/icons-material/Apartment';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { alpha, lighten, useTheme } from '@mui/material/styles';
 import Avatar from '../Avatar/Avatar';
+import { getInitialsFromFullName } from '../../utils/avatarUtils';
 import type { UserProfile, HistoricalThesisEntry } from '../../types/profile';
 import type { ThesisData } from '../../types/thesis';
 
@@ -28,7 +30,7 @@ export interface ProfileViewProps {
     currentTheses?: ThesisData[];
     skills?: string[];
     timeline?: HistoricalThesisEntry[];
-    contacts?: Array<{ icon: React.ReactNode; text: string }>;
+    contacts?: { icon: React.ReactNode; text: string }[];
     primaryAction?: ProfilePrimaryAction;
     backAction?: ProfileBackAction;
     assignmentsEmptyMessage?: string;
@@ -37,11 +39,11 @@ export interface ProfileViewProps {
     headerCaption?: string;
 }
 
-function buildContacts(profile: UserProfile, custom?: ProfileViewProps['contacts']): Array<{ icon: React.ReactNode; text: string }> {
+function buildContacts(profile: UserProfile, custom?: ProfileViewProps['contacts']): { icon: React.ReactNode; text: string }[] {
     if (custom && custom.length > 0) {
         return custom;
     }
-    const contacts: Array<{ icon: React.ReactNode; text: string }> = [];
+    const contacts: { icon: React.ReactNode; text: string }[] = [];
     contacts.push({ icon: <EmailIcon fontSize="small" color="primary" />, text: profile.email });
     if (profile.department) {
         contacts.push({ icon: <ApartmentIcon fontSize="small" color="primary" />, text: profile.department });
@@ -121,10 +123,10 @@ export default function ProfileView({
                 </Box>
                 <Box sx={{ p: { xs: 3, md: 4 } }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems={{ xs: 'flex-start', sm: 'center' }}>
-                        <Avatar profile={profile} tooltip="full" sx={avatarStyles} size={96} />
+                        <Avatar uid={profile.uid} tooltip="full" sx={avatarStyles} size={96} />
                         <Box sx={{ flex: 1 }}>
                             <Typography variant="h4" component="h1" gutterBottom>
-                                {`${profile.prefix ? `${profile.prefix} ` : ''}${profile.firstName} ${profile.lastName}`}
+                                {`${profile.name.prefix ? `${profile.name.prefix} ` : ''}${profile.name.first} ${profile.name.last}`}
                             </Typography>
                             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                                 <Chip label={roleLabel} color="primary" size="small" />
@@ -187,11 +189,16 @@ export default function ProfileView({
                                     {contactItems.map((item, idx) => (
                                         <ListItem key={idx} sx={{ p: 0 }}>
                                             <ListItemAvatar>
-                                                <Avatar
-                                                    name={item.text}
-                                                    sx={{ bgcolor: alpha(accentColor, 0.15), color: accentColor }}
-                                                    size="small"
-                                                />
+                                                <MuiAvatar
+                                                    sx={{
+                                                        bgcolor: alpha(accentColor, 0.15),
+                                                        color: accentColor,
+                                                        width: 32,
+                                                        height: 32
+                                                    }}
+                                                >
+                                                    {getInitialsFromFullName(item.text)}
+                                                </MuiAvatar>
                                             </ListItemAvatar>
                                             <ListItemText
                                                 primary={
@@ -220,11 +227,16 @@ export default function ProfileView({
                                         {currentTheses.map((thesis) => (
                                             <ListItem key={thesis.title} sx={{ alignItems: 'flex-start' }}>
                                                 <ListItemAvatar>
-                                                    <Avatar
-                                                        name={thesis.title}
-                                                        sx={{ bgcolor: alpha(accentColor, 0.2), color: accentColor }}
-                                                        size="medium"
-                                                    />
+                                                    <MuiAvatar
+                                                        sx={{
+                                                            bgcolor: alpha(accentColor, 0.2),
+                                                            color: accentColor,
+                                                            width: 40,
+                                                            height: 40
+                                                        }}
+                                                    >
+                                                        {getInitialsFromFullName(thesis.title)}
+                                                    </MuiAvatar>
                                                 </ListItemAvatar>
                                                 <ListItemText
                                                     primary={
