@@ -76,6 +76,32 @@ export async function getAllUsers(): Promise<UserProfile[]> {
     return snap.docs.map(d => d.data() as UserProfile);
 }
 
+export interface UserFilterOptions {
+    role?: UserRole;
+    department?: string;
+}
+
+/**
+ * Query users by optional role and department filters.
+ * @param options Optional role and department to narrow the results
+ */
+export async function getUsersByFilter(options: UserFilterOptions = {}): Promise<UserProfile[]> {
+    const constraints = [];
+
+    if (options.role) {
+        constraints.push(where('role', '==', options.role));
+    }
+
+    if (options.department) {
+        constraints.push(where('department', '==', options.department));
+    }
+
+    const baseCollection = collection(firebaseFirestore, USERS_COLLECTION);
+    const usersQuery = constraints.length > 0 ? query(baseCollection, ...constraints) : baseCollection;
+    const snap = await getDocs(usersQuery);
+    return snap.docs.map((docSnap) => docSnap.data() as UserProfile);
+}
+
 /**
  * Check whether the specified user has the provided role.
  * @param uid - User ID of the user to check
