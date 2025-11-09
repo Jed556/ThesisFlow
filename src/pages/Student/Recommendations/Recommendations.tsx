@@ -12,7 +12,7 @@ import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
 import { type ProfileCardStat, ProfileCard } from '../../../components/Profile';
 import type { NavigationItem } from '../../../types/navigation';
-import { getAllUsers } from '../../../utils/firebase/firestore/profile';
+import { getAllUsers } from '../../../utils/firebase/firestore/user';
 import { getAllTheses } from '../../../utils/firebase/firestore/thesis';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import type { UserProfile } from '../../../types/profile';

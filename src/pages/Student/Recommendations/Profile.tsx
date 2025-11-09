@@ -3,7 +3,7 @@ import { Alert, Button, Skeleton, Stack } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../../components/Profile/ProfileView';
-import { getUserById } from '../../../utils/firebase/firestore/profile';
+import { getUserById } from '../../../utils/firebase/firestore/user';
 import { getAllTheses } from '../../../utils/firebase/firestore/thesis';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisData } from '../../../types/thesis';

@@ -103,18 +103,6 @@ export async function getUsersByFilter(options: UserFilterOptions = {}): Promise
 }
 
 /**
- * Check whether the specified user has the provided role.
- * @param uid - User ID of the user to check
- * @param role - Role to compare against
- * @returns true when the user's role matches, false otherwise
- */
-export async function isUserInRole(uid: string, role: UserRole): Promise<boolean> {
-    const profile = await getUserById(uid);
-    if (!profile) return false;
-    return profile.role === role;
-}
-
-/**
  * Create or update a user's profile in Firestore (merge mode).
  * @param uid - User ID to use as the document key
  * @param data - Partial UserProfile fields to write/merge

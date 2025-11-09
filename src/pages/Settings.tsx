@@ -8,7 +8,7 @@ import {
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
-import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/profile';
+import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/user';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { uploadBanner, deleteFileFromStorage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../utils/avatarUtils';

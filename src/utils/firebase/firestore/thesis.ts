@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
-import { getUserById } from './profile';
+import { getUserById } from './user';
 
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';

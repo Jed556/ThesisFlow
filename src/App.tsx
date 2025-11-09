@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { authSignOut, signInWithGoogle, onAuthStateChanged } from './utils/firebase/auth/client';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { getUserById } from './utils/firebase/firestore/profile';
+import { getUserById } from './utils/firebase/firestore/user';
 import { setCurrentAppTheme } from './utils/devUtils';
 import { buildNavigation } from './utils/navBuilder';
 import { getUserRole } from './utils/roleUtils';
@@ -71,7 +71,7 @@ function AppContent() {
 
                 try {
                     // Get role from Auth claims first, then fall back to Firestore
-                    let userRole = await getUserRole(undefined, true); // Force refresh to get latest claims
+                    let userRole = await getUserRole(true); // Force refresh to get latest claims
 
                     // Fetch user profile for additional data
                     const profile = await getUserById(user.uid);

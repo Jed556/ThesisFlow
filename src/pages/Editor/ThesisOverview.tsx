@@ -16,7 +16,7 @@ import { AnimatedPage } from '../../components/Animate';
 import ChatBox from '../../components/Chat/ChatBox';
 import { getAllTheses } from '../../utils/firebase/firestore/thesis';
 import { getFilesByThesis } from '../../utils/firebase/firestore/file';
-import { getDisplayName } from '../../utils/firebase/firestore/profile';
+import { getDisplayName } from '../../utils/firebase/firestore/user';
 import { getThesisRole } from '../../utils/roleUtils';
 
 export const metadata: NavigationItem = {

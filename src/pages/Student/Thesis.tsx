@@ -19,7 +19,7 @@ import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedList, AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
-import { calculateProgress, getThesisTeamMembers } from '../../utils/thesisUtils';
+import { calculateThesisProgress, getThesisTeamMembers } from '../../utils/thesisUtils';
 import { getAllTheses } from '../../utils/firebase/firestore/thesis';
 import { normalizeDateInput } from '../../utils/dateUtils';
 
@@ -108,7 +108,7 @@ export default function ThesisPage() {
 
                 const [members, progressValue] = await Promise.all([
                     getThesisTeamMembers(match.id),
-                    calculateProgress(match.id),
+                    calculateThesisProgress(match.id),
                 ]);
 
                 if (!active) return;

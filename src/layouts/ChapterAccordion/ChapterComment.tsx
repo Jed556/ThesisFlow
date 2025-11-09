@@ -4,7 +4,7 @@ import type { ThesisComment } from '../../types/thesis';
 import type { ChatMessage } from '../../types/chat';
 import type { FileAttachment } from '../../types/file';
 import type { ThesisRole } from '../../types/thesis';
-import { getDisplayName } from '../../utils/firebase/firestore/profile';
+import { getDisplayName } from '../../utils/firebase/firestore/user';
 import { getAttachmentFiles, getDocumentNameByVersion } from '../../utils/fileUtils';
 import { getThesisRole, getThesisRoleDisplayText } from '../../utils/roleUtils';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
@@ -122,7 +122,7 @@ export default function ChapterComment({
             const names = new Map<string, string>();
             const roleTexts = new Map<string, string>();
             const uniqueAuthors = Array.from(new Set(comments.map(c => c.author)));
-            
+
             // Fetch user data
             await Promise.all(
                 uniqueAuthors.map(async (author) => {
@@ -136,7 +136,7 @@ export default function ChapterComment({
                     roleTexts.set(author, roleText);
                 })
             );
-            
+
             setUserRoles(roles);
             setDisplayNames(names);
             setRoleDisplayTexts(roleTexts);
@@ -180,7 +180,7 @@ export default function ChapterComment({
                     }
                     return acc;
                 }, {} as Record<number, ChatMessage[]>);
-                
+
                 setGroupedMessages(grouped);
             }
         };

@@ -7,15 +7,15 @@ import type { ThesisRole, ThesisData } from '../types/thesis';
 import type { UserRole } from '../types/profile';
 import { firebaseAuth, firebaseFirestore } from './firebase/firebaseConfig';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { getUserById } from './firebase/firestore';
 
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
  * Prioritizes Auth token claims over Firestore data for better performance and security
- * @param email - Optional email parameter for backwards compatibility (not used, uses current user)
  * @param forceRefresh - Whether to force refresh the ID token to get latest claims
  * @returns Promise resolving to the user's role
  */
-export async function getUserRole(email?: string, forceRefresh: boolean = true): Promise<UserRole> {
+export async function getUserRole( forceRefresh: boolean = true): Promise<UserRole> {
     const user = firebaseAuth.currentUser;
 
     if (!user) {
@@ -89,6 +89,18 @@ export function getRoleHierarchy(role: UserRole): number {
  */
 export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boolean {
     return getRoleHierarchy(userRole) >= getRoleHierarchy(minimumRole);
+}
+
+/**
+ * Check whether the specified user has the provided role.
+ * @param uid - User ID of the user to check
+ * @param role - Role to compare against
+ * @returns true when the user's role matches, false otherwise
+ */
+export async function isUserInRole(uid: string, role: UserRole): Promise<boolean> {
+    const profile = await getUserById(uid);
+    if (!profile) return false;
+    return profile.role === role;
 }
 
 // ==================================================

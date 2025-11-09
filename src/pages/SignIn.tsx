@@ -10,7 +10,7 @@ import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
-import { getAllUsers, getUserById } from '../utils/firebase/firestore/profile';
+import { getAllUsers, getUserById } from '../utils/firebase/firestore/user';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
