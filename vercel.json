@@ -1,15 +1,15 @@
 {
     "framework": "vite",
     "functions": {
-        "api/**/*.ts": {
+        "/serverless/api/**/*.ts": {
             "memory": 512,
             "maxDuration": 30
         }
     },
     "rewrites": [
         {
-            "source": "/api/(.*)",
-            "destination": "/api/$1"
+            "source": "/serverless/api/(.*)",
+            "destination": "/serverless/api/$1"
         },
         {
             "source": "/(.*)",
@@ -18,7 +18,7 @@
     ],
     "headers": [
         {
-            "source": "/api/health",
+            "source": "/serverless/api/health",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
@@ -39,7 +39,7 @@
             ]
         },
         {
-            "source": "/api/user/create",
+            "source": "/serverless/api/user/create",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
@@ -60,7 +60,28 @@
             ]
         },
         {
-            "source": "/api/user/delete",
+            "source": "/serverless/api/user/delete",
+            "headers": [
+                {
+                    "key": "Access-Control-Allow-Credentials",
+                    "value": "true"
+                },
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                },
+                {
+                    "key": "Access-Control-Allow-Methods",
+                    "value": "DELETE, OPTIONS"
+                },
+                {
+                    "key": "Access-Control-Allow-Headers",
+                    "value": "Content-Type, Authorization, X-API-Secret"
+                }
+            ]
+        },
+        {
+            "source": "/serverless/api/wipe",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",

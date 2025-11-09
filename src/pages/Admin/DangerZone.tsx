@@ -16,14 +16,13 @@ export const metadata: NavigationItem = {
     roles: ['admin', 'developer'],
 };
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type WipeCategory = 'calendar' | 'event' | 'file' | 'form' | 'group' | 'thesis' | 'user';
 
 interface WipeAction {
     id: string;
     label: string;
     description: string;
-    endpoint: string;
-    method?: HttpMethod;
+    category: WipeCategory;
 }
 
 const wipeActions: WipeAction[] = [
@@ -31,44 +30,43 @@ const wipeActions: WipeAction[] = [
         id: 'wipe-auth-users',
         label: 'Wipe Auth + Firestore Users',
         description: 'Removes every user account from Firebase Auth and clears the users collection.',
-        endpoint: '/user/wipe',
-        method: 'POST',
+        category: 'user',
     },
     {
         id: 'wipe-calendars',
         label: 'Wipe Calendars',
         description: 'Deletes every calendar document.',
-        endpoint: '/calendar/wipe',
+        category: 'calendar',
     },
     {
         id: 'wipe-events',
         label: 'Wipe Events',
         description: 'Deletes every event entry across all calendars.',
-        endpoint: '/event/wipe',
+        category: 'event',
     },
     {
         id: 'wipe-groups',
         label: 'Wipe Groups',
         description: 'Removes all thesis groups.',
-        endpoint: '/group/wipe',
+        category: 'group',
     },
     {
         id: 'wipe-theses',
         label: 'Wipe Theses',
         description: 'Deletes every thesis document.',
-        endpoint: '/thesis/wipe',
+        category: 'thesis',
     },
     {
         id: 'wipe-form-templates',
         label: 'Wipe Form Templates',
         description: 'Deletes every form template.',
-        endpoint: '/form/wipe',
+        category: 'form',
     },
     {
         id: 'wipe-files',
         label: 'Wipe Files',
         description: 'Clears all file metadata documents.',
-        endpoint: '/file/wipe',
+        category: 'file',
     },
 ];
 
@@ -98,9 +96,10 @@ export default function DangerZonePage() {
                 return;
             }
 
-            const response = await fetch(`${apiUrl}${action.endpoint}`, {
-                method: action.method ?? 'DELETE',
+            const response = await fetch(`${apiUrl}/wipe`, {
+                method: 'DELETE',
                 headers,
+                body: JSON.stringify({ category: action.category }),
             });
 
             if (!response.ok) {
@@ -113,8 +112,17 @@ export default function DangerZonePage() {
 
             const detailParts: string[] = [];
             if (typeof result === 'object' && result) {
+                if (typeof result.deleted === 'number') {
+                    detailParts.push(`Deleted: ${result.deleted}`);
+                }
+                if (typeof result.batches === 'number') {
+                    detailParts.push(`Batches: ${result.batches}`);
+                }
                 if (typeof result.firestoreDeleted === 'number') {
                     detailParts.push(`Firestore: ${result.firestoreDeleted}`);
+                }
+                if (typeof result.firestoreBatches === 'number') {
+                    detailParts.push(`Firestore batches: ${result.firestoreBatches}`);
                 }
                 if (typeof result.authDeleted === 'number') {
                     detailParts.push(`Auth: ${result.authDeleted}`);

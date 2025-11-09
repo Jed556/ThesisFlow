@@ -22,7 +22,7 @@
     },
     "include": [
         "src",
-        "api",
-        "utils"
+        "serverless/api",
+        "utils",
     ]
 }
