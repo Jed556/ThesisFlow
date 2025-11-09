@@ -1,7 +1,6 @@
 import { Typography, Box, Chip, Accordion, AccordionSummary, AccordionDetails, Button, } from '@mui/material';
 import { ExpandMore, CheckCircle, Pending, Cancel, Schedule, Upload, CloudUpload, } from '@mui/icons-material';
 import type { StatusColor, ThesisChapter } from '../../types/thesis';
-import { getChapterSubmissions } from '../../utils/fileUtils';
 import ChapterItem from './ChapterItem';
 
 /**
@@ -86,8 +85,7 @@ const getStatusDisplayText = (status: string): string => {
  * @param onUploadClick - Callback function for upload button click
  */
 export default function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
-    // Check if chapter has any submissions
-    const hasSubmissions = getChapterSubmissions(chapter.id).length > 0;
+    const hasSubmissions = (chapter.submissions ?? []).length > 0;
 
     return (
         <Accordion>
@@ -108,7 +106,7 @@ export default function ChapterAccordion({ chapter, onUploadClick }: ChapterAcco
                     <Chip
                         sx={{ m: 2 }}
                         label={getStatusDisplayText(chapter.status)}
-                        color={getStatusColor(chapter.status) as any}
+                        color={getStatusColor(chapter.status)}
                         size="small"
                     />
                 </Box>
