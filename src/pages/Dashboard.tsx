@@ -1,7 +1,8 @@
 import * as React from 'react';
 import Typography from '@mui/material/Typography';
 import {
-    Box, Chip, Card, CardContent, FormControl, InputLabel, Select, MenuItem, LinearProgress, Paper
+    Alert, Box, Chip, Card, CardContent, CircularProgress, FormControl,
+    InputLabel, LinearProgress, MenuItem, Paper, Select,
 } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { BarChart } from '@mui/x-charts/BarChart';
@@ -10,9 +11,22 @@ import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import { AnimatedPage } from '../components/Animate';
-import { mockAllTheses, mockUserProfiles } from '../data/mockData';
-import type { ThesisChapter } from '../types/thesis';
+import type { ThesisChapter, ThesisData } from '../types/thesis';
 import { CheckCircle, Schedule, Warning, Block } from '@mui/icons-material';
+import { listenTheses } from '../utils/firebase/firestore/thesis';
+import type { UserProfile } from '../types/profile';
+import { getUsersByIds } from '../utils/firebase/firestore/user';
+
+type ThesisRecord = ThesisData & { id: string };
+
+type ChapterAggregate = {
+    chapter: string;
+    approved: number;
+    underReview: number;
+    revisionRequired: number;
+    notSubmitted: number;
+    total: number;
+};
 
 export const metadata: NavigationItem = {
     group: 'main',
@@ -53,6 +67,9 @@ function getChapterStatusInfo(status: ThesisChapter['status']) {
  * Calculate progress percentage for a thesis
  */
 function calculateProgress(chapters: ThesisChapter[]): number {
+    if (!chapters || chapters.length === 0) {
+        return 0;
+    }
     const completedChapters = chapters.filter(ch => ch.status === 'approved').length;
     return Math.round((completedChapters / chapters.length) * 100);
 }
@@ -68,35 +85,83 @@ export default function DashboardPage() {
     // Filters
     const [groupFilter, setGroupFilter] = React.useState<GroupFilter>('all');
     const [defenseStageFilter, setDefenseStageFilter] = React.useState<DefenseStage>('all');
+    const [theses, setTheses] = React.useState<ThesisRecord[]>([]);
+    const [loadingTheses, setLoadingTheses] = React.useState(true);
+    const [thesisError, setThesisError] = React.useState<string | null>(null);
+    const [leaderProfiles, setLeaderProfiles] = React.useState<Record<string, UserProfile>>({});
+
+    React.useEffect(() => {
+        setLoadingTheses(true);
+        const unsubscribe = listenTheses(undefined, {
+            onData: (records) => {
+                setTheses(records);
+                setThesisError(null);
+                setLoadingTheses(false);
+            },
+            onError: (error) => {
+                console.error('Failed to load theses for dashboard:', error);
+                setTheses([]);
+                setThesisError('Unable to load thesis data right now. Please try again later.');
+                setLoadingTheses(false);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, []);
+
+    const availableGroups = React.useMemo(() => {
+        const titles = new Set<string>();
+        theses.forEach((record) => {
+            if (record.title) {
+                titles.add(record.title);
+            }
+        });
+        return Array.from(titles).sort((a, b) => a.localeCompare(b));
+    }, [theses]);
 
     // Calculate statistics based on filters
     const stats = React.useMemo(() => {
-        let filteredTheses = [...mockAllTheses];
+        const defaultStats = {
+            totalStudents: 0,
+            totalTheses: 0,
+            chapterStats: [] as ChapterAggregate[],
+            defenseStageStats: [
+                { label: 'Pre Title Defense', value: 0 },
+                { label: 'Pre Thesis Defense', value: 0 },
+            ],
+        };
 
-        // Apply group filter
+        if (theses.length === 0) {
+            return defaultStats;
+        }
+
+        let filteredTheses = [...theses];
+
         if (groupFilter !== 'all') {
-            filteredTheses = filteredTheses.filter(t => t.title === groupFilter);
+            filteredTheses = filteredTheses.filter((t) => t.title === groupFilter);
         }
 
-        // Apply defense stage filter
         if (defenseStageFilter !== 'all') {
-            filteredTheses = filteredTheses.filter(t => {
-                if (defenseStageFilter === 'pre-title') {
-                    return t.overallStatus === 'Pre Title Defense';
-                } else {
-                    return t.overallStatus === 'Pre Thesis Defense';
-                }
-            });
+            const matcher = defenseStageFilter === 'pre-title' ? 'pre title' : 'pre thesis';
+            filteredTheses = filteredTheses.filter((t) =>
+                (t.overallStatus ?? '').toLowerCase().includes(matcher)
+            );
         }
 
-        // Calculate total students
+        if (filteredTheses.length === 0) {
+            return defaultStats;
+        }
+
         const totalStudents = filteredTheses.reduce((acc, t) => {
-            return acc + 1 + t.members.length; // Leader + members
+            const membersCount = Array.isArray(t.members) ? t.members.length : 0;
+            return acc + 1 + membersCount;
         }, 0);
 
-        // Calculate students per chapter
         const chapterStats = filteredTheses.reduce((acc, thesis) => {
-            thesis.chapters.forEach((chapter, idx) => {
+            const chapters = thesis.chapters ?? [];
+            chapters.forEach((chapter, idx) => {
                 const chapterNum = idx + 1;
                 if (!acc[chapterNum]) {
                     acc[chapterNum] = {
@@ -105,11 +170,12 @@ export default function DashboardPage() {
                         underReview: 0,
                         revisionRequired: 0,
                         notSubmitted: 0,
-                        total: 0
-                    };
+                        total: 0,
+                    } as ChapterAggregate;
                 }
 
-                const studentsInThesis = 1 + thesis.members.length;
+                const membersCount = Array.isArray(thesis.members) ? thesis.members.length : 0;
+                const studentsInThesis = 1 + membersCount;
                 acc[chapterNum].total += studentsInThesis;
 
                 switch (chapter.status) {
@@ -123,50 +189,122 @@ export default function DashboardPage() {
                         acc[chapterNum].revisionRequired += studentsInThesis;
                         break;
                     case 'not_submitted':
+                    default:
                         acc[chapterNum].notSubmitted += studentsInThesis;
                         break;
                 }
             });
             return acc;
-        }, {} as Record<number, {
-            chapter: string; approved: number; underReview: number; revisionRequired: number; notSubmitted: number; total: number
-        }>);
+        }, {} as Record<number, ChapterAggregate>);
 
-        // Calculate defense stage distribution
-        const preTitle = filteredTheses.filter(t => t.overallStatus === 'Pre Title Defense').length;
-        const preThesis = filteredTheses.filter(t => t.overallStatus === 'Pre Thesis Defense').length;
+        const defenseStageStats = filteredTheses.reduce(
+            (acc, thesis) => {
+                const status = (thesis.overallStatus ?? '').toLowerCase();
+                if (status.includes('pre title')) {
+                    acc[0].value += 1;
+                } else if (status.includes('pre thesis')) {
+                    acc[1].value += 1;
+                }
+                return acc;
+            },
+            [
+                { label: 'Pre Title Defense', value: 0 },
+                { label: 'Pre Thesis Defense', value: 0 },
+            ]
+        );
 
         return {
             totalStudents,
             totalTheses: filteredTheses.length,
             chapterStats: Object.values(chapterStats),
-            defenseStageStats: [
-                { label: 'Pre Title Defense', value: preTitle },
-                { label: 'Pre Thesis Defense', value: preThesis }
-            ]
+            defenseStageStats,
         };
-    }, [groupFilter, defenseStageFilter]);
+    }, [theses, groupFilter, defenseStageFilter]);
 
     // Get user's thesis (for students)
     const userThesis = React.useMemo(() => {
         if (userRole === 'student' && userUid) {
-            return mockAllTheses.find(t =>
-                t.leader === userUid || t.members.includes(userUid)
-            );
+            return theses.find((t) =>
+                t.leader === userUid || (Array.isArray(t.members) && t.members.includes(userUid))
+            ) ?? null;
         }
         return null;
-    }, [userUid, userRole]);
+    }, [theses, userUid, userRole]);
 
     // Get theses for advisers/editors
     const managedTheses = React.useMemo(() => {
         if ((userRole === 'adviser' || userRole === 'editor') && userUid) {
-            return mockAllTheses.filter(t =>
+            return theses.filter((t) =>
                 (userRole === 'adviser' && t.adviser === userUid) ||
                 (userRole === 'editor' && t.editor === userUid)
             );
         }
         return [];
-    }, [userUid, userRole]);
+    }, [theses, userUid, userRole]);
+
+    React.useEffect(() => {
+        if (!(userRole === 'adviser' || userRole === 'editor')) {
+            setLeaderProfiles({});
+            return;
+        }
+
+        if (managedTheses.length === 0) {
+            setLeaderProfiles({});
+            return;
+        }
+
+        const leaderIds = new Set<string>();
+        managedTheses.forEach((record) => {
+            if (record.leader) {
+                leaderIds.add(record.leader);
+            }
+        });
+
+        if (leaderIds.size === 0) {
+            setLeaderProfiles({});
+            return;
+        }
+
+        let cancelled = false;
+
+        void (async () => {
+            try {
+                const profiles = await getUsersByIds(Array.from(leaderIds));
+                if (cancelled) {
+                    return;
+                }
+                const profileMap: Record<string, UserProfile> = {};
+                profiles.forEach((profile) => {
+                    profileMap[profile.uid] = profile;
+                });
+                setLeaderProfiles(profileMap);
+            } catch (error) {
+                console.error('Failed to hydrate leader profiles for dashboard:', error);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [managedTheses, userRole]);
+
+    if (loadingTheses) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 360 }}>
+                    <CircularProgress />
+                </Box>
+            </AnimatedPage>
+        );
+    }
+
+    if (thesisError) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Alert severity="error">{thesisError}</Alert>
+            </AnimatedPage>
+        );
+    }
 
     return (
         <AnimatedPage variant="slideUp">
@@ -221,12 +359,12 @@ export default function DashboardPage() {
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                 <Typography variant="body2">Overall Progress</Typography>
                                 <Typography variant="body2" fontWeight="bold">
-                                    {calculateProgress(userThesis.chapters)}%
+                                    {calculateProgress(userThesis.chapters ?? [])}%
                                 </Typography>
                             </Box>
                             <LinearProgress
                                 variant="determinate"
-                                value={calculateProgress(userThesis.chapters)}
+                                value={calculateProgress(userThesis.chapters ?? [])}
                                 sx={{ height: 8, borderRadius: 4 }}
                             />
                         </Box>
@@ -237,7 +375,7 @@ export default function DashboardPage() {
                             </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                            {userThesis.chapters.map(chapter => {
+                            {(userThesis.chapters ?? []).map(chapter => {
                                 const statusInfo = getChapterStatusInfo(chapter.status);
                                 return (
                                     <Box key={chapter.id} sx={{
@@ -273,8 +411,11 @@ export default function DashboardPage() {
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                         {managedTheses.map((thesis, idx) => {
-                            const progress = calculateProgress(thesis.chapters);
-                            const leader = mockUserProfiles.find(u => u.uid === thesis.leader);
+                            const progress = calculateProgress(thesis.chapters ?? []);
+                            const leaderProfile = leaderProfiles[thesis.leader];
+                            const leaderName = leaderProfile
+                                ? `${leaderProfile.name.first} ${leaderProfile.name.last}`
+                                : thesis.leader;
                             return (
                                 <Box key={idx} sx={{
                                     flex: { xs: '1 1 100%', md: '1 1 calc(50% - 16px)', lg: '1 1 calc(33.333% - 16px)' },
@@ -286,7 +427,7 @@ export default function DashboardPage() {
                                                 {thesis.title}
                                             </Typography>
                                             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                                Leader: {leader ? `${leader.name.first} ${leader.name.last}` : thesis.leader}
+                                                Leader: {leaderName}
                                             </Typography>
                                             <Box sx={{ mb: 1 }}>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -323,9 +464,9 @@ export default function DashboardPage() {
                                     onChange={(e) => setGroupFilter(e.target.value as GroupFilter)}
                                 >
                                     <MenuItem value="all">All Groups</MenuItem>
-                                    {mockAllTheses.map((thesis, idx) => (
-                                        <MenuItem key={idx} value={thesis.title}>
-                                            {thesis.title}
+                                    {availableGroups.map((title) => (
+                                        <MenuItem key={title} value={title}>
+                                            {title}
                                         </MenuItem>
                                     ))}
                                 </Select>
