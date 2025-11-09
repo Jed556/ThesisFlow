@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Typography, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Alert, CircularProgress } from '@mui/material';
 import { Article, Upload, CloudUpload } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../../types/navigation';
-import type { ThesisChapter } from '../../../types/thesis';
+import type { ThesisChapter, ThesisData } from '../../../types/thesis';
 import type { Session } from '../../../types/session';
-import { mockThesisData } from '../../../data/mockData';
 import { AnimatedPage, AnimatedList } from '../../../components/Animate';
 import ChapterAccordion from '../../../layouts/ChapterAccordion/ChapterAccordion';
 import { uploadThesisFile, validateThesisDocument } from '../../../utils/firebase/storage/thesis';
+import { listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
+
+type ThesisRecord = ThesisData & { id: string };
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -27,6 +29,7 @@ export const metadata: NavigationItem = {
  */
 export default function ThesisChaptersPage() {
     const session = useSession() as Session;
+    const userUid = session?.user?.uid;
     const [uploadDialog, setUploadDialog] = useState(false);
     const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -34,6 +37,49 @@ export default function ThesisChaptersPage() {
     const [uploading, setUploading] = useState(false);
     const [uploadSuccess, setUploadSuccess] = useState(false);
     const [chapterTitle, setChapterTitle] = useState('');
+    const [thesis, setThesis] = useState<ThesisRecord | null>(null);
+    const [loadingThesis, setLoadingThesis] = useState(true);
+    const [thesisError, setThesisError] = useState<string | null>(null);
+    const [hasNoThesis, setHasNoThesis] = useState(false);
+
+    useEffect(() => {
+        if (!userUid) {
+            setThesis(null);
+            setThesisError(null);
+            setHasNoThesis(false);
+            setLoadingThesis(false);
+            return;
+        }
+
+        setLoadingThesis(true);
+        setThesisError(null);
+        setHasNoThesis(false);
+
+        const unsubscribe = listenThesesForParticipant(userUid, {
+            onData: (records) => {
+                if (records.length === 0) {
+                    setThesis(null);
+                    setHasNoThesis(true);
+                } else {
+                    const candidate = records.find((record) => record.leader === userUid) ?? records[0];
+                    setThesis(candidate ?? null);
+                    setHasNoThesis(false);
+                }
+                setLoadingThesis(false);
+            },
+            onError: (error) => {
+                console.error('Failed to subscribe to thesis chapters:', error);
+                setThesis(null);
+                setThesisError('Unable to load thesis chapters right now. Please try again later.');
+                setHasNoThesis(false);
+                setLoadingThesis(false);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [userUid]);
 
     const handleUploadClick = (chapterId: number, chapterTitle: string) => {
         setSelectedChapter(chapterId);
@@ -60,7 +106,7 @@ export default function ThesisChaptersPage() {
     };
 
     const handleUploadSubmit = async () => {
-        if (!uploadedFile || !selectedChapter || !session?.user?.uid) {
+        if (!uploadedFile || !selectedChapter || !session?.user?.uid || !thesis?.id) {
             setUploadError('Missing required information');
             return;
         }
@@ -73,7 +119,7 @@ export default function ThesisChaptersPage() {
             const result = await uploadThesisFile({
                 file: uploadedFile,
                 userUid: session.user.uid,
-                thesisId: 'thesis_001', // TODO: Get from thesis context when available
+                thesisId: thesis.id,
                 chapterId: selectedChapter,
                 category: 'submission',
                 metadata: {
@@ -115,12 +161,58 @@ export default function ThesisChaptersPage() {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
+    if (session?.loading) {
+        return (
+            <AnimatedPage variant="fade">
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
+                    <CircularProgress />
+                </Box>
+            </AnimatedPage>
+        );
+    }
+
+    if (!userUid) {
+        return (
+            <AnimatedPage variant="fade">
+                <Alert severity="info">Sign in to manage your thesis submissions.</Alert>
+            </AnimatedPage>
+        );
+    }
+
+    if (loadingThesis) {
+        return (
+            <AnimatedPage variant="fade">
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
+                    <CircularProgress />
+                </Box>
+            </AnimatedPage>
+        );
+    }
+
+    if (thesisError) {
+        return (
+            <AnimatedPage variant="fade">
+                <Alert severity="error">{thesisError}</Alert>
+            </AnimatedPage>
+        );
+    }
+
+    if (hasNoThesis || !thesis) {
+        return (
+            <AnimatedPage variant="fade">
+                <Alert severity="info">No thesis record found for your account yet.</Alert>
+            </AnimatedPage>
+        );
+    }
+
+    const chapters = thesis.chapters ?? [];
+
     return (
         <AnimatedPage variant="fade">
             {/* Chapter Submissions */}
             <AnimatedList variant="slideUp" staggerDelay={60}>
                 {
-                    mockThesisData.chapters.map((chapter: ThesisChapter) => (
+                    chapters.map((chapter: ThesisChapter) => (
                         <ChapterAccordion
                             key={chapter.id}
                             chapter={chapter}
@@ -128,6 +220,9 @@ export default function ThesisChaptersPage() {
                         />
                     ))
                 }
+                {chapters.length === 0 && (
+                    <Alert severity="info">No chapters have been added yet.</Alert>
+                )}
             </AnimatedList>
             <Box sx={{ mb: 2 }}></Box>
 
