@@ -3,8 +3,8 @@ import { Alert, Button, Skeleton, Stack } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../../components/Profile/ProfileView';
-import { getUserById } from '../../../utils/firebase/firestore/user';
-import { getAllTheses } from '../../../utils/firebase/firestore/thesis';
+import { onUserProfile } from '../../../utils/firebase/firestore/user';
+import { listenThesesForMentor } from '../../../utils/firebase/firestore/thesis';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile, HistoricalThesisEntry } from '../../../types/profile';
@@ -23,26 +23,29 @@ export const metadata: NavigationItem = {
 /**
  * Derive historical thesis entries from completed theses
  */
+const COMPLETED_STATUSES = ['completed', 'defended', 'published', 'archived'] as const;
+
 function deriveThesisHistory(
     allTheses: (ThesisData & { id: string })[],
     userUid: string,
     userRole: 'adviser' | 'editor'
 ): HistoricalThesisEntry[] {
     // Filter theses where user was adviser/editor and thesis is completed
-    const completedStatuses = ['Completed', 'Defended', 'Published', 'Archived'];
     const userTheses = allTheses.filter((thesis) => {
         const isUserInvolved = userRole === 'adviser'
             ? thesis.adviser === userUid
             : thesis.editor === userUid;
-        const isCompleted = completedStatuses.some(status =>
-            thesis.overallStatus.toLowerCase().includes(status.toLowerCase())
-        );
+        const statusValue = (thesis.overallStatus ?? '').toLowerCase();
+        const isCompleted = COMPLETED_STATUSES.some((status) => statusValue.includes(status));
         return isUserInvolved && isCompleted;
     });
 
     // Map to HistoricalThesisEntry format
     return userTheses.map((thesis) => {
-        const submissionYear = new Date(thesis.submissionDate).getFullYear().toString();
+        const rawDate = thesis.submissionDate ? new Date(thesis.submissionDate) : null;
+        const submissionYear = rawDate && !Number.isNaN(rawDate.getTime())
+            ? rawDate.getFullYear().toString()
+            : '—';
         return {
             year: submissionYear,
             title: thesis.title,
@@ -62,69 +65,83 @@ export default function MentorProfilePage() {
     const [history, setHistory] = React.useState<HistoricalThesisEntry[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
+    const [profileLoaded, setProfileLoaded] = React.useState(false);
+    const [thesesLoaded, setThesesLoaded] = React.useState(false);
+
+    React.useEffect(() => {
+        setLoading(!(profileLoaded && thesesLoaded));
+    }, [profileLoaded, thesesLoaded]);
 
     // Load profile and thesis data
     React.useEffect(() => {
-        let mounted = true;
+        setError(null);
+        setProfile(null);
+        setCurrentAssignments([]);
+        setHistory([]);
+        setProfileLoaded(false);
+        setThesesLoaded(false);
 
-        async function loadData() {
-            try {
-                setLoading(true);
+        if (!uid) {
+            setError('Profile not found');
+            setProfileLoaded(true);
+            setThesesLoaded(true);
+            return () => { /* no-op */ };
+        }
+
+        const unsubscribeProfile = onUserProfile(uid, (profileData) => {
+            if (!profileData) {
+                setProfile(null);
+                setError('Profile not found');
+                setProfileLoaded(true);
+                return;
+            }
+
+            setProfile(profileData);
+            setProfileLoaded(true);
+        });
+
+        return () => {
+            unsubscribeProfile();
+        };
+    }, [uid]);
+
+    React.useEffect(() => {
+        if (!profile || (profile.role !== 'adviser' && profile.role !== 'editor')) {
+            setCurrentAssignments([]);
+            setHistory([]);
+            setThesesLoaded(true);
+            return () => { /* no-op */ };
+        }
+ 
+        setThesesLoaded(false);
+
+        const unsubscribe = listenThesesForMentor(profile.role, profile.uid, {
+            onData: (records) => {
                 setError(null);
-
-                // Fetch user profile by UID
-                const userProfile = await getUserById(uid);
-                if (!mounted) return;
-
-                if (!userProfile) {
-                    setError('Profile not found');
-                    setLoading(false);
-                    return;
-                }
-
-                setProfile(userProfile);
-
-                // Fetch all theses
-                const allTheses = await getAllTheses();
-                if (!mounted) return;
-
-                // Filter current assignments (active theses where user is adviser/editor)
-                const activeTheses = allTheses.filter((thesis) => {
-                    const isUserInvolved = userProfile.role === 'adviser'
-                        ? thesis.adviser === userProfile.uid
-                        : thesis.editor === userProfile.uid;
-
-                    // Consider thesis active if not completed
-                    const completedStatuses = ['Completed', 'Defended', 'Published', 'Archived'];
-                    const isActive = !completedStatuses.some(status =>
-                        thesis.overallStatus.toLowerCase().includes(status.toLowerCase())
-                    );
-
-                    return isUserInvolved && isActive;
+                const activeTheses = records.filter((thesis) => {
+                    const statusValue = (thesis.overallStatus ?? '').toLowerCase();
+                    const isCompleted = COMPLETED_STATUSES.some((status) => statusValue.includes(status));
+                    return !isCompleted;
                 });
 
                 setCurrentAssignments(activeTheses);
-
-                // Derive historical thesis entries
-                const roleForHistory = userProfile.role === 'adviser' ? 'adviser' : 'editor';
-                const thesisHistory = deriveThesisHistory(allTheses, userProfile.uid, roleForHistory);
+                // Narrow role to adviser|editor — this branch already ensures profile.role is one of those values
+                const role = profile.role as 'adviser' | 'editor';
+                const thesisHistory = deriveThesisHistory(records, profile.uid, role);
                 setHistory(thesisHistory);
-
-                setLoading(false);
-            } catch (err) {
-                if (!mounted) return;
-                console.error('Error loading mentor profile:', err);
-                setError('Failed to load profile data');
-                setLoading(false);
-            }
-        }
-
-        loadData();
+                setThesesLoaded(true);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to listen for mentor assignments:', listenerError);
+                setError('Unable to load thesis assignments for this mentor at the moment.');
+                setThesesLoaded(true);
+            },
+        });
 
         return () => {
-            mounted = false;
+            unsubscribe();
         };
-    }, [uid]);
+    }, [profile]);
 
     const skills = React.useMemo(
         () => profile?.skills ?? [],

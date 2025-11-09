@@ -1,16 +1,5 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Chip,
-    LinearProgress,
-    Paper,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, LinearProgress, Paper, Skeleton, Stack, Typography } from '@mui/material';
 import { School } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
@@ -19,8 +8,8 @@ import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedList, AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
-import { calculateThesisProgress, getThesisTeamMembers } from '../../utils/thesisUtils';
-import { getAllTheses } from '../../utils/firebase/firestore/thesis';
+import { getThesisTeamMembers } from '../../utils/thesisUtils';
+import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { normalizeDateInput } from '../../utils/dateUtils';
 
 export const metadata: NavigationItem = {
@@ -56,6 +45,20 @@ function formatDateLabel(value?: string | null): string {
 }
 
 /**
+ * Calculate the overall completion percentage for a thesis record.
+ * @param record - Thesis document containing chapter progress information
+ * @returns Completion percentage between 0 and 100
+ */
+function computeThesisProgressPercent(record: ThesisRecord): number {
+    const chapters = record.chapters ?? [];
+    if (chapters.length === 0) {
+        return 0;
+    }
+    const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
+    return (approvedCount / chapters.length) * 100;
+}
+
+/**
  * Main thesis overview page for students, showing progress, chapters, and team members.
  */
 export default function ThesisPage() {
@@ -63,6 +66,7 @@ export default function ThesisPage() {
     const userUid = session?.user?.uid;
 
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
+    const [userTheses, setUserTheses] = React.useState<ThesisRecord[]>([]);
     const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>([]);
     const [progress, setProgress] = React.useState<number>(0);
     const [loading, setLoading] = React.useState<boolean>(true);
@@ -70,73 +74,85 @@ export default function ThesisPage() {
     const [hasNoThesis, setHasNoThesis] = React.useState<boolean>(false);
 
     React.useEffect(() => {
-        let active = true;
-
-        async function loadThesis() {
-            if (!userUid) {
-                if (active) {
-                    setThesis(null);
-                    setTeamMembers([]);
-                    setProgress(0);
-                    setHasNoThesis(false);
-                    setLoading(false);
-                }
-                return;
-            }
-
-            setLoading(true);
-            setError(null);
+        if (!userUid) {
+            setThesis(null);
+            setUserTheses([]);
+            setTeamMembers([]);
+            setProgress(0);
             setHasNoThesis(false);
-
-            try {
-                const allTheses = await getAllTheses();
-                if (!active) return;
-
-                const match = allTheses.find((item) => item.leader === userUid || item.members?.includes(userUid));
-
-                if (!match) {
-                    if (active) {
-                        setThesis(null);
-                        setTeamMembers([]);
-                        setProgress(0);
-                        setHasNoThesis(true);
-                    }
-                    return;
-                }
-
-                setThesis(match);
-
-                const [members, progressValue] = await Promise.all([
-                    getThesisTeamMembers(match.id),
-                    calculateThesisProgress(match.id),
-                ]);
-
-                if (!active) return;
-
-                setTeamMembers(members);
-                setProgress(progressValue);
-            } catch (err) {
-                console.error('Error loading thesis data:', err);
-                if (active) {
-                    setError('Failed to load thesis data. Please try again later.');
-                    setThesis(null);
-                    setTeamMembers([]);
-                    setProgress(0);
-                    setHasNoThesis(false);
-                }
-            } finally {
-                if (active) {
-                    setLoading(false);
-                }
-            }
+            setLoading(false);
+            setError(null);
+            return;
         }
 
-        void loadThesis();
+        setLoading(true);
+        setError(null);
+        setHasNoThesis(false);
+        setUserTheses([]);
+
+        const unsubscribe = listenThesesForParticipant(userUid, {
+            onData: (records) => {
+                setUserTheses(records);
+                setLoading(false);
+                setError(null);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to subscribe to thesis data:', listenerError);
+                setError('Unable to load thesis data right now. Please try again later.');
+                setLoading(false);
+            },
+        });
 
         return () => {
-            active = false;
+            unsubscribe();
         };
     }, [userUid]);
+
+    React.useEffect(() => {
+        if (!userUid) {
+            return;
+        }
+
+        if (userTheses.length === 0) {
+            setThesis(null);
+            setTeamMembers([]);
+            setProgress(0);
+            setHasNoThesis(true);
+            return;
+        }
+
+        const candidate = userTheses.find((record) => record.leader === userUid) ?? userTheses[0];
+        setThesis(candidate);
+        setProgress(computeThesisProgressPercent(candidate));
+        setHasNoThesis(false);
+    }, [userTheses, userUid]);
+
+    React.useEffect(() => {
+        if (!thesis) {
+            setTeamMembers([]);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadTeam = async () => {
+            try {
+                const members = await getThesisTeamMembers(thesis.id);
+                if (!cancelled) {
+                    setTeamMembers(members);
+                }
+            } catch (teamError) {
+                console.error('Failed to load thesis team members:', teamError);
+            }
+        };
+
+        void loadTeam();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [thesis]);
+
 
     if (session?.loading) {
         return (

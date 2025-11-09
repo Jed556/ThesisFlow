@@ -1,12 +1,20 @@
 import {
     doc, setDoc, onSnapshot, collection, query, where, getDocs,
-    addDoc, getDoc, deleteDoc, documentId, type WithFieldValue,
+    addDoc, getDoc, deleteDoc, documentId, writeBatch,
+    type WithFieldValue, type QueryConstraint, type QuerySnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { addEventToCalendar, removeEventFromCalendar } from './calendars';
 import { cleanData } from './firestore';
 
 import type { ScheduleEvent } from '../../../types/schedule';
+
+type EventRecord = ScheduleEvent & { id: string };
+
+export interface EventsListenerOptions {
+    onData: (events: EventRecord[]) => void;
+    onError?: (error: Error) => void;
+}
 
 /** Firestore collection name used for events documents */
 const EVENTS_COLLECTION = 'events';
@@ -51,9 +59,25 @@ export async function getEventById(id: string): Promise<ScheduleEvent | null> {
 /**
  * Subscribe to realtime updates for an event
  */
-export function onEvent(id: string, cb: (event: ScheduleEvent | null) => void) {
+export function onEvent(
+    id: string,
+    onNext: (event: ScheduleEvent | null) => void,
+    onError?: (err: unknown) => void
+): () => void {
     const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
-    return onSnapshot(ref, snap => cb(snap.exists() ? (snap.data() as ScheduleEvent) : null));
+
+    // Wrap the listener and provide a default error handler that logs to console
+    // if the caller doesn't provide one. Return the unsubscribe function.
+    const unsubscribe = onSnapshot(
+        ref,
+        (snap) => onNext(snap.exists() ? (snap.data() as ScheduleEvent) : null),
+        (err) => {
+            if (onError) onError(err);
+            else console.error('onEvent listener error', err);
+        }
+    );
+
+    return unsubscribe;
 }
 
 /**
@@ -148,13 +172,50 @@ export async function bulkDeleteEvents(ids: string[]): Promise<void> {
 
     await Promise.all(calendarUpdates);
 
-    // Delete events
-    const deletePromises = ids.map(id => {
+    // Batch-delete event documents atomically
+    const batch = writeBatch(firebaseFirestore);
+    ids.forEach((id) => {
         const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
-        return deleteDoc(ref);
+        batch.delete(ref);
     });
 
-    await Promise.all(deletePromises);
+    await batch.commit();
+}
+
+/**
+ * Subscribe to events collection updates with optional query constraints.
+ * Mirrors the listener structure used in thesis.ts to provide a consistent API.
+ * @param constraints - Optional Firestore query constraints to narrow the listener scope
+ * @param options - Listener callbacks invoked for data updates or errors
+ * @returns Unsubscribe handler to detach the snapshot listener
+ */
+export function listenEvents(
+    constraints: QueryConstraint[] | undefined,
+    options: EventsListenerOptions
+): () => void {
+    const { onData, onError } = options;
+    const baseCollection = collection(firebaseFirestore, EVENTS_COLLECTION);
+    const eventsQuery = constraints && constraints.length > 0
+        ? query(baseCollection, ...constraints)
+        : baseCollection;
+
+    return onSnapshot(
+        eventsQuery,
+        (snapshot: QuerySnapshot<DocumentData>) => {
+            const events = snapshot.docs.map((docSnap) => ({
+                id: docSnap.id,
+                ...(docSnap.data() as Omit<ScheduleEvent, 'id'>),
+            } as EventRecord));
+            onData(events);
+        },
+        (error) => {
+            if (onError) {
+                onError(error);
+            } else {
+                console.error('Events listener error:', error);
+            }
+        }
+    );
 }
 
 /**

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, Card, CardContent, Chip, LinearProgress, Stack, Typography, } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, LinearProgress, Stack, Typography } from '@mui/material';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useSession } from '@toolpad/core';
@@ -7,7 +7,7 @@ import type { NavigationItem } from '../../types/navigation';
 import type { ReviewerAssignment } from '../../types/reviewer';
 import type { Session } from '../../types/session';
 import { AnimatedPage } from '../../components/Animate';
-import { getReviewerAssignmentsForUser } from '../../utils/firebase/firestore/thesis';
+import { listenReviewerAssignmentsForUser } from '../../utils/firebase/firestore/thesis';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',
@@ -27,34 +27,32 @@ export default function AdviserAssignmentsPage() {
     const adviserUid = session?.user?.uid;
     const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
     const [loading, setLoading] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        let active = true;
-
-        async function loadAssignments() {
-            if (!adviserUid) {
-                setAssignments([]);
-                setLoading(false);
-                return;
-            }
-
-            setLoading(true);
-            try {
-                const data = await getReviewerAssignmentsForUser('adviser', adviserUid);
-                if (active) {
-                    setAssignments(data);
-                }
-            } finally {
-                if (active) {
-                    setLoading(false);
-                }
-            }
+        if (!adviserUid) {
+            setAssignments([]);
+            setLoading(false);
+            setError(null);
+            return () => { /* no-op */ };
         }
 
-        void loadAssignments();
+        setLoading(true);
+        const unsubscribe = listenReviewerAssignmentsForUser('adviser', adviserUid, {
+            onData: (data) => {
+                setAssignments(data);
+                setLoading(false);
+                setError(null);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to load adviser assignments:', listenerError);
+                setError('Unable to load assignments. Please try again or refresh the page.');
+                setLoading(false);
+            },
+        });
 
         return () => {
-            active = false;
+            unsubscribe();
         };
     }, [adviserUid]);
 
@@ -139,6 +137,11 @@ export default function AdviserAssignmentsPage() {
 
     return (
         <AnimatedPage variant="slideUp">
+            {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                    {error}
+                </Alert>
+            )}
             <Box sx={{ mb: 3 }}>
                 <Typography variant="h4" gutterBottom>
                     Advising workload

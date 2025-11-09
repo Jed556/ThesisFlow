@@ -12,8 +12,8 @@ import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
 import { type ProfileCardStat, ProfileCard } from '../../../components/Profile';
 import type { NavigationItem } from '../../../types/navigation';
-import { getAllUsers } from '../../../utils/firebase/firestore/user';
-import { getAllTheses } from '../../../utils/firebase/firestore/thesis';
+import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
+import { listenTheses } from '../../../utils/firebase/firestore/thesis';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { ThesisData } from '../../../types/thesis';
@@ -36,60 +36,96 @@ export default function AdviserEditorRecommendationsPage() {
     const location = useLocation();
     const [activeTab, setActiveTab] = React.useState(0);
     const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
-    const [profiles, setProfiles] = React.useState<UserProfile[]>([]);
+    const [adviserProfiles, setAdviserProfiles] = React.useState<UserProfile[]>([]);
+    const [editorProfiles, setEditorProfiles] = React.useState<UserProfile[]>([]);
     const [theses, setTheses] = React.useState<(ThesisData & { id: string })[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        let mounted = true;
+        let active = true;
+        const loaded = { advisers: false, editors: false, theses: false };
 
-        async function loadData() {
-            try {
-                setLoading(true);
-                setError(null);
-                const [userProfiles, thesisData] = await Promise.all([
-                    getAllUsers(),
-                    getAllTheses(),
-                ]);
-                if (!mounted) return;
-                setProfiles(userProfiles);
-                setTheses(thesisData);
-            } catch (err) {
-                if (!mounted) return;
-                console.error('Error loading mentor recommendations:', err);
-                setError('Failed to load mentor recommendations. Please try again later.');
-            } finally {
-                if (mounted) {
-                    setLoading(false);
-                }
+        const tryResolveLoading = () => {
+            if (!active) return;
+            if (loaded.advisers && loaded.editors && loaded.theses) {
+                setLoading(false);
             }
-        }
+        };
 
-        loadData();
+        setLoading(true);
+        setError(null);
+
+        const unsubscribeAdvisers = listenUsersByFilter(
+            { role: 'adviser' },
+            {
+                onData: (profilesData) => {
+                    if (!active) return;
+                    setError(null);
+                    setAdviserProfiles(profilesData);
+                    loaded.advisers = true;
+                    tryResolveLoading();
+                },
+                onError: (err) => {
+                    if (!active) return;
+                    console.error('Failed to load adviser recommendations:', err);
+                    setError('Unable to load adviser recommendations right now.');
+                    setLoading(false);
+                },
+            }
+        );
+
+        const unsubscribeEditors = listenUsersByFilter(
+            { role: 'editor' },
+            {
+                onData: (profilesData) => {
+                    if (!active) return;
+                    setError(null);
+                    setEditorProfiles(profilesData);
+                    loaded.editors = true;
+                    tryResolveLoading();
+                },
+                onError: (err) => {
+                    if (!active) return;
+                    console.error('Failed to load editor recommendations:', err);
+                    setError('Unable to load editor recommendations right now.');
+                    setLoading(false);
+                },
+            }
+        );
+
+        const unsubscribeTheses = listenTheses(undefined, {
+            onData: (thesisData) => {
+                if (!active) return;
+                setError(null);
+                setTheses(thesisData);
+                loaded.theses = true;
+                tryResolveLoading();
+            },
+            onError: (err) => {
+                if (!active) return;
+                console.error('Failed to load thesis data for recommendations:', err);
+                setError('Unable to load thesis data for recommendations.');
+                setLoading(false);
+            },
+        });
 
         return () => {
-            mounted = false;
+            active = false;
+            unsubscribeAdvisers();
+            unsubscribeEditors();
+            unsubscribeTheses();
         };
     }, []);
 
     const thesisStats = React.useMemo(() => aggregateThesisStats(theses), [theses]);
-    const advisers = React.useMemo(
-        () => profiles.filter((profile) => profile.role === 'adviser'),
-        [profiles]
-    );
-    const editors = React.useMemo(
-        () => profiles.filter((profile) => profile.role === 'editor'),
-        [profiles]
-    );
-
     const adviserCards = React.useMemo(
-        () => computeMentorCards(advisers, 'adviser', thesisStats),
-        [advisers, thesisStats]
+        () => computeMentorCards(adviserProfiles, 'adviser', thesisStats),
+        [adviserProfiles, thesisStats]
     );
     const editorCards = React.useMemo(
-        () => computeMentorCards(editors, 'editor', thesisStats),
-        [editors, thesisStats]
+        () => computeMentorCards(editorProfiles, 'editor', thesisStats),
+        [editorProfiles, thesisStats]
     );
 
     // Check if we're on a child route (profile page)

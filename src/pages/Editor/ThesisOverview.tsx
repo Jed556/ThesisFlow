@@ -7,6 +7,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ForumIcon from '@mui/icons-material/Forum';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import { useSession } from '@toolpad/core';
+import { where } from 'firebase/firestore';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisData } from '../../types/thesis';
@@ -14,7 +15,7 @@ import type { FileAttachment } from '../../types/file';
 import type { ChatMessage } from '../../types/chat';
 import { AnimatedPage } from '../../components/Animate';
 import ChatBox from '../../components/Chat/ChatBox';
-import { getAllTheses } from '../../utils/firebase/firestore/thesis';
+import { listenTheses } from '../../utils/firebase/firestore/thesis';
 import { getFilesByThesis } from '../../utils/firebase/firestore/file';
 import { getDisplayName } from '../../utils/firebase/firestore/user';
 import { getThesisRole } from '../../utils/roleUtils';
@@ -42,7 +43,7 @@ const DEFAULT_EMPTY_MESSAGE = 'No theses assigned to you yet.';
 
 export default function EditorThesisOverviewPage() {
     const session = useSession<Session>();
-    const editorUid = session?.user?.email ?? undefined;
+    const editorUid = session?.user?.uid ?? undefined;
 
     // State for thesis data
     const [activeThesis, setActiveThesis] = React.useState<(ThesisData & { id: string }) | null>(null);
@@ -50,35 +51,61 @@ export default function EditorThesisOverviewPage() {
     const [displayNames, setDisplayNames] = React.useState<Map<string, string>>(new Map());
     const [roleTexts, setRoleTexts] = React.useState<Map<string, string>>(new Map());
     const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState<string | null>(null);
 
     // Fetch theses assigned to this editor
     React.useEffect(() => {
-        if (!editorUid) return;
+        if (!editorUid) {
+            setLoading(false);
+            setActiveThesis(null);
+            setError(null);
+            return () => { /* no-op */ };
+        }
 
-        const fetchTheses = async () => {
-            setLoading(true);
-            try {
-                const allTheses = await getAllTheses();
-                // Filter theses where current user is the editor
-                const editorTheses = allTheses.filter(thesis => thesis.editor === editorUid);
+        setLoading(true);
+        setError(null);
 
-                // Set the first thesis as active
-                if (editorTheses.length > 0) {
-                    setActiveThesis(editorTheses[0]);
-                }
-            } catch (error) {
-                console.error('Error fetching theses:', error);
-            } finally {
+        const unsubscribe = listenTheses([
+            where('editor', '==', editorUid),
+        ], {
+            onData: (records) => {
                 setLoading(false);
-            }
-        };
+                setError(null);
+                if (records.length === 0) {
+                    setActiveThesis(null);
+                    return;
+                }
 
-        fetchTheses();
+                setActiveThesis((prev) => {
+                    if (prev) {
+                        const updated = records.find((record) => record.id === prev.id);
+                        if (updated) {
+                            return updated;
+                        }
+                    }
+                    return records[0];
+                });
+            },
+            onError: (listenerError) => {
+                console.error('Error listening to editor theses:', listenerError);
+                setError('Unable to load assigned theses right now. Please try again later.');
+                setLoading(false);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
     }, [editorUid]);
 
     // Fetch files and user data for active thesis
     React.useEffect(() => {
-        if (!activeThesis) return;
+        if (!activeThesis) {
+            setRecentFiles([]);
+            setDisplayNames(new Map());
+            setRoleTexts(new Map());
+            return;
+        }
 
         const fetchThesisData = async () => {
             try {
@@ -160,6 +187,14 @@ export default function EditorThesisOverviewPage() {
                         <Skeleton variant="text" width="60%" height={40} />
                         <Skeleton variant="text" width="40%" height={24} sx={{ mt: 1 }} />
                         <Skeleton variant="rectangular" height={200} sx={{ mt: 3 }} />
+                    </CardContent>
+                </Card>
+            ) : error ? (
+                <Card>
+                    <CardContent>
+                        <Typography variant="body1" color="error">
+                            {error}
+                        </Typography>
                     </CardContent>
                 </Card>
             ) : !activeThesis ? (

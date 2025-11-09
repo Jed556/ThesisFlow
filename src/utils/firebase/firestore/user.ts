@@ -1,4 +1,7 @@
-import { doc, setDoc, onSnapshot, collection, query, where, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
+import {
+    doc, setDoc, onSnapshot, collection, query, where, getDocs, getDoc,
+    deleteDoc, documentId, writeBatch, type QueryConstraint,
+} from 'firebase/firestore';
 import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
 import { cleanData } from './firestore';
 
@@ -76,6 +79,99 @@ export async function getAllUsers(): Promise<UserProfile[]> {
     return snap.docs.map(d => d.data() as UserProfile);
 }
 
+/**
+ * Fetch multiple user profiles by their Firebase Auth UIDs in chunks of 10.
+ * @param uids - Array of user UIDs to resolve
+ * @returns Array of UserProfile documents matching the provided UIDs
+ */
+export async function getUsersByIds(uids: string[]): Promise<UserProfile[]> {
+    if (!uids || uids.length === 0) {
+        return [];
+    }
+
+    const uniqueIds = Array.from(new Set(uids.map((uid) => encodeURIComponent(uid))));
+    const users: UserProfile[] = [];
+    const chunkSize = 10;
+
+    for (let index = 0; index < uniqueIds.length; index += chunkSize) {
+        const chunk = uniqueIds.slice(index, index + chunkSize);
+        const usersRef = collection(firebaseFirestore, USERS_COLLECTION);
+        const usersQuery = query(usersRef, where(documentId(), 'in', chunk));
+        const snapshot = await getDocs(usersQuery);
+
+        snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data() as UserProfile;
+            const resolvedUid = data.uid ?? decodeURIComponent(docSnap.id);
+            users.push({ ...data, uid: resolvedUid });
+        });
+    }
+
+    return users;
+}
+
+/**
+ * Options accepted by the real-time user listener.
+ */
+export interface UserListenerOptions {
+    onData: (profiles: UserProfile[]) => void;
+    onError?: (error: Error) => void;
+}
+
+/**
+ * Subscribe to users collection changes given optional filter constraints.
+ * @param constraints - Optional Firestore query constraints to scope the listener
+ * @param options - Listener callbacks invoked for data updates or errors
+ * @returns Unsubscribe handler to detach the snapshot listener
+ */
+export function listenUsers(
+    constraints: QueryConstraint[] | undefined,
+    options: UserListenerOptions
+): () => void {
+    const { onData, onError } = options;
+    const baseCollection = collection(firebaseFirestore, USERS_COLLECTION);
+    const usersQuery = constraints && constraints.length > 0
+        ? query(baseCollection, ...constraints)
+        : baseCollection;
+
+    return onSnapshot(
+        usersQuery,
+        (snapshot) => {
+            const profiles = snapshot.docs.map((docSnap) => docSnap.data() as UserProfile);
+            onData(profiles);
+        },
+        (error) => {
+            if (onError) {
+                onError(error);
+            } else {
+                console.error('Users listener error:', error);
+            }
+        }
+    );
+}
+
+/**
+ * Subscribe to users filtered by role/department with real-time updates.
+ * @param filter - Filter options applied to the users query
+ * @param options - Listener callbacks invoked for updates or errors
+ * @returns Unsubscribe handler to detach the listener
+ */
+export function listenUsersByFilter(
+    filter: UserFilterOptions,
+    options: UserListenerOptions
+): () => void {
+    const constraints: QueryConstraint[] = [];
+
+    if (filter.role) {
+        constraints.push(where('role', '==', filter.role));
+    }
+
+    if (filter.department) {
+        constraints.push(where('department', '==', filter.department));
+    }
+
+    return listenUsers(constraints, options);
+}
+
 export interface UserFilterOptions {
     role?: UserRole;
     department?: string;
@@ -136,14 +232,15 @@ export async function deleteUserProfile(uid: string): Promise<void> {
  */
 export async function bulkDeleteUserProfiles(uids: string[]): Promise<void> {
     if (!uids || uids.length === 0) throw new Error('UIDs required');
+    const batch = writeBatch(firebaseFirestore);
 
-    const deletePromises = uids.map(uid => {
+    uids.forEach((uid) => {
         const id = encodeURIComponent(uid);
         const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
-        return deleteDoc(ref);
+        batch.delete(ref);
     });
 
-    await Promise.all(deletePromises);
+    await batch.commit();
 }
 
 /**

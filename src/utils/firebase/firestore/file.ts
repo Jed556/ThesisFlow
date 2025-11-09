@@ -3,7 +3,7 @@
  * Unified file metadata storage with support for various contexts (thesis, user, etc.)
  */
 
-import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, query, where, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, query, where, orderBy, limit, writeBatch } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import type { FileAttachment } from '../../../types/file';
@@ -241,13 +241,14 @@ export async function deleteFileMetadata(fileId: string): Promise<void> {
  */
 export async function bulkDeleteFileMetadata(fileIds: string[]): Promise<void> {
     if (!fileIds || fileIds.length === 0) throw new Error('File IDs required');
+    const batch = writeBatch(firebaseFirestore);
 
-    const deletePromises = fileIds.map(fileId => {
+    fileIds.forEach((fileId) => {
         const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-        return deleteDoc(ref);
+        batch.delete(ref);
     });
 
-    await Promise.all(deletePromises);
+    await batch.commit();
 }
 
 /**
