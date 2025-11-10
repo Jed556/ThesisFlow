@@ -22,6 +22,7 @@ import {
 } from '../../utils/firebase/firestore';
 import { importGroupsFromCsv, exportGroupsToCsv } from '../../utils/csv/group';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -62,6 +63,7 @@ const emptyFormData: ThesisGroupFormData = {
 export default function AdminGroupManagementPage() {
     const session = useSession<Session>();
     const { showNotification } = useSnackbar();
+    const { startJob } = useBackgroundJobControls();
     const userRole = session?.user?.role;
 
     const [groups, setGroups] = React.useState<ThesisGroup[]>([]);
@@ -75,12 +77,33 @@ export default function AdminGroupManagementPage() {
     const [formErrors, setFormErrors] = React.useState<Partial<Record<keyof ThesisGroupFormData, string>>>({});
     const [saving, setSaving] = React.useState(false);
 
+    const isMountedRef = React.useRef(true);
+    React.useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    // Track active group import jobs so we can pause reloads mid-import
+    const hasActiveImport = useBackgroundJobFlag(
+        React.useCallback((job) => {
+            if (job.status !== 'pending' && job.status !== 'running') {
+                return false;
+            }
+            const jobType = job.metadata?.jobType as string | undefined;
+            return jobType === 'groups-import';
+        }, [])
+    );
+
     // Filter users by role
     const students = React.useMemo(() => users.filter((u) => u.role === 'student'), [users]);
     const advisers = React.useMemo(() => users.filter((u) => u.role === 'adviser'), [users]);
     const editors = React.useMemo(() => users.filter((u) => u.role === 'editor'), [users]);
 
     const loadData = React.useCallback(async () => {
+        if (hasActiveImport) {
+            return;
+        }
         try {
             setLoading(true);
             // Load users
@@ -96,7 +119,7 @@ export default function AdminGroupManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [showNotification]);
+    }, [showNotification, hasActiveImport]);
 
     React.useEffect(() => {
         loadData();
@@ -264,34 +287,107 @@ export default function AdminGroupManagementPage() {
     };
 
     const handleImport = async (file: File) => {
-        try {
-            const text = await file.text();
-            const { parsed: importedGroups, errors: parseErrors } = importGroupsFromCsv(text);
+        startJob(
+            `Importing groups from ${file.name}`,
+            async (updateProgress, signal) => {
+                const text = await file.text();
+                if (signal.aborted) {
+                    throw new Error('Import cancelled');
+                }
 
-            const errors: string[] = [];
-            if (parseErrors.length) errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
+                const { parsed: importedGroups, errors: parseErrors } = importGroupsFromCsv(text);
 
-            // Import groups to Firestore
-            for (const groupData of importedGroups) {
-                const groupId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-                await setGroup(groupId, {
-                    ...groupData,
-                    id: groupId,
-                });
+                const errors: string[] = [];
+                if (parseErrors.length) {
+                    errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
+                }
+
+                if (signal.aborted) {
+                    throw new Error('Import cancelled');
+                }
+
+                const total = importedGroups.length;
+                let successCount = 0;
+
+                for (let i = 0; i < importedGroups.length; i++) {
+                    if (signal.aborted) {
+                        throw new Error('Import cancelled');
+                    }
+
+                    const groupData = importedGroups[i];
+                    if (total > 0) {
+                        updateProgress({
+                            current: i + 1,
+                            total,
+                            message: `Creating group ${groupData.name || `#${i + 1}`}`,
+                        });
+                    }
+
+                    try {
+                        const fallbackId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+                        const groupId = (groupData as Partial<ThesisGroup>).id || fallbackId;
+                        await setGroup(groupId, {
+                            ...groupData,
+                            id: groupId,
+                        });
+                        successCount++;
+                    } catch (importError) {
+                        const identifier = groupData.name || groupData.id || `row ${i + 2}`;
+                        errors.push(
+                            `Failed to import ${identifier}: ${importError instanceof Error ? importError.message : 'Unknown error'}`
+                        );
+                    }
+                }
+
+                return {
+                    count: successCount,
+                    errors,
+                    total,
+                };
+            },
+            { fileName: file.name, fileSize: file.size, jobType: 'groups-import' },
+            (job) => {
+                if (isMountedRef.current) {
+                    (async () => {
+                        try {
+                            setLoading(true);
+                            const [allUsers, groupsData] = await Promise.all([
+                                getAllUsers(),
+                                getAllGroups(),
+                            ]);
+                            setUsers(allUsers);
+                            setGroups(groupsData);
+                        } catch {
+                            // handled via notifications below
+                        } finally {
+                            setLoading(false);
+                        }
+                    })();
+                }
+
+                if (job.status === 'completed' && job.result) {
+                    const result = job.result as { count: number; errors: string[]; total: number };
+                    if (result.errors.length > 0) {
+                        showNotification(
+                            `Imported ${result.count} of ${result.total} group(s) with warnings`,
+                            'warning',
+                            6000,
+                            {
+                                label: 'View Details',
+                                onClick: () =>
+                                    showNotification(`Import warnings:\n${result.errors.join('\n')}`, 'info', 0),
+                            }
+                        );
+                    } else {
+                        showNotification(`Successfully imported ${result.count} group(s)`, 'success');
+                    }
+                } else if (job.status === 'failed') {
+                    showNotification(`Group import failed: ${job.error}`, 'error');
+                }
             }
+        );
 
-            // Reload data
-            await loadData();
-
-            if (errors.length > 0) {
-                showNotification(`Imported ${importedGroups.length} group(s) with ${errors.length} warning(s)`, 'warning');
-            } else {
-                showNotification(`Successfully imported ${importedGroups.length} group(s)`, 'success');
-            }
-        } catch (error) {
-            console.error('Error importing groups:', error);
-            showNotification('Failed to import groups from CSV', 'error');
-        }
+        showNotification('Group import started in the background.', 'info', 5000);
     };
 
     const columns: GridColDef<ThesisGroup>[] = [
@@ -413,6 +509,7 @@ export default function AdminGroupManagementPage() {
                     enableMultiDelete
                     enableExport
                     enableImport
+                    importDisabled={hasActiveImport}
                     enableRefresh
                     enableAdd
                     enableQuickFilter

@@ -11,6 +11,7 @@ import { navigationGroups } from './config/groups';
 import { Outlet } from 'react-router';
 import { SnackbarProvider, SnackbarContainer, useSnackbar } from './components/Snackbar';
 import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';
+import BackgroundJobNotifications from './components/BackgroundJobNotifications';
 
 import type { Navigation } from '@toolpad/core/AppProvider';
 import type { Session, ExtendedAuthentication } from './types/session';
@@ -147,6 +148,7 @@ function AppContent() {
             <CssBaseline />
             <Outlet />
             <SnackbarContainer />
+            <BackgroundJobNotifications />
         </ReactRouterAppProvider>
     );
 }

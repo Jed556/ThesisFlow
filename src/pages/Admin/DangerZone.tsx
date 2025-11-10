@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import * as React from 'react';
 import { Box, Button, Card, CardActions, CardContent, Grid, Stack, Typography } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { AnimatedPage } from '../../components/Animate';
@@ -6,6 +6,7 @@ import type { NavigationItem } from '../../types/navigation';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { getError } from '../../../utils/errorUtils';
 import { resolveAdminApiBaseUrl, buildAdminApiHeaders } from '../../utils/firebase/api';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -72,77 +73,120 @@ const wipeActions: WipeAction[] = [
 
 export default function DangerZonePage() {
     const { showNotification } = useSnackbar();
-    const [loadingAction, setLoadingAction] = useState<string | null>(null);
+    const { startJob } = useBackgroundJobControls();
+
+    const hasActiveWipe = useBackgroundJobFlag(
+        React.useCallback((job) => {
+            if (job.status !== 'pending' && job.status !== 'running') {
+                return false;
+            }
+            const jobType = job.metadata?.jobType as string | undefined;
+            return jobType === 'danger-wipe';
+        }, [])
+    );
 
     /**
      * Execute a destructive wipe operation via the admin API.
      */
-    const handleWipe = async (action: WipeAction) => {
+    const handleWipe = React.useCallback(async (action: WipeAction) => {
         if (!window.confirm(`This will permanently delete data for "${action.label}". Continue?`)) {
             return;
         }
 
-        setLoadingAction(action.id);
+        startJob(
+            `Executing wipe: ${action.label}`,
+            async (_, signal) => {
+                const apiUrl = resolveAdminApiBaseUrl();
 
-        try {
-            const apiUrl = resolveAdminApiBaseUrl();
-            let headers: Record<string, string>;
+                let headers: Record<string, string>;
+                try {
+                    headers = await buildAdminApiHeaders();
+                } catch (authError) {
+                    const { message } = getError(
+                        authError,
+                        'Authentication required to execute wipe operations.'
+                    );
+                    throw new Error(message);
+                }
 
-            try {
-                headers = await buildAdminApiHeaders();
-            } catch (authError) {
-                const { message } = getError(authError, 'Authentication required to execute wipe operations.');
-                showNotification(message, 'error');
-                return;
+                if (signal.aborted) {
+                    throw new Error('Wipe cancelled');
+                }
+
+                const response = await fetch(`${apiUrl}/wipe`, {
+                    method: 'DELETE',
+                    headers: {
+                        ...headers,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ category: action.category }),
+                    signal,
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.json().catch(() => null);
+                    const message = errorBody?.error || `Failed to wipe ${action.label}`;
+                    throw new Error(message);
+                }
+
+                const result = await response.json().catch(() => ({}));
+                return result;
+            },
+            {
+                jobType: 'danger-wipe',
+                actionId: action.id,
+                category: action.category,
+                actionLabel: action.label,
+            },
+            (job) => {
+                const actionLabel = (job.metadata?.actionLabel as string | undefined) || 'Operation';
+
+                if (job.status === 'completed') {
+                    const result = job.result as Record<string, unknown> | null;
+                    const detailParts: string[] = [];
+                    if (result && typeof result === 'object') {
+                        if (typeof result.deleted === 'number') {
+                            detailParts.push(`Deleted: ${result.deleted}`);
+                        }
+                        if (typeof result.batches === 'number') {
+                            detailParts.push(`Batches: ${result.batches}`);
+                        }
+                        if (typeof result.firestoreDeleted === 'number') {
+                            detailParts.push(`Firestore: ${result.firestoreDeleted}`);
+                        }
+                        if (typeof result.firestoreBatches === 'number') {
+                            detailParts.push(`Firestore batches: ${result.firestoreBatches}`);
+                        }
+                        if (typeof result.authDeleted === 'number') {
+                            detailParts.push(`Auth: ${result.authDeleted}`);
+                        }
+                        if (typeof result.authFailed === 'number' && result.authFailed > 0) {
+                            detailParts.push(`Auth failures: ${result.authFailed}`);
+                        }
+                    }
+
+                    const baseMessage =
+                        (result && typeof result === 'object' && typeof result.message === 'string')
+                            ? result.message
+                            : `${actionLabel} completed successfully`;
+                    const message = detailParts.length > 0
+                        ? `${baseMessage} (${detailParts.join(', ')})`
+                        : baseMessage;
+
+                    showNotification(message, 'success');
+                } else if (job.status === 'failed') {
+                    const message = job.error || `Unable to complete ${actionLabel.toLowerCase()}`;
+                    showNotification(message, 'error');
+                }
             }
+        );
 
-            const response = await fetch(`${apiUrl}/wipe`, {
-                method: 'DELETE',
-                headers,
-                body: JSON.stringify({ category: action.category }),
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => null);
-                const message = errorBody?.error || `Failed to wipe ${action.label}`;
-                throw new Error(message);
-            }
-
-            const result = await response.json();
-
-            const detailParts: string[] = [];
-            if (typeof result === 'object' && result) {
-                if (typeof result.deleted === 'number') {
-                    detailParts.push(`Deleted: ${result.deleted}`);
-                }
-                if (typeof result.batches === 'number') {
-                    detailParts.push(`Batches: ${result.batches}`);
-                }
-                if (typeof result.firestoreDeleted === 'number') {
-                    detailParts.push(`Firestore: ${result.firestoreDeleted}`);
-                }
-                if (typeof result.firestoreBatches === 'number') {
-                    detailParts.push(`Firestore batches: ${result.firestoreBatches}`);
-                }
-                if (typeof result.authDeleted === 'number') {
-                    detailParts.push(`Auth: ${result.authDeleted}`);
-                }
-                if (typeof result.authFailed === 'number' && result.authFailed > 0) {
-                    detailParts.push(`Auth failures: ${result.authFailed}`);
-                }
-            }
-
-            const baseMessage = result?.message || `${action.label} wiped successfully`;
-            const message = detailParts.length > 0 ? `${baseMessage} (${detailParts.join(', ')})` : baseMessage;
-
-            showNotification(message, 'success');
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : `Unable to wipe ${action.label}`;
-            showNotification(message, 'error');
-        } finally {
-            setLoadingAction(null);
-        }
-    };
+        showNotification(
+            'Wipe started in the background. You can navigate away and it will continue.',
+            'warning',
+            5000
+        );
+    }, [startJob, showNotification]);
 
     return (
         <AnimatedPage variant="fade">
@@ -186,9 +230,9 @@ export default function DangerZonePage() {
                                         color="warning"
                                         variant="contained"
                                         onClick={() => handleWipe(action)}
-                                        disabled={loadingAction === action.id}
+                                        disabled={hasActiveWipe}
                                     >
-                                        {loadingAction === action.id ? 'Wiping…' : 'Execute Wipe'}
+                                        {hasActiveWipe ? 'Wiping…' : 'Execute Wipe'}
                                     </Button>
                                 </CardActions>
                             </Card>

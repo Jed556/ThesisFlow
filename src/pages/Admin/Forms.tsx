@@ -31,6 +31,7 @@ import {
 import { getAllGroups } from '../../utils/firebase/firestore';
 import { importFormsFromCsv, exportFormsToCsv } from '../../utils/csv/form';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -91,6 +92,7 @@ const emptyWorkflowStep: FormWorkflowStep = {
 export default function AdminFormManagementPage() {
     const session = useSession<Session>();
     const { showNotification } = useSnackbar();
+    const { startJob } = useBackgroundJobControls();
     const userRole = session?.user?.role;
 
     const [forms, setForms] = React.useState<FormTemplate[]>([]);
@@ -122,7 +124,28 @@ export default function AdminFormManagementPage() {
     const [selectedFieldIndex, setSelectedFieldIndex] = React.useState<number | null>(null);
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>({});
 
+    const isMountedRef = React.useRef(true);
+    React.useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    // Track active form import jobs to pause reloads until the import finishes
+    const hasActiveImport = useBackgroundJobFlag(
+        React.useCallback((job) => {
+            if (job.status !== 'pending' && job.status !== 'running') {
+                return false;
+            }
+            const jobType = job.metadata?.jobType as string | undefined;
+            return jobType === 'forms-import';
+        }, [])
+    );
+
     const loadData = React.useCallback(async () => {
+        if (hasActiveImport) {
+            return;
+        }
         try {
             setLoading(true);
             // Load from Firestore
@@ -138,7 +161,7 @@ export default function AdminFormManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [showNotification]);
+    }, [showNotification, hasActiveImport]);
 
     React.useEffect(() => {
         loadData();
@@ -449,34 +472,107 @@ export default function AdminFormManagementPage() {
     };
 
     const handleImport = async (file: File) => {
-        try {
-            const text = await file.text();
-            const { parsed: importedForms, errors: parseErrors } = importFormsFromCsv(text);
+        startJob(
+            `Importing forms from ${file.name}`,
+            async (updateProgress, signal) => {
+                const text = await file.text();
+                if (signal.aborted) {
+                    throw new Error('Import cancelled');
+                }
 
-            const errors: string[] = [];
-            if (parseErrors.length) errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
+                const { parsed: importedForms, errors: parseErrors } = importFormsFromCsv(text);
 
-            // Import forms to Firestore
-            for (const formData of importedForms) {
-                const formId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-                await setFormTemplate(formId, {
-                    ...formData,
-                    id: formId,
-                });
+                const errors: string[] = [];
+                if (parseErrors.length) {
+                    errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
+                }
+
+                if (signal.aborted) {
+                    throw new Error('Import cancelled');
+                }
+
+                const total = importedForms.length;
+                let successCount = 0;
+
+                for (let i = 0; i < importedForms.length; i++) {
+                    if (signal.aborted) {
+                        throw new Error('Import cancelled');
+                    }
+
+                    const formData = importedForms[i];
+                    if (total > 0) {
+                        updateProgress({
+                            current: i + 1,
+                            total,
+                            message: `Creating form ${formData.title || `#${i + 1}`}`,
+                        });
+                    }
+
+                    try {
+                        const fallbackId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+                        const formId = (formData as Partial<FormTemplate>).id || fallbackId;
+                        await setFormTemplate(formId, {
+                            ...formData,
+                            id: formId,
+                        });
+                        successCount++;
+                    } catch (importError) {
+                        const identifier = formData.title || formData.id || `row ${i + 2}`;
+                        errors.push(
+                            `Failed to import ${identifier}: ${importError instanceof Error ? importError.message : 'Unknown error'}`
+                        );
+                    }
+                }
+
+                return {
+                    count: successCount,
+                    errors,
+                    total,
+                };
+            },
+            { fileName: file.name, fileSize: file.size, jobType: 'forms-import' },
+            (job) => {
+                if (isMountedRef.current) {
+                    (async () => {
+                        try {
+                            setLoading(true);
+                            const [formsData, groupsData] = await Promise.all([
+                                getAllFormTemplates(),
+                                getAllGroups(),
+                            ]);
+                            setForms(formsData);
+                            setGroups(groupsData);
+                        } catch {
+                            // handled below via notifications
+                        } finally {
+                            setLoading(false);
+                        }
+                    })();
+                }
+
+                if (job.status === 'completed' && job.result) {
+                    const result = job.result as { count: number; errors: string[]; total: number };
+                    if (result.errors.length > 0) {
+                        showNotification(
+                            `Imported ${result.count} of ${result.total} form(s) with warnings`,
+                            'warning',
+                            6000,
+                            {
+                                label: 'View Details',
+                                onClick: () =>
+                                    showNotification(`Import warnings:\n${result.errors.join('\n')}`, 'info', 0),
+                            }
+                        );
+                    } else {
+                        showNotification(`Successfully imported ${result.count} form(s)`, 'success');
+                    }
+                } else if (job.status === 'failed') {
+                    showNotification(`Form import failed: ${job.error}`, 'error');
+                }
             }
+        );
 
-            // Reload data
-            await loadData();
-            
-            if (errors.length > 0) {
-                showNotification(`Imported ${importedForms.length} form(s) with ${errors.length} warning(s)`, 'warning');
-            } else {
-                showNotification(`Successfully imported ${importedForms.length} form(s)`, 'success');
-            }
-        } catch (error) {
-            console.error('Error importing forms:', error);
-            showNotification('Failed to import forms from CSV', 'error');
-        }
+        showNotification('Form import started in the background.', 'info', 5000);
     };
 
     const getAdditionalActions = (params: GridRowParams<FormTemplate>) => [
@@ -521,6 +617,7 @@ export default function AdminFormManagementPage() {
                     enableMultiDelete
                     enableExport
                     enableImport
+                    importDisabled={hasActiveImport}
                     enableRefresh
                     enableAdd
                     enableQuickFilter

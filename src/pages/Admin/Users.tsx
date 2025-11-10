@@ -19,6 +19,7 @@ import {
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../utils/csv/user';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../utils/avatarUtils';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
@@ -59,7 +60,18 @@ const emptyFormData: UserProfile = {
 export default function AdminUsersPage() {
     const session = useSession<Session>();
     const { showNotification } = useSnackbar();
+    const { startJob } = useBackgroundJobControls();
     const userRole = session?.user?.role;
+
+    // Track active user import jobs without re-rendering on progress updates
+    const hasActiveImport = useBackgroundJobFlag(
+        React.useCallback((job) => {
+            if (job.status !== 'pending' && job.status !== 'running') {
+                return false;
+            }
+            return job.name.startsWith('Importing users');
+        }, [])
+    );
 
     const [users, setUsers] = React.useState<UserProfile[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -73,6 +85,14 @@ export default function AdminUsersPage() {
     const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
     const [avatarPreview, setAvatarPreview] = React.useState<string>('');
     const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
+
+    // Track if component is mounted to prevent reloads after navigation
+    const isMountedRef = React.useRef(true);
+    React.useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     // Calculate admin count for deletion protection
     const adminCount = React.useMemo(() => {
@@ -95,16 +115,21 @@ export default function AdminUsersPage() {
     }
 
     const loadUsers = React.useCallback(async () => {
+        // Don't reload if there's an active import in progress (to prevent lag)
+        if (hasActiveImport) {
+            return;
+        }
+
         try {
             setLoading(true);
             const allUsers = await getAllUsers();
             setUsers(allUsers);
-        } catch (error) {
+        } catch {
             showNotification('Failed to load users. Please try again.', 'error');
         } finally {
             setLoading(false);
         }
-    }, [showNotification]);
+    }, [showNotification, hasActiveImport]);
 
     React.useEffect(() => {
         loadUsers();
@@ -151,7 +176,7 @@ export default function AdminUsersPage() {
         try {
             const previewUrl = await createAvatarPreview(file);
             setAvatarPreview(previewUrl);
-        } catch (error) {
+        } catch {
             showNotification('Failed to create preview', 'error');
         }
     };
@@ -268,12 +293,12 @@ export default function AdminUsersPage() {
 
                 try {
                     await setUserProfile(uid, newUser);
-                } catch (error) {
+                } catch {
                     // Step 2 failed - delete auth account to avoid orphaned accounts
                     showNotification('Failed to create user profile. Rolling back...', 'error');
                     try {
                         await adminDeleteUserAccount({ uid });
-                    } catch (deleteError) {
+                    } catch {
                         showNotification('Failed to rollback auth account. Manual cleanup may be required.', 'error', 0);
                     }
                     setSaving(false);
@@ -292,7 +317,7 @@ export default function AdminUsersPage() {
                     } else {
                         console.warn('User created but UID not available for calendar creation');
                     }
-                } catch (error) {
+                } catch {
                     showNotification('User created but calendar creation failed', 'warning');
                 }
 
@@ -347,7 +372,7 @@ export default function AdminUsersPage() {
                         } else {
                             showNotification(`Auth update failed: ${authResult.message}.`, 'error', 6000);
                         }
-                    } catch (error) {
+                    } catch {
                         showNotification('Failed to update User.', 'error', 6000);
                     }
                 } else {
@@ -360,7 +385,7 @@ export default function AdminUsersPage() {
 
             await loadUsers();
             handleCloseDialog();
-        } catch (error) {
+        } catch {
             showNotification('Failed to save user. Please try again.', 'error');
             setFormErrors({ email: 'Failed to save user. Please try again.' });
         } finally {
@@ -390,7 +415,7 @@ export default function AdminUsersPage() {
             showNotification(`User ${selectedUser.name.first} ${selectedUser.name.last} deleted successfully`, 'success');
             await loadUsers();
             handleCloseDialog();
-        } catch (error) {
+        } catch {
             showNotification('Failed to delete user. Please try again.', 'error');
         } finally {
             setSaving(false);
@@ -458,92 +483,152 @@ export default function AdminUsersPage() {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             showNotification(`Exported ${selectedUsers.length} user(s) to CSV`, 'success');
-        } catch (error) {
+        } catch {
             showNotification('Failed to export users to CSV', 'error');
         }
     };
 
     async function handleImport(file: File) {
-        try {
-            const text = await file.text();
-            const { parsed, errors: parseErrors } = importUsersFromCsv(text);
+        // Start the import as a background job so users can navigate away
+        startJob(
+            `Importing users from ${file.name}`,
+            async (updateProgress, signal) => {
+                // Parse CSV file
+                const text = await file.text();
+                const { parsed, errors: parseErrors } = importUsersFromCsv(text);
 
-            const errors: string[] = [];
-            if (parseErrors.length) errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
+                const errors: string[] = [];
+                if (parseErrors.length) errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
 
-            // Filter out already-existing users and prepare to import
-            const toImport: ImportedUser[] = [];
-            for (let i = 0; i < parsed.length; i++) {
-                const u = parsed[i];
-                const exists = await getUserById(u.uid);
-                if (exists) {
-                    errors.push(`Row ${i + 2}: user ${u.email} already exists`);
-                    continue;
-                }
-                toImport.push(u);
-            }
+                // Check if aborted
+                if (signal.aborted) throw new Error('Import cancelled');
 
-            if (toImport.length === 0) {
-                showNotification(
-                    'No users to import',
-                    'warning',
-                    0,
-                    errors.length > 0 ? {
-                        label: 'View Errors',
-                        onClick: () => showNotification(`Import errors:\n${errors.join('\n')}`, 'error', 0)
-                    } : undefined
-                );
-                return;
-            }
-
-            // Create auth accounts and Firestore profiles
-            for (const user of toImport) {
-                const { password: importPassword, ...profileNoPassword } = user;
-                const password = importPassword || DEFAULT_PASSWORD;
-                const authResult = await adminCreateUserAccount(
-                    user.uid,
-                    user.email,
-                    password,
-                    user.role,
-                );
-                if (!authResult.success) {
-                    errors.push(`Auth create failed for ${user.email}: ${authResult.message}`);
-                    continue;
-                }
-
-                // Store the UID in the profile
-                const profileWithUid = {
-                    ...profileNoPassword,
-                    uid: authResult.uid ?? user.uid,
-                };
-
-                // setUserProfile now automatically cleans empty values
-                const profileUid = profileWithUid.uid ?? user.uid;
-                if (!profileUid) {
-                    errors.push(`Missing UID after creating auth record for ${user.email}`);
-                    continue;
-                }
-                await setUserProfile(profileUid, profileWithUid);
-            }
-
-            await loadUsers();
-
-            if (errors.length) {
-                showNotification(
-                    `Imported ${toImport.length} user(s) with some errors`,
-                    'warning',
-                    6000,
-                    {
-                        label: 'View Errors',
-                        onClick: () => showNotification(`Import errors:\n${errors.join('\n')}`, 'error', 0)
+                // Filter out already-existing users and prepare to import
+                const toImport: ImportedUser[] = [];
+                for (let i = 0; i < parsed.length; i++) {
+                    const u = parsed[i];
+                    const exists = await getUserById(u.uid);
+                    if (exists) {
+                        errors.push(`Row ${i + 2}: user ${u.email} already exists`);
+                        continue;
                     }
-                );
-            } else {
-                showNotification(`Successfully imported ${toImport.length} user(s)`, 'success');
+                    toImport.push(u);
+                }
+
+                if (toImport.length === 0) {
+                    // Return immediately if nothing to import
+                    return {
+                        count: 0,
+                        errors,
+                        message: 'No users to import',
+                    };
+                }
+
+                // Check if aborted before starting imports
+                if (signal.aborted) throw new Error('Import cancelled');
+
+                // Create auth accounts and Firestore profiles
+                let successCount = 0;
+                for (let i = 0; i < toImport.length; i++) {
+                    // Check for cancellation before each user
+                    if (signal.aborted) throw new Error('Import cancelled');
+
+                    const user = toImport[i];
+                    const { password: importPassword, ...profileNoPassword } = user;
+                    const password = importPassword || DEFAULT_PASSWORD;
+
+                    // Update progress
+                    updateProgress({
+                        current: i + 1,
+                        total: toImport.length,
+                        message: `Creating user ${user.email}`,
+                    });
+
+                    try {
+                        const authResult = await adminCreateUserAccount(
+                            user.uid,
+                            user.email,
+                            password,
+                            user.role,
+                        );
+                        if (!authResult.success) {
+                            errors.push(`Auth create failed for ${user.email}: ${authResult.message}`);
+                            continue;
+                        }
+
+                        // Store the UID in the profile
+                        const profileWithUid = {
+                            ...profileNoPassword,
+                            uid: authResult.uid ?? user.uid,
+                        };
+
+                        // setUserProfile now automatically cleans empty values
+                        const profileUid = profileWithUid.uid ?? user.uid;
+                        if (!profileUid) {
+                            errors.push(`Missing UID after creating auth record for ${user.email}`);
+                            continue;
+                        }
+                        await setUserProfile(profileUid, profileWithUid);
+                        successCount++;
+                    } catch (error) {
+                        errors.push(`Failed to create ${user.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    }
+                }
+
+                return {
+                    count: successCount,
+                    errors,
+                    total: toImport.length,
+                };
+            },
+            { fileName: file.name, fileSize: file.size, jobType: 'users-import' },
+            // Completion callback
+            (job) => {
+                // Only reload users if component is still mounted (user is still on this page)
+                // Force reload even if import is "active" since we're in the completion callback
+                if (isMountedRef.current) {
+                    // Call getAllUsers directly to bypass the hasActiveImport check
+                    (async () => {
+                        try {
+                            setLoading(true);
+                            const allUsers = await getAllUsers();
+                            setUsers(allUsers);
+                        } catch {
+                            // Silent fail - notification will be shown for job status
+                        } finally {
+                            setLoading(false);
+                        }
+                    })();
+                }
+
+                if (job.status === 'completed' && job.result) {
+                    const result = job.result as { count: number; errors: string[]; total?: number };
+
+                    if (result.errors.length > 0) {
+                        showNotification(
+                            `Imported ${result.count} of ${result.total ?? result.count} user(s) with some errors`,
+                            'warning',
+                            6000,
+                            {
+                                label: 'View Errors',
+                                onClick: () => showNotification(`Import errors:\n${result.errors.join('\n')}`, 'error', 0)
+                            }
+                        );
+                    } else {
+                        showNotification(`Successfully imported ${result.count} user(s)`, 'success');
+                    }
+                } else if (job.status === 'failed') {
+                    showNotification(`Import failed: ${job.error}`, 'error');
+                }
             }
-        } catch (error) {
-            showNotification('Failed to import CSV. Please check the file format and try again.', 'error');
-        }
+        );
+
+        // Show immediate feedback that the import has started
+        showNotification(
+            'Import started in background. You can navigate away and it will continue.',
+            'info',
+            5000
+        );
     };
 
     const handleInlineUpdate = async (newRow: UserProfile, oldRow: UserProfile): Promise<UserProfile> => {
@@ -598,7 +683,7 @@ export default function AdminUsersPage() {
                     } else {
                         showNotification(`Auth update failed: ${authResult.message}.`, 'warning', 4000);
                     }
-                } catch (error) {
+                } catch {
                     showNotification('Failed to update user profile.', 'warning', 4000);
                 }
             }
@@ -757,6 +842,7 @@ export default function AdminUsersPage() {
                     enableMultiDelete
                     enableExport
                     enableImport
+                    importDisabled={hasActiveImport}
                     enableRefresh
                     enableAdd
                     enableQuickFilter
