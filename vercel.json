@@ -1,7 +1,7 @@
 {
     "framework": "vite",
     "functions": {
-        "/serverless/api/**/*.ts": {
+        "serverless/api/**/*.ts": {
             "memory": 512,
             "maxDuration": 30
         }
