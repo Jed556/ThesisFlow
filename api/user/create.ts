@@ -23,16 +23,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return errorResponse(res, 'Unauthorized: Provide either Bearer token or X-API-Secret', 401);
     }
 
-    const { email, password, role, uid: customUid } = req.body;
+    const { email, password, role, uid: customUid } = req.body ?? {};
 
-    if (!email || !password) {
+    const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+    const normalizedPassword = typeof password === 'string' ? password : '';
+
+    if (!normalizedEmail || !normalizedPassword) {
         return errorResponse(res, 'Email and password are required', 400);
+    }
+
+    const isValidEmailShape = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    if (!isValidEmailShape) {
+        // Surface the payload shape to aid debugging without logging sensitive data like the password value
+        console.error('Invalid email payload received during user creation', {
+            receivedEmail: email,
+            bodyKeys: typeof req.body === 'object' && req.body ? Object.keys(req.body) : [],
+        });
+        return errorResponse(res, 'Email must be a valid email address', 400);
     }
 
     try {
         // Check if user already exists by email
         try {
-            const existingUser = await auth.getUserByEmail(email);
+            const existingUser = await auth.getUserByEmail(normalizedEmail);
             return successResponse(res, { uid: existingUser.uid }, 'User already exists');
         } catch (notFoundError: unknown) {
             // User doesn't exist, proceed with creation unless different error
@@ -59,8 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Create the user using Admin SDK with optional custom UID
         const userRecord = await auth.createUser({
             uid: customUid, // If undefined, Firebase will auto-generate
-            email,
-            password,
+            email: normalizedEmail,
+            password: normalizedPassword,
             emailVerified: false,
         });
 
@@ -70,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.log(`Set custom claims for user: ${email} with role: ${role}`);
         }
 
-        console.log(`Created user: ${email}`);
+        console.log(`Created user: ${normalizedEmail}`);
         return successResponse(
             res,
             { uid: userRecord.uid },
@@ -78,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
     } catch (error: unknown) {
         const { message } = getError(error, 'Unable to create user');
-        console.error(`Failed to create user: ${email}`, error);
+        console.error(`Failed to create user: ${normalizedEmail}`, error);
         return errorResponse(res, message, 500);
     }
 }

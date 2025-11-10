@@ -246,7 +246,12 @@ export default function AdminUsersPage() {
                 const userRole = isFirstUser ? 'admin' : role;
 
                 // STEP 1: Create Firebase Auth account first
-                const authResult = await adminCreateUserAccount(uid, email, DEFAULT_PASSWORD, userRole);
+                const authResult = await adminCreateUserAccount(
+                    uid,
+                    email,
+                    DEFAULT_PASSWORD,
+                    userRole,
+                );
                 if (!authResult.success) {
                     // Step 1 failed - do nothing, just show error and return
                     setFormErrors({ email: `Failed to create auth account: ${authResult.message}` });
@@ -495,7 +500,12 @@ export default function AdminUsersPage() {
             for (const user of toImport) {
                 const { password: importPassword, ...profileNoPassword } = user;
                 const password = importPassword || DEFAULT_PASSWORD;
-                const authResult = await adminCreateUserAccount(user.email, password, user.role);
+                const authResult = await adminCreateUserAccount(
+                    user.uid,
+                    user.email,
+                    password,
+                    user.role,
+                );
                 if (!authResult.success) {
                     errors.push(`Auth create failed for ${user.email}: ${authResult.message}`);
                     continue;
@@ -504,11 +514,16 @@ export default function AdminUsersPage() {
                 // Store the UID in the profile
                 const profileWithUid = {
                     ...profileNoPassword,
-                    uid: authResult.uid,
+                    uid: authResult.uid ?? user.uid,
                 };
 
                 // setUserProfile now automatically cleans empty values
-                await setUserProfile(user.email, profileWithUid);
+                const profileUid = profileWithUid.uid ?? user.uid;
+                if (!profileUid) {
+                    errors.push(`Missing UID after creating auth record for ${user.email}`);
+                    continue;
+                }
+                await setUserProfile(profileUid, profileWithUid);
             }
 
             await loadUsers();
