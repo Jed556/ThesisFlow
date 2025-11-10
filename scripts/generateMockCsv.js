@@ -34,15 +34,29 @@ const escapeCsv = value => {
 const firstNames = [
     'Alex', 'Jamie', 'Taylor', 'Jordan', 'Morgan', 'Sydney', 'Avery', 'Casey', 'Riley', 'Hayden',
     'Peyton', 'Dakota', 'Quinn', 'Rowan', 'Skyler', 'Emerson', 'Harper', 'Logan', 'Parker', 'Reese',
+    'Noah', 'Liam', 'Olivia', 'Emma', 'Sophia', 'Isabella', 'Mia', 'Charlotte', 'Amelia', 'Evelyn',
+    'Benjamin', 'Lucas', 'Mason', 'Ethan', 'James', 'William', 'Henry', 'Sebastian', 'Mateo', 'Jack',
+    'Zoe', 'Chloe', 'Luna', 'Ellie', 'Nora', 'Camila', 'Aurora', 'Victoria'
 ];
-const middleInitials = ['', 'A.', 'B.', 'C.', 'D.', 'E.', 'F.', 'G.', 'H.', 'J.'];
-const lastNames = [
+// Family names (used as the primary pool for last and middle/family names)
+const familyNames = [
     'Anderson', 'Brooks', 'Campbell', 'Dawson', 'Ellis', 'Fletcher', 'Garcia', 'Hayes', 'Ibrahim', 'Jensen',
     'Kendall', 'Lopez', 'Monroe', 'Nguyen', 'Owens', 'Patel', 'Quincy', 'Ramirez', 'Singh', 'Turner',
+    'Baker', 'Carter', 'Diaz', 'Edwards', 'Fisher', 'Gomez', 'Harris', 'Iverson', 'Jackson', 'Kim',
+    'Lopez', 'Marshall', 'Murphy', 'Nash', 'Olsen', 'Perry', 'Reid', 'Santos', 'Torres', 'Ward', 'Young',
+    // Additional surnames for greater variety
+    'Zimmerman', 'Kaur', 'Velasquez', 'Bennett', 'Griffin', 'Murillo', 'Holmes', 'Powers', 'Vega', 'Bennett',
+    'Abbott', 'Conner', 'Reynolds', 'Schmidt', 'Knight', 'Walsh', 'Armstrong', 'Friedman', 'Lopez-Rodriguez', 'Chung'
 ];
 const departments = [
-    'Engineering', 'Computer Science', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Humanities', 'Business',
-    'Design', 'Education', 'Public Policy', 'Health Sciences', 'Environmental Studies', 'Data Science', 'Robotics',
+    'School of Nursing',
+    'School of Computer Studies and Technology',
+    'School of Education, Arts, and Sciences',
+    'School of Tourism and Hospitality Management',
+    'School of Business, Management, and Accountancy',
+    'School of Engineering and Architecture',
+    'Research Department',
+    'IT Department',
 ];
 const thesisTopics = [
     'Autonomous Systems', 'Renewable Energy Forecasting', 'Digital Preservation', 'Smart Agriculture',
@@ -51,7 +65,7 @@ const thesisTopics = [
     'Edge Computing', 'Quantum Communication', 'Assistive Robotics', 'Biometric Security', 'XR Learning Environments',
     'Cultural Heritage Digitization', 'Precision Medicine', 'Clean Water Solutions',
 ];
-const calendarIds = ['thesis-events', 'adviser-sync', 'review-deadlines', 'student-workshops'];
+// (removed unused top-level calendarIds constant — schedule generator accepts calendars as an argument)
 const eventStatuses = ['scheduled', 'confirmed', 'cancelled', 'completed', 'rescheduled'];
 const participantStatuses = ['accepted', 'declined', 'pending', 'tentative'];
 const eventTags = ['defense', 'proposal', 'check-in', 'editing', 'milestone', 'review', 'planning', 'training'];
@@ -70,13 +84,16 @@ const formAudiences = ['student', 'adviser', 'editor'];
 const formStatuses = ['draft', 'active', 'archived'];
 const thesisStatuses = ['under_review', 'revision_required', 'approved', 'not_submitted'];
 
-const roleDistribution = [
-    { role: 'admin', prefix: 'ADM', count: 8, honorific: 'Dr.' },
-    { role: 'developer', prefix: 'DEV', count: 7, honorific: '' },
-    { role: 'adviser', prefix: 'ADV', count: 20, honorific: 'Prof.' },
-    { role: 'editor', prefix: 'EDT', count: 15, honorific: '' },
-    { role: 'student', prefix: 'STD', count: 50, honorific: '' },
-];
+// Role percentages (applied when generating users):
+// developers: 1%, admins: 9%, advisers+editors: 25% (split roughly equally), rest students
+// Prefixes used to generate unique UIDs per role
+const rolePrefixes = {
+    admin: 'ADM',
+    developer: 'DEV',
+    adviser: 'ADV',
+    editor: 'EDT',
+    student: 'STD',
+};
 
 const pickWithOffset = (source, index, offset = 0) => source[(index + offset) % source.length];
 
@@ -147,32 +164,97 @@ const generateUsers = (totalUsers = 100) => {
         developer: [],
         student: [],
     };
-    // Compute weight totals and scale counts to match the requested totalUsers
-    const totalWeight = roleDistribution.reduce((s, r) => s + r.count, 0);
-    const scaled = roleDistribution.map(r => ({ ...r, scaledCount: Math.max(1, Math.round((r.count / totalWeight) * totalUsers)) }));
 
-    // Adjust rounding drift so total equals totalUsers
-    let scaledSum = scaled.reduce((s, r) => s + r.scaledCount, 0);
-    // Prefer to adjust the student count to absorb rounding differences
-    const studentIdx = scaled.findIndex(r => r.role === 'student');
-    if (studentIdx !== -1) {
-        scaled[studentIdx].scaledCount += (totalUsers - scaledSum);
-        scaledSum = scaled.reduce((s, r) => s + r.scaledCount, 0);
-    }
+    // Calculate counts per role
+    const devCount = Math.max(1, Math.round(totalUsers * 0.01));
+    const adminCount = Math.max(1, Math.round(totalUsers * 0.09));
+    // Split advisers/editors roughly equally
+    const advisersCount = Math.round(totalUsers * 0.125);
+    const editorsCount = Math.round(totalUsers * 0.125);
+    let assigned = devCount + adminCount + advisersCount + editorsCount;
+    let studentCount = totalUsers - assigned;
+    if (studentCount < 0) studentCount = 0;
+
+    const rolePlan = [
+        { role: 'developer', count: devCount, prefix: rolePrefixes.developer, honorific: '' },
+        { role: 'admin', count: adminCount, prefix: rolePrefixes.admin, honorific: 'Dr.' },
+        { role: 'adviser', count: advisersCount, prefix: rolePrefixes.adviser, honorific: 'Prof.' },
+        { role: 'editor', count: editorsCount, prefix: rolePrefixes.editor, honorific: '' },
+        { role: 'student', count: studentCount, prefix: rolePrefixes.student, honorific: '' },
+    ];
 
     let globalIndex = 0;
-    scaled.forEach(({ role, prefix, scaledCount, honorific }) => {
-        for (let i = 0; i < scaledCount; i += 1) {
-            const firstName = pickWithOffset(firstNames, globalIndex, i);
-            const middleName = pickWithOffset(middleInitials, i);
-            const lastName = pickWithOffset(lastNames, globalIndex, i * 2);
+    // Track used full name combinations to avoid duplicates
+    const usedFullNames = new Set();
+
+    // Helper: pick a pseudo-random element from an array using baseIndex and an attempt offset
+    const pickRandomWithJitter = (source, baseIndex, attempt = 0) => {
+        if (!Array.isArray(source) || source.length === 0) return '';
+        const jitter = Math.floor(Math.random() * source.length);
+        return source[(baseIndex + jitter + attempt) % source.length];
+    };
+
+    // Helper to pick a department that respects role constraints
+    const pickDepartmentForRole = (role, idx) => {
+        if (role === 'admin') {
+            const giveResearch = (idx % 5) === 0; // ~20% of admins in Research
+            return giveResearch ? 'Research Department' : pickWithOffset(departments.filter(d => d !== 'Research Department'), idx);
+        }
+        if (role === 'developer') {
+            // Developers must be only from IT Department or School of Computer Studies and Technology
+            const devDepts = ['IT Department', 'School of Computer Studies and Technology'];
+            return pickWithOffset(devDepts, idx);
+        }
+        if (role === 'adviser') {
+            // Advisers cannot be from Research Department
+            return pickWithOffset(departments.filter(d => d !== 'Research Department'), idx + 1);
+        }
+        if (role === 'editor') {
+            // Editors only come from School of Education, Arts, and Sciences
+            return 'School of Education, Arts, and Sciences';
+        }
+        if (role === 'student') {
+            // Students must not be assigned to Research Department or IT Department
+            return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 2);
+        }
+        // Fallback for any other role: avoid Research Department
+        return pickWithOffset(departments.filter(d => d !== 'Research Department'), idx + 2);
+    };
+
+    for (const plan of rolePlan) {
+        const { role, count, prefix, honorific } = plan;
+        for (let i = 0; i < count; i += 1) {
+            // Pick names with jitter and ensure the full name (first+middle+last) is unique
+            let attemptName = 0;
+            let firstName;
+            let lastName;
+            let middleName;
+            let fullName;
+            while (attemptName < 100) {
+                firstName = pickRandomWithJitter(firstNames, globalIndex, i + attemptName);
+                lastName = pickRandomWithJitter(familyNames, globalIndex, i * 2 + attemptName);
+                // pick a middle/family name but avoid matching the last name
+                let midCandidate = pickRandomWithJitter(familyNames, i, attemptName + 1);
+                if (midCandidate === lastName) {
+                    midCandidate = pickRandomWithJitter(familyNames, i + 1, attemptName + 2);
+                }
+                middleName = midCandidate;
+                fullName = `${firstName} ${middleName} ${lastName}`;
+                if (!usedFullNames.has(fullName)) break;
+                attemptName += 1;
+            }
+            // reserve the full name
+            usedFullNames.add(fullName || `${pickWithOffset(firstNames, globalIndex)} ${pickWithOffset(familyNames, i)} ${pickWithOffset(familyNames, globalIndex)}`);
             const uid = `${prefix}${pad(i + 1)}`;
-            const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
-            const emailPrefix = `${roleLabel}${pad(i + 1)}`;
-            const email = `${emailPrefix}@thesisflow.dev`;
-            const department = pickWithOffset(departments, globalIndex + i);
+            const email = `${role.charAt(0).toUpperCase() + role.slice(1)}${pad(i + 1)}@thesisflow.dev`;
+            let department = pickDepartmentForRole(role, globalIndex + i);
             const suffix = (globalIndex % 10 === 0 && role !== 'student') ? 'PhD' : '';
             const password = 'Password_123';
+
+            // Ensure non-admins are never assigned Research Department
+            if (department === 'Research Department' && role !== 'admin') {
+                department = pickWithOffset(departments.filter(d => d !== 'Research Department'), globalIndex + i);
+            }
 
             const userRow = [
                 uid,
@@ -196,7 +278,40 @@ const generateUsers = (totalUsers = 100) => {
             usersByRole[role].push(uid);
             globalIndex += 1;
         }
-    });
+    }
+
+    // Fill remaining slots with students if rounding left gaps
+    while (users.length < totalUsers) {
+        const i = users.length;
+        const role = 'student';
+        // Fill remaining students: ensure unique full names here too
+        let attemptName = 0;
+        let firstName = pickWithOffset(firstNames, i, 0);
+        let lastName = pickWithOffset(familyNames, i * 2, 0);
+        let middleName = pickRandomWithJitter(familyNames, i, attemptName);
+        let fullName = `${firstName} ${middleName} ${lastName}`;
+        while (usedFullNames.has(fullName) && attemptName < 100) {
+            attemptName += 1;
+            firstName = pickRandomWithJitter(firstNames, i + attemptName, 0);
+            lastName = pickRandomWithJitter(familyNames, i * 2 + attemptName, 0);
+            middleName = pickRandomWithJitter(familyNames, i + attemptName, attemptName);
+            if (middleName === lastName) middleName = pickRandomWithJitter(familyNames, i + attemptName + 1, attemptName + 1);
+            fullName = `${firstName} ${middleName} ${lastName}`;
+        }
+        usedFullNames.add(fullName);
+        const uid = `${rolePrefixes.student}${pad(usersByRole.student.length + 1)}`;
+        const email = `Student${pad(usersByRole.student.length + 1)}@thesisflow.dev`;
+        const department = pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), i + 2);
+        const userRow = [
+            uid, email, firstName, middleName, lastName, '', '', role, department,
+            `+1-555-${pad(1000 + i)}`, `https://storage.thesisflow.edu/avatars/${uid.toLowerCase()}.png`,
+            `https://storage.thesisflow.edu/banners/${uid.toLowerCase()}.jpg`,
+            `${firstName} ${lastName} focuses on ${pickWithOffset(thesisTopics, i)} research.`, 'Password_123',
+        ];
+        users.push(userRow);
+        userEmails.set(uid, email);
+        usersByRole.student.push(uid);
+    }
 
     return { users, userEmails, usersByRole };
 };
@@ -219,15 +334,27 @@ const generateGroups = (usersByRole, ungroupedStudents = []) => {
     const groups = [];
     const baseDate = new Date('2025-01-01T08:00:00.000Z');
     const ungroupedSet = new Set(ungroupedStudents);
+
     // Students available for grouping (exclude those intentionally left ungrouped)
     const availableStudents = usersByRole.student.filter(uid => !ungroupedSet.has(uid));
+
     for (let i = 0; i < RECORD_COUNT; i += 1) {
-        const membersCount = 3 + ((i % 3));
-        const membersSource = availableStudents.length >= membersCount ? availableStudents : usersByRole.student;
-        const members = pickUniqueFromList(membersSource, membersCount, i);
-        const leader = members[0] || pickWithOffset(usersByRole.student, i);
-        const adviser = pickWithOffset(usersByRole.adviser, i);
-        const editor = pickWithOffset(usersByRole.editor, i * 2);
+        // Enforce: exactly one adviser and one editor per group, and up to 4 students per group.
+        const studentCount = Math.min(4, 1 + (i % 4)); // yields 1..4 students
+        const membersSource = availableStudents.length >= studentCount ? availableStudents : usersByRole.student;
+        const students = pickUniqueFromList(membersSource, studentCount, i);
+
+        const leader = students[0] || pickWithOffset(usersByRole.student, i);
+
+        // Ensure there is an adviser and editor for the group; fall back to admins if role lists are empty
+        const adviser = (usersByRole.adviser && usersByRole.adviser.length > 0)
+            ? pickWithOffset(usersByRole.adviser, i)
+            : pickWithOffset(usersByRole.admin, i);
+
+        const editor = (usersByRole.editor && usersByRole.editor.length > 0)
+            ? pickWithOffset(usersByRole.editor, i * 2)
+            : pickWithOffset(usersByRole.admin, i * 3);
+
         const statuses = ['active', 'completed', 'inactive', 'archived'];
         const status = pickWithOffset(statuses, i);
         const createdAt = buildIso(baseDate, i * 2, 9, 30);
@@ -237,7 +364,7 @@ const generateGroups = (usersByRole, ungroupedStudents = []) => {
             `GRP${pad(i + 1)}`,
             `Thesis Cohort ${pad(i + 1)}`,
             leader,
-            members.join(';'),
+            students.join(';'),
             adviser,
             editor,
             `Team researching ${pickWithOffset(thesisTopics, i)} applications.`,
@@ -248,6 +375,7 @@ const generateGroups = (usersByRole, ungroupedStudents = []) => {
             pickWithOffset(departments, i),
         ]);
     }
+
     return groups;
 };
 
@@ -527,10 +655,11 @@ const generateTheses = (groups, usersByRole, thesisTitles) => {
 };
 // Interactive prompt to let the user override counts at runtime.
 const parseArg = (key) => {
-    const match = process.argv.find(a => a.startsWith(`--${key}=`));
-    if (match) {
-        return match.split('=')[1];
-    }
+    // Use globalThis to avoid linter warnings about `process` being undefined in some configs.
+    const proc = typeof globalThis !== 'undefined' ? globalThis.process : undefined;
+    if (!proc || !Array.isArray(proc.argv)) return null;
+    const match = proc.argv.find(a => a.startsWith(`--${key}=`));
+    if (match) return match.split('=')[1];
     return null;
 };
 
