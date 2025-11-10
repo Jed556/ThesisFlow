@@ -5,7 +5,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { handleCors, errorResponse, successResponse } from '../utils/utils.js';
 import { authenticate } from '../utils/auth.js';
 import { auth, firestore } from '../utils/firebase.js';
-import { getError } from '../../utils/errorUtils.js';
+import { getError } from '../utils/errorUtils.js';
 
 const FIRESTORE_BATCH_LIMIT = 500;
 const AUTH_BATCH_LIMIT = 1000;

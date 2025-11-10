@@ -1,15 +1,15 @@
 {
     "framework": "vite",
     "functions": {
-        "serverless/api/**/*.ts": {
+        "api/**/*.ts": {
             "memory": 512,
             "maxDuration": 30
         }
     },
     "rewrites": [
         {
-            "source": "/serverless/api/(.*)",
-            "destination": "/serverless/api/$1"
+            "source": "/api/(.*)",
+            "destination": "/api/$1"
         },
         {
             "source": "/(.*)",
@@ -18,7 +18,7 @@
     ],
     "headers": [
         {
-            "source": "/serverless/api/health",
+            "source": "/api/health",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
@@ -39,7 +39,7 @@
             ]
         },
         {
-            "source": "/serverless/api/user/create",
+            "source": "/api/user/create",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
@@ -60,7 +60,7 @@
             ]
         },
         {
-            "source": "/serverless/api/user/delete",
+            "source": "/api/user/delete",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
@@ -81,7 +81,7 @@
             ]
         },
         {
-            "source": "/serverless/api/wipe",
+            "source": "/api/wipe",
             "headers": [
                 {
                     "key": "Access-Control-Allow-Credentials",
