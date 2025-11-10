@@ -4,7 +4,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { handleCors, errorResponse, successResponse } from '../../utils/utils.js';
-import { getError } from '../../../utils/errorUtils.js';
+import { getError } from '../../utils/errorUtils.js';
 import { authenticate } from '../../utils/auth.js';
 import { auth } from '../../utils/firebase.js';
 
