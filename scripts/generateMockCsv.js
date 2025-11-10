@@ -4,12 +4,14 @@
  * The script produces 100 representative rows for each CSV handler.
  */
 
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { log } from 'node:console';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline/promises';
+import { stdin, stdout } from 'node:process';
 
-const RECORD_COUNT = 100;
+let RECORD_COUNT = 100;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const baseDir = resolve(__dirname, '..', 'mock', 'csv');
@@ -93,7 +95,49 @@ const writeCsv = (fileName, headers, rows) => {
     log(`Generated ${fileName} with ${rows.length} rows.`);
 };
 
-const generateUsers = () => {
+// Random utilities
+const shuffle = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+};
+
+const sample = (arr, count) => shuffle(arr).slice(0, count);
+
+// Generate unique thesis titles
+const generateUniqueThesisTitles = (count) => {
+    const adjectives = ['Advanced', 'Adaptive', 'Scalable', 'Robust', 'Efficient', 'Secure', 'Interactive', 'Autonomous', 'Novel', 'Integrated', 'Hybrid', 'Predictive', 'Generative'];
+    const suffixes = ['Framework', 'System', 'Model', 'Approach', 'Platform', 'Pipeline', 'Architecture', 'Method', 'Toolkit'];
+    const titles = new Set();
+    const results = [];
+
+    while (results.length < count) {
+        const topic = thesisTopics[Math.floor(Math.random() * thesisTopics.length)];
+        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const suf = suffixes[Math.floor(Math.random() * suffixes.length)];
+        let title = `${adj} ${topic} ${suf}`;
+
+        if (titles.has(title)) {
+            // Append a short random suffix to avoid collisions
+            title = `${title} (${Math.floor(Math.random() * 900) + 100})`;
+            if (titles.has(title)) continue;
+        }
+
+        titles.add(title);
+        results.push(title);
+    }
+
+    return results;
+};
+
+/**
+ * Generate users using a scaled role distribution based on `totalUsers`.
+ * roleDistribution count fields are treated as weights (they sum to ~100 in default)
+ */
+const generateUsers = (totalUsers = 100) => {
     const users = [];
     const userEmails = new Map();
     const usersByRole = {
@@ -103,18 +147,32 @@ const generateUsers = () => {
         developer: [],
         student: [],
     };
+    // Compute weight totals and scale counts to match the requested totalUsers
+    const totalWeight = roleDistribution.reduce((s, r) => s + r.count, 0);
+    const scaled = roleDistribution.map(r => ({ ...r, scaledCount: Math.max(1, Math.round((r.count / totalWeight) * totalUsers)) }));
+
+    // Adjust rounding drift so total equals totalUsers
+    let scaledSum = scaled.reduce((s, r) => s + r.scaledCount, 0);
+    // Prefer to adjust the student count to absorb rounding differences
+    const studentIdx = scaled.findIndex(r => r.role === 'student');
+    if (studentIdx !== -1) {
+        scaled[studentIdx].scaledCount += (totalUsers - scaledSum);
+        scaledSum = scaled.reduce((s, r) => s + r.scaledCount, 0);
+    }
 
     let globalIndex = 0;
-    roleDistribution.forEach(({ role, prefix, count, honorific }) => {
-        for (let i = 0; i < count; i += 1) {
+    scaled.forEach(({ role, prefix, scaledCount, honorific }) => {
+        for (let i = 0; i < scaledCount; i += 1) {
             const firstName = pickWithOffset(firstNames, globalIndex, i);
             const middleName = pickWithOffset(middleInitials, i);
             const lastName = pickWithOffset(lastNames, globalIndex, i * 2);
             const uid = `${prefix}${pad(i + 1)}`;
-            const email = `${firstName}.${lastName}${globalIndex + 1}@example.edu`.toLowerCase();
+            const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+            const emailPrefix = `${roleLabel}${pad(i + 1)}`;
+            const email = `${emailPrefix}@thesisflow.dev`;
             const department = pickWithOffset(departments, globalIndex + i);
             const suffix = (globalIndex % 10 === 0 && role !== 'student') ? 'PhD' : '';
-            const password = `${role.charAt(0).toUpperCase() + role.slice(1)}@${100 + globalIndex}`;
+            const password = 'Password_123';
 
             const userRow = [
                 uid,
@@ -157,13 +215,17 @@ const pickUniqueFromList = (source, count, seed) => {
     return result;
 };
 
-const generateGroups = (usersByRole) => {
+const generateGroups = (usersByRole, ungroupedStudents = []) => {
     const groups = [];
     const baseDate = new Date('2025-01-01T08:00:00.000Z');
+    const ungroupedSet = new Set(ungroupedStudents);
+    // Students available for grouping (exclude those intentionally left ungrouped)
+    const availableStudents = usersByRole.student.filter(uid => !ungroupedSet.has(uid));
     for (let i = 0; i < RECORD_COUNT; i += 1) {
         const membersCount = 3 + ((i % 3));
-        const members = pickUniqueFromList(usersByRole.student, membersCount, i);
-        const leader = members[0];
+        const membersSource = availableStudents.length >= membersCount ? availableStudents : usersByRole.student;
+        const members = pickUniqueFromList(membersSource, membersCount, i);
+        const leader = members[0] || pickWithOffset(usersByRole.student, i);
         const adviser = pickWithOffset(usersByRole.adviser, i);
         const editor = pickWithOffset(usersByRole.editor, i * 2);
         const statuses = ['active', 'completed', 'inactive', 'archived'];
@@ -189,7 +251,7 @@ const generateGroups = (usersByRole) => {
     return groups;
 };
 
-const generateSchedule = (usersByRole) => {
+const generateSchedule = (usersByRole, calendarIds) => {
     const schedules = [];
     const baseDate = new Date('2025-02-01T08:00:00.000Z');
     const admins = usersByRole.admin;
@@ -200,6 +262,9 @@ const generateSchedule = (usersByRole) => {
         const editor = pickWithOffset(usersByRole.editor, i * 3);
         const organizerCandidates = [adviser, editor, pickWithOffset(admins, i)];
         const organizer = organizerCandidates[i % organizerCandidates.length];
+
+        // Use available calendars; rotate through them
+        const calendarId = calendarIds.length > 0 ? calendarIds[i % calendarIds.length] : 'default';
 
         const participantEntries = [];
         participantEntries.push({ uid: organizer, role: 'organizer', status: 'accepted' });
@@ -228,7 +293,7 @@ const generateSchedule = (usersByRole) => {
             `EVT${pad(i + 1)}`,
             `Milestone Session ${pad(i + 1)}`,
             `Working session focused on ${pickWithOffset(thesisTopics, i)} progress.`,
-            pickWithOffset(calendarIds, i),
+            calendarId,
             pickWithOffset(eventStatuses, i),
             startDate,
             endDate,
@@ -258,7 +323,7 @@ const generateFiles = (usersByRole, userEmails) => {
         const fileMeta = pickWithOffset(fileTypes, i);
         const id = `FIL${pad(i + 1)}`;
         const authorUid = pickWithOffset(allAuthors, i * 3 + 4);
-        const authorEmail = userEmails.get(authorUid) || `${authorUid.toLowerCase()}@example.edu`;
+        const authorEmail = userEmails.get(authorUid) || `${authorUid.toLowerCase()}@thesisflow.dev`;
         const uploadDate = buildIso(baseDate, Math.floor(i / 2), 8 + (i % 6), (i % 4) * 15);
         const sizeBytes = (250 + (i % 25) * 25) * 1024;
         const isMedia = ['mp4', 'mp3'].includes(fileMeta.ext);
@@ -292,7 +357,7 @@ const generateForms = (usersByRole, userEmails) => {
         const createdAt = buildIso(baseDate, i, 9, 0);
         const updatedAt = buildIso(baseDate, i + Math.floor(i / 4), 15, 20);
         const authorUid = pickWithOffset(authors, i * 2 + 3);
-        const authorEmail = userEmails.get(authorUid) || `${authorUid.toLowerCase()}@example.edu`;
+        const authorEmail = userEmails.get(authorUid) || `${authorUid.toLowerCase()}@thesisflow.dev`;
         const dueInDays = 3 + (i % 14);
 
         const fields = [
@@ -348,7 +413,67 @@ const generateForms = (usersByRole, userEmails) => {
     return forms;
 };
 
-const generateTheses = (groups, usersByRole) => {
+const generateCalendars = (usersByRole, groups) => {
+    const calendars = [];
+    const baseDate = new Date('2025-01-01T08:00:00.000Z');
+
+    // Create personal calendars for all users
+    Object.entries(usersByRole).forEach(([role, uids]) => {
+        uids.forEach((uid, idx) => {
+            calendars.push([
+                `CAL_PERS_${uid}`,
+                `${uid}'s Personal Calendar`,
+                'Personal calendar for thesis work',
+                'personal',
+                '#1E88E5',
+                JSON.stringify([{ uid, role: 'owner', canView: true, canEdit: true, canDelete: true }]),
+                uid,
+                uid,
+                buildIso(baseDate, 0, 8, 0),
+                buildIso(baseDate, 0, 8, 0),
+                'true',
+                'true',
+            ]);
+        });
+    });
+
+    // Create shared calendars for each group
+    groups.forEach((groupRow, idx) => {
+        const groupId = groupRow[0];
+        const groupMembers = groupRow[3].split(';').filter(Boolean);
+        const adviser = groupRow[4];
+        const editor = groupRow[5];
+
+        // Build permissions for group calendar
+        const permissions = [
+            { uid: groupRow[2], role: 'owner', canView: true, canEdit: true, canDelete: true }, // leader
+            ...groupMembers.map(uid => ({ uid, role: 'member', canView: true, canEdit: true, canDelete: false })),
+            { uid: adviser, role: 'adviser', canView: true, canEdit: true, canDelete: false },
+            { uid: editor, role: 'editor', canView: true, canEdit: true, canDelete: false },
+        ];
+
+        calendars.push([
+            `CAL_GRP_${groupId}`,
+            `${groupRow[1]} - Shared Calendar`,
+            `Shared calendar for ${groupRow[1]} thesis work`,
+            'group',
+            pickWithOffset(eventColors, idx),
+            JSON.stringify(permissions),
+            groupRow[2], // ownerUid (group leader)
+            groupRow[2], // createdBy
+            buildIso(baseDate, idx, 9, 0),
+            buildIso(baseDate, idx, 9, 0),
+            'true',
+            'true',
+            groupId,
+            groupRow[1],
+        ]);
+    });
+
+    return calendars;
+};
+
+const generateTheses = (groups, usersByRole, thesisTitles) => {
     const theses = [];
     const baseDate = new Date('2025-02-10T08:00:00.000Z');
     const advisers = usersByRole.adviser;
@@ -356,7 +481,7 @@ const generateTheses = (groups, usersByRole) => {
 
     for (let i = 0; i < RECORD_COUNT; i += 1) {
         const groupRow = groups[i];
-        const title = `${pickWithOffset(thesisTopics, i)} Implementation ${pad(i + 1)}`;
+        const title = thesisTitles && thesisTitles[i] ? thesisTitles[i] : `${pickWithOffset(thesisTopics, i)} Implementation ${pad(i + 1)}`;
         const leader = groupRow[2];
         const members = groupRow[3].split(';');
         const adviser = groupRow[4] || pickWithOffset(advisers, i);
@@ -400,48 +525,148 @@ const generateTheses = (groups, usersByRole) => {
 
     return theses;
 };
+// Interactive prompt to let the user override counts at runtime.
+const parseArg = (key) => {
+    const match = process.argv.find(a => a.startsWith(`--${key}=`));
+    if (match) {
+        return match.split('=')[1];
+    }
+    return null;
+};
 
-const main = () => {
-    if (!existsSync(baseDir)) {
-        throw new Error(`CSV directory not found: ${baseDir}`);
+const promptInputs = async () => {
+    // Support command-line overrides: --users=200 --groups=50 --ungrouped=10 --schedules=80 --files=100 --forms=50 --theses=50 --calendars=100
+    const usersArg = parseArg('users');
+    const groupsArg = parseArg('groups');
+    const ungroupedArg = parseArg('ungrouped');
+    const schedulesArg = parseArg('schedules');
+    const filesArg = parseArg('files');
+    const formsArg = parseArg('forms');
+    const thesesArg = parseArg('theses');
+    const calendarsArg = parseArg('calendars');
+
+    if (usersArg !== null || groupsArg !== null || ungroupedArg !== null || schedulesArg !== null ||
+        filesArg !== null || formsArg !== null || thesesArg !== null || calendarsArg !== null) {
+        const usersToCreate = Number.parseInt(usersArg || '100', 10) || 100;
+        const groupsToCreate = Number.parseInt(groupsArg || '100', 10) || 100;
+        const ungroupedCount = ungroupedArg == null ? null : (Number.parseInt(ungroupedArg, 10) || 0);
+        const schedulesToCreate = Number.parseInt(schedulesArg || '100', 10) || 100;
+        const filesToCreate = Number.parseInt(filesArg || '100', 10) || 100;
+        const formsToCreate = Number.parseInt(formsArg || '100', 10) || 100;
+        const thesesCount = Number.parseInt(thesesArg || '100', 10) || 100;
+        const calendarsToCreate = Number.parseInt(calendarsArg || '100', 10) || 100;
+        return { usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate, formsToCreate, thesesCount, calendarsToCreate };
     }
 
-    const { users, userEmails, usersByRole } = generateUsers();
+    const rl = createInterface({ input: stdin, output: stdout });
+    try {
+        const usersAnswer = await rl.question(`How many total users should be created? (default 100): `);
+        const groupsAnswer = await rl.question(`How many groups should be created? (default 100): `);
+        const ungroupedAnswer = await rl.question(`How many users should remain ungrouped? (leave empty for ~10% default): `);
+        const schedulesAnswer = await rl.question(`How many schedules/events should be created? (default 100): `);
+        const filesAnswer = await rl.question(`How many files should be created? (default 100): `);
+        const formsAnswer = await rl.question(`How many forms should be created? (default 100): `);
+        const thesesAnswer = await rl.question(`How many theses should be created? (default 100): `);
+        const calendarsAnswer = await rl.question(`How many calendars should be created? (default 100): `);
+
+        const usersToCreate = Number.parseInt(usersAnswer || '100', 10) || 100;
+        const groupsToCreate = Number.parseInt(groupsAnswer || '100', 10) || 100;
+        const ungroupedCount = ungroupedAnswer === '' ? null : (Number.parseInt(ungroupedAnswer, 10) || 0);
+        const schedulesToCreate = Number.parseInt(schedulesAnswer || '100', 10) || 100;
+        const filesToCreate = Number.parseInt(filesAnswer || '100', 10) || 100;
+        const formsToCreate = Number.parseInt(formsAnswer || '100', 10) || 100;
+        const thesesCount = Number.parseInt(thesesAnswer || '100', 10) || 100;
+        const calendarsToCreate = Number.parseInt(calendarsAnswer || '100', 10) || 100;
+
+        return { usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate, formsToCreate, thesesCount, calendarsToCreate };
+    } finally {
+        rl.close();
+    }
+};
+
+const main = async () => {
+    if (!existsSync(baseDir)) {
+        // Create the output directory if it does not exist to make the script more user-friendly.
+        // This avoids failing when the mock/csv directory hasn't been created yet.
+        // Create directory synchronously (acceptable for a small CLI utility)
+        mkdirSync(baseDir, { recursive: true });
+        log(`Created missing CSV directory: ${baseDir}`);
+    }
+
+    const {
+        usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate,
+        formsToCreate, thesesCount, calendarsToCreate,
+    } = await promptInputs();
+
+    const { users, userEmails, usersByRole } = generateUsers(usersToCreate);
     writeCsv('users.mock.csv', [
         'uid', 'email', 'firstName', 'middleName', 'lastName', 'prefix', 'suffix', 'role', 'department',
         'phone', 'avatar', 'banner', 'bio', 'password',
     ], users);
 
-    const groups = generateGroups(usersByRole);
+    // Generate groups
+    RECORD_COUNT = groupsToCreate;
+    const defaultUngrouped = Math.max(1, Math.floor(usersByRole.student.length * 0.1));
+    const resolvedUngroupedCount = (typeof ungroupedCount === 'number' && ungroupedCount !== null)
+        ? Math.min(ungroupedCount, usersByRole.student.length)
+        : defaultUngrouped;
+    const ungroupedStudents = sample(usersByRole.student, resolvedUngroupedCount);
+
+    const thesisTitles = generateUniqueThesisTitles(groupsToCreate);
+
+    const groups = generateGroups(usersByRole, ungroupedStudents);
     writeCsv('groups.mock.csv', [
         'id', 'name', 'leader', 'members', 'adviser', 'editor', 'description', 'status', 'createdAt',
         'updatedAt', 'thesisTitle', 'department',
     ], groups);
 
-    const schedule = generateSchedule(usersByRole);
+    // Generate calendars (personal for all users + group calendars)
+    const calendars = generateCalendars(usersByRole, groups);
+    writeCsv('calendars.mock.csv', [
+        'id', 'name', 'description', 'type', 'color', 'permissions', 'ownerUid', 'createdBy', 'createdAt',
+        'lastModified', 'isVisible', 'isDefault', 'groupId', 'groupName',
+    ], calendars);
+
+    // Extract calendar IDs for scheduling (use group calendars for schedule events)
+    const groupCalendarIds = calendars.filter(cal => cal[2] === 'group').map(cal => cal[0]);
+    const availableCalendarIds = groupCalendarIds.length > 0 ? groupCalendarIds : calendars.map(cal => cal[0]);
+
+    // Generate schedules using calendars
+    RECORD_COUNT = schedulesToCreate;
+    const schedule = generateSchedule(usersByRole, availableCalendarIds);
     writeCsv('schedule.mock.csv', [
         'id', 'title', 'description', 'calendarId', 'status', 'startDate', 'endDate', 'isAllDay', 'organizer',
         'participants', 'location_address', 'location_room', 'location_url', 'location_platform', 'tags', 'color',
         'createdBy', 'createdAt',
     ], schedule);
 
+    // Generate files
+    RECORD_COUNT = filesToCreate;
     const files = generateFiles(usersByRole, userEmails);
     writeCsv('files.mock.csv', [
         'id', 'name', 'type', 'size', 'url', 'mimeType', 'thumbnail', 'duration', 'uploadDate', 'author', 'category',
     ], files);
 
+    // Generate forms
+    RECORD_COUNT = formsToCreate;
     const forms = generateForms(usersByRole, userEmails);
     writeCsv('forms.mock.csv', [
         'id', 'title', 'description', 'version', 'audience', 'status', 'createdAt', 'updatedAt', 'createdBy', 'tags',
         'reviewerNotes', 'dueInDays', 'fields', 'workflow', 'availableToGroups',
     ], forms);
 
-    const theses = generateTheses(groups, usersByRole);
+    // Generate theses
+    RECORD_COUNT = thesesCount;
+    const thesisGroupsSlice = groups.slice(0, thesesCount);
+    const thesisTitlesSlice = thesisTitles.slice(0, thesesCount);
+    const theses = generateTheses(thesisGroupsSlice, usersByRole, thesisTitlesSlice);
     writeCsv('theses.mock.csv', [
         'title', 'leader', 'members', 'adviser', 'editor', 'submissionDate', 'lastUpdated', 'overallStatus', 'chapters',
     ], theses);
 
     log('Mock CSV generation complete.');
+    log(`Summary: Users=${usersToCreate}, Groups=${groupsToCreate}, Calendars=${calendars.length}, `
+        + `Schedules=${schedule.length}, Files=${files.length}, Forms=${forms.length}, Theses=${theses.length}`);
 };
 
 main();
