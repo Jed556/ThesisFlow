@@ -22,8 +22,10 @@ import type {
 } from '../types/schedule';
 import type { UserProfile } from '../types/profile';
 import { format, isWithinInterval } from 'date-fns';
-import { getUserCalendars, getEventIdsFromCalendars } from '../utils/firebase/firestore/calendars';
+import { getUserCalendars, getEventIdsFromCalendars, setCalendar } from '../utils/firebase/firestore/calendars';
 import { setEvent, deleteEvent, getEventsByIds } from '../utils/firebase/firestore/events';
+import { importScheduleFromCsv, exportScheduleToCsv, importCalendarsFromCsv, exportCalendarsToCsv } from '../utils/csv';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../hooks/useBackgroundJobs';
 
 export const metadata: NavigationItem = {
     index: 2,
@@ -56,71 +58,6 @@ function canModifyEvent(event: ScheduleEvent & { id: string }, uid?: string, use
 }
 
 /**
- * Parse CSV content to events
- */
-function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<ScheduleEvent>[] {
-    const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line);
-    if (lines.length < 2) return [];
-
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const events: Partial<ScheduleEvent>[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim());
-        const event: Partial<ScheduleEvent> = {};
-
-        headers.forEach((header, index) => {
-            const value = values[index];
-            if (!value) return;
-
-            // Map common header variations
-            if (header === 'title' || header === 'name') event.title = value;
-            else if (header === 'description' || header === 'desc') event.description = value;
-            else if (header === 'calendarid' || header === 'calendar') event.calendarId = value;
-            else if (header === 'status') event.status = value as EventStatus;
-            else if (header === 'startdate' || header === 'start') event.startDate = value;
-            else if (header === 'enddate' || header === 'end') event.endDate = value;
-            else if (header === 'color') event.color = value;
-            else if (header === 'tags') event.tags = value.split(';').map(t => t.trim());
-            else if (header === 'location') {
-                event.location = { address: value, type: 'physical' } as EventLocation;
-            }
-        });
-
-        // Use default calendar if not specified
-        if (!event.calendarId) {
-            event.calendarId = defaultCalendarId;
-        }
-
-        if (event.title && event.startDate) {
-            events.push(event);
-        }
-    }
-
-    return events;
-}
-
-/**
- * Export events to CSV
- */
-function exportEventsToCSV(events: (ScheduleEvent & { id: string })[]): string {
-    const headers = ['Title', 'Description', 'CalendarId', 'Status', 'StartDate', 'EndDate', 'Color', 'Tags', 'Location'];
-    const rows = events.map(event => [
-        event.title || '',
-        event.description || '',
-        event.calendarId || '',
-        event.status || '',
-        event.startDate || '',
-        event.endDate || '',
-        event.color || '',
-        event.tags?.join(';') || '',
-        event.location?.address || event.location?.url || ''
-    ]);
-
-    return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-}
-
-/**
  * Calendar page for viewing and managing events
  */
 export default function CalendarPage() {
@@ -135,6 +72,28 @@ export default function CalendarPage() {
     const [calendars, setCalendars] = React.useState<CalendarType[]>([]);
     const [selectedCalendarIds, setSelectedCalendarIds] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
+    const { startJob } = useBackgroundJobControls();
+
+    const hasActiveEventImport = useBackgroundJobFlag(
+        React.useCallback((job) => {
+            if (job.status !== 'pending' && job.status !== 'running') {
+                return false;
+            }
+            return job.metadata?.jobType === 'events-import';
+        }, [])
+    );
+
+    const hasActiveCalendarImport = useBackgroundJobFlag(
+        React.useCallback((job) => {
+            if (job.status !== 'pending' && job.status !== 'running') {
+                return false;
+            }
+            return job.metadata?.jobType === 'calendars-import';
+        }, [])
+    );
+
+    const hasActiveImport = hasActiveEventImport || hasActiveCalendarImport;
+    const isMountedRef = React.useRef(true);
 
     // Dialog states
     const [openDialog, setOpenDialog] = React.useState(false);
@@ -194,37 +153,43 @@ export default function CalendarPage() {
         }
     }, [openDialog, formData.color]);
 
-    // Load calendars and events from Firestore
     React.useEffect(() => {
-        loadCalendarsAndEvents();
-    }, [session?.user?.uid, session?.user?.role]);
+        return () => {
+            isMountedRef.current = false;
+            if (colorUpdateTimeoutRef.current) {
+                clearTimeout(colorUpdateTimeoutRef.current);
+            }
+        };
+    }, []);
 
-    const loadCalendarsAndEvents = async () => {
+    const loadCalendarsAndEvents = React.useCallback(async () => {
         if (!session?.user?.uid) return;
 
         try {
             setLoading(true);
 
-            // Load user's accessible calendars
             const userCalendars = await getUserCalendars(
                 session.user.uid,
                 session.user.role,
-                [] // TODO: Add user groups when available in user profile
+                []
             );
 
-            setCalendars(userCalendars);
+            if (!isMountedRef.current) {
+                return;
+            }
 
-            // Select all calendars by default (Google Calendar style)
+            setCalendars(userCalendars);
             setSelectedCalendarIds(userCalendars.map(cal => cal.id));
 
-            // Step 2: Get event IDs from selected calendars
             const eventIds = await getEventIdsFromCalendars(userCalendars);
-
-            // Step 3: Async load events by their IDs
             const fetchedEvents = await getEventsByIds(eventIds);
+
+            if (!isMountedRef.current) {
+                return;
+            }
+
             setEvents(fetchedEvents);
 
-            // Extract all unique tags from events for autocomplete
             const tagsSet = new Set<string>();
             fetchedEvents.forEach(event => {
                 if (Array.isArray(event.tags)) {
@@ -233,12 +198,15 @@ export default function CalendarPage() {
             });
             setAllTags(Array.from(tagsSet));
 
-            // Load all users for calendar sharing (admin/developer only)
             if (session.user.role === 'admin' || session.user.role === 'developer') {
                 try {
                     const { getAllUsers } = await import('../utils/firebase/firestore');
-                    const users: UserProfile[] = await getAllUsers();
-                    setAllUsers(users);
+                    if (isMountedRef.current) {
+                        const users: UserProfile[] = await getAllUsers();
+                        if (isMountedRef.current) {
+                            setAllUsers(users);
+                        }
+                    }
                 } catch (error) {
                     console.error('Failed to load users:', error);
                 }
@@ -247,9 +215,19 @@ export default function CalendarPage() {
             console.error('Error loading data:', error);
             showNotification('Failed to load calendars and events', 'error');
         } finally {
-            setLoading(false);
+            if (isMountedRef.current) {
+                setLoading(false);
+            }
         }
-    };
+    }, [session?.user?.uid, session?.user?.role, showNotification]);
+
+    // Load calendars and events from Firestore
+    React.useEffect(() => {
+        if (hasActiveImport) {
+            return;
+        }
+        void loadCalendarsAndEvents();
+    }, [loadCalendarsAndEvents, hasActiveImport]);
 
     // Filter events based on current filters, selected calendars, and range
     const filteredEvents = React.useMemo(() => {
@@ -423,69 +401,338 @@ export default function CalendarPage() {
         }
     };
 
-    const handleImportCSV = () => {
+    const triggerFilePicker = React.useCallback((accept: string, onSelect: (file: File) => void) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.csv';
-        input.onchange = async (e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (!file) return;
+        input.accept = accept;
+        input.onchange = () => {
+            const file = input.files?.[0];
+            if (file) {
+                onSelect(file);
+            }
+            input.remove();
+        };
+        input.click();
+    }, []);
 
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                try {
-                    const csvContent = event.target?.result as string;
+    /**
+     * Import schedule events from CSV using the background job manager.
+     */
+    const handleEventImport = React.useCallback(() => {
+        if (!session?.user?.uid) {
+            showNotification('You need to be signed in to import events.', 'error');
+            return;
+        }
 
-                    // Use personal calendar as default for imports
-                    const defaultCalendar = calendars.find(cal => cal.type === 'personal') || calendars[0];
-                    if (!defaultCalendar) {
-                        showNotification('No calendar available for import', 'error');
-                        return;
+        if (calendars.length === 0) {
+            showNotification('No calendars available for import.', 'error');
+            return;
+        }
+
+        if (hasActiveEventImport) {
+            showNotification('An event import is already running.', 'info');
+            return;
+        }
+
+        triggerFilePicker('.csv', (file) => {
+            const personalCalendar = calendars.find(cal => cal.type === 'personal' && cal.ownerUid === session?.user?.uid);
+            const fallbackCalendarId = personalCalendar?.id ?? calendars[0]?.id;
+            const calendarIds = new Set(calendars.map(cal => cal.id));
+
+            startJob(
+                `Importing events from ${file.name}`,
+                async (updateProgress, signal) => {
+                    const text = await file.text();
+                    if (signal.aborted) {
+                        throw new Error('Import cancelled');
                     }
 
-                    const parsedEvents = parseEventsCSV(csvContent, defaultCalendar.id);
+                    const { parsed, errors: parseErrors } = importScheduleFromCsv(text);
+                    const errors = parseErrors.map(error => `Parse: ${error}`);
+
+                    if (parsed.length === 0) {
+                        return { count: 0, total: 0, errors };
+                    }
 
                     let successCount = 0;
-                    for (const eventData of parsedEvents) {
+                    const total = parsed.length;
+                    const progressTotal = Math.max(total, 1);
+
+                    for (let index = 0; index < parsed.length; index++) {
+                        if (signal.aborted) {
+                            throw new Error('Import cancelled');
+                        }
+
+                        const rawEvent = parsed[index];
+                        const resolvedCalendarId = rawEvent.calendarId && calendarIds.has(rawEvent.calendarId)
+                            ? rawEvent.calendarId
+                            : fallbackCalendarId;
+
+                        if (!resolvedCalendarId) {
+                            errors.push(
+                                `Row ${index + 2}: Missing valid calendar for "${rawEvent.title
+                                || rawEvent.id || `event ${index + 1}`}"`
+                            );
+                            continue;
+                        }
+
+                        updateProgress({
+                            current: index + 1,
+                            total: progressTotal,
+                            message: `Saving ${rawEvent.title || `event ${index + 1}`}`,
+                        });
+
+                        const eventData: ScheduleEvent = {
+                            ...rawEvent,
+                            id: '',
+                            calendarId: resolvedCalendarId,
+                            createdBy: rawEvent.createdBy || session?.user?.uid || '',
+                            createdAt: rawEvent.createdAt || new Date().toISOString(),
+                            lastModified: new Date().toISOString(),
+                            lastModifiedBy: session?.user?.uid || rawEvent.lastModifiedBy || '',
+                            organizer: rawEvent.organizer || session?.user?.uid || '',
+                            participants: rawEvent.participants ?? [],
+                            isAllDay: Boolean(rawEvent.isAllDay),
+                            color: rawEvent.color || defaultEventColor,
+                            tags: rawEvent.tags ?? [],
+                        };
+
                         try {
-                            await setEvent(null, {
-                                ...eventData,
-                                createdBy: session?.user?.uid || '',
-                                createdAt: new Date().toISOString(),
-                                lastModified: new Date().toISOString()
-                            } as ScheduleEvent);
+                            await setEvent(null, eventData);
                             successCount++;
                         } catch (error) {
-                            console.error('Error importing event:', error);
+                            errors.push(
+                                `Failed to import ${rawEvent.title || `row ${index + 2}`}: ${error instanceof Error ?
+                                    error.message : 'Unknown error'}`
+                            );
                         }
                     }
 
-                    await loadCalendarsAndEvents();
-                    showNotification(
-                        `Successfully imported ${successCount} of ${parsedEvents.length} events`,
-                        successCount === parsedEvents.length ? 'success' : 'warning'
-                    );
-                } catch (error) {
-                    console.error('Error parsing CSV:', error);
-                    showNotification('Failed to parse CSV file', 'error');
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
-    };
+                    return { count: successCount, total, errors };
+                },
+                { fileName: file.name, fileSize: file.size, jobType: 'events-import' },
+                (job) => {
+                    if (isMountedRef.current) {
+                        void loadCalendarsAndEvents();
+                    }
 
-    const handleExportCSV = () => {
-        const csv = exportEventsToCSV(filteredEvents);
-        const blob = new Blob([csv], { type: 'text/csv' });
+                    if (job.status === 'completed' && job.result) {
+                        const result = job.result as { count: number; total: number; errors: string[] };
+                        if (result.total === 0) {
+                            if (result.errors.length > 0) {
+                                showNotification(
+                                    `No events imported. ${result.errors.length} warning(s) encountered.`,
+                                    'warning',
+                                    6000
+                                );
+                            } else {
+                                showNotification('No events found in the CSV file.', 'info');
+                            }
+                            return;
+                        }
+
+                        if (result.errors.length > 0) {
+                            showNotification(
+                                `Imported ${result.count} of ${result.total} event(s) with warnings`,
+                                'warning',
+                                6000,
+                                {
+                                    label: 'View Errors',
+                                    onClick: () =>
+                                        showNotification(`Import warnings:\n${result.errors.join('\n')}`, 'error', 0),
+                                }
+                            );
+                        } else {
+                            showNotification(`Successfully imported ${result.count} event(s)`, 'success');
+                        }
+                    } else if (job.status === 'failed') {
+                        showNotification(`Event import failed: ${job.error ?? 'Unknown error'}`, 'error');
+                    }
+                }
+            );
+
+            showNotification('Event import started in the background.', 'info', 5000);
+        });
+    }, [calendars, hasActiveEventImport, loadCalendarsAndEvents, session?.user?.uid, showNotification, startJob, triggerFilePicker]);
+
+    /**
+     * Export the currently filtered events to CSV.
+     */
+    const handleEventExport = React.useCallback(() => {
+        if (filteredEvents.length === 0) {
+            showNotification('No events available to export for the current filters.', 'info');
+            return;
+        }
+
+        const csvText = exportScheduleToCsv(filteredEvents);
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `events_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-        a.click();
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `events_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+        link.click();
         URL.revokeObjectURL(url);
-        showNotification('Events exported successfully', 'success');
-    };
+        showNotification(`Exported ${filteredEvents.length} event(s)`, 'success');
+    }, [filteredEvents, showNotification]);
+
+    /**
+     * Import calendars from CSV. Restricted to admin/developer roles.
+     */
+    const handleCalendarImport = React.useCallback(() => {
+        if (session?.user?.role !== 'admin' && session?.user?.role !== 'developer') {
+            showNotification('Only administrators or developers can import calendars.', 'error');
+            return;
+        }
+
+        if (hasActiveCalendarImport) {
+            showNotification('A calendar import is already running.', 'info');
+            return;
+        }
+
+        triggerFilePicker('.csv', (file) => {
+            startJob(
+                `Importing calendars from ${file.name}`,
+                async (updateProgress, signal) => {
+                    const text = await file.text();
+                    if (signal.aborted) {
+                        throw new Error('Import cancelled');
+                    }
+
+                    const { parsed, errors: parseErrors } = importCalendarsFromCsv(text);
+                    const errors = parseErrors.map(error => `Parse: ${error}`);
+
+                    if (parsed.length === 0) {
+                        return { count: 0, total: 0, errors };
+                    }
+
+                    let successCount = 0;
+                    const total = parsed.length;
+                    const progressTotal = Math.max(total, 1);
+
+                    for (let index = 0; index < parsed.length; index++) {
+                        if (signal.aborted) {
+                            throw new Error('Import cancelled');
+                        }
+
+                        const record = parsed[index];
+                        const ownerUid = record.ownerUid || session?.user?.uid || '';
+                        if (!ownerUid) {
+                            errors.push(`Row ${index + 2}: Missing ownerUid and no fallback available.`);
+                            continue;
+                        }
+
+                        const calendarType = record.type ?? 'custom';
+                        const permissions = record.permissions && record.permissions.length > 0
+                            ? record.permissions
+                            : [{
+                                uid: ownerUid,
+                                canView: true,
+                                canEdit: true,
+                                canDelete: calendarType !== 'personal',
+                            }];
+
+                        const calendarPayload: CalendarType = {
+                            id: record.id ?? '',
+                            name: record.name ?? `Calendar ${index + 1}`,
+                            description: record.description,
+                            type: calendarType,
+                            color: record.color ?? DEFAULT_CALENDAR_COLORS[0],
+                            eventIds: record.eventIds ?? [],
+                            ownerUid,
+                            createdBy: record.createdBy || session?.user?.uid || ownerUid,
+                            createdAt: record.createdAt || new Date().toISOString(),
+                            lastModified: new Date().toISOString(),
+                            permissions,
+                            groupId: record.groupId,
+                            groupName: record.groupName,
+                            isVisible: typeof record.isVisible === 'boolean' ? record.isVisible : true,
+                            isDefault: record.isDefault,
+                        };
+
+                        updateProgress({
+                            current: index + 1,
+                            total: progressTotal,
+                            message: `Saving ${calendarPayload.name}`,
+                        });
+
+                        try {
+                            await setCalendar(record.id ?? null, calendarPayload);
+                            successCount++;
+                        } catch (error) {
+                            errors.push(
+                                `Failed to import ${calendarPayload.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
+                            );
+                        }
+                    }
+
+                    return { count: successCount, total, errors };
+                },
+                { fileName: file.name, fileSize: file.size, jobType: 'calendars-import' },
+                (job) => {
+                    if (isMountedRef.current) {
+                        void loadCalendarsAndEvents();
+                    }
+
+                    if (job.status === 'completed' && job.result) {
+                        const result = job.result as { count: number; total: number; errors: string[] };
+
+                        if (result.total === 0) {
+                            if (result.errors.length > 0) {
+                                showNotification(
+                                    `No calendars imported. ${result.errors.length} warning(s) encountered.`,
+                                    'warning',
+                                    6000
+                                );
+                            } else {
+                                showNotification('No calendars found in the CSV file.', 'info');
+                            }
+                            return;
+                        }
+
+                        if (result.errors.length > 0) {
+                            showNotification(
+                                `Imported ${result.count} of ${result.total} calendar(s) with warnings`,
+                                'warning',
+                                6000,
+                                {
+                                    label: 'View Errors',
+                                    onClick: () =>
+                                        showNotification(`Import warnings:\n${result.errors.join('\n')}`, 'info', 0),
+                                }
+                            );
+                        } else {
+                            showNotification(`Successfully imported ${result.count} calendar(s)`, 'success');
+                        }
+                    } else if (job.status === 'failed') {
+                        showNotification(`Calendar import failed: ${job.error ?? 'Unknown error'}`, 'error');
+                    }
+                }
+            );
+
+            showNotification('Calendar import started in the background.', 'info', 5000);
+        });
+    }, [hasActiveCalendarImport, loadCalendarsAndEvents, session?.user?.role,
+        session?.user?.uid, showNotification, startJob, triggerFilePicker]);
+
+    /**
+     * Export accessible calendars to CSV.
+     */
+    const handleCalendarExport = React.useCallback(() => {
+        if (calendars.length === 0) {
+            showNotification('No calendars available to export.', 'info');
+            return;
+        }
+
+        const csvText = exportCalendarsToCsv(calendars);
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `calendars_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showNotification(`Exported ${calendars.length} calendar(s)`, 'success');
+    }, [calendars, showNotification]);
 
     const handleRangeSelect = (range: { from?: Date; to?: Date }) => {
         if (range.from && range.to) {
@@ -558,7 +805,6 @@ export default function CalendarPage() {
                 isDefault: false
             };
 
-            const { setCalendar } = await import('../utils/firebase/firestore');
             const calendarId = await setCalendar(null, newCalendar as CalendarType);
 
             await loadCalendarsAndEvents();
@@ -610,7 +856,7 @@ export default function CalendarPage() {
             <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <Box sx={{ width: '100%' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, gap: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
                             <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()}>
                                 Add Event
                             </Button>
@@ -620,13 +866,44 @@ export default function CalendarPage() {
                                     New Calendar
                                 </Button>
                             )}
-                            <Button variant="outlined" startIcon={<Upload />} onClick={handleImportCSV}>
-                                Import CSV
-                            </Button>
-                            <Button variant="outlined" startIcon={<Download />} onClick={handleExportCSV}
-                                disabled={filteredEvents.length === 0}>
-                                Export CSV
-                            </Button>
+                            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<Upload />}
+                                    onClick={handleEventImport}
+                                    disabled={hasActiveEventImport}
+                                >
+                                    {hasActiveEventImport ? 'Importing Events...' : 'Import Events CSV'}
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<Download />}
+                                    onClick={handleEventExport}
+                                    disabled={filteredEvents.length === 0}
+                                >
+                                    Export Events CSV
+                                </Button>
+                            </Stack>
+                            {(session?.user?.role === 'admin' || session?.user?.role === 'developer') && (
+                                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<Upload />}
+                                        onClick={handleCalendarImport}
+                                        disabled={hasActiveCalendarImport}
+                                    >
+                                        {hasActiveCalendarImport ? 'Importing Calendars...' : 'Import Calendars CSV'}
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<Download />}
+                                        onClick={handleCalendarExport}
+                                        disabled={calendars.length === 0}
+                                    >
+                                        Export Calendars CSV
+                                    </Button>
+                                </Stack>
+                            )}
                         </Box>
                     </Box>
 

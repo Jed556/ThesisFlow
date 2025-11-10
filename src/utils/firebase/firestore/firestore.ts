@@ -12,7 +12,17 @@ export function cleanData<T extends object>(data: T): Partial<T> {
         const value = data[key];
         // Keep the value if it's not null, not undefined, and not an empty string
         if (value !== null && value !== undefined && value !== '') {
-            cleaned[key] = value;
+            // Special handling for arrays: filter out empty elements
+            if (Array.isArray(value)) {
+                const filteredArray = value.filter(item =>
+                    item !== null && item !== undefined && item !== ''
+                );
+                if (filteredArray.length > 0) {
+                    cleaned[key] = filteredArray as T[keyof T];
+                }
+            } else {
+                cleaned[key] = value;
+            }
         }
     }
 

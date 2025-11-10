@@ -26,6 +26,13 @@ export {
     exportScheduleToCsv,
 } from './schedule';
 
+// Calendar import/export
+export {
+    importCalendarsFromCsv,
+    exportCalendarsToCsv,
+} from './calendar';
+export type { ImportedCalendarRecord } from './calendar';
+
 // File import/export
 export {
     importFilesFromCsv,
