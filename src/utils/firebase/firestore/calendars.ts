@@ -268,15 +268,29 @@ export async function createGroupCalendar(
  * @param id - Calendar ID
  * @param cb - Callback function to handle calendar updates
  */
-export function onCalendar(id: string, cb: (calendar: Calendar | null) => void) {
+export function onCalendar(
+    id: string,
+    onData: (calendar: Calendar | null) => void,
+    onError?: (error: Error) => void
+): () => void {
     const ref = doc(firebaseFirestore, CALENDARS_COLLECTION, id);
-    return onSnapshot(ref, snap => {
-        if (!snap.exists()) {
-            cb(null);
-            return;
+    return onSnapshot(
+        ref,
+        (snap) => {
+            if (!snap.exists()) {
+                onData(null);
+                return;
+            }
+            onData({ id: snap.id, ...snap.data() } as Calendar);
+        },
+        (error) => {
+            if (onError) {
+                onError(error as Error);
+            } else {
+                console.error('Calendar listener error:', error);
+            }
         }
-        cb({ id: snap.id, ...snap.data() } as Calendar);
-    });
+    );
 }
 
 /**

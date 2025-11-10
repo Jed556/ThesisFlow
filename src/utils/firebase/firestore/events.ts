@@ -61,7 +61,7 @@ export async function getEventById(id: string): Promise<ScheduleEvent | null> {
  */
 export function onEvent(
     id: string,
-    onNext: (event: ScheduleEvent | null) => void,
+    onData: (event: ScheduleEvent | null) => void,
     onError?: (err: unknown) => void
 ): () => void {
     const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
@@ -70,7 +70,7 @@ export function onEvent(
     // if the caller doesn't provide one. Return the unsubscribe function.
     const unsubscribe = onSnapshot(
         ref,
-        (snap) => onNext(snap.exists() ? (snap.data() as ScheduleEvent) : null),
+        (snap) => onData(snap.exists() ? (snap.data() as ScheduleEvent) : null),
         (err) => {
             if (onError) onError(err);
             else console.error('onEvent listener error', err);

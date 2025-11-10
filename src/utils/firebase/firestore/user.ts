@@ -1,6 +1,7 @@
 import {
     doc, setDoc, onSnapshot, collection, query, where, getDocs, getDoc,
-    deleteDoc, documentId, writeBatch, type QueryConstraint,
+    deleteDoc, documentId, writeBatch, type QueryConstraint, type QuerySnapshot,
+    type DocumentData,
 } from 'firebase/firestore';
 import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
 import { cleanData } from './firestore';
@@ -135,7 +136,7 @@ export function listenUsers(
 
     return onSnapshot(
         usersQuery,
-        (snapshot) => {
+        (snapshot: QuerySnapshot<DocumentData>) => {
             const profiles = snapshot.docs.map((docSnap) => docSnap.data() as UserProfile);
             onData(profiles);
         },
@@ -249,12 +250,26 @@ export async function bulkDeleteUserProfiles(uids: string[]): Promise<void> {
  * @param callback - Called with UserProfile|null on each change
  * @returns Unsubscribe function
  */
-export function onUserProfile(uid: string, callback: (profile: UserProfile | null) => void) {
-    if (!uid) return () => { /* No-op unsubscribe */ };
+export function onUserProfile(
+    uid: string | null | undefined,
+    onData: (profile: UserProfile | null) => void,
+    onError?: (error: Error) => void
+): () => void {
+    if (!uid) return () => { /* no-op */ };
     const docRef = doc(firebaseFirestore, USERS_COLLECTION, uid);
-    return onSnapshot(docRef, (snap) => {
-        callback(snap.exists() ? (snap.data() as UserProfile) : null);
-    });
+    return onSnapshot(
+        docRef,
+        (snap) => {
+            onData(snap.exists() ? (snap.data() as UserProfile) : null);
+        },
+        (error) => {
+            if (onError) {
+                onError(error as Error);
+            } else {
+                console.error('User profile listener error:', error);
+            }
+        }
+    );
 }
 
 /**
@@ -263,10 +278,13 @@ export function onUserProfile(uid: string, callback: (profile: UserProfile | nul
  * @param callback - Called with UserProfile|null when profile updates
  * @returns Unsubscribe function
  */
-export function onCurrentUserProfile(callback: (profile: UserProfile | null) => void) {
+export function onCurrentUserProfile(
+    onData: (profile: UserProfile | null) => void,
+    onError?: (error: Error) => void
+): () => void {
     const uid = getCurrentUserId();
-    if (!uid) return () => { /* No-op unsubscribe */ };
-    return onUserProfile(uid, callback);
+    if (!uid) return () => { /* no-op */ };
+    return onUserProfile(uid, onData, onError);
 }
 
 /**
