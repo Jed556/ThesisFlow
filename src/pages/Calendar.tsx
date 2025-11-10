@@ -1226,14 +1226,14 @@ export default function CalendarPage() {
                                                     return <li {...props}>{option}</li>;
                                                 }
                                                 const fullName = [
-                                                    option.prefix, option.firstName, option.middleName,
-                                                    option.lastName, option.suffix
+                                                    option.name.prefix, option.name.first, option.name.middle,
+                                                    option.name.last, option.name.suffix
                                                 ].filter(Boolean).join(' ');
                                                 return (
                                                     <li {...props}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
                                                             <Avatar
-                                                                email={option.email}
+                                                                uid={option.uid}
                                                                 initials={[Name.FIRST, Name.LAST]}
                                                                 size="small"
                                                             />
