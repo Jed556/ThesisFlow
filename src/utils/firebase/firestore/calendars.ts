@@ -400,7 +400,10 @@ export async function getEventIdsFromCalendars(calendars: Calendar[]): Promise<s
     // Collect all unique event IDs from selected calendars
     const eventIdsSet = new Set<string>();
     calendars.forEach(calendar => {
-        calendar.eventIds.forEach(eventId => eventIdsSet.add(eventId));
+        // Defensive check: some calendars may not have eventIds initialized
+        if (calendar.eventIds && Array.isArray(calendar.eventIds)) {
+            calendar.eventIds.forEach(eventId => eventIdsSet.add(eventId));
+        }
     });
     return Array.from(eventIdsSet);
 }
