@@ -46,6 +46,7 @@ export function importGroupsFromCsv(csvText: string): { parsed: ThesisGroup[]; e
             updatedAt: get('updatedAt') || get('updated_at') || new Date().toISOString(),
             thesisTitle: get('thesisTitle') || get('thesis_title') || undefined,
             department: get('department') || undefined,
+            course: get('course') || undefined,
         };
 
         parsed.push(group);
@@ -71,6 +72,7 @@ export function exportGroupsToCsv(groups: ThesisGroup[]): string {
         'updatedAt',
         'thesisTitle',
         'department',
+        'course',
     ];
 
     const rows = groups.map(group => [
@@ -86,6 +88,7 @@ export function exportGroupsToCsv(groups: ThesisGroup[]): string {
         group.updatedAt,
         group.thesisTitle || '',
         group.department || '',
+        group.course || '',
     ]);
 
     return generateCsvText(headers, rows);

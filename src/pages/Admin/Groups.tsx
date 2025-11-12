@@ -1,28 +1,34 @@
 import * as React from 'react';
-import {
-    Autocomplete, Box, Button, Chip, Dialog, DialogActions,
-    DialogContent, DialogTitle, Stack, TextField, Typography,
-} from '@mui/material';
+import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import GroupsIcon from '@mui/icons-material/Groups';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
-import { GridActionsCellItem } from '@mui/x-data-grid';
-import { AnimatedPage, GrowTransition } from '../../components/Animate';
-import { DataGrid } from '../../components/DataGrid';
+import AddIcon from '@mui/icons-material/Add';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useSession } from '@toolpad/core';
+import { AnimatedPage } from '../../components/Animate';
+import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisGroup, ThesisGroupFormData } from '../../types/group';
 import type { Session } from '../../types/session';
 import type { UserProfile } from '../../types/profile';
-import { getAllUsers } from '../../utils/firebase/firestore';
 import {
-    getAllGroups, createGroup, updateGroup, deleteGroup, setGroup,
+    getAllUsers,
+    getAllGroups,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    setGroup,
+    getUsersByFilter,
 } from '../../utils/firebase/firestore';
 import { importGroupsFromCsv, exportGroupsToCsv } from '../../utils/csv/group';
-import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
+import GroupCard from '../../components/Group/GroupCard';
+import GroupManageDialog, { type GroupFormErrorKey } from '../../components/Group/GroupManageDialog';
+import GroupDeleteDialog from '../../components/Group/GroupDeleteDialog';
+import { GroupView } from '../../components/Group/GroupView';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -31,18 +37,6 @@ export const metadata: NavigationItem = {
     segment: 'group-management',
     icon: <GroupsIcon />,
     roles: ['admin', 'developer'],
-};
-
-const STATUS_OPTIONS: ThesisGroup['status'][] = ['active', 'inactive', 'completed', 'archived'];
-
-const STATUS_COLORS: Record<
-    ThesisGroup['status'],
-    'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'
-> = {
-    active: 'success',
-    inactive: 'default',
-    completed: 'info',
-    archived: 'warning',
 };
 
 const emptyFormData: ThesisGroupFormData = {
@@ -55,7 +49,19 @@ const emptyFormData: ThesisGroupFormData = {
     status: 'active',
     thesisTitle: '',
     department: '',
+    course: '',
 };
+
+type CourseValidationReason = 'missingCourse' | 'mismatch' | 'unresolvedStudent';
+
+interface CourseValidationResult {
+    course?: string;
+    error?: string;
+    reason?: CourseValidationReason;
+}
+
+const createStudentFilterKey = (department: string, course?: string | null) =>
+    `${department.toLowerCase()}::${(course ?? '').toLowerCase()}`;
 
 /**
  * Admin page for managing thesis groups
@@ -65,17 +71,25 @@ export default function AdminGroupManagementPage() {
     const { showNotification } = useSnackbar();
     const { startJob } = useBackgroundJobControls();
     const userRole = session?.user?.role;
+    const canManage = userRole === 'admin' || userRole === 'developer';
 
     const [groups, setGroups] = React.useState<ThesisGroup[]>([]);
     const [users, setUsers] = React.useState<UserProfile[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [dialogOpen, setDialogOpen] = React.useState(false);
+    const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+    const [viewGroup, setViewGroup] = React.useState<ThesisGroup | null>(null);
     const [editMode, setEditMode] = React.useState(false);
-    const [formData, setFormData] = React.useState<ThesisGroupFormData>(emptyFormData);
+    const [formData, setFormData] = React.useState<ThesisGroupFormData>({ ...emptyFormData });
+    const [activeStep, setActiveStep] = React.useState(0);
+    const formSteps = React.useMemo(() => ['Group Details', 'Team', 'Review'], []);
     const [selectedGroup, setSelectedGroup] = React.useState<ThesisGroup | null>(null);
-    const [formErrors, setFormErrors] = React.useState<Partial<Record<keyof ThesisGroupFormData, string>>>({});
+    const [formErrors, setFormErrors] = React.useState<Partial<Record<GroupFormErrorKey, string>>>({});
     const [saving, setSaving] = React.useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+    const [studentOptions, setStudentOptions] = React.useState<UserProfile[]>([]);
+    const [studentOptionsLoading, setStudentOptionsLoading] = React.useState(false);
+    const lastStudentFilterRef = React.useRef<string | null>(null);
 
     const isMountedRef = React.useRef(true);
     React.useEffect(() => {
@@ -99,6 +113,153 @@ export default function AdminGroupManagementPage() {
     const students = React.useMemo(() => users.filter((u) => u.role === 'student'), [users]);
     const advisers = React.useMemo(() => users.filter((u) => u.role === 'adviser'), [users]);
     const editors = React.useMemo(() => users.filter((u) => u.role === 'editor'), [users]);
+
+    const studentLookup = React.useMemo(() => {
+        const map = new Map<string, UserProfile>();
+        students.forEach((student) => {
+            map.set(student.email, student);
+        });
+        return map;
+    }, [students]);
+
+    const departmentOptions = React.useMemo(() => {
+        const unique = new Set<string>();
+        users.forEach((user) => {
+            const department = user.department?.trim();
+            if (department) {
+                unique.add(department);
+            }
+        });
+        return Array.from(unique).sort((a, b) => a.localeCompare(b));
+    }, [users]);
+
+    const usersByEmail = React.useMemo(() => {
+        const map = new Map<string, UserProfile>();
+        users.forEach((user) => {
+            if (user.email) {
+                map.set(user.email, user);
+            }
+        });
+        return map;
+    }, [users]);
+
+    const fetchStudentOptions = React.useCallback(
+        async (department: string, course?: string) => {
+            const normalizedDepartment = department.trim();
+            if (!normalizedDepartment) {
+                setStudentOptions([]);
+                return [] as UserProfile[];
+            }
+
+            const normalizedCourse = course?.trim() || undefined;
+
+            setStudentOptionsLoading(true);
+            try {
+                const filteredStudents = await getUsersByFilter({
+                    role: 'student',
+                    department: normalizedDepartment,
+                    course: normalizedCourse,
+                });
+                setStudentOptions(filteredStudents);
+                return filteredStudents;
+            } catch (error) {
+                console.error('Error filtering students:', error);
+                showNotification('Failed to filter students. Please try again.', 'error');
+                throw error;
+            } finally {
+                setStudentOptionsLoading(false);
+            }
+        },
+        [showNotification]
+    );
+
+    const requestStudentOptions = React.useCallback(
+        (course?: string | null) => {
+            const department = formData.department?.trim() ?? '';
+            if (!department) {
+                lastStudentFilterRef.current = null;
+                setStudentOptions([]);
+                return Promise.resolve([] as UserProfile[]);
+            }
+
+            const normalizedCourse = course?.trim() || undefined;
+            const filterKey = createStudentFilterKey(department, normalizedCourse);
+
+            if (lastStudentFilterRef.current === filterKey) {
+                return Promise.resolve(studentOptions);
+            }
+
+            return fetchStudentOptions(department, normalizedCourse).then((results) => {
+                lastStudentFilterRef.current = filterKey;
+                return results;
+            });
+        },
+        [fetchStudentOptions, formData.department, studentOptions]
+    );
+
+    const computeCourseInfo = React.useCallback(
+        (leaderEmail: string, memberEmails: string[]): CourseValidationResult => {
+            const participantEmails = [leaderEmail, ...memberEmails].filter((email): email is string => !!email);
+            if (participantEmails.length === 0) {
+                return {};
+            }
+
+            const formatName = (user: UserProfile | undefined) => {
+                if (!user) return 'Selected student';
+                const parts = [user.name?.first, user.name?.last].filter(Boolean);
+                return parts.length > 0 ? parts.join(' ') : user.email;
+            };
+
+            const firstStudentEmail = participantEmails[0];
+            const firstStudent = studentLookup.get(firstStudentEmail);
+
+            if (!firstStudent) {
+                return {
+                    error: 'Unable to resolve the student profile to determine the course.',
+                    reason: 'unresolvedStudent',
+                };
+            }
+
+            const firstCourse = firstStudent.course?.trim();
+            if (!firstCourse) {
+                return {
+                    error: `${formatName(firstStudent)} does not have a course assigned.`,
+                    reason: 'missingCourse',
+                };
+            }
+
+            for (const email of participantEmails.slice(1)) {
+                const student = studentLookup.get(email);
+                if (!student) {
+                    return {
+                        course: firstCourse,
+                        error: 'Unable to resolve one of the student profiles to validate the group course.',
+                        reason: 'unresolvedStudent',
+                    };
+                }
+
+                const candidateCourse = student.course?.trim();
+                if (!candidateCourse) {
+                    return {
+                        course: firstCourse,
+                        error: `${formatName(student)} does not have a course assigned.`,
+                        reason: 'missingCourse',
+                    };
+                }
+
+                if (candidateCourse !== firstCourse) {
+                    return {
+                        course: firstCourse,
+                        error: 'All student members must be enrolled in the same course.',
+                        reason: 'mismatch',
+                    };
+                }
+            }
+
+            return { course: firstCourse };
+        },
+        [studentLookup]
+    );
 
     const loadData = React.useCallback(async () => {
         if (hasActiveImport) {
@@ -125,62 +286,292 @@ export default function AdminGroupManagementPage() {
         loadData();
     }, [loadData]);
 
-    const handleOpenCreateDialog = () => {
+    const handleRefresh = React.useCallback(() => {
+        loadData();
+    }, [loadData]);
+
+    const handleFormFieldChange = React.useCallback((changes: Partial<ThesisGroupFormData>) => {
+        setFormData((prev) => ({ ...prev, ...changes }));
+
+        if (Object.prototype.hasOwnProperty.call(changes, 'department')) {
+            setStudentOptions([]);
+            lastStudentFilterRef.current = null;
+        }
+    }, []);
+
+    const handleOpenCreateDialog = React.useCallback(() => {
         setEditMode(false);
-        setFormData(emptyFormData);
+        setSelectedGroup(null);
+        setFormData({ ...emptyFormData });
         setFormErrors({});
-        setDialogOpen(true);
-    };
+        setActiveStep(0);
+        setStudentOptions([]);
+        setStudentOptionsLoading(false);
+        lastStudentFilterRef.current = null;
+        setManageDialogOpen(true);
+    }, []);
 
-    const handleOpenEditDialog = (group: ThesisGroup) => {
-        setEditMode(true);
-        setSelectedGroup(group);
-        setFormData({
-            id: group.id,
-            name: group.name,
-            description: group.description,
-            leader: group.leader,
-            members: group.members,
-            adviser: group.adviser,
-            editor: group.editor,
-            status: group.status,
-            thesisTitle: group.thesisTitle,
-            department: group.department,
-        });
-        setFormErrors({});
-        setDialogOpen(true);
-    };
+    const handleOpenEditDialog = React.useCallback(
+        (group: ThesisGroup) => {
+            setEditMode(true);
+            setSelectedGroup(group);
+            setViewGroup(null);
+            const sanitizedMembers = Array.from(
+                new Set((group.members || []).filter((email) => email && email !== group.leader))
+            );
+            const derivedCourse = computeCourseInfo(group.leader, sanitizedMembers).course;
+            setFormData({
+                id: group.id,
+                name: group.name,
+                description: group.description,
+                leader: group.leader,
+                members: sanitizedMembers,
+                adviser: group.adviser,
+                editor: group.editor,
+                status: group.status,
+                thesisTitle: group.thesisTitle,
+                department: group.department,
+                course: group.course || derivedCourse || '',
+            });
+            setFormErrors({});
+            setActiveStep(0);
+            setStudentOptions([]);
+            setStudentOptionsLoading(false);
+            lastStudentFilterRef.current = null;
+            setManageDialogOpen(true);
+        },
+        [computeCourseInfo]
+    );
 
-    const handleOpenDeleteDialog = (group: ThesisGroup) => {
+    const handleOpenDeleteDialog = React.useCallback((group: ThesisGroup) => {
         setSelectedGroup(group);
+        setViewGroup(null);
         setDeleteDialogOpen(true);
-    };
+    }, []);
 
-    const handleCloseDialog = () => {
-        setDialogOpen(false);
+    const handleCloseManageDialog = React.useCallback(() => {
+        setManageDialogOpen(false);
+        setSelectedGroup(null);
+        setFormData({ ...emptyFormData });
+        setFormErrors({});
+        setActiveStep(0);
+        setSaving(false);
+        setStudentOptions([]);
+        setStudentOptionsLoading(false);
+        lastStudentFilterRef.current = null;
+    }, []);
+
+    const handleCloseDeleteDialog = React.useCallback(() => {
         setDeleteDialogOpen(false);
         setSelectedGroup(null);
-        setFormData(emptyFormData);
-        setFormErrors({});
-    };
+        setSaving(false);
+    }, []);
 
-    const validateForm = (): boolean => {
-        const errors: Partial<Record<keyof ThesisGroupFormData, string>> = {};
+    const handleCloseView = React.useCallback(() => {
+        setViewGroup(null);
+    }, []);
 
-        if (!formData.name.trim()) {
-            errors.name = 'Group name is required';
+    const collectErrorsForStep = React.useCallback((step: number): Partial<Record<GroupFormErrorKey, string>> => {
+        const errors: Partial<Record<GroupFormErrorKey, string>> = {};
+
+        if (step === 0) {
+            if (!formData.name.trim()) {
+                errors.name = 'Group name is required';
+            }
+
+            if (!formData.department?.trim()) {
+                errors.department = 'Department is required';
+            }
         }
 
-        if (!formData.leader) {
-            errors.leader = 'Group leader is required';
+        if (step === 1) {
+            if (!formData.leader) {
+                errors.leader = 'Group leader is required';
+            }
+
+            const courseCheck = computeCourseInfo(formData.leader, formData.members);
+            if (courseCheck.error) {
+                errors.members = courseCheck.error;
+            }
         }
 
+        return errors;
+    }, [computeCourseInfo, formData.leader, formData.members, formData.name]);
+
+    const validateStep = React.useCallback((step: number): boolean => {
+        const errors = collectErrorsForStep(step);
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
-    };
+    }, [collectErrorsForStep]);
+
+    const applyMemberError = React.useCallback((message?: string) => {
+        setFormErrors((prev) => {
+            if (message) {
+                return { ...prev, members: message };
+            }
+
+            if (prev.members) {
+                const next = { ...prev };
+                delete next.members;
+                return next;
+            }
+
+            return prev;
+        });
+    }, []);
+
+    const handleNextStep = React.useCallback(async () => {
+        if (!validateStep(activeStep)) {
+            return;
+        }
+
+        if (activeStep === 0) {
+            try {
+                await requestStudentOptions(null);
+                setActiveStep(1);
+            } catch {
+                // notification handled inside requestStudentOptions
+            }
+            return;
+        }
+
+        setActiveStep((prev) => Math.min(prev + 1, formSteps.length - 1));
+    }, [activeStep, formSteps.length, requestStudentOptions, validateStep]);
+
+    const handleBackStep = React.useCallback(() => {
+        setActiveStep((prev) => Math.max(prev - 1, 0));
+    }, []);
+
+    const handleLeaderChange = React.useCallback(
+        (newValue: UserProfile | null) => {
+            const nextLeader = newValue?.email ?? '';
+            const filteredMembers = formData.members.filter((email) => email !== nextLeader);
+            const courseResult = computeCourseInfo(nextLeader, filteredMembers);
+
+            applyMemberError(courseResult.error);
+
+            setFormData((prev) => ({
+                ...prev,
+                leader: nextLeader,
+                members: filteredMembers,
+                course: courseResult.course ?? '',
+            }));
+        },
+        [applyMemberError, computeCourseInfo, formData.members]
+    );
+
+    const handleMembersChange = React.useCallback(
+        (selectedUsers: UserProfile[]) => {
+            const nextMemberEmails = Array.from(new Set(selectedUsers.map((user) => user.email)));
+            const courseResult = computeCourseInfo(formData.leader, nextMemberEmails);
+
+            applyMemberError(courseResult.error);
+
+            if (courseResult.reason === 'mismatch') {
+                showNotification(
+                    courseResult.error ?? 'All student members must be enrolled in the same course.',
+                    'warning',
+                    6000
+                );
+                return;
+            }
+
+            setFormData((prev) => ({
+                ...prev,
+                members: nextMemberEmails,
+                course: courseResult.course ?? '',
+            }));
+        },
+        [applyMemberError, computeCourseInfo, formData.leader, showNotification]
+    );
+
+    React.useEffect(() => {
+        if (!manageDialogOpen || activeStep !== 1) {
+            return;
+        }
+
+        const department = formData.department?.trim();
+        if (!department) {
+            setStudentOptions([]);
+            lastStudentFilterRef.current = null;
+            return;
+        }
+
+        const hasSelection = Boolean(formData.leader || formData.members.length);
+        if (!hasSelection) {
+            void requestStudentOptions(null);
+            return;
+        }
+
+        const result = computeCourseInfo(formData.leader, formData.members);
+        if (result.reason === 'mismatch') {
+            return;
+        }
+
+        void requestStudentOptions(result.course ?? null);
+    }, [
+        activeStep,
+        computeCourseInfo,
+        formData.department,
+        formData.leader,
+        formData.members,
+        manageDialogOpen,
+        requestStudentOptions,
+    ]);
+
+    const formatUserLabel = React.useCallback(
+        (email: string | null | undefined): string => {
+            if (!email) {
+                return '—';
+            }
+
+            const user = usersByEmail.get(email);
+            if (!user) {
+                return email;
+            }
+
+            const first = user.name?.first?.trim();
+            const last = user.name?.last?.trim();
+            const displayName = [first, last].filter(Boolean).join(' ');
+
+            return displayName ? `${displayName} (${user.email})` : user.email;
+        },
+        [usersByEmail]
+    );
+
+    const reviewCourse = React.useMemo(() => {
+        const result = computeCourseInfo(formData.leader, formData.members);
+        return result.course ?? formData.course ?? '';
+    }, [computeCourseInfo, formData.course, formData.leader, formData.members]);
+
+    const memberChipData = React.useMemo(
+        () => formData.members.map((email) => ({ email, label: formatUserLabel(email) })),
+        [formData.members, formatUserLabel]
+    );
 
     const handleSave = async () => {
-        if (!validateForm()) return;
+        const step0Errors = collectErrorsForStep(0);
+        const step1Errors = collectErrorsForStep(1);
+        const aggregatedErrors: Partial<Record<GroupFormErrorKey, string>> = {
+            ...step0Errors,
+            ...step1Errors,
+        };
+
+        setFormErrors(aggregatedErrors);
+
+        if (Object.keys(step0Errors).length > 0) {
+            setActiveStep(0);
+            return;
+        }
+
+        if (Object.keys(step1Errors).length > 0) {
+            setActiveStep(1);
+            return;
+        }
+
+        const normalizedDepartment = formData.department?.trim();
+        const courseInfo = computeCourseInfo(formData.leader, formData.members);
+        const normalizedCourse = courseInfo.course?.trim() ?? '';
 
         setSaving(true);
         try {
@@ -195,12 +586,13 @@ export default function AdminGroupManagementPage() {
                     editor: formData.editor,
                     status: formData.status,
                     thesisTitle: formData.thesisTitle?.trim(),
-                    department: formData.department?.trim(),
+                    department: normalizedDepartment || '',
+                    course: normalizedCourse,
                 };
 
                 // Save to Firestore
                 const createdGroup = await createGroup(newGroupData);
-                setGroups([...groups, createdGroup]);
+                setGroups((prev) => [...prev, createdGroup]);
                 showNotification(`Group "${createdGroup.name}" created successfully`, 'success');
             } else {
                 // Update existing group
@@ -215,17 +607,18 @@ export default function AdminGroupManagementPage() {
                     editor: formData.editor,
                     status: formData.status,
                     thesisTitle: formData.thesisTitle?.trim(),
-                    department: formData.department?.trim(),
+                    department: normalizedDepartment || '',
+                    course: normalizedCourse,
                 };
 
                 // Update in Firestore
                 await updateGroup(selectedGroup.id, updates);
                 const updatedGroup = { ...selectedGroup, ...updates, updatedAt: new Date().toISOString() };
-                setGroups(groups.map((g) => (g.id === updatedGroup.id ? updatedGroup : g)));
+                setGroups((prev) => prev.map((g) => (g.id === updatedGroup.id ? updatedGroup : g)));
                 showNotification(`Group "${updatedGroup.name}" updated successfully`, 'success');
             }
 
-            handleCloseDialog();
+            handleCloseManageDialog();
         } catch (error) {
             console.error('Error saving group:', error);
             showNotification('Failed to save group. Please try again.', 'error');
@@ -234,37 +627,22 @@ export default function AdminGroupManagementPage() {
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = React.useCallback(async () => {
         if (!selectedGroup) return;
 
         setSaving(true);
         try {
-            // Delete from Firestore
             await deleteGroup(selectedGroup.id);
-            setGroups(groups.filter((g) => g.id !== selectedGroup.id));
+            setGroups((prev) => prev.filter((group) => group.id !== selectedGroup.id));
             showNotification(`Group "${selectedGroup.name}" deleted successfully`, 'success');
-            handleCloseDialog();
+            handleCloseDeleteDialog();
         } catch (error) {
             console.error('Error deleting group:', error);
             showNotification('Failed to delete group. Please try again.', 'error');
         } finally {
             setSaving(false);
         }
-    };
-
-    const handleMultiDelete = async (deletedGroups: ThesisGroup[]) => {
-        try {
-            // Delete from Firestore
-            await Promise.all(deletedGroups.map((g) => deleteGroup(g.id)));
-            const deletedIds = new Set(deletedGroups.map((g) => g.id));
-            setGroups(groups.filter((g) => !deletedIds.has(g.id)));
-            showNotification(`Successfully deleted ${deletedGroups.length} group(s)`, 'success');
-        } catch (error) {
-            console.error('Error deleting groups:', error);
-            showNotification('Failed to delete groups. Please try again.', 'error');
-            throw error;
-        }
-    };
+    }, [handleCloseDeleteDialog, selectedGroup, showNotification]);
 
     const handleExport = (selectedGroups: ThesisGroup[]) => {
         try {
@@ -286,204 +664,131 @@ export default function AdminGroupManagementPage() {
         }
     };
 
-    const handleImport = async (file: File) => {
-        startJob(
-            `Importing groups from ${file.name}`,
-            async (updateProgress, signal) => {
-                const text = await file.text();
-                if (signal.aborted) {
-                    throw new Error('Import cancelled');
-                }
-
-                const { parsed: importedGroups, errors: parseErrors } = importGroupsFromCsv(text);
-
-                const errors: string[] = [];
-                if (parseErrors.length) {
-                    errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
-                }
-
-                if (signal.aborted) {
-                    throw new Error('Import cancelled');
-                }
-
-                const total = importedGroups.length;
-                let successCount = 0;
-
-                for (let i = 0; i < importedGroups.length; i++) {
+    const handleImport = React.useCallback(
+        async (file: File) => {
+            startJob(
+                `Importing groups from ${file.name}`,
+                async (updateProgress, signal) => {
+                    const text = await file.text();
                     if (signal.aborted) {
                         throw new Error('Import cancelled');
                     }
 
-                    const groupData = importedGroups[i];
-                    if (total > 0) {
-                        updateProgress({
-                            current: i + 1,
-                            total,
-                            message: `Creating group ${groupData.name || `#${i + 1}`}`,
-                        });
+                    const { parsed: importedGroups, errors: parseErrors } = importGroupsFromCsv(text);
+
+                    const errors: string[] = [];
+                    if (parseErrors.length) {
+                        errors.push(...parseErrors.map((e: string) => `Parse: ${e}`));
                     }
 
-                    try {
-                        const fallbackId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-                        const groupId = (groupData as Partial<ThesisGroup>).id || fallbackId;
-                        await setGroup(groupId, {
-                            ...groupData,
-                            id: groupId,
-                        });
-                        successCount++;
-                    } catch (importError) {
-                        const identifier = groupData.name || groupData.id || `row ${i + 2}`;
-                        errors.push(
-                            `Failed to import ${identifier}: ${importError instanceof Error ? importError.message : 'Unknown error'}`
-                        );
+                    if (signal.aborted) {
+                        throw new Error('Import cancelled');
                     }
-                }
 
-                return {
-                    count: successCount,
-                    errors,
-                    total,
-                };
-            },
-            { fileName: file.name, fileSize: file.size, jobType: 'groups-import' },
-            (job) => {
-                if (isMountedRef.current) {
-                    (async () => {
-                        try {
-                            setLoading(true);
-                            const [allUsers, groupsData] = await Promise.all([
-                                getAllUsers(),
-                                getAllGroups(),
-                            ]);
-                            setUsers(allUsers);
-                            setGroups(groupsData);
-                        } catch {
-                            // handled via notifications below
-                        } finally {
-                            setLoading(false);
+                    const total = importedGroups.length;
+                    let successCount = 0;
+
+                    for (let i = 0; i < importedGroups.length; i++) {
+                        if (signal.aborted) {
+                            throw new Error('Import cancelled');
                         }
-                    })();
-                }
 
-                if (job.status === 'completed' && job.result) {
-                    const result = job.result as { count: number; errors: string[]; total: number };
-                    if (result.errors.length > 0) {
-                        showNotification(
-                            `Imported ${result.count} of ${result.total} group(s) with warnings`,
-                            'warning',
-                            6000,
-                            {
-                                label: 'View Details',
-                                onClick: () =>
-                                    showNotification(`Import warnings:\n${result.errors.join('\n')}`, 'info', 0),
-                            }
-                        );
-                    } else {
-                        showNotification(`Successfully imported ${result.count} group(s)`, 'success');
+                        const groupData = importedGroups[i];
+                        if (total > 0) {
+                            updateProgress({
+                                current: i + 1,
+                                total,
+                                message: `Creating group ${groupData.name || `#${i + 1}`}`,
+                            });
+                        }
+
+                        try {
+                            const fallbackId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+                            const groupId = (groupData as Partial<ThesisGroup>).id || fallbackId;
+                            await setGroup(groupId, {
+                                ...groupData,
+                                id: groupId,
+                            });
+                            successCount++;
+                        } catch (importError) {
+                            const identifier = groupData.name || groupData.id || `row ${i + 2}`;
+                            const importMessage =
+                                importError instanceof Error ? importError.message : 'Unknown error';
+                            errors.push(
+                                `Failed to import ${identifier}: ${importMessage}`
+                            );
+                        }
                     }
-                } else if (job.status === 'failed') {
-                    showNotification(`Group import failed: ${job.error}`, 'error');
+
+                    return {
+                        count: successCount,
+                        errors,
+                        total,
+                    };
+                },
+                { fileName: file.name, fileSize: file.size, jobType: 'groups-import' },
+                (job) => {
+                    if (isMountedRef.current) {
+                        (async () => {
+                            try {
+                                setLoading(true);
+                                const [allUsers, groupsData] = await Promise.all([
+                                    getAllUsers(),
+                                    getAllGroups(),
+                                ]);
+                                setUsers(allUsers);
+                                setGroups(groupsData);
+                            } catch {
+                                // handled via notifications below
+                            } finally {
+                                setLoading(false);
+                            }
+                        })();
+                    }
+
+                    if (job.status === 'completed' && job.result) {
+                        const result = job.result as { count: number; errors: string[]; total: number };
+                        if (result.errors.length > 0) {
+                            showNotification(
+                                `Imported ${result.count} of ${result.total} group(s) with warnings`,
+                                'warning',
+                                6000,
+                                {
+                                    label: 'View Details',
+                                    onClick: () =>
+                                        showNotification(`Import warnings:\n${result.errors.join('\n')}`, 'info', 0),
+                                }
+                            );
+                        } else {
+                            showNotification(`Successfully imported ${result.count} group(s)`, 'success');
+                        }
+                    } else if (job.status === 'failed') {
+                        showNotification(`Group import failed: ${job.error}`, 'error');
+                    }
                 }
+            );
+
+            showNotification('Group import started in the background.', 'info', 5000);
+        },
+        [showNotification, startJob]
+    );
+
+    const handleImportButtonClick = React.useCallback(() => {
+        fileInputRef.current?.click();
+    }, []);
+
+    const handleFileInputChange = React.useCallback(
+        (event: React.ChangeEvent<HTMLInputElement>) => {
+            const file = event.target.files?.[0];
+            if (file) {
+                void handleImport(file);
             }
-        );
+            event.target.value = '';
+        },
+        [handleImport]
+    );
 
-        showNotification('Group import started in the background.', 'info', 5000);
-    };
-
-    const columns: GridColDef<ThesisGroup>[] = [
-        {
-            field: 'name',
-            headerName: 'Group Name',
-            flex: 1,
-            minWidth: 200,
-            editable: false,
-        },
-        {
-            field: 'thesisTitle',
-            headerName: 'Thesis Title',
-            flex: 1.5,
-            minWidth: 250,
-            editable: false,
-        },
-        {
-            field: 'leader',
-            headerName: 'Leader',
-            flex: 1,
-            minWidth: 200,
-            editable: false,
-            valueGetter: (value) => {
-                const user = users.find((u) => u.email === value);
-                return user ? `${user.name.first} ${user.name.last}` : value;
-            },
-        },
-        {
-            field: 'members',
-            headerName: 'Members',
-            flex: 1,
-            minWidth: 150,
-            editable: false,
-            renderCell: (params) => (
-                <Chip label={`${params.value.length} member${params.value.length !== 1 ? 's' : ''}`} size="small" />
-            ),
-        },
-        {
-            field: 'adviser',
-            headerName: 'Adviser',
-            flex: 1,
-            minWidth: 180,
-            editable: false,
-            valueGetter: (value) => {
-                if (!value) return '—';
-                const user = users.find((u) => u.email === value);
-                return user ? `${user.name.first} ${user.name.last}` : value;
-            },
-        },
-        {
-            field: 'editor',
-            headerName: 'Editor',
-            flex: 1,
-            minWidth: 180,
-            editable: false,
-            valueGetter: (value) => {
-                if (!value) return '—';
-                const user = users.find((u) => u.email === value);
-                return user ? `${user.name.first} ${user.name.last}` : value;
-            },
-        },
-        {
-            field: 'status',
-            headerName: 'Status',
-            width: 120,
-            editable: false,
-            renderCell: (params) => (
-                <Chip
-                    label={params.value}
-                    color={STATUS_COLORS[params.value as ThesisGroup['status']]}
-                    size="small"
-                    sx={{ textTransform: 'capitalize' }}
-                />
-            ),
-        },
-    ];
-
-    const getAdditionalActions = (params: GridRowParams<ThesisGroup>) => [
-        <GridActionsCellItem
-            key="edit"
-            icon={<EditIcon />}
-            label="Edit"
-            onClick={() => handleOpenEditDialog(params.row)}
-            showInMenu={false}
-        />,
-        <GridActionsCellItem
-            key="delete"
-            icon={<DeleteIcon />}
-            label="Delete"
-            onClick={() => handleOpenDeleteDialog(params.row)}
-            showInMenu={false}
-        />,
-    ];
-
-    if (userRole !== 'admin' && userRole !== 'developer') {
+    if (!canManage) {
         return (
             <AnimatedPage variant="fade">
                 <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." />
@@ -493,166 +798,133 @@ export default function AdminGroupManagementPage() {
 
     return (
         <AnimatedPage variant="fade">
-            <Box sx={{ width: '100%' }}>
-                <DataGrid
-                    rows={groups}
-                    columns={columns}
-                    loading={loading}
-                    initialPage={0}
-                    initialPageSize={10}
-                    pageSizeOptions={[5, 10, 25, 50]}
-                    checkboxSelection
-                    disableRowSelectionOnClick
-                    height={600}
-                    editable={false}
-                    additionalActions={getAdditionalActions}
-                    enableMultiDelete
-                    enableExport
-                    enableImport
-                    importDisabled={hasActiveImport}
-                    enableRefresh
-                    enableAdd
-                    enableQuickFilter
-                    onRowsDelete={handleMultiDelete}
-                    onExport={handleExport}
-                    onImport={handleImport}
-                    onRefresh={loadData}
-                    onAdd={handleOpenCreateDialog}
+            <Box sx={{ width: '100%', py: 3 }}>
+                <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={2}
+                    alignItems={{ xs: 'flex-start', md: 'center' }}
+                    justifyContent="space-between"
+                    sx={{ mb: 3 }}
+                >
+                    <Box>
+                        <Typography variant="h4" sx={{ mb: 0.5 }}>
+                            Thesis Groups
+                        </Typography>
+                        <Typography color="text.secondary">
+                            Manage thesis teams, review membership, and coordinate advisers.
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Button
+                            variant="outlined"
+                            startIcon={<RefreshIcon />}
+                            onClick={handleRefresh}
+                            disabled={loading}
+                        >
+                            Refresh
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            startIcon={<FileDownloadIcon />}
+                            onClick={() => handleExport(groups)}
+                            disabled={loading || groups.length === 0}
+                        >
+                            Export
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            startIcon={<CloudUploadIcon />}
+                            onClick={handleImportButtonClick}
+                            disabled={hasActiveImport}
+                        >
+                            Import
+                        </Button>
+                        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateDialog}>
+                            New Group
+                        </Button>
+                    </Stack>
+                </Stack>
+
+                <input
+                    type="file"
+                    hidden
+                    ref={fileInputRef}
+                    accept=".csv,text/csv"
+                    onChange={handleFileInputChange}
                 />
 
-                {/* Create/Edit Dialog */}
-                <Dialog
-                    open={dialogOpen}
-                    onClose={handleCloseDialog}
-                    maxWidth="md"
-                    fullWidth
-                    slots={{ transition: GrowTransition }}
-                >
-                    <DialogTitle>{editMode ? 'Edit Group' : 'Create New Group'}</DialogTitle>
-                    <DialogContent>
-                        <Stack spacing={2.5} sx={{ mt: 1 }}>
-                            <TextField
-                                label="Group Name"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                error={!!formErrors.name}
-                                helperText={formErrors.name}
-                                required
-                                fullWidth
-                            />
-
-                            <TextField
-                                label="Description"
-                                value={formData.description || ''}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                multiline
-                                rows={2}
-                                fullWidth
-                            />
-
-                            <TextField
-                                label="Thesis Title"
-                                value={formData.thesisTitle || ''}
-                                onChange={(e) => setFormData({ ...formData, thesisTitle: e.target.value })}
-                                fullWidth
-                            />
-
-                            <TextField
-                                label="Department"
-                                value={formData.department || ''}
-                                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                                fullWidth
-                            />
-
-                            <Autocomplete
-                                options={students}
-                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
-                                value={students.find((u) => u.email === formData.leader) || null}
-                                onChange={(_, newValue) => setFormData({ ...formData, leader: newValue?.email || '' })}
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Group Leader"
-                                        required
-                                        error={!!formErrors.leader}
-                                        helperText={formErrors.leader}
-                                    />
-                                )}
-                            />
-
-                            <Autocomplete
-                                multiple
-                                options={students}
-                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
-                                value={students.filter((u) => formData.members.includes(u.email))}
-                                onChange={(_, newValue) =>
-                                    setFormData({ ...formData, members: newValue.map((u) => u.email) })
-                                }
-                                renderInput={(params) => <TextField {...params} label="Members" />}
-                            />
-
-                            <Autocomplete
-                                options={advisers}
-                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
-                                value={advisers.find((u) => u.email === formData.adviser) || null}
-                                onChange={(_, newValue) => setFormData({ ...formData, adviser: newValue?.email || '' })}
-                                renderInput={(params) => <TextField {...params} label="Adviser (Optional)" />}
-                            />
-
-                            <Autocomplete
-                                options={editors}
-                                getOptionLabel={(option) => `${option.name.first} ${option.name.last} (${option.email})`}
-                                value={editors.find((u) => u.email === formData.editor) || null}
-                                onChange={(_, newValue) => setFormData({ ...formData, editor: newValue?.email || '' })}
-                                renderInput={(params) => <TextField {...params} label="Editor (Optional)" />}
-                            />
-
-                            <TextField
-                                select
-                                label="Status"
-                                value={formData.status}
-                                onChange={(e) =>
-                                    setFormData({ ...formData, status: e.target.value as ThesisGroup['status'] })
-                                }
-                                slotProps={{ select: { native: true } }}
-                                fullWidth
-                            >
-                                {STATUS_OPTIONS.map((status) => (
-                                    <option key={status} value={status}>
-                                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                                    </option>
-                                ))}
-                            </TextField>
-                        </Stack>
-                    </DialogContent>
-                    <DialogActions>
-                        <Button onClick={handleCloseDialog} disabled={saving}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSave} variant="contained" disabled={saving}>
-                            {saving ? 'Saving...' : editMode ? 'Save Changes' : 'Create Group'}
-                        </Button>
-                    </DialogActions>
-                </Dialog>
-
-                {/* Delete Confirmation Dialog */}
-                <Dialog open={deleteDialogOpen} onClose={handleCloseDialog} slots={{ transition: GrowTransition }}>
-                    <DialogTitle>Delete Group</DialogTitle>
-                    <DialogContent>
-                        <Typography>
-                            Are you sure you want to delete group <strong>{selectedGroup?.name}</strong>? This action
-                            cannot be undone.
+                {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+                        <CircularProgress />
+                    </Box>
+                ) : groups.length === 0 ? (
+                    <Box sx={{ textAlign: 'center', py: 8 }}>
+                        <Typography variant="h6" gutterBottom>
+                            No groups yet
                         </Typography>
-                    </DialogContent>
-                    <DialogActions>
-                        <Button onClick={handleCloseDialog} disabled={saving}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleDelete} variant="contained" color="error" disabled={saving}>
-                            {saving ? 'Deleting...' : 'Delete'}
-                        </Button>
-                    </DialogActions>
-                </Dialog>
+                        <Typography color="text.secondary">
+                            Create a group to start tracking thesis progress.
+                        </Typography>
+                    </Box>
+                ) : (
+                    <Grid container spacing={3}>
+                        {groups.map((group) => (
+                            <Grid key={group.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+                                <GroupCard
+                                    group={group}
+                                    usersByEmail={usersByEmail}
+                                    onClick={setViewGroup}
+                                    onEdit={handleOpenEditDialog}
+                                    onDelete={handleOpenDeleteDialog}
+                                    canManage={canManage}
+                                />
+                            </Grid>
+                        ))}
+                    </Grid>
+                )}
+
+                <GroupManageDialog
+                    open={manageDialogOpen}
+                    editMode={editMode}
+                    activeStep={activeStep}
+                    steps={formSteps}
+                    formData={formData}
+                    formErrors={formErrors}
+                    students={studentOptions}
+                    advisers={advisers}
+                    editors={editors}
+                    departmentOptions={departmentOptions}
+                    memberChipData={memberChipData}
+                    reviewCourse={reviewCourse}
+                    saving={saving}
+                    studentLoading={studentOptionsLoading}
+                    onClose={handleCloseManageDialog}
+                    onFieldChange={handleFormFieldChange}
+                    onLeaderChange={handleLeaderChange}
+                    onMembersChange={handleMembersChange}
+                    onNext={handleNextStep}
+                    onBack={handleBackStep}
+                    onSubmit={handleSave}
+                    formatUserLabel={formatUserLabel}
+                />
+
+                <GroupDeleteDialog
+                    open={deleteDialogOpen}
+                    group={selectedGroup}
+                    onCancel={handleCloseDeleteDialog}
+                    onConfirm={handleDelete}
+                    loading={saving}
+                />
+
+                <GroupView
+                    open={!!viewGroup}
+                    group={viewGroup}
+                    usersByEmail={usersByEmail}
+                    onClose={handleCloseView}
+                    onEdit={handleOpenEditDialog}
+                    onDelete={handleOpenDeleteDialog}
+                    canManage={canManage}
+                />
             </Box>
         </AnimatedPage>
     );

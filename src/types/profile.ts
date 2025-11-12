@@ -49,6 +49,10 @@ export interface UserProfile {
      */
     department?: string;
     /**
+     * User's degree program or course (e.g., BS Computer Science)
+     */
+    course?: string;
+    /**
      * URL to the user's avatar image
      */
     avatar?: string;

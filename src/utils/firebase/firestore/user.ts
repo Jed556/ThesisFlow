@@ -170,12 +170,17 @@ export function listenUsersByFilter(
         constraints.push(where('department', '==', filter.department));
     }
 
+    if (filter.course) {
+        constraints.push(where('course', '==', filter.course));
+    }
+
     return listenUsers(constraints, options);
 }
 
 export interface UserFilterOptions {
     role?: UserRole;
     department?: string;
+    course?: string;
 }
 
 /**
@@ -191,6 +196,10 @@ export async function getUsersByFilter(options: UserFilterOptions = {}): Promise
 
     if (options.department) {
         constraints.push(where('department', '==', options.department));
+    }
+
+    if (options.course) {
+        constraints.push(where('course', '==', options.course));
     }
 
     const baseCollection = collection(firebaseFirestore, USERS_COLLECTION);

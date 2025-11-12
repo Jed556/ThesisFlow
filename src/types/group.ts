@@ -14,6 +14,7 @@ export interface ThesisGroup {
     status: 'active' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
     department?: string;
+    course?: string;
 }
 
 /**
@@ -30,4 +31,5 @@ export interface ThesisGroupFormData {
     status: 'active' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
     department?: string;
+    course?: string;
 }

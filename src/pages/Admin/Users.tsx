@@ -52,6 +52,7 @@ const emptyFormData: UserProfile = {
         last: '',
     },
     role: 'student',
+    course: '',
 };
 
 /**
@@ -674,6 +675,7 @@ export default function AdminUsersPage() {
                                 suffix: newRow.name.suffix,
                             },
                             department: newRow.department,
+                            course: newRow.course,
                             avatar: newRow.avatar,
                             phone: newRow.phone,
                         };
@@ -766,6 +768,13 @@ export default function AdminUsersPage() {
         {
             field: 'department',
             headerName: 'Department',
+            flex: 1,
+            minWidth: 150,
+            editable: true,
+        },
+        {
+            field: 'course',
+            headerName: 'Course',
             flex: 1,
             minWidth: 150,
             editable: true,
@@ -1021,6 +1030,12 @@ export default function AdminUsersPage() {
                                 label="Department"
                                 value={formData.department?.trim() || ''}
                                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                                fullWidth
+                            />
+                            <TextField
+                                label="Course"
+                                value={formData.course?.trim() || ''}
+                                onChange={(e) => setFormData({ ...formData, course: e.target.value })}
                                 fullWidth
                             />
                             <TextField
