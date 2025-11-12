@@ -58,6 +58,16 @@ const departments = [
     'Research Department',
     'IT Department',
 ];
+const coursesByDepartment = {
+    'School of Nursing': ['BS Nursing', 'BS Midwifery', 'BS Medical Technology'],
+    'School of Computer Studies and Technology': ['BS Computer Science', 'BS Information Technology', 'BS Information Systems'],
+    'School of Education, Arts, and Sciences': ['BA Communication', 'BS Psychology', 'BA English Language Studies'],
+    'School of Tourism and Hospitality Management': ['BS Tourism Management', 'BS Hospitality Management'],
+    'School of Business, Management, and Accountancy': ['BS Business Administration', 'BS Accountancy', 'BS Management Accounting'],
+    'School of Engineering and Architecture': ['BS Civil Engineering', 'BS Mechanical Engineering', 'BS Architecture'],
+    'Research Department': ['Graduate Research Studies'],
+    'IT Department': ['IT Operations', 'Systems Administration'],
+};
 const thesisTopics = [
     'Autonomous Systems', 'Renewable Energy Forecasting', 'Digital Preservation', 'Smart Agriculture',
     'Medical Imaging AI', 'Cybersecurity Analytics', 'Human-Computer Interaction', 'Sustainable Materials',
@@ -96,6 +106,15 @@ const rolePrefixes = {
 };
 
 const pickWithOffset = (source, index, offset = 0) => source[(index + offset) % source.length];
+
+const pickCourseForDepartment = (department, seed = 0) => {
+    const courseOptions = coursesByDepartment[department];
+    if (!courseOptions || courseOptions.length === 0) {
+        return '';
+    }
+    const index = Math.abs(seed) % courseOptions.length;
+    return courseOptions[index];
+};
 
 const buildIso = (baseDate, dayOffset, hourOffset = 9, minuteOffset = 0) => {
     const date = new Date(baseDate.getTime());
@@ -164,6 +183,7 @@ const generateUsers = (totalUsers = 100) => {
         developer: [],
         student: [],
     };
+    const userDetails = new Map();
 
     // Calculate counts per role
     const devCount = Math.max(1, Math.round(totalUsers * 0.01));
@@ -266,6 +286,7 @@ const generateUsers = (totalUsers = 100) => {
                 suffix,
                 role,
                 department,
+                role === 'student' ? pickCourseForDepartment(department, globalIndex + i) : '',
                 `+1-555-${pad(1000 + globalIndex)}`,
                 `https://storage.thesisflow.edu/avatars/${uid.toLowerCase()}.png`,
                 `https://storage.thesisflow.edu/banners/${uid.toLowerCase()}.jpg`,
@@ -276,6 +297,11 @@ const generateUsers = (totalUsers = 100) => {
             users.push(userRow);
             userEmails.set(uid, email);
             usersByRole[role].push(uid);
+            userDetails.set(uid, {
+                role,
+                department,
+                course: role === 'student' ? userRow[9] : '',
+            });
             globalIndex += 1;
         }
     }
@@ -302,8 +328,10 @@ const generateUsers = (totalUsers = 100) => {
         const uid = `${rolePrefixes.student}${pad(usersByRole.student.length + 1)}`;
         const email = `Student${pad(usersByRole.student.length + 1)}@thesisflow.dev`;
         const department = pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), i + 2);
+        const course = pickCourseForDepartment(department, usersByRole.student.length + attemptName);
         const userRow = [
             uid, email, firstName, middleName, lastName, '', '', role, department,
+            course,
             `+1-555-${pad(1000 + i)}`, `https://storage.thesisflow.edu/avatars/${uid.toLowerCase()}.png`,
             `https://storage.thesisflow.edu/banners/${uid.toLowerCase()}.jpg`,
             `${firstName} ${lastName} focuses on ${pickWithOffset(thesisTopics, i)} research.`, 'Password_123',
@@ -311,9 +339,14 @@ const generateUsers = (totalUsers = 100) => {
         users.push(userRow);
         userEmails.set(uid, email);
         usersByRole.student.push(uid);
+        userDetails.set(uid, {
+            role,
+            department,
+            course,
+        });
     }
 
-    return { users, userEmails, usersByRole };
+    return { users, userEmails, usersByRole, userDetails };
 };
 
 const pickUniqueFromList = (source, count, seed) => {
@@ -330,7 +363,7 @@ const pickUniqueFromList = (source, count, seed) => {
     return result;
 };
 
-const generateGroups = (usersByRole, ungroupedStudents = []) => {
+const generateGroups = (usersByRole, userDetails, ungroupedStudents = []) => {
     const groups = [];
     const baseDate = new Date('2025-01-01T08:00:00.000Z');
     const ungroupedSet = new Set(ungroupedStudents);
@@ -341,10 +374,31 @@ const generateGroups = (usersByRole, ungroupedStudents = []) => {
     for (let i = 0; i < RECORD_COUNT; i += 1) {
         // Enforce: exactly one adviser and one editor per group, and up to 4 students per group.
         const studentCount = Math.min(4, 1 + (i % 4)); // yields 1..4 students
-        const membersSource = availableStudents.length >= studentCount ? availableStudents : usersByRole.student;
-        const students = pickUniqueFromList(membersSource, studentCount, i);
+        const leaderPool = availableStudents.length > 0 ? availableStudents : usersByRole.student;
+        if (leaderPool.length === 0) {
+            break;
+        }
 
-        const leader = students[0] || pickWithOffset(usersByRole.student, i);
+        const leader = pickWithOffset(leaderPool, i);
+        const leaderDetails = userDetails.get(leader) || {};
+        const leaderDepartment = leaderDetails.department || pickWithOffset(departments, i);
+        const leaderCourse = leaderDetails.course || pickCourseForDepartment(leaderDepartment, i);
+
+        const memberCount = Math.max(studentCount - 1, 0);
+        const eligibleMembers = leaderPool.filter(
+            uid => uid !== leader && (!leaderCourse || userDetails.get(uid)?.course === leaderCourse)
+        );
+        let selectedMembers = pickUniqueFromList(eligibleMembers, memberCount, i * 3 + 5);
+
+        if (selectedMembers.length < memberCount) {
+            const fallbackPool = usersByRole.student.filter(
+                uid => uid !== leader && !selectedMembers.includes(uid)
+            );
+            const additional = pickUniqueFromList(fallbackPool, memberCount - selectedMembers.length, i * 7 + 3);
+            selectedMembers = selectedMembers.concat(additional);
+        }
+
+        const students = [leader, ...selectedMembers];
 
         // Ensure there is an adviser and editor for the group; fall back to admins if role lists are empty
         const adviser = (usersByRole.adviser && usersByRole.adviser.length > 0)
@@ -359,6 +413,8 @@ const generateGroups = (usersByRole, ungroupedStudents = []) => {
         const status = pickWithOffset(statuses, i);
         const createdAt = buildIso(baseDate, i * 2, 9, 30);
         const updatedAt = buildIso(baseDate, i * 2 + 10, 14, 15);
+        const groupDepartment = leaderDepartment || pickWithOffset(departments, i);
+        const groupCourse = leaderCourse || pickCourseForDepartment(groupDepartment, i);
 
         groups.push([
             `GRP${pad(i + 1)}`,
@@ -372,7 +428,8 @@ const generateGroups = (usersByRole, ungroupedStudents = []) => {
             createdAt,
             updatedAt,
             `${pickWithOffset(thesisTopics, i)} in Practice`,
-            pickWithOffset(departments, i),
+            groupDepartment,
+            groupCourse,
         ]);
     }
 
@@ -546,8 +603,8 @@ const generateCalendars = (usersByRole, groups) => {
     const baseDate = new Date('2025-01-01T08:00:00.000Z');
 
     // Create personal calendars for all users
-    Object.entries(usersByRole).forEach(([role, uids]) => {
-        uids.forEach((uid, idx) => {
+    Object.entries(usersByRole).forEach(([, uids]) => {
+        uids.forEach((uid) => {
             calendars.push([
                 `CAL_PERS_${uid}`,
                 `${uid}'s Personal Calendar`,
@@ -664,7 +721,7 @@ const parseArg = (key) => {
 };
 
 const promptInputs = async () => {
-    // Support command-line overrides: --users=200 --groups=50 --ungrouped=10 --schedules=80 --files=100 --forms=50 --theses=50 --calendars=100
+    // Support command-line overrides: --users=200 --groups=50 --ungrouped=10 --schedules=80 --files=100 --forms=50 --theses=50 --calendars=10
     const usersArg = parseArg('users');
     const groupsArg = parseArg('groups');
     const ungroupedArg = parseArg('ungrouped');
@@ -683,7 +740,7 @@ const promptInputs = async () => {
         const filesToCreate = Number.parseInt(filesArg || '100', 10) || 100;
         const formsToCreate = Number.parseInt(formsArg || '100', 10) || 100;
         const thesesCount = Number.parseInt(thesesArg || '100', 10) || 100;
-        const calendarsToCreate = Number.parseInt(calendarsArg || '100', 10) || 100;
+        const calendarsToCreate = Number.parseInt(calendarsArg || '10', 10) || 10;
         return { usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate, formsToCreate, thesesCount, calendarsToCreate };
     }
 
@@ -696,7 +753,8 @@ const promptInputs = async () => {
         const filesAnswer = await rl.question(`How many files should be created? (default 100): `);
         const formsAnswer = await rl.question(`How many forms should be created? (default 100): `);
         const thesesAnswer = await rl.question(`How many theses should be created? (default 100): `);
-        const calendarsAnswer = await rl.question(`How many calendars should be created? (default 100): `);
+
+        const calendarsAnswer = await rl.question(`How many extra shared calendars should be created? (default 10): `);
 
         const usersToCreate = Number.parseInt(usersAnswer || '100', 10) || 100;
         const groupsToCreate = Number.parseInt(groupsAnswer || '100', 10) || 100;
@@ -705,7 +763,7 @@ const promptInputs = async () => {
         const filesToCreate = Number.parseInt(filesAnswer || '100', 10) || 100;
         const formsToCreate = Number.parseInt(formsAnswer || '100', 10) || 100;
         const thesesCount = Number.parseInt(thesesAnswer || '100', 10) || 100;
-        const calendarsToCreate = Number.parseInt(calendarsAnswer || '100', 10) || 100;
+        const calendarsToCreate = Number.parseInt(calendarsAnswer || '10', 10) || 10;
 
         return { usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate, formsToCreate, thesesCount, calendarsToCreate };
     } finally {
@@ -727,9 +785,9 @@ const main = async () => {
         formsToCreate, thesesCount, calendarsToCreate,
     } = await promptInputs();
 
-    const { users, userEmails, usersByRole } = generateUsers(usersToCreate);
+    const { users, userEmails, usersByRole, userDetails } = generateUsers(usersToCreate);
     writeCsv('users.mock.csv', [
-        'uid', 'email', 'firstName', 'middleName', 'lastName', 'prefix', 'suffix', 'role', 'department',
+        'uid', 'email', 'firstName', 'middleName', 'lastName', 'prefix', 'suffix', 'role', 'department', 'course',
         'phone', 'avatar', 'banner', 'bio', 'password',
     ], users);
 
@@ -743,10 +801,10 @@ const main = async () => {
 
     const thesisTitles = generateUniqueThesisTitles(groupsToCreate);
 
-    const groups = generateGroups(usersByRole, ungroupedStudents);
+    const groups = generateGroups(usersByRole, userDetails, ungroupedStudents);
     writeCsv('groups.mock.csv', [
         'id', 'name', 'leader', 'members', 'adviser', 'editor', 'description', 'status', 'createdAt',
-        'updatedAt', 'thesisTitle', 'department',
+        'updatedAt', 'thesisTitle', 'department', 'course',
     ], groups);
 
     // Generate calendars (personal for all users + group calendars)
@@ -756,9 +814,41 @@ const main = async () => {
         'lastModified', 'isVisible', 'isDefault', 'groupId', 'groupName',
     ], calendars);
 
+    // Add extra shared calendars (not tied to groups/personal) if requested
+    if (typeof calendarsToCreate === 'number' && calendarsToCreate > 0) {
+        const extraBase = new Date('2025-01-15T08:00:00.000Z');
+        const adminOwner = (usersByRole.admin && usersByRole.admin.length > 0) ? usersByRole.admin[0] : (users.length > 0 ? users[0][0] : 'SYS');
+        for (let i = 0; i < calendarsToCreate; i += 1) {
+            const id = `CAL_EXTRA_${pad(i + 1)}`;
+            calendars.push([
+                id,
+                `Shared Calendar ${i + 1}`,
+                `Shared calendar ${i + 1} for other schedules`,
+                'shared',
+                pickWithOffset(eventColors, i),
+                JSON.stringify([{ uid: adminOwner, role: 'owner', canView: true, canEdit: true, canDelete: true }]),
+                adminOwner,
+                adminOwner,
+                buildIso(extraBase, i, 9, 0),
+                buildIso(extraBase, i, 9, 0),
+                'true',
+                'false',
+                '',
+                '',
+            ]);
+        }
+    }
+
     // Extract calendar IDs for scheduling (use group calendars for schedule events)
-    const groupCalendarIds = calendars.filter(cal => cal[2] === 'group').map(cal => cal[0]);
+    // Note: calendar `type` is at index 3 in the pushed arrays (0=id,1=name,2=description,3=type,...)
+    const groupCalendarIds = calendars.filter(cal => cal[3] === 'group').map(cal => cal[0]);
     const availableCalendarIds = groupCalendarIds.length > 0 ? groupCalendarIds : calendars.map(cal => cal[0]);
+
+    // Provide more accurate calendar counts for the summary
+    const totalCalendars = calendars.length;
+    const personalCalendarCount = calendars.filter(cal => cal[3] === 'personal').length;
+    const groupCalendarCount = calendars.filter(cal => cal[3] === 'group').length;
+    const extraCalendarCount = calendars.filter(cal => cal[3] === 'shared').length;
 
     // Generate schedules using calendars
     RECORD_COUNT = schedulesToCreate;
@@ -794,7 +884,7 @@ const main = async () => {
     ], theses);
 
     log('Mock CSV generation complete.');
-    log(`Summary: Users=${usersToCreate}, Groups=${groupsToCreate}, Calendars=${calendars.length}, `
+    log(`Summary: Users=${usersToCreate}, Groups=${groupsToCreate}, Calendars=${totalCalendars} (personal=${personalCalendarCount}, group=${groupCalendarCount}, shared=${extraCalendarCount}), `
         + `Schedules=${schedule.length}, Files=${files.length}, Forms=${forms.length}, Theses=${theses.length}`);
 };
 
