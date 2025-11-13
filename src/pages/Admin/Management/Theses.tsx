@@ -8,26 +8,26 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
-import { AnimatedPage, GrowTransition } from '../../components/Animate';
-import { DataGrid } from '../../components/DataGrid';
+import { AnimatedPage, GrowTransition } from '../../../components/Animate';
+import { DataGrid } from '../../../components/DataGrid';
 import { useSession } from '@toolpad/core';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
-import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
-import type { NavigationItem } from '../../types/navigation';
-import type { Session } from '../../types/session';
-import type { ThesisData, ThesisChapter } from '../../types/thesis';
-import type { UserProfile } from '../../types/profile';
-import type { ThesisGroup, ThesisGroupMembers } from '../../types/group';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
+import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
+import type { NavigationItem } from '../../../types/navigation';
+import type { Session } from '../../../types/session';
+import type { ThesisData, ThesisChapter } from '../../../types/thesis';
+import type { UserProfile } from '../../../types/profile';
+import type { ThesisGroup, ThesisGroupMembers } from '../../../types/group';
 import {
     bulkDeleteTheses, deleteThesis, getAllTheses, listenTheses,
     setThesis, computeThesisProgressRatio, type ThesisRecord,
-} from '../../utils/firebase/firestore/thesis';
-import { getAllGroups, getGroupById, updateGroup } from '../../utils/firebase/firestore/groups';
-import { getUserById, getUsersByIds, listenUsersByFilter } from '../../utils/firebase/firestore/user';
-import { importThesesFromCsv, exportThesesToCsv } from '../../utils/csv/thesis';
-import { formatProfileLabel } from '../../utils/userUtils';
-import { formatDateShort, fromDateInputString, toDateInputString } from '../../utils/dateUtils';
+} from '../../../utils/firebase/firestore/thesis';
+import { getAllGroups, getGroupById, updateGroup } from '../../../utils/firebase/firestore/groups';
+import { getUserById, getUsersByIds, listenUsersByFilter } from '../../../utils/firebase/firestore/user';
+import { importThesesFromCsv, exportThesesToCsv } from '../../../utils/csv/thesis';
+import { formatProfileLabel } from '../../../utils/userUtils';
+import { formatDateShort, fromDateInputString, toDateInputString } from '../../../utils/dateUtils';
 
 const STATUS_SUGGESTIONS = [
     'Not Submitted',

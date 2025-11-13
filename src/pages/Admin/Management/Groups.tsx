@@ -7,13 +7,13 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useSession } from '@toolpad/core';
-import { AnimatedPage } from '../../components/Animate';
-import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import type { NavigationItem } from '../../types/navigation';
-import type { ThesisGroup, ThesisGroupFormData } from '../../types/group';
-import type { Session } from '../../types/session';
-import type { UserProfile } from '../../types/profile';
+import { AnimatedPage } from '../../../components/Animate';
+import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
+import type { NavigationItem } from '../../../types/navigation';
+import type { ThesisGroup, ThesisGroupFormData } from '../../../types/group';
+import type { Session } from '../../../types/session';
+import type { UserProfile } from '../../../types/profile';
 import {
     getAllUsers,
     getAllGroups,
@@ -22,13 +22,13 @@ import {
     deleteGroup,
     setGroup,
     getUsersByFilter,
-} from '../../utils/firebase/firestore';
-import { importGroupsFromCsv, exportGroupsToCsv } from '../../utils/csv/group';
-import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
-import GroupCard from '../../components/Group/GroupCard';
-import GroupManageDialog, { type GroupFormErrorKey } from '../../components/Group/GroupManageDialog';
-import GroupDeleteDialog from '../../components/Group/GroupDeleteDialog';
-import { GroupView } from '../../components/Group/GroupView';
+} from '../../../utils/firebase/firestore';
+import { importGroupsFromCsv, exportGroupsToCsv } from '../../../utils/csv/group';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
+import GroupCard from '../../../components/Group/GroupCard';
+import GroupManageDialog, { type GroupFormErrorKey } from '../../../components/Group/GroupManageDialog';
+import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
+import { GroupView } from '../../../components/Group/GroupView';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -293,6 +293,36 @@ export default function AdminGroupManagementPage() {
     const handleFormFieldChange = React.useCallback((changes: Partial<ThesisGroupFormData>) => {
         setFormData((prev) => ({ ...prev, ...changes }));
 
+        // Clear validation errors for fields that are being changed and are now valid
+        setFormErrors((prevErrors) => {
+            const nextErrors = { ...prevErrors };
+            let hasChanges = false;
+
+            // Clear department error if a valid department is provided
+            if (Object.prototype.hasOwnProperty.call(changes, 'department')) {
+                const departmentValue = changes.department;
+                if (typeof departmentValue === 'string' && departmentValue.trim()) {
+                    if (nextErrors.department) {
+                        delete nextErrors.department;
+                        hasChanges = true;
+                    }
+                }
+            }
+
+            // Clear name error if a valid name is provided
+            if (Object.prototype.hasOwnProperty.call(changes, 'name')) {
+                const nameValue = changes.name;
+                if (typeof nameValue === 'string' && nameValue.trim()) {
+                    if (nextErrors.name) {
+                        delete nextErrors.name;
+                        hasChanges = true;
+                    }
+                }
+            }
+
+            return hasChanges ? nextErrors : prevErrors;
+        });
+
         if (Object.prototype.hasOwnProperty.call(changes, 'department')) {
             setStudentOptions([]);
             lastStudentFilterRef.current = null;
@@ -396,7 +426,7 @@ export default function AdminGroupManagementPage() {
         }
 
         return errors;
-    }, [computeCourseInfo, formData.leader, formData.members, formData.name]);
+    }, [computeCourseInfo, formData.department, formData.leader, formData.members, formData.name]);
 
     const validateStep = React.useCallback((step: number): boolean => {
         const errors = collectErrorsForStep(step);
@@ -448,7 +478,13 @@ export default function AdminGroupManagementPage() {
             const filteredMembers = formData.members.filter((email) => email !== nextLeader);
             const courseResult = computeCourseInfo(nextLeader, filteredMembers);
 
-            applyMemberError(courseResult.error);
+            // Don't show "missing course" errors immediately during selection
+            // The validation will catch it when they try to proceed
+            if (courseResult.reason === 'missingCourse') {
+                applyMemberError(undefined);
+            } else {
+                applyMemberError(courseResult.error);
+            }
 
             setFormData((prev) => ({
                 ...prev,
@@ -474,6 +510,12 @@ export default function AdminGroupManagementPage() {
                     6000
                 );
                 return;
+            }
+
+            // Don't show "missing course" errors immediately - let users add members first
+            // The validation will catch it when they try to proceed
+            if (courseResult.reason === 'missingCourse') {
+                applyMemberError(undefined); // Clear the error for now
             }
 
             setFormData((prev) => ({

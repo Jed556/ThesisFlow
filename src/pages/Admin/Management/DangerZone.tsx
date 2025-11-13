@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { Box, Button, Card, CardActions, CardContent, Grid, Stack, Typography } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import { AnimatedPage } from '../../components/Animate';
-import type { NavigationItem } from '../../types/navigation';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import { getError } from '../../../utils/errorUtils';
-import { resolveAdminApiBaseUrl, buildAdminApiHeaders } from '../../utils/firebase/api';
-import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
+import { AnimatedPage } from '../../../components/Animate';
+import type { NavigationItem } from '../../../types/navigation';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
+import { getError } from '../../../../utils/errorUtils';
+import { resolveAdminApiBaseUrl, buildAdminApiHeaders } from '../../../utils/firebase/api';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
 
 export const metadata: NavigationItem = {
     group: 'management',

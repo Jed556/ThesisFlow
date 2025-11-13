@@ -6,20 +6,20 @@ import {
 import { People, Delete, PhotoCamera, Close } from '@mui/icons-material';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
-import { AnimatedPage, GrowTransition } from '../../components/Animate';
-import { DataGrid } from '../../components/DataGrid';
+import { AnimatedPage, GrowTransition } from '../../../components/Animate';
+import { DataGrid } from '../../../components/DataGrid';
 import { useSession } from '@toolpad/core';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import type { NavigationItem } from '../../types/navigation';
-import type { UserProfile, UserRole } from '../../types/profile';
-import type { Session } from '../../types/session';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
+import type { NavigationItem } from '../../../types/navigation';
+import type { UserProfile, UserRole } from '../../../types/profile';
+import type { Session } from '../../../types/session';
 import {
     getAllUsers, getUserById, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
-} from '../../utils/firebase/firestore';
-import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../utils/firebase/auth/admin';
-import { importUsersFromCsv, exportUsersToCsv } from '../../utils/csv/user';
-import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../utils/avatarUtils';
-import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
+} from '../../../utils/firebase/firestore';
+import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../../utils/firebase/auth/admin';
+import { importUsersFromCsv, exportUsersToCsv } from '../../../utils/csv/user';
+import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../../utils/avatarUtils';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
@@ -558,7 +558,7 @@ export default function AdminUsersPage() {
                         }
 
                         // Store the UID in the profile
-                        const profileWithUid = {
+                        const profileWithUid: UserProfile = {
                             ...profileNoPassword,
                             uid: authResult.uid ?? user.uid,
                         };

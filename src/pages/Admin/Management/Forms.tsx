@@ -13,25 +13,25 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
-import { AnimatedPage, GrowTransition } from '../../components/Animate';
-import { DataGrid } from '../../components/DataGrid';
+import { AnimatedPage, GrowTransition } from '../../../components/Animate';
+import { DataGrid } from '../../../components/DataGrid';
 import { useSession } from '@toolpad/core';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import type { NavigationItem } from '../../types/navigation';
-import type { FormTemplate, FormField, FormFieldType, FormFieldOption, FormWorkflowStep, FormAudience } from '../../types/forms';
-import type { Session } from '../../types/session';
-import type { ThesisGroup } from '../../types/group';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
+import type { NavigationItem } from '../../../types/navigation';
+import type { FormTemplate, FormField, FormFieldType, FormFieldOption, FormWorkflowStep, FormAudience } from '../../../types/forms';
+import type { Session } from '../../../types/session';
+import type { ThesisGroup } from '../../../types/group';
 import {
     getAllFormTemplates,
     createFormTemplate,
     updateFormTemplate,
     deleteFormTemplate,
     setFormTemplate,
-} from '../../utils/firebase/firestore';
-import { getAllGroups } from '../../utils/firebase/firestore';
-import { importFormsFromCsv, exportFormsToCsv } from '../../utils/csv/form';
-import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
-import { useBackgroundJobControls, useBackgroundJobFlag } from '../../hooks/useBackgroundJobs';
+} from '../../../utils/firebase/firestore';
+import { getAllGroups } from '../../../utils/firebase/firestore';
+import { importFormsFromCsv, exportFormsToCsv } from '../../../utils/csv/form';
+import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
 
 export const metadata: NavigationItem = {
     group: 'management',
