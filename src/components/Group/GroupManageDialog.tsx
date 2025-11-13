@@ -119,7 +119,7 @@ export default function GroupManageDialog({
                                         helperText={
                                             formErrors.department || 'Select an existing department or type a new one'
                                         }
-                                        required
+
                                     />
                                 )}
                             />
