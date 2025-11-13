@@ -399,3 +399,231 @@ export async function setGroup(groupId: string, group: ThesisGroup): Promise<voi
         throw new Error('Failed to set group');
     }
 }
+
+/**
+ * Get groups by course (students can only see groups in their course)
+ */
+export async function getGroupsByCourse(course: string): Promise<ThesisGroup[]> {
+    try {
+        const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+        const q = query(groupsRef, where('course', '==', course), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map((doc) => mapGroupDocument(doc));
+    } catch (error) {
+        console.error('Error getting groups by course:', error);
+        throw new Error('Failed to fetch groups by course');
+    }
+}
+
+/**
+ * Send an invite to a student to join a group
+ */
+export async function inviteUserToGroup(groupId: string, userUid: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const groupSnap = await getDoc(groupRef);
+
+        if (!groupSnap.exists()) {
+            throw new Error('Group not found');
+        }
+
+        const group = mapGroupDocument(groupSnap);
+        const invites = group.invites ?? [];
+
+        if (invites.includes(userUid)) {
+            throw new Error('User already invited');
+        }
+
+        await updateDoc(groupRef, {
+            invites: [...invites, userUid],
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error inviting user to group:', error);
+        throw error;
+    }
+}
+
+/**
+ * Remove an invite from a group (user accepted or declined)
+ */
+export async function removeInviteFromGroup(groupId: string, userUid: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const groupSnap = await getDoc(groupRef);
+
+        if (!groupSnap.exists()) {
+            throw new Error('Group not found');
+        }
+
+        const group = mapGroupDocument(groupSnap);
+        const invites = (group.invites ?? []).filter(uid => uid !== userUid);
+
+        await updateDoc(groupRef, {
+            invites,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error removing invite from group:', error);
+        throw error;
+    }
+}
+
+/**
+ * Request to join a group
+ */
+export async function requestToJoinGroup(groupId: string, userUid: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const groupSnap = await getDoc(groupRef);
+
+        if (!groupSnap.exists()) {
+            throw new Error('Group not found');
+        }
+
+        const group = mapGroupDocument(groupSnap);
+        const requests = group.requests ?? [];
+
+        if (requests.includes(userUid)) {
+            throw new Error('Request already sent');
+        }
+
+        await updateDoc(groupRef, {
+            requests: [...requests, userUid],
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error requesting to join group:', error);
+        throw error;
+    }
+}
+
+/**
+ * Accept a join request and add the user to the group
+ */
+export async function acceptJoinRequest(groupId: string, userUid: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const groupSnap = await getDoc(groupRef);
+
+        if (!groupSnap.exists()) {
+            throw new Error('Group not found');
+        }
+
+        const group = mapGroupDocument(groupSnap);
+        const requests = (group.requests ?? []).filter(uid => uid !== userUid);
+        const members = [...group.members.members, userUid];
+
+        await updateDoc(groupRef, {
+            'members.members': members,
+            requests,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error accepting join request:', error);
+        throw error;
+    }
+}
+
+/**
+ * Reject a join request
+ */
+export async function rejectJoinRequest(groupId: string, userUid: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const groupSnap = await getDoc(groupRef);
+
+        if (!groupSnap.exists()) {
+            throw new Error('Group not found');
+        }
+
+        const group = mapGroupDocument(groupSnap);
+        const requests = (group.requests ?? []).filter(uid => uid !== userUid);
+
+        await updateDoc(groupRef, {
+            requests,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error rejecting join request:', error);
+        throw error;
+    }
+}
+
+/**
+ * Accept an invite and add the user to the group
+ */
+export async function acceptInvite(groupId: string, userUid: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const groupSnap = await getDoc(groupRef);
+
+        if (!groupSnap.exists()) {
+            throw new Error('Group not found');
+        }
+
+        const group = mapGroupDocument(groupSnap);
+        const invites = (group.invites ?? []).filter(uid => uid !== userUid);
+        const members = [...group.members.members, userUid];
+
+        await updateDoc(groupRef, {
+            'members.members': members,
+            invites,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error accepting invite:', error);
+        throw error;
+    }
+}
+
+/**
+ * Submit a group for review (draft -> review)
+ */
+export async function submitGroupForReview(groupId: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        await updateDoc(groupRef, {
+            status: 'review',
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error submitting group for review:', error);
+        throw new Error('Failed to submit group for review');
+    }
+}
+
+/**
+ * Approve a group (review -> active)
+ */
+export async function approveGroup(groupId: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        await updateDoc(groupRef, {
+            status: 'active',
+            rejectionReason: null,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error approving group:', error);
+        throw new Error('Failed to approve group');
+    }
+}
+
+/**
+ * Reject a group with a reason (review -> rejected)
+ */
+export async function rejectGroup(groupId: string, reason: string): Promise<void> {
+    try {
+        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        await updateDoc(groupRef, {
+            status: 'rejected',
+            rejectionReason: reason,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error rejecting group:', error);
+        throw new Error('Failed to reject group');
+    }
+}

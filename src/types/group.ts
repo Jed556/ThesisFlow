@@ -8,10 +8,16 @@ export interface ThesisGroup {
     members: ThesisGroupMembers;
     createdAt: string;
     updatedAt: string;
-    status: 'active' | 'inactive' | 'completed' | 'archived';
+    status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
     department?: string;
     course?: string;
+    /** Pending invites to other students (array of UIDs) */
+    invites?: string[];
+    /** Incoming join requests from students (array of UIDs) */
+    requests?: string[];
+    /** Rejection reason (only populated when status is 'rejected') */
+    rejectionReason?: string;
 }
 
 /**
@@ -36,8 +42,28 @@ export interface ThesisGroupFormData {
     members: string[];
     adviser?: string;
     editor?: string;
-    status: 'active' | 'inactive' | 'completed' | 'archived';
+    status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
     department?: string;
     course?: string;
+}
+
+/**
+ * Group invite for a student
+ */
+export interface GroupInvite {
+    groupId: string;
+    groupName: string;
+    leaderUid: string;
+    invitedAt: string;
+}
+
+/**
+ * Group join request from a student
+ */
+export interface GroupJoinRequest {
+    groupId: string;
+    groupName: string;
+    requesterUid: string;
+    requestedAt: string;
 }
