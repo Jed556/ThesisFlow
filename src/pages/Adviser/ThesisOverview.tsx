@@ -16,7 +16,7 @@ import type { ThesisData } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ReviewerAssignment } from '../../types/reviewer';
 import { getFilesByThesis } from '../../utils/firebase/firestore/file';
-import { getDisplayName } from '../../utils/firebase/firestore/user';
+import { getDisplayName } from '../../utils/userUtils';
 import {
     calculateThesisProgress,
     getReviewerAssignmentsForUser,

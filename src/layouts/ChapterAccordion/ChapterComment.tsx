@@ -4,32 +4,11 @@ import type { ThesisComment } from '../../types/thesis';
 import type { ChatMessage } from '../../types/chat';
 import type { FileAttachment } from '../../types/file';
 import type { ThesisRole } from '../../types/thesis';
-import { getDisplayName } from '../../utils/firebase/firestore/user';
+import { getDisplayName } from '../../utils/userUtils';
 import { getAttachmentFiles, getDocumentNameByVersion } from '../../utils/fileUtils';
 import { getThesisRole, getThesisRoleDisplayText } from '../../utils/roleUtils';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
 import { ChatBox } from '../../components/Chat';
-
-/**
- * Parse size string (e.g., "1.2MB") to bytes
- */
-const parseSizeString = (sizeStr: string): number => {
-    const match = sizeStr.match(/^([\d.]+)\s*([A-Z]+)$/i);
-    if (!match) return 0;
-
-    const value = parseFloat(match[1]);
-    const unit = match[2].toUpperCase();
-
-    const units: Record<string, number> = {
-        'B': 1,
-        'BYTES': 1,
-        'KB': 1024,
-        'MB': 1024 * 1024,
-        'GB': 1024 * 1024 * 1024
-    };
-
-    return Math.round(value * (units[unit] || 0));
-};
 
 /**
  * Props for the ChapterComment component

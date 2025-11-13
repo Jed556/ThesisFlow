@@ -305,32 +305,3 @@ export async function getProfile(uid: string): Promise<UserProfile | undefined> 
     const profile = await getUserById(uid);
     return profile || undefined;
 }
-
-/**
- * Get formatted display name for user
- * @param uid - User ID of the user
- * @returns Formatted display name or UID as fallback
- */
-export async function getDisplayName(uid: string): Promise<string> {
-    const profile = await getProfile(uid);
-
-    if (!profile) {
-        return uid;
-    }
-
-    const parts: string[] = [];
-
-    if (profile.name.prefix) {
-        parts.push(profile.name.prefix);
-    }
-    parts.push(profile.name.first);
-    if (profile.name.middle) {
-        parts.push(profile.name.middle);
-    }
-    parts.push(profile.name.last);
-    if (profile.name.suffix) {
-        parts.push(profile.name.suffix);
-    }
-
-    return parts.join(' ');
-}

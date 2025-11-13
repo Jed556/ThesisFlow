@@ -317,17 +317,17 @@ export default function AdminGroupManagementPage() {
             setSelectedGroup(group);
             setViewGroup(null);
             const sanitizedMembers = Array.from(
-                new Set((group.members || []).filter((email) => email && email !== group.leader))
+                new Set((group.members.members || []).filter((email) => email && email !== group.members.leader))
             );
-            const derivedCourse = computeCourseInfo(group.leader, sanitizedMembers).course;
+            const derivedCourse = computeCourseInfo(group.members.leader, sanitizedMembers).course;
             setFormData({
                 id: group.id,
                 name: group.name,
                 description: group.description,
-                leader: group.leader,
+                leader: group.members.leader,
                 members: sanitizedMembers,
-                adviser: group.adviser,
-                editor: group.editor,
+                adviser: group.members.adviser ?? '',
+                editor: group.members.editor ?? '',
                 status: group.status,
                 thesisTitle: group.thesisTitle,
                 department: group.department,
@@ -580,10 +580,12 @@ export default function AdminGroupManagementPage() {
                 const newGroupData: Omit<ThesisGroup, 'id' | 'createdAt' | 'updatedAt'> = {
                     name: formData.name.trim(),
                     description: formData.description?.trim(),
-                    leader: formData.leader,
-                    members: formData.members,
-                    adviser: formData.adviser,
-                    editor: formData.editor,
+                    members: {
+                        leader: formData.leader,
+                        members: formData.members,
+                        adviser: formData.adviser || undefined,
+                        editor: formData.editor || undefined,
+                    },
                     status: formData.status,
                     thesisTitle: formData.thesisTitle?.trim(),
                     department: normalizedDepartment || '',
@@ -601,10 +603,13 @@ export default function AdminGroupManagementPage() {
                 const updates: Partial<ThesisGroup> = {
                     name: formData.name.trim(),
                     description: formData.description?.trim(),
-                    leader: formData.leader,
-                    members: formData.members,
-                    adviser: formData.adviser,
-                    editor: formData.editor,
+                    members: {
+                        leader: formData.leader,
+                        members: formData.members,
+                        adviser: formData.adviser || undefined,
+                        editor: formData.editor || undefined,
+                        panels: selectedGroup.members.panels,
+                    },
                     status: formData.status,
                     thesisTitle: formData.thesisTitle?.trim(),
                     department: normalizedDepartment || '',
@@ -613,7 +618,12 @@ export default function AdminGroupManagementPage() {
 
                 // Update in Firestore
                 await updateGroup(selectedGroup.id, updates);
-                const updatedGroup = { ...selectedGroup, ...updates, updatedAt: new Date().toISOString() };
+                const updatedGroup: ThesisGroup = {
+                    ...selectedGroup,
+                    ...updates,
+                    members: updates.members ?? selectedGroup.members,
+                    updatedAt: new Date().toISOString(),
+                };
                 setGroups((prev) => prev.map((g) => (g.id === updatedGroup.id ? updatedGroup : g)));
                 showNotification(`Group "${updatedGroup.name}" updated successfully`, 'success');
             }

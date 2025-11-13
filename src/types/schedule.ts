@@ -175,21 +175,6 @@ export interface ScheduleStats {
     eventsByCalendar: Record<string, number>; // Count by calendar ID
 }
 
-// Event creation/update payload
-export interface EventPayload {
-    title: string;
-    description?: string;
-    calendarId: string; // Required: which calendar to add event to
-    startDate: string;
-    endDate: string;
-    isAllDay: boolean;
-    participants: Omit<EventParticipant, 'status' | 'responseDate'>[];
-    location?: Omit<EventLocation, 'notes'>;
-    tags?: string[];
-    recurrence?: RecurrenceSettings;
-    reminders?: EventReminder[];
-}
-
 // Schedule notification interface
 export interface ScheduleNotification {
     id: string;

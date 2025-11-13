@@ -33,14 +33,21 @@ export function importGroupsFromCsv(csvText: string): { parsed: ThesisGroup[]; e
         const members = splitArrayField(get('members') || get('team') || get('students'));
         const statusRaw = (get('status') || 'active').toLowerCase() as ThesisGroup['status'];
 
+        const adviser = get('adviser') || get('adviser_uid') || undefined;
+        const editor = get('editor') || get('editor_uid') || undefined;
+        const panels = splitArrayField(get('panels'));
+
         const group: ThesisGroup = {
             id: get('id') || `group_${Date.now()}_${idx}`,
             name,
-            leader,
-            members,
-            adviser: get('adviser') || get('adviser_uid') || undefined,
-            editor: get('editor') || get('editor_uid') || undefined,
             description: get('description') || undefined,
+            members: {
+                leader,
+                members,
+                adviser,
+                editor,
+                panels: panels.length > 0 ? panels : undefined,
+            },
             status: (['active', 'inactive', 'completed', 'archived'].includes(statusRaw) ? statusRaw : 'active'),
             createdAt: get('createdAt') || get('created_at') || new Date().toISOString(),
             updatedAt: get('updatedAt') || get('updated_at') || new Date().toISOString(),
@@ -66,6 +73,7 @@ export function exportGroupsToCsv(groups: ThesisGroup[]): string {
         'members',
         'adviser',
         'editor',
+        'panels',
         'description',
         'status',
         'createdAt',
@@ -78,10 +86,11 @@ export function exportGroupsToCsv(groups: ThesisGroup[]): string {
     const rows = groups.map(group => [
         group.id,
         group.name,
-        group.leader,
-        group.members.join(';'),
-        group.adviser || '',
-        group.editor || '',
+        group.members.leader,
+        group.members.members.join(';'),
+        group.members.adviser || '',
+        group.members.editor || '',
+        group.members.panels?.join(';') || '',
         group.description || '',
         group.status,
         group.createdAt,

@@ -5,12 +5,14 @@ import {
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import { getUserById, getUsersByIds } from './user';
+import { getGroupById } from './groups';
 
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
 import type { ReviewerAssignment, ReviewerRole } from '../../../types/reviewer';
+import type { ThesisGroupMembers } from '../../../types/group';
 
-type ThesisRecord = ThesisData & { id: string };
+export type ThesisRecord = ThesisData & { id: string };
 
 /** Firestore collection name used for user documents */
 const THESES_COLLECTION = 'theses';
@@ -32,7 +34,15 @@ export async function getThesisById(id: string): Promise<ThesisData | null> {
  */
 export async function getAllTheses(): Promise<ThesisRecord[]> {
     const snap = await getDocs(collection(firebaseFirestore, THESES_COLLECTION));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ThesisRecord));
+    return snap.docs.map((docSnap) => {
+        const data = docSnap.data() as ThesisData;
+        const { id: _ignored, ...rest } = data;
+        void _ignored;
+        return {
+            id: docSnap.id,
+            ...(rest as Omit<ThesisData, 'id'>),
+        } as ThesisRecord;
+    });
 }
 
 /**
@@ -123,26 +133,67 @@ async function hydrateUserProfiles(
     }
 }
 
+async function hydrateThesisGroups(
+    theses: ThesisData[],
+    cache: Map<string, ThesisGroupMembers>
+): Promise<void> {
+    const missingGroupIds = theses
+        .map((thesis) => thesis.groupId)
+        .filter((groupId): groupId is string => Boolean(groupId) && !cache.has(groupId));
+
+    if (missingGroupIds.length === 0) {
+        return;
+    }
+
+    const uniqueIds = Array.from(new Set(missingGroupIds));
+    const fetchedGroups = await Promise.all(uniqueIds.map(async (groupId) => {
+        try {
+            return await getGroupById(groupId);
+        } catch (error) {
+            console.error(`Failed to fetch group ${groupId} for thesis hydration:`, error);
+            return null;
+        }
+    }));
+
+    fetchedGroups.forEach((group, index) => {
+        if (group) {
+            cache.set(uniqueIds[index], group.members);
+        }
+    });
+}
+
+function collectGroupMemberIds(members: ThesisGroupMembers | undefined): Set<string> {
+    const uids = new Set<string>();
+    if (!members) {
+        return uids;
+    }
+
+    if (members.leader) {
+        uids.add(members.leader);
+    }
+
+    members.members.forEach((uid) => {
+        if (uid) {
+            uids.add(uid);
+        }
+    });
+
+    if (members.adviser) {
+        uids.add(members.adviser);
+    }
+
+    if (members.editor) {
+        uids.add(members.editor);
+    }
+
+    return uids;
+}
+
 /**
  * Extract all participant UIDs (students, adviser, editor) from a thesis document.
  * @param thesis - Thesis data source containing membership fields
  * @returns Set of UIDs participating in the thesis
  */
-function collectThesisUserIds(thesis: ThesisData): Set<string> {
-    const members = new Set<string>();
-    if (thesis.leader) {
-        members.add(thesis.leader);
-    }
-    thesis.members?.forEach((uid) => members.add(uid));
-    if (thesis.adviser) {
-        members.add(thesis.adviser);
-    }
-    if (thesis.editor) {
-        members.add(thesis.editor);
-    }
-    return members;
-}
-
 /**
  * Transform thesis documents into reviewer assignment models while reusing cached profiles.
  * @param theses - Thesis records that belong to the reviewer role
@@ -153,11 +204,15 @@ function collectThesisUserIds(thesis: ThesisData): Set<string> {
 async function buildReviewerAssignments(
     theses: ThesisRecord[],
     role: ReviewerRole,
-    profileCache: Map<string, UserProfile>
+    profileCache: Map<string, UserProfile>,
+    groupCache: Map<string, ThesisGroupMembers>
 ): Promise<ReviewerAssignment[]> {
+    await hydrateThesisGroups(theses, groupCache);
+
     const userIds = new Set<string>();
     theses.forEach((thesis) => {
-        collectThesisUserIds(thesis).forEach((uid) => userIds.add(uid));
+        const members = groupCache.get(thesis.groupId);
+        collectGroupMemberIds(members).forEach((uid) => userIds.add(uid));
     });
 
     if (userIds.size > 0) {
@@ -165,13 +220,19 @@ async function buildReviewerAssignments(
     }
 
     return theses.map((thesis) => {
-        const progressRatio = computeProgressRatio(thesis);
-        const studentEmails = [thesis.leader, ...(thesis.members ?? [])]
+        const members = groupCache.get(thesis.groupId);
+        const leaderUid = members?.leader ?? '';
+        const memberUids = members?.members ?? [];
+        const adviserUid = members?.adviser ?? '';
+        const editorUid = members?.editor ?? '';
+
+        const progressRatio = computeThesisProgressRatio(thesis);
+        const studentEmails = [leaderUid, ...memberUids]
             .map((uid) => (uid ? profileCache.get(uid)?.email : undefined))
             .filter((email): email is string => Boolean(email));
 
-        const assignedUid = role === 'adviser' ? thesis.adviser : thesis.editor;
-        const counterpartUid = role === 'adviser' ? thesis.editor : thesis.adviser;
+        const assignedUid = role === 'adviser' ? adviserUid : editorUid;
+        const counterpartUid = role === 'adviser' ? editorUid : adviserUid;
 
         const assignedEmail = assignedUid ? profileCache.get(assignedUid)?.email : undefined;
         const counterpartEmail = counterpartUid ? profileCache.get(counterpartUid)?.email : undefined;
@@ -202,19 +263,27 @@ async function buildReviewerAssignments(
 export async function getThesisTeamMembers(thesisId: string): Promise<(UserProfile & { thesisRole: string })[]> {
     const thesis = await getThesisById(thesisId);
     if (!thesis) return [];
+    const group = thesis.groupId ? await getGroupById(thesis.groupId) : null;
+    const members = group?.members;
+    if (!members) {
+        return [];
+    }
+
     const memberRoles: { uid: string; role: string }[] = [];
 
-    if (thesis.leader) {
-        memberRoles.push({ uid: thesis.leader, role: 'Leader' });
+    if (members.leader) {
+        memberRoles.push({ uid: members.leader, role: 'Leader' });
     }
-    thesis.members?.forEach((memberUid) => {
-        memberRoles.push({ uid: memberUid, role: 'Member' });
+    members.members.forEach((memberUid) => {
+        if (memberUid) {
+            memberRoles.push({ uid: memberUid, role: 'Member' });
+        }
     });
-    if (thesis.adviser) {
-        memberRoles.push({ uid: thesis.adviser, role: 'Adviser' });
+    if (members.adviser) {
+        memberRoles.push({ uid: members.adviser, role: 'Adviser' });
     }
-    if (thesis.editor) {
-        memberRoles.push({ uid: thesis.editor, role: 'Editor' });
+    if (members.editor) {
+        memberRoles.push({ uid: members.editor, role: 'Editor' });
     }
 
     if (memberRoles.length === 0) {
@@ -264,7 +333,7 @@ export async function calculateThesisProgress(thesisId: string): Promise<number>
     return (approved / total) * 100;
 }
 
-function computeProgressRatio(thesis: ThesisData): number {
+export function computeThesisProgressRatio(thesis: ThesisData): number {
     if (!thesis.chapters || thesis.chapters.length === 0) {
         return 0;
     }
@@ -319,11 +388,17 @@ export async function getReviewerAssignmentsForUser(role: ReviewerRole, userUid?
 
     const theses = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
-        ...(docSnap.data() as ThesisData),
+        ...((): Omit<ThesisData, 'id'> => {
+            const data = docSnap.data() as ThesisData;
+            const { id: _ignored, ...rest } = data;
+            void _ignored;
+            return rest as Omit<ThesisData, 'id'>;
+        })(),
     }));
 
     const profileCache = new Map<string, UserProfile>();
-    return buildReviewerAssignments(theses, role, profileCache);
+    const groupCache = new Map<string, ThesisGroupMembers>();
+    return buildReviewerAssignments(theses, role, profileCache, groupCache);
 }
 
 /**
@@ -363,7 +438,12 @@ export function listenTheses(
         (snapshot) => {
             const theses = snapshot.docs.map((docSnap) => ({
                 id: docSnap.id,
-                ...(docSnap.data() as ThesisData),
+                ...((): Omit<ThesisData, 'id'> => {
+                    const data = docSnap.data() as ThesisData;
+                    const { id: _ignored, ...rest } = data;
+                    void _ignored;
+                    return rest as Omit<ThesisData, 'id'>;
+                })(),
             }));
             onData(theses);
         },
@@ -403,18 +483,24 @@ export function listenReviewerAssignmentsForUser(
         where(roleField, '==', userUid)
     );
     const profileCache = new Map<string, UserProfile>();
+    const groupCache = new Map<string, ThesisGroupMembers>();
 
     return onSnapshot(
         roleQuery,
         (snapshot: QuerySnapshot<DocumentData>) => {
             const theses = snapshot.docs.map((docSnap) => ({
                 id: docSnap.id,
-                ...(docSnap.data() as ThesisData),
+                ...((): Omit<ThesisData, 'id'> => {
+                    const data = docSnap.data() as ThesisData;
+                    const { id: _ignored, ...rest } = data;
+                    void _ignored;
+                    return rest as Omit<ThesisData, 'id'>;
+                })(),
             }));
 
             void (async () => {
                 try {
-                    const assignments = await buildReviewerAssignments(theses, role, profileCache);
+                    const assignments = await buildReviewerAssignments(theses, role, profileCache, groupCache);
                     onData(assignments);
                 } catch (error) {
                     if (error instanceof Error) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { getAvatarInitials } from '../../utils/avatarUtils';
-import { getProfile, getDisplayName as getDisplayNameAsync } from '../../utils/firebase/firestore/user';
+import { getProfile } from '../../utils/firebase/firestore/user';
+import { getDisplayName as getDisplayNameAsync } from '../../utils/userUtils';
 import type { UserProfile } from '../../types/profile';
 import MuiAvatar, { type AvatarProps as MuiAvatarProps } from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';

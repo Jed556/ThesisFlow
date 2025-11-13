@@ -13,6 +13,7 @@ export type ThesisRoleDisplay = 'Student (Leader)' | 'Student (Member)' | 'Advis
  * Thesis comment/feedback
  */
 export interface ThesisComment {
+    id: string;
     author: string; // Firebase UID of author
     date: string;
     comment: string;
@@ -37,11 +38,13 @@ export interface ThesisChapter {
  * Main thesis data
  */
 export interface ThesisData {
+    id?: string;
     title: string;
-    leader: string; // Firebase UID
-    members: string[]; // Firebase UIDs
-    adviser: string; // Firebase UID
-    editor: string; // Firebase UID
+    groupId: string;
+    leader?: string;
+    members?: string[];
+    adviser?: string;
+    editor?: string;
     submissionDate: string;
     lastUpdated: string;
     overallStatus: string;

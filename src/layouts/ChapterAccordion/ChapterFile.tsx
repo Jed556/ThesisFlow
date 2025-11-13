@@ -3,7 +3,7 @@ import { Typography, Box, Chip, Card, CardContent, IconButton, Alert, Stack, Too
 import { PictureAsPdf, Description, Delete, Download } from '@mui/icons-material';
 import { Avatar, Name } from '../../components/Avatar';
 import type { FileAttachment, FileType } from '../../types/file';
-import { getDisplayName } from '../../utils/firebase/firestore/user';
+import { getDisplayName } from '../../utils/userUtils';
 import { getChapterSubmissions } from '../../utils/fileUtils';
 
 /**

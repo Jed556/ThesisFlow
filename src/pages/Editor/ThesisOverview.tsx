@@ -17,7 +17,7 @@ import { AnimatedPage } from '../../components/Animate';
 import ChatBox from '../../components/Chat/ChatBox';
 import { listenTheses } from '../../utils/firebase/firestore/thesis';
 import { getFilesByThesis } from '../../utils/firebase/firestore/file';
-import { getDisplayName } from '../../utils/firebase/firestore/user';
+import { getDisplayName } from '../../utils/userUtils';
 import { getThesisRole } from '../../utils/roleUtils';
 
 export const metadata: NavigationItem = {
@@ -110,18 +110,18 @@ export default function EditorThesisOverviewPage() {
         const fetchThesisData = async () => {
             try {
                 // Fetch recent files for this thesis
-                const files = await getFilesByThesis(activeThesis.id);
+                const files = await getFilesByThesis(activeThesis!.id);
                 setRecentFiles(files.slice(0, 5)); // Get 5 most recent
 
                 // Fetch display names and roles for all participants
                 const names = new Map<string, string>();
                 const roles = new Map<string, string>();
                 const uids = [
-                    activeThesis.leader,
-                    ...activeThesis.members,
-                    activeThesis.adviser,
-                    activeThesis.editor
-                ].filter(Boolean);
+                    activeThesis!.leader,
+                    ...(activeThesis!.members ?? []),
+                    activeThesis!.adviser,
+                    activeThesis!.editor
+                ].filter((x): x is string => Boolean(x));
 
                 await Promise.all(
                     uids.map(async (uid) => {
@@ -214,9 +214,9 @@ export default function EditorThesisOverviewPage() {
                                     <Stack direction="row" spacing={2} alignItems="center">
                                         <AssessmentIcon color="primary" />
                                         <Box>
-                                            <Typography variant="h6">{activeThesis.title}</Typography>
+                                            <Typography variant="h6">{activeThesis!.title}</Typography>
                                             <Typography variant="body2" color="text.secondary">
-                                                Stage: {activeThesis.overallStatus}
+                                                Stage: {activeThesis!.overallStatus}
                                             </Typography>
                                         </Box>
                                     </Stack>
@@ -229,14 +229,14 @@ export default function EditorThesisOverviewPage() {
                                     </Box>
                                     <Stack spacing={1.5} sx={{ mt: 2 }}>
                                         <Typography variant="subtitle2">Students</Typography>
-                                        <Chip label={`${getCachedDisplayName(activeThesis.leader)} (Leader)`}
+                                        <Chip label={`${getCachedDisplayName(activeThesis!.leader)} (Leader)`}
                                             size="small" color="primary" variant="outlined" />
-                                        {activeThesis.members.length === 0 && (
+                                        {(activeThesis!.members ?? []).length === 0 && (
                                             <Typography variant="body2" color="text.secondary">
                                                 No additional team members registered.
                                             </Typography>
                                         )}
-                                        {activeThesis.members.map((memberUid: string) => (
+                                        {(activeThesis!.members ?? []).map((memberUid: string) => (
                                             <Chip key={memberUid} label={`${getCachedDisplayName(memberUid)} (Member)`}
                                                 size="small" variant="outlined" />
                                         ))}
@@ -282,12 +282,12 @@ export default function EditorThesisOverviewPage() {
                                         Focus chapters
                                     </Typography>
                                     <Stack spacing={1}>
-                                        {activeThesis.chapters.filter(ch => ch.status !== 'approved').length === 0 ? (
+                                        {activeThesis!.chapters.filter(ch => ch.status !== 'approved').length === 0 ? (
                                             <Typography variant="body2" color="text.secondary">
                                                 All chapters are currently approved.
                                             </Typography>
                                         ) : (
-                                            activeThesis.chapters
+                                            activeThesis!.chapters
                                                 .filter(ch => ch.status !== 'approved')
                                                 .map((chapter) => (
                                                     <Chip

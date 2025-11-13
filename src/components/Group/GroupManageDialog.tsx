@@ -6,7 +6,7 @@ import type { ThesisGroupFormData } from '../../types/group';
 import type { UserProfile } from '../../types/profile';
 import { GROUP_STATUS_OPTIONS, formatGroupStatus } from './constants';
 import { GrowTransition } from '../Animate';
-import { formatProfileLabel } from '../../utils/profileUtils';
+import { formatProfileLabel } from '../../utils/userUtils';
 
 export type GroupFormErrorKey = keyof ThesisGroupFormData | 'members' | 'general';
 

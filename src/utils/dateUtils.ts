@@ -6,6 +6,46 @@ import * as React from 'react';
  */
 
 /**
+ * Converts a date-like value to the yyyy-mm-dd format expected by date inputs.
+ */
+export function toDateInputString(value?: string | Date | null): string {
+    if (!value) return '';
+    const candidate = typeof value === 'string' ? new Date(value) : value;
+    if (!candidate || Number.isNaN(candidate.getTime())) {
+        return '';
+    }
+    return candidate.toISOString().slice(0, 10);
+}
+
+/**
+ * Normalizes a date input string into an ISO 8601 timestamp.
+ * Falls back to the provided date or now when parsing fails.
+ */
+export function fromDateInputString(value?: string | null, fallbackDate?: Date): string {
+    const fallback = fallbackDate ?? new Date();
+    if (!value) {
+        return fallback.toISOString();
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return fallback.toISOString();
+    }
+    return parsed.toISOString();
+}
+
+/**
+ * Formats a date-like value into a short, human readable string.
+ */
+export function formatDateShort(value?: string | Date | null, locale?: string): string {
+    if (!value) return '—';
+    const candidate = typeof value === 'string' ? new Date(value) : value;
+    if (!candidate || Number.isNaN(candidate.getTime())) {
+        return typeof value === 'string' ? value : '—';
+    }
+    return candidate.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
  * Normalizes supported date inputs (Date, ISO strings, Firestore timestamps) into Date instances.
  * @param value - Date-like input to normalize
  * @returns A Date instance or null if the value cannot be normalized
@@ -314,10 +354,8 @@ export function useTick(conservative: boolean = false, ticksPerSecond: number = 
             durationsSec.push(acc);
         }
 
-        let phase = 0;
         const startPhase = (p: number) => {
             cleanup();
-            phase = p;
             const interval = intervalsMs[Math.min(p, intervalsMs.length - 1)];
             id = setInterval(() => setNow(new Date()), interval);
             // schedule next phase if there is one
@@ -341,7 +379,7 @@ export function useTick(conservative: boolean = false, ticksPerSecond: number = 
  * @param order - Sort order ('asc' for oldest first, 'desc' for newest first)
  * @returns Sorted array
  */
-export function sortByDate<T extends Record<string, any>>(
+export function sortByDate<T extends Record<string, unknown>>(
     items: T[],
     dateKey: keyof T,
     order: 'asc' | 'desc' = 'asc'

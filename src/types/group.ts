@@ -5,16 +5,24 @@ export interface ThesisGroup {
     id: string;
     name: string;
     description?: string;
-    leader: string; // Firebase UID of the group leader
-    members: string[]; // Array of member Firebase UIDs
-    adviser?: string; // Firebase UID of the assigned adviser
-    editor?: string; // Firebase UID of the assigned editor
+    members: ThesisGroupMembers;
     createdAt: string;
     updatedAt: string;
     status: 'active' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
     department?: string;
     course?: string;
+}
+
+/**
+ * Thesis group members
+ */
+export interface ThesisGroupMembers {
+    leader: string; // Firebase UID of the group leader
+    members: string[]; // Array of member Firebase UIDs
+    adviser?: string; // Firebase UID of the assigned adviser
+    editor?: string; // Firebase UID of the assigned editor
+    panels?: string[]; // Array of panel member Firebase UIDs
 }
 
 /**

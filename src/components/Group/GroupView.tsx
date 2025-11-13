@@ -42,14 +42,14 @@ export const GroupView: React.FC<GroupViewProps> = ({
     onDelete,
     canManage,
 }) => {
-    const leaderProfile = group ? usersByEmail.get(group.leader) : undefined;
-    const adviserProfile = group?.adviser ? usersByEmail.get(group.adviser) : undefined;
-    const editorProfile = group?.editor ? usersByEmail.get(group.editor) : undefined;
+    const leaderProfile = group ? usersByEmail.get(group.members.leader) : undefined;
+    const adviserProfile = group?.members.adviser ? usersByEmail.get(group.members.adviser) : undefined;
+    const editorProfile = group?.members.editor ? usersByEmail.get(group.members.editor) : undefined;
     const memberLabels = React.useMemo(() => {
         if (!group) {
             return [] as { email: string; label: string }[];
         }
-        return group.members.map((memberEmail) => ({
+        return group.members.members.map((memberEmail) => ({
             email: memberEmail,
             label: getProfileLabel(usersByEmail.get(memberEmail)),
         }));

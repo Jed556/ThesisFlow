@@ -2,16 +2,29 @@
  * CSV import/export for Thesis Data
  */
 
-import type { ThesisData, ThesisChapter } from '../../types/thesis';
+import type { ThesisChapter } from '../../types/thesis';
 import { parseCsvText, normalizeHeader, mapHeaderIndexes, splitArrayField, generateCsvText } from './parser';
 
 /**
  * Import theses from CSV text
  */
-export function importThesesFromCsv(csvText: string): { parsed: ThesisData[]; errors: string[] } {
+export interface ThesisCsvRow {
+    title: string;
+    groupId: string;
+    leader: string;
+    members: string[];
+    adviser: string;
+    editor: string;
+    submissionDate: string;
+    lastUpdated: string;
+    overallStatus: string;
+    chapters: ThesisChapter[];
+}
+
+export function importThesesFromCsv(csvText: string): { parsed: ThesisCsvRow[]; errors: string[] } {
     const { headers, rows } = parseCsvText(csvText);
     const headerMap = mapHeaderIndexes(headers);
-    const parsed: ThesisData[] = [];
+    const parsed: ThesisCsvRow[] = [];
     const errors: string[] = [];
 
     rows.forEach((row, idx) => {
@@ -20,6 +33,12 @@ export function importThesesFromCsv(csvText: string): { parsed: ThesisData[]; er
         const title = get('title');
         if (!title) {
             errors.push(`row ${idx + 2}: missing title`);
+            return;
+        }
+
+        const groupId = get('groupId') || get('group_id');
+        if (!groupId) {
+            errors.push(`row ${idx + 2}: missing groupId`);
             return;
         }
 
@@ -67,8 +86,9 @@ export function importThesesFromCsv(csvText: string): { parsed: ThesisData[]; er
             errors.push(`row ${idx + 2}: failed parsing chapters JSON${detail}`);
         }
 
-        const thesis: ThesisData = {
+        const thesis: ThesisCsvRow = {
             title,
+            groupId,
             leader: get('leader') || '', // Firebase UID
             members, // Firebase UIDs
             adviser: get('adviser') || '', // Firebase UID
@@ -88,9 +108,10 @@ export function importThesesFromCsv(csvText: string): { parsed: ThesisData[]; er
 /**
  * Export theses to CSV text
  */
-export function exportThesesToCsv(theses: ThesisData[]): string {
+export function exportThesesToCsv(theses: ThesisCsvRow[]): string {
     const headers = [
         'title',
+        'groupId',
         'leader',
         'members',
         'adviser',
@@ -103,6 +124,7 @@ export function exportThesesToCsv(theses: ThesisData[]): string {
 
     const rows = theses.map(thesis => [
         thesis.title,
+        thesis.groupId,
         thesis.leader,
         thesis.members.join(';'),
         thesis.adviser,

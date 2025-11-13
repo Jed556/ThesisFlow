@@ -36,8 +36,8 @@ const getUserDisplayName = (profile: UserProfile | undefined): string => {
  * tappable to open the detailed group view.
  */
 export default function GroupCard({ group, usersByEmail, onClick, onEdit, onDelete, canManage }: GroupCardProps) {
-    const leaderProfile = usersByEmail.get(group.leader);
-    const memberCount = group.members?.length ?? 0;
+    const leaderProfile = usersByEmail.get(group.members.leader);
+    const memberCount = group.members?.members.length ?? 0;
 
     const handleCardClick = React.useCallback(() => {
         onClick?.(group);
