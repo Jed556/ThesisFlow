@@ -308,7 +308,14 @@ export async function getGroupsByMember(memberUid: string): Promise<ThesisGroup[
 export async function createGroup(group: Omit<ThesisGroup, 'id' | 'createdAt' | 'updatedAt'>): Promise<ThesisGroup> {
     try {
         const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
-        const newGroupRef = doc(groupsRef);
+        // Use leader's UID as the group ID for organized setup
+        const leaderUid = typeof group.members === 'object' && 'leader' in group.members
+            ? group.members.leader
+            : '';
+        if (!leaderUid) {
+            throw new Error('Leader UID is required to create a group');
+        }
+        const newGroupRef = doc(groupsRef, leaderUid);
 
         const sanitizedGroup = sanitizeGroupForWrite(group, { includeDefaultMembers: true });
 

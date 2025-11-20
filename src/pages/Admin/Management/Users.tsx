@@ -1028,13 +1028,13 @@ export default function AdminUsersPage() {
                             </TextField>
                             <TextField
                                 label="Department"
-                                value={formData.department?.trim() || ''}
+                                value={formData.department || ''}
                                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                                 fullWidth
                             />
                             <TextField
                                 label="Course"
-                                value={formData.course?.trim() || ''}
+                                value={formData.course || ''}
                                 onChange={(e) => setFormData({ ...formData, course: e.target.value })}
                                 fullWidth
                             />

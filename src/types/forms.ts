@@ -104,7 +104,9 @@ export interface FormTemplate {
     tags?: string[];
     /** Additional notes displayed to reviewers. */
     reviewerNotes?: string;
-    /** Suggested due date offset in days once assigned. */
+    /** Due date for the form (ISO date string). */
+    dueDate?: string;
+    /** @deprecated Use dueDate instead. Suggested due date offset in days once assigned. */
     dueInDays?: number;
     /** Default attachments bundled with the template. */
     attachments?: FileAttachment[];

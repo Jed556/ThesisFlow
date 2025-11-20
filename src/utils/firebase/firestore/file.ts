@@ -39,8 +39,8 @@ export async function setFileMetadata(
         updatedAt: new Date().toISOString()
     };
 
-    // Clean the data to remove undefined, null, and empty string values
-    const cleanedData = cleanData(metadata);
+    // Clean the data to remove undefined, null, and empty values (create mode)
+    const cleanedData = cleanData(metadata, 'create');
 
     await setDoc(ref, cleanedData, { merge: true });
 }
@@ -261,10 +261,11 @@ export async function updateFileMetadata(
     updates: Partial<FileAttachment>
 ): Promise<void> {
     const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
+    // Clean data: remove undefined (keep null to delete fields in update mode)
     const cleanedUpdates = cleanData({
         ...updates,
         updatedAt: new Date().toISOString()
-    });
+    }, 'update');
 
     await setDoc(ref, cleanedUpdates, { merge: true });
 }

@@ -12,6 +12,7 @@ import {
     serverTimestamp,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
+import { cleanData } from './firestore';
 import type { FormTemplate } from '../../../types/forms';
 
 const COLLECTION_NAME = 'formTemplates';
@@ -122,13 +123,14 @@ export async function createFormTemplate(
         const formsRef = collection(firebaseFirestore, COLLECTION_NAME);
         const newFormRef = doc(formsRef);
 
-        const formData = {
+        // Clean data to remove undefined, null, and empty values (create mode)
+        const cleanedForm = cleanData({
             ...form,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-        };
+        }, 'create');
 
-        await setDoc(newFormRef, formData);
+        await setDoc(newFormRef, cleanedForm);
 
         return {
             id: newFormRef.id,
@@ -152,10 +154,13 @@ export async function updateFormTemplate(formId: string, updates: Partial<FormTe
         // Remove id, createdAt from updates
         const { id, createdAt, ...updateData } = updates as Partial<FormTemplate>;
 
-        await updateDoc(formRef, {
+        // Clean data: remove undefined (keep null to delete fields in update mode)
+        const cleanedData = cleanData({
             ...updateData,
             updatedAt: serverTimestamp(),
-        });
+        }, 'update');
+
+        await updateDoc(formRef, cleanedData);
     } catch (error) {
         console.error('Error updating form template:', error);
         throw new Error('Failed to update form template');
@@ -192,7 +197,10 @@ export async function setFormTemplate(formId: string, form: FormTemplate): Promi
             formData.createdAt = serverTimestamp();
         }
 
-        await setDoc(formRef, formData);
+        // Clean data to remove undefined values (create mode)
+        const cleanedData = cleanData(formData, 'create');
+
+        await setDoc(formRef, cleanedData);
     } catch (error) {
         console.error('Error setting form template:', error);
         throw new Error('Failed to set form template');

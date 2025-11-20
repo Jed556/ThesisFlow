@@ -4,6 +4,10 @@ import {
     DialogTitle, Divider, IconButton, MenuItem, Paper, Stack, Step, StepLabel,
     Stepper, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs from 'dayjs';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -121,6 +125,16 @@ export default function AdminFormManagementPage() {
         availableGroups: [],
     });
 
+    // Local state for Step 0 to avoid expensive state updates on every keystroke
+    const [localFormDetails, setLocalFormDetails] = React.useState({
+        title: '',
+        description: '',
+        audience: 'student' as FormAudience,
+        status: 'draft' as FormTemplate['status'],
+        dueDate: undefined as string | undefined,
+        reviewerNotes: '',
+    });
+
     const [selectedFieldIndex, setSelectedFieldIndex] = React.useState<number | null>(null);
     const [formErrors, setFormErrors] = React.useState<Record<string, string>>({});
 
@@ -130,6 +144,49 @@ export default function AdminFormManagementPage() {
             isMountedRef.current = false;
         };
     }, []);
+
+    // Memoize columns to prevent DataGrid re-renders
+    const columns = React.useMemo<GridColDef<FormTemplate>[]>(() => [
+        {
+            field: 'title',
+            headerName: 'Form Title',
+            flex: 1.5,
+            minWidth: 250,
+        },
+        {
+            field: 'audience',
+            headerName: 'Audience',
+            width: 130,
+            renderCell: (params) => (
+                <Chip label={params.value} color="primary" size="small" sx={{ textTransform: 'capitalize' }} />
+            ),
+        },
+        {
+            field: 'fields',
+            headerName: 'Questions',
+            width: 100,
+            valueGetter: (value: FormField[]) => value.length,
+        },
+        {
+            field: 'status',
+            headerName: 'Status',
+            width: 120,
+            renderCell: (params) => (
+                <Chip
+                    label={params.value}
+                    color={STATUS_COLORS[params.value as FormTemplate['status']]}
+                    size="small"
+                    sx={{ textTransform: 'capitalize' }}
+                />
+            ),
+        },
+        {
+            field: 'updatedAt',
+            headerName: 'Last Updated',
+            width: 180,
+            valueFormatter: (value) => new Date(value as string).toLocaleString(),
+        },
+    ], []);
 
     // Track active form import jobs to pause reloads until the import finishes
     const hasActiveImport = useBackgroundJobFlag(
@@ -167,7 +224,7 @@ export default function AdminFormManagementPage() {
         loadData();
     }, [loadData]);
 
-    const resetBuilder = () => {
+    const resetBuilder = React.useCallback(() => {
         setBuilderState({
             template: {
                 title: '',
@@ -180,17 +237,25 @@ export default function AdminFormManagementPage() {
             workflow: [],
             availableGroups: [],
         });
+        setLocalFormDetails({
+            title: '',
+            description: '',
+            audience: 'student',
+            status: 'draft',
+            dueDate: undefined,
+            reviewerNotes: '',
+        });
         setSelectedFieldIndex(null);
         setActiveStep(0);
         setFormErrors({});
-    };
+    }, []);
 
-    const handleOpenCreateDialog = () => {
+    const handleOpenCreateDialog = React.useCallback(() => {
         resetBuilder();
         setDialogOpen(true);
-    };
+    }, [resetBuilder]);
 
-    const handleOpenEditDialog = (form: FormTemplate) => {
+    const handleOpenEditDialog = React.useCallback((form: FormTemplate) => {
         setSelectedForm(form);
         setBuilderState({
             template: {
@@ -200,35 +265,44 @@ export default function AdminFormManagementPage() {
                 status: form.status,
                 tags: form.tags || [],
                 dueInDays: form.dueInDays,
+                dueDate: form.dueDate,
                 reviewerNotes: form.reviewerNotes,
             },
             fields: [...form.fields],
             workflow: form.workflow || [],
             availableGroups: form.availableToGroups || [],
         });
+        setLocalFormDetails({
+            title: form.title,
+            description: form.description || '',
+            audience: form.audience,
+            status: form.status,
+            dueDate: form.dueDate,
+            reviewerNotes: form.reviewerNotes || '',
+        });
         setDialogOpen(true);
-    };
+    }, []);
 
-    const handleOpenDeleteDialog = (form: FormTemplate) => {
+    const handleOpenDeleteDialog = React.useCallback((form: FormTemplate) => {
         setSelectedForm(form);
         setDeleteDialogOpen(true);
-    };
+    }, []);
 
-    const handleCloseDialog = () => {
+    const handleCloseDialog = React.useCallback(() => {
         setDialogOpen(false);
         setDeleteDialogOpen(false);
         setSelectedForm(null);
         resetBuilder();
-    };
+    }, [resetBuilder]);
 
-    const validateStep = (step: number): boolean => {
+    const validateStep = React.useCallback((step: number): boolean => {
         const errors: Record<string, string> = {};
 
         if (step === 0) {
-            if (!builderState.template.title?.trim()) {
+            if (!localFormDetails.title?.trim()) {
                 errors.title = 'Form title is required';
             }
-            if (!builderState.template.audience) {
+            if (!localFormDetails.audience) {
                 errors.audience = 'Target audience is required';
             }
         } else if (step === 1) {
@@ -252,33 +326,76 @@ export default function AdminFormManagementPage() {
 
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
-    };
+    }, [localFormDetails.title, localFormDetails.audience, builderState.fields, builderState.workflow]);
 
-    const handleNext = () => {
+    const handleNext = React.useCallback(() => {
         if (validateStep(activeStep)) {
+            // When leaving step 0, commit local form details to builderState
+            if (activeStep === 0) {
+                setBuilderState(prev => ({
+                    ...prev,
+                    template: {
+                        ...prev.template,
+                        title: localFormDetails.title,
+                        description: localFormDetails.description,
+                        audience: localFormDetails.audience,
+                        status: localFormDetails.status,
+                        dueDate: localFormDetails.dueDate,
+                        reviewerNotes: localFormDetails.reviewerNotes,
+                    },
+                }));
+            }
             setActiveStep((prev) => prev + 1);
         }
-    };
+    }, [activeStep, validateStep, localFormDetails]);
 
-    const handleBack = () => {
+    const handleBack = React.useCallback(() => {
         setActiveStep((prev) => prev - 1);
-    };
+    }, []);
 
-    const handleSave = async () => {
+    const handleSave = React.useCallback(async () => {
         if (!validateStep(activeStep)) return;
+
+        // Commit local form details to builderState before saving
+        if (activeStep === 0) {
+            setBuilderState(prev => ({
+                ...prev,
+                template: {
+                    ...prev.template,
+                    title: localFormDetails.title,
+                    description: localFormDetails.description,
+                    audience: localFormDetails.audience,
+                    status: localFormDetails.status,
+                    dueDate: localFormDetails.dueDate,
+                    reviewerNotes: localFormDetails.reviewerNotes,
+                },
+            }));
+        }
 
         setSaving(true);
         try {
-            const formData: Omit<FormTemplate, 'id' | 'createdAt' | 'updatedAt'> = {
-                title: builderState.template.title!,
-                description: builderState.template.description,
-                version: selectedForm?.version || '1.0.0',
-                audience: builderState.template.audience!,
-                fields: builderState.fields.map((f, idx) => ({ ...f, id: f.id || `field-${idx}` })),
-                status: builderState.template.status!,
-                createdBy: selectedForm?.createdBy || session?.user?.uid || '',
+            // Use localFormDetails if on step 0, otherwise use builderState
+            const templateData = activeStep === 0 ? {
+                title: localFormDetails.title,
+                description: localFormDetails.description,
+                audience: localFormDetails.audience,
+                status: localFormDetails.status,
+                dueDate: localFormDetails.dueDate,
+                reviewerNotes: localFormDetails.reviewerNotes,
                 tags: builderState.template.tags,
-                reviewerNotes: builderState.template.reviewerNotes,
+            } : builderState.template;
+
+            const formData: Omit<FormTemplate, 'id' | 'createdAt' | 'updatedAt'> = {
+                title: templateData.title!,
+                description: templateData.description,
+                version: selectedForm?.version || '1.0.0',
+                audience: templateData.audience!,
+                fields: builderState.fields.map((f, idx) => ({ ...f, id: f.id || `field-${idx}` })),
+                status: templateData.status!,
+                createdBy: selectedForm?.createdBy || session?.user?.uid || '',
+                tags: templateData.tags,
+                reviewerNotes: templateData.reviewerNotes,
+                dueDate: templateData.dueDate,
                 dueInDays: builderState.template.dueInDays,
                 workflow: builderState.workflow,
                 availableToGroups: builderState.availableGroups,
@@ -308,7 +425,10 @@ export default function AdminFormManagementPage() {
         } finally {
             setSaving(false);
         }
-    };
+    }, [
+        activeStep, validateStep, localFormDetails, builderState,
+        selectedForm, forms, session?.user?.uid, handleCloseDialog, showNotification
+    ]);
 
     const handleDelete = async () => {
         if (!selectedForm) return;
@@ -409,49 +529,7 @@ export default function AdminFormManagementPage() {
         setBuilderState({ ...builderState, workflow: newWorkflow });
     };
 
-    const columns: GridColDef<FormTemplate>[] = [
-        {
-            field: 'title',
-            headerName: 'Form Title',
-            flex: 1.5,
-            minWidth: 250,
-        },
-        {
-            field: 'audience',
-            headerName: 'Audience',
-            width: 130,
-            renderCell: (params) => (
-                <Chip label={params.value} color="primary" size="small" sx={{ textTransform: 'capitalize' }} />
-            ),
-        },
-        {
-            field: 'fields',
-            headerName: 'Questions',
-            width: 100,
-            valueGetter: (value: FormField[]) => value.length,
-        },
-        {
-            field: 'status',
-            headerName: 'Status',
-            width: 120,
-            renderCell: (params) => (
-                <Chip
-                    label={params.value}
-                    color={STATUS_COLORS[params.value as FormTemplate['status']]}
-                    size="small"
-                    sx={{ textTransform: 'capitalize' }}
-                />
-            ),
-        },
-        {
-            field: 'updatedAt',
-            headerName: 'Last Updated',
-            width: 180,
-            valueFormatter: (value) => new Date(value as string).toLocaleString(),
-        },
-    ];
-
-    const handleExport = (selectedForms: FormTemplate[]) => {
+    const handleExport = React.useCallback((selectedForms: FormTemplate[]) => {
         try {
             const csvText = exportFormsToCsv(selectedForms);
             const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
@@ -469,9 +547,9 @@ export default function AdminFormManagementPage() {
             console.error('Error exporting forms:', error);
             showNotification('Failed to export forms to CSV', 'error');
         }
-    };
+    }, [showNotification]);
 
-    const handleImport = async (file: File) => {
+    const handleImport = React.useCallback(async (file: File) => {
         startJob(
             `Importing forms from ${file.name}`,
             async (updateProgress, signal) => {
@@ -573,9 +651,9 @@ export default function AdminFormManagementPage() {
         );
 
         showNotification('Form import started in the background.', 'info', 5000);
-    };
+    }, [startJob, showNotification]);
 
-    const getAdditionalActions = (params: GridRowParams<FormTemplate>) => [
+    const getAdditionalActions = React.useCallback((params: GridRowParams<FormTemplate>) => [
         <GridActionsCellItem
             key="edit"
             icon={<EditIcon />}
@@ -590,7 +668,7 @@ export default function AdminFormManagementPage() {
             onClick={() => handleOpenDeleteDialog(params.row)}
             showInMenu={false}
         />,
-    ];
+    ], [handleOpenEditDialog, handleOpenDeleteDialog]);
 
     if (userRole !== 'admin' && userRole !== 'developer') {
         return (
@@ -600,32 +678,37 @@ export default function AdminFormManagementPage() {
         );
     }
 
+    // Memoize DataGrid to prevent re-renders when dialog state changes
+    const dataGridSection = React.useMemo(() => (
+        <DataGrid
+            rows={forms}
+            columns={columns}
+            loading={loading}
+            initialPage={0}
+            initialPageSize={10}
+            pageSizeOptions={[5, 10, 25, 50]}
+            checkboxSelection
+            disableRowSelectionOnClick
+            height={600}
+            additionalActions={getAdditionalActions}
+            enableMultiDelete
+            enableExport
+            enableImport
+            importDisabled={hasActiveImport}
+            enableRefresh
+            enableAdd
+            enableQuickFilter
+            onRefresh={loadData}
+            onAdd={handleOpenCreateDialog}
+            onExport={handleExport}
+            onImport={handleImport}
+        />
+    ), [forms, columns, loading, getAdditionalActions, hasActiveImport, loadData, handleOpenCreateDialog, handleExport, handleImport]);
+
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ width: '100%' }}>
-                <DataGrid
-                    rows={forms}
-                    columns={columns}
-                    loading={loading}
-                    initialPage={0}
-                    initialPageSize={10}
-                    pageSizeOptions={[5, 10, 25, 50]}
-                    checkboxSelection
-                    disableRowSelectionOnClick
-                    height={600}
-                    additionalActions={getAdditionalActions}
-                    enableMultiDelete
-                    enableExport
-                    enableImport
-                    importDisabled={hasActiveImport}
-                    enableRefresh
-                    enableAdd
-                    enableQuickFilter
-                    onRefresh={loadData}
-                    onAdd={handleOpenCreateDialog}
-                    onExport={handleExport}
-                    onImport={handleImport}
-                />
+                {dataGridSection}
 
                 {/* Form Builder Dialog */}
                 <Dialog
@@ -659,12 +742,9 @@ export default function AdminFormManagementPage() {
                                 <Stack spacing={3}>
                                     <TextField
                                         label="Form Title"
-                                        value={builderState.template.title || ''}
+                                        value={localFormDetails.title || ''}
                                         onChange={(e) =>
-                                            setBuilderState({
-                                                ...builderState,
-                                                template: { ...builderState.template, title: e.target.value },
-                                            })
+                                            setLocalFormDetails(prev => ({ ...prev, title: e.target.value }))
                                         }
                                         error={!!formErrors.title}
                                         helperText={formErrors.title}
@@ -674,12 +754,9 @@ export default function AdminFormManagementPage() {
 
                                     <TextField
                                         label="Description"
-                                        value={builderState.template.description || ''}
+                                        value={localFormDetails.description || ''}
                                         onChange={(e) =>
-                                            setBuilderState({
-                                                ...builderState,
-                                                template: { ...builderState.template, description: e.target.value },
-                                            })
+                                            setLocalFormDetails(prev => ({ ...prev, description: e.target.value }))
                                         }
                                         multiline
                                         rows={3}
@@ -689,15 +766,12 @@ export default function AdminFormManagementPage() {
                                     <TextField
                                         select
                                         label="Target Audience"
-                                        value={builderState.template.audience || 'student'}
+                                        value={localFormDetails.audience || 'student'}
                                         onChange={(e) =>
-                                            setBuilderState({
-                                                ...builderState,
-                                                template: {
-                                                    ...builderState.template,
-                                                    audience: e.target.value as FormAudience,
-                                                },
-                                            })
+                                            setLocalFormDetails(prev => ({
+                                                ...prev,
+                                                audience: e.target.value as FormAudience,
+                                            }))
                                         }
                                         error={!!formErrors.audience}
                                         helperText={formErrors.audience || 'Who will fill out this form?'}
@@ -712,15 +786,12 @@ export default function AdminFormManagementPage() {
                                     <TextField
                                         select
                                         label="Status"
-                                        value={builderState.template.status || 'draft'}
+                                        value={localFormDetails.status || 'draft'}
                                         onChange={(e) =>
-                                            setBuilderState({
-                                                ...builderState,
-                                                template: {
-                                                    ...builderState.template,
-                                                    status: e.target.value as FormTemplate['status'],
-                                                },
-                                            })
+                                            setLocalFormDetails(prev => ({
+                                                ...prev,
+                                                status: e.target.value as FormTemplate['status'],
+                                            }))
                                         }
                                         fullWidth
                                     >
@@ -729,31 +800,30 @@ export default function AdminFormManagementPage() {
                                         <MenuItem value="archived">Archived</MenuItem>
                                     </TextField>
 
-                                    <TextField
-                                        label="Due In (Days)"
-                                        type="number"
-                                        value={builderState.template.dueInDays || ''}
-                                        onChange={(e) =>
-                                            setBuilderState({
-                                                ...builderState,
-                                                template: {
-                                                    ...builderState.template,
-                                                    dueInDays: Number(e.target.value) || undefined,
+                                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+                                        <DatePicker
+                                            label="Due Date"
+                                            value={localFormDetails.dueDate ? dayjs(localFormDetails.dueDate) : null}
+                                            onChange={(newValue) =>
+                                                setLocalFormDetails(prev => ({
+                                                    ...prev,
+                                                    dueDate: newValue ? newValue.toISOString() : undefined,
+                                                }))
+                                            }
+                                            slotProps={{
+                                                textField: {
+                                                    fullWidth: true,
+                                                    helperText: 'Select the due date for this form',
                                                 },
-                                            })
-                                        }
-                                        helperText="Suggested due date offset in days once assigned"
-                                        fullWidth
-                                    />
+                                            }}
+                                        />
+                                    </LocalizationProvider>
 
                                     <TextField
                                         label="Reviewer Notes"
-                                        value={builderState.template.reviewerNotes || ''}
+                                        value={localFormDetails.reviewerNotes || ''}
                                         onChange={(e) =>
-                                            setBuilderState({
-                                                ...builderState,
-                                                template: { ...builderState.template, reviewerNotes: e.target.value },
-                                            })
+                                            setLocalFormDetails(prev => ({ ...prev, reviewerNotes: e.target.value }))
                                         }
                                         multiline
                                         rows={2}
@@ -779,12 +849,26 @@ export default function AdminFormManagementPage() {
                                                 elevation={selectedFieldIndex === index ? 4 : 1}
                                                 sx={{
                                                     p: 2,
-                                                    cursor: 'pointer',
+                                                    position: 'relative',
                                                     border: selectedFieldIndex === index ? 2 : 0,
                                                     borderColor: 'primary.main',
                                                 }}
-                                                onClick={() => setSelectedFieldIndex(index)}
                                             >
+                                                {/* Click overlay - only visible when not selected */}
+                                                {selectedFieldIndex !== index && (
+                                                    <Box
+                                                        onClick={() => setSelectedFieldIndex(index)}
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            top: 0,
+                                                            left: 0,
+                                                            right: 0,
+                                                            bottom: 0,
+                                                            cursor: 'pointer',
+                                                            zIndex: 1,
+                                                        }}
+                                                    />
+                                                )}
                                                 <Stack spacing={2}>
                                                     <Stack direction="row" spacing={1} alignItems="center">
                                                         <TextField
@@ -797,7 +881,6 @@ export default function AdminFormManagementPage() {
                                                             helperText={formErrors[`field-${index}-label`]}
                                                             size="small"
                                                             fullWidth
-                                                            onClick={(e) => e.stopPropagation()}
                                                         />
                                                         <TextField
                                                             select
@@ -810,7 +893,6 @@ export default function AdminFormManagementPage() {
                                                             }
                                                             size="small"
                                                             sx={{ minWidth: 150 }}
-                                                            onClick={(e) => e.stopPropagation()}
                                                         >
                                                             {FIELD_TYPES.map((type) => (
                                                                 <MenuItem key={type.value} value={type.value}>

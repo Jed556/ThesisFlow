@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Box, Button, CircularProgress, Stack, Typography, Autocomplete, TextField } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import GroupsIcon from '@mui/icons-material/Groups';
 import AddIcon from '@mui/icons-material/Add';
@@ -19,7 +20,6 @@ import {
     getAllGroups,
     createGroup,
     updateGroup,
-    deleteGroup,
     setGroup,
     getUsersByFilter,
 } from '../../../utils/firebase/firestore';
@@ -27,8 +27,6 @@ import { importGroupsFromCsv, exportGroupsToCsv } from '../../../utils/csv/group
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
 import GroupCard from '../../../components/Group/GroupCard';
 import GroupManageDialog, { type GroupFormErrorKey } from '../../../components/Group/GroupManageDialog';
-import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
-import { GroupView } from '../../../components/Group/GroupView';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -70,6 +68,8 @@ export default function AdminGroupManagementPage() {
     const session = useSession<Session>();
     const { showNotification } = useSnackbar();
     const { startJob } = useBackgroundJobControls();
+    const navigate = useNavigate();
+    const location = useLocation();
     const userRole = session?.user?.role;
     const canManage = userRole === 'admin' || userRole === 'developer';
 
@@ -77,8 +77,6 @@ export default function AdminGroupManagementPage() {
     const [users, setUsers] = React.useState<UserProfile[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
-    const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
-    const [viewGroup, setViewGroup] = React.useState<ThesisGroup | null>(null);
     const [editMode, setEditMode] = React.useState(false);
     const [formData, setFormData] = React.useState<ThesisGroupFormData>({ ...emptyFormData });
     const [activeStep, setActiveStep] = React.useState(0);
@@ -90,6 +88,10 @@ export default function AdminGroupManagementPage() {
     const [studentOptions, setStudentOptions] = React.useState<UserProfile[]>([]);
     const [studentOptionsLoading, setStudentOptionsLoading] = React.useState(false);
     const lastStudentFilterRef = React.useRef<string | null>(null);
+
+    // Filter states
+    const [selectedDepartment, setSelectedDepartment] = React.useState<string>('');
+    const [selectedCourse, setSelectedCourse] = React.useState<string>('');
 
     const isMountedRef = React.useRef(true);
     React.useEffect(() => {
@@ -117,7 +119,9 @@ export default function AdminGroupManagementPage() {
     const studentLookup = React.useMemo(() => {
         const map = new Map<string, UserProfile>();
         students.forEach((student) => {
-            map.set(student.email, student);
+            if (student.uid) {
+                map.set(student.uid, student);
+            }
         });
         return map;
     }, [students]);
@@ -133,11 +137,25 @@ export default function AdminGroupManagementPage() {
         return Array.from(unique).sort((a, b) => a.localeCompare(b));
     }, [users]);
 
-    const usersByEmail = React.useMemo(() => {
+    // Get courses filtered by selected department
+    const courseOptions = React.useMemo(() => {
+        if (!selectedDepartment) {
+            return [];
+        }
+        const unique = new Set<string>();
+        users.forEach((user) => {
+            if (user.department?.trim() === selectedDepartment && user.course?.trim()) {
+                unique.add(user.course.trim());
+            }
+        });
+        return Array.from(unique).sort((a, b) => a.localeCompare(b));
+    }, [users, selectedDepartment]);
+
+    const usersByUid = React.useMemo(() => {
         const map = new Map<string, UserProfile>();
         users.forEach((user) => {
-            if (user.email) {
-                map.set(user.email, user);
+            if (user.uid) {
+                map.set(user.uid, user);
             }
         });
         return map;
@@ -198,9 +216,9 @@ export default function AdminGroupManagementPage() {
     );
 
     const computeCourseInfo = React.useCallback(
-        (leaderEmail: string, memberEmails: string[]): CourseValidationResult => {
-            const participantEmails = [leaderEmail, ...memberEmails].filter((email): email is string => !!email);
-            if (participantEmails.length === 0) {
+        (leaderUid: string, memberUids: string[]): CourseValidationResult => {
+            const participantUids = [leaderUid, ...memberUids].filter((uid): uid is string => !!uid);
+            if (participantUids.length === 0) {
                 return {};
             }
 
@@ -210,8 +228,8 @@ export default function AdminGroupManagementPage() {
                 return parts.length > 0 ? parts.join(' ') : user.email;
             };
 
-            const firstStudentEmail = participantEmails[0];
-            const firstStudent = studentLookup.get(firstStudentEmail);
+            const firstStudentUid = participantUids[0];
+            const firstStudent = studentLookup.get(firstStudentUid);
 
             if (!firstStudent) {
                 return {
@@ -228,8 +246,8 @@ export default function AdminGroupManagementPage() {
                 };
             }
 
-            for (const email of participantEmails.slice(1)) {
-                const student = studentLookup.get(email);
+            for (const uid of participantUids.slice(1)) {
+                const student = studentLookup.get(uid);
                 if (!student) {
                     return {
                         course: firstCourse,
@@ -271,8 +289,21 @@ export default function AdminGroupManagementPage() {
             const allUsers = await getAllUsers();
             setUsers(allUsers);
 
-            // Load groups from Firestore
-            const groupsData = await getAllGroups();
+            // Load groups based on filters
+            let groupsData: ThesisGroup[] = [];
+
+            // Only load groups if filters are applied
+            if (selectedDepartment || selectedCourse) {
+                const allGroups = await getAllGroups();
+
+                // Filter by department and/or course
+                groupsData = allGroups.filter(group => {
+                    const deptMatch = !selectedDepartment || group.department === selectedDepartment;
+                    const courseMatch = !selectedCourse || group.course === selectedCourse;
+                    return deptMatch && courseMatch;
+                });
+            }
+
             setGroups(groupsData);
         } catch (error) {
             console.error('Error loading data:', error);
@@ -280,11 +311,48 @@ export default function AdminGroupManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [showNotification, hasActiveImport]);
+    }, [showNotification, hasActiveImport, selectedDepartment, selectedCourse]);
 
     React.useEffect(() => {
         loadData();
     }, [loadData]);
+
+    // Handle edit mode from navigation state (from GroupView)
+    React.useEffect(() => {
+        const state = location.state as { editGroupId?: string } | null;
+        if (state?.editGroupId && groups.length > 0) {
+            const groupToEdit = groups.find(g => g.id === state.editGroupId);
+            if (groupToEdit) {
+                setEditMode(true);
+                setSelectedGroup(groupToEdit);
+                const sanitizedMembers = Array.from(
+                    new Set((groupToEdit.members.members || []).filter((uid) => uid && uid !== groupToEdit.members.leader))
+                );
+                const derivedCourse = computeCourseInfo(groupToEdit.members.leader, sanitizedMembers).course;
+                setFormData({
+                    id: groupToEdit.id,
+                    name: groupToEdit.name,
+                    description: groupToEdit.description,
+                    leader: groupToEdit.members.leader,
+                    members: sanitizedMembers,
+                    adviser: groupToEdit.members.adviser ?? '',
+                    editor: groupToEdit.members.editor ?? '',
+                    status: groupToEdit.status,
+                    thesisTitle: groupToEdit.thesisTitle,
+                    department: groupToEdit.department,
+                    course: groupToEdit.course || derivedCourse || '',
+                });
+                setFormErrors({});
+                setActiveStep(0);
+                setStudentOptions([]);
+                setStudentOptionsLoading(false);
+                lastStudentFilterRef.current = null;
+                setManageDialogOpen(true);
+                // Clear navigation state
+                navigate(location.pathname, { replace: true, state: null });
+            }
+        }
+    }, [location.state, groups, navigate, location.pathname, computeCourseInfo]);
 
     const handleRefresh = React.useCallback(() => {
         loadData();
@@ -332,52 +400,23 @@ export default function AdminGroupManagementPage() {
     const handleOpenCreateDialog = React.useCallback(() => {
         setEditMode(false);
         setSelectedGroup(null);
-        setFormData({ ...emptyFormData });
+        // Pre-populate department and course from active filters
+        setFormData({
+            ...emptyFormData,
+            department: selectedDepartment,
+            course: selectedCourse,
+        });
         setFormErrors({});
         setActiveStep(0);
         setStudentOptions([]);
         setStudentOptionsLoading(false);
         lastStudentFilterRef.current = null;
         setManageDialogOpen(true);
-    }, []);
+    }, [selectedDepartment, selectedCourse]);
 
-    const handleOpenEditDialog = React.useCallback(
-        (group: ThesisGroup) => {
-            setEditMode(true);
-            setSelectedGroup(group);
-            setViewGroup(null);
-            const sanitizedMembers = Array.from(
-                new Set((group.members.members || []).filter((email) => email && email !== group.members.leader))
-            );
-            const derivedCourse = computeCourseInfo(group.members.leader, sanitizedMembers).course;
-            setFormData({
-                id: group.id,
-                name: group.name,
-                description: group.description,
-                leader: group.members.leader,
-                members: sanitizedMembers,
-                adviser: group.members.adviser ?? '',
-                editor: group.members.editor ?? '',
-                status: group.status,
-                thesisTitle: group.thesisTitle,
-                department: group.department,
-                course: group.course || derivedCourse || '',
-            });
-            setFormErrors({});
-            setActiveStep(0);
-            setStudentOptions([]);
-            setStudentOptionsLoading(false);
-            lastStudentFilterRef.current = null;
-            setManageDialogOpen(true);
-        },
-        [computeCourseInfo]
-    );
-
-    const handleOpenDeleteDialog = React.useCallback((group: ThesisGroup) => {
-        setSelectedGroup(group);
-        setViewGroup(null);
-        setDeleteDialogOpen(true);
-    }, []);
+    const handleViewGroup = React.useCallback((group: ThesisGroup) => {
+        navigate(`/group/${group.id}`);
+    }, [navigate]);
 
     const handleCloseManageDialog = React.useCallback(() => {
         setManageDialogOpen(false);
@@ -389,16 +428,6 @@ export default function AdminGroupManagementPage() {
         setStudentOptions([]);
         setStudentOptionsLoading(false);
         lastStudentFilterRef.current = null;
-    }, []);
-
-    const handleCloseDeleteDialog = React.useCallback(() => {
-        setDeleteDialogOpen(false);
-        setSelectedGroup(null);
-        setSaving(false);
-    }, []);
-
-    const handleCloseView = React.useCallback(() => {
-        setViewGroup(null);
     }, []);
 
     const collectErrorsForStep = React.useCallback((step: number): Partial<Record<GroupFormErrorKey, string>> => {
@@ -474,8 +503,8 @@ export default function AdminGroupManagementPage() {
 
     const handleLeaderChange = React.useCallback(
         (newValue: UserProfile | null) => {
-            const nextLeader = newValue?.email ?? '';
-            const filteredMembers = formData.members.filter((email) => email !== nextLeader);
+            const nextLeader = newValue?.uid ?? '';
+            const filteredMembers = formData.members.filter((uid) => uid !== nextLeader);
             const courseResult = computeCourseInfo(nextLeader, filteredMembers);
 
             // Don't show "missing course" errors immediately during selection
@@ -498,8 +527,8 @@ export default function AdminGroupManagementPage() {
 
     const handleMembersChange = React.useCallback(
         (selectedUsers: UserProfile[]) => {
-            const nextMemberEmails = Array.from(new Set(selectedUsers.map((user) => user.email)));
-            const courseResult = computeCourseInfo(formData.leader, nextMemberEmails);
+            const nextMemberUids = Array.from(new Set(selectedUsers.map((user) => user.uid).filter(Boolean) as string[]));
+            const courseResult = computeCourseInfo(formData.leader, nextMemberUids);
 
             applyMemberError(courseResult.error);
 
@@ -520,7 +549,7 @@ export default function AdminGroupManagementPage() {
 
             setFormData((prev) => ({
                 ...prev,
-                members: nextMemberEmails,
+                members: nextMemberUids,
                 course: courseResult.course ?? '',
             }));
         },
@@ -562,14 +591,14 @@ export default function AdminGroupManagementPage() {
     ]);
 
     const formatUserLabel = React.useCallback(
-        (email: string | null | undefined): string => {
-            if (!email) {
+        (uid: string | null | undefined): string => {
+            if (!uid) {
                 return '—';
             }
 
-            const user = usersByEmail.get(email);
+            const user = users.find(u => u.uid === uid);
             if (!user) {
-                return email;
+                return uid;
             }
 
             const first = user.name?.first?.trim();
@@ -578,7 +607,7 @@ export default function AdminGroupManagementPage() {
 
             return displayName ? `${displayName} (${user.email})` : user.email;
         },
-        [usersByEmail]
+        [usersByUid]
     );
 
     const reviewCourse = React.useMemo(() => {
@@ -587,8 +616,11 @@ export default function AdminGroupManagementPage() {
     }, [computeCourseInfo, formData.course, formData.leader, formData.members]);
 
     const memberChipData = React.useMemo(
-        () => formData.members.map((email) => ({ email, label: formatUserLabel(email) })),
-        [formData.members, formatUserLabel]
+        () => formData.members.map((uid) => {
+            const user = users.find(u => u.uid === uid);
+            return { email: user?.email || uid, label: formatUserLabel(uid) };
+        }),
+        [formData.members, formatUserLabel, users]
     );
 
     const handleSave = async () => {
@@ -638,6 +670,8 @@ export default function AdminGroupManagementPage() {
                 const createdGroup = await createGroup(newGroupData);
                 setGroups((prev) => [...prev, createdGroup]);
                 showNotification(`Group "${createdGroup.name}" created successfully`, 'success');
+                // Navigate to the newly created group
+                navigate(`/group-management/${createdGroup.id}`);
             } else {
                 // Update existing group
                 if (!selectedGroup) return;
@@ -678,23 +712,6 @@ export default function AdminGroupManagementPage() {
             setSaving(false);
         }
     };
-
-    const handleDelete = React.useCallback(async () => {
-        if (!selectedGroup) return;
-
-        setSaving(true);
-        try {
-            await deleteGroup(selectedGroup.id);
-            setGroups((prev) => prev.filter((group) => group.id !== selectedGroup.id));
-            showNotification(`Group "${selectedGroup.name}" deleted successfully`, 'success');
-            handleCloseDeleteDialog();
-        } catch (error) {
-            console.error('Error deleting group:', error);
-            showNotification('Failed to delete group. Please try again.', 'error');
-        } finally {
-            setSaving(false);
-        }
-    }, [handleCloseDeleteDialog, selectedGroup, showNotification]);
 
     const handleExport = (selectedGroups: ThesisGroup[]) => {
         try {
@@ -905,6 +922,45 @@ export default function AdminGroupManagementPage() {
                     onChange={handleFileInputChange}
                 />
 
+                {/* Filters */}
+                <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+                    <Autocomplete
+                        options={departmentOptions}
+                        value={selectedDepartment}
+                        onChange={(_, newValue) => {
+                            setSelectedDepartment(newValue || '');
+                            setSelectedCourse(''); // Reset course when department changes
+                        }}
+                        renderInput={(params) => (
+                            <TextField {...params} label="Filter by Department" placeholder="Select department" />
+                        )}
+                        sx={{ minWidth: 250 }}
+                        size="small"
+                    />
+                    <Autocomplete
+                        options={courseOptions}
+                        value={selectedCourse}
+                        onChange={(_, newValue) => setSelectedCourse(newValue || '')}
+                        renderInput={(params) => (
+                            <TextField {...params} label="Filter by Course" placeholder="Select course" />
+                        )}
+                        sx={{ minWidth: 250 }}
+                        size="small"
+                        disabled={!selectedDepartment}
+                    />
+                    {(selectedDepartment || selectedCourse) && (
+                        <Button
+                            variant="text"
+                            onClick={() => {
+                                setSelectedDepartment('');
+                                setSelectedCourse('');
+                            }}
+                        >
+                            Clear Filters
+                        </Button>
+                    )}
+                </Stack>
+
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
                         <CircularProgress />
@@ -912,10 +968,12 @@ export default function AdminGroupManagementPage() {
                 ) : groups.length === 0 ? (
                     <Box sx={{ textAlign: 'center', py: 8 }}>
                         <Typography variant="h6" gutterBottom>
-                            No groups yet
+                            {selectedDepartment || selectedCourse ? 'No groups found' : 'Select filters to view groups'}
                         </Typography>
                         <Typography color="text.secondary">
-                            Create a group to start tracking thesis progress.
+                            {selectedDepartment || selectedCourse
+                                ? 'No groups match the selected filters.'
+                                : 'Use the department and course filters above to load groups.'}
                         </Typography>
                     </Box>
                 ) : (
@@ -924,11 +982,8 @@ export default function AdminGroupManagementPage() {
                             <Grid key={group.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                                 <GroupCard
                                     group={group}
-                                    usersByEmail={usersByEmail}
-                                    onClick={setViewGroup}
-                                    onEdit={handleOpenEditDialog}
-                                    onDelete={handleOpenDeleteDialog}
-                                    canManage={canManage}
+                                    usersByUid={usersByUid}
+                                    onClick={handleViewGroup}
                                 />
                             </Grid>
                         ))}
@@ -938,6 +993,7 @@ export default function AdminGroupManagementPage() {
                 <GroupManageDialog
                     open={manageDialogOpen}
                     editMode={editMode}
+                    isAdmin={true}
                     activeStep={activeStep}
                     steps={formSteps}
                     formData={formData}
@@ -958,24 +1014,6 @@ export default function AdminGroupManagementPage() {
                     onBack={handleBackStep}
                     onSubmit={handleSave}
                     formatUserLabel={formatUserLabel}
-                />
-
-                <GroupDeleteDialog
-                    open={deleteDialogOpen}
-                    group={selectedGroup}
-                    onCancel={handleCloseDeleteDialog}
-                    onConfirm={handleDelete}
-                    loading={saving}
-                />
-
-                <GroupView
-                    open={!!viewGroup}
-                    group={viewGroup}
-                    usersByEmail={usersByEmail}
-                    onClose={handleCloseView}
-                    onEdit={handleOpenEditDialog}
-                    onDelete={handleOpenDeleteDialog}
-                    canManage={canManage}
                 />
             </Box>
         </AnimatedPage>

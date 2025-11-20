@@ -374,13 +374,14 @@ export async function buildRoutes(): Promise<RouteObject[]> {
     // Get all pages
     const allPages = Object.values(PAGE_REGISTRY);
 
-    // Separate special pages (like signin) from regular pages
-    const specialPages = allPages.filter(page => isHidden(page.metadata));
-    const visiblePages = allPages.filter(page => !isHidden(page.metadata));
+    // Separate pages that don't require layout (like signin) from those that do
+    // requiresLayout defaults to true, so only pages explicitly set to false are excluded
+    const pagesWithoutLayout = allPages.filter(page => page.metadata.requiresLayout === false);
+    const pagesWithLayout = allPages.filter(page => page.metadata.requiresLayout !== false);
 
     // Get all child segments to exclude from top-level routes
     const childSegments = new Set<string>();
-    visiblePages.forEach(page => {
+    pagesWithLayout.forEach(page => {
         if (page.metadata.children && page.metadata.children.length > 0) {
             page.metadata.children.forEach(child => {
                 // Add child to set regardless of its visibility for route exclusion
@@ -390,7 +391,7 @@ export async function buildRoutes(): Promise<RouteObject[]> {
     });
 
     // Filter out pages that are children of other pages from top-level routes
-    const topLevelPages = visiblePages.filter(page =>
+    const topLevelPages = pagesWithLayout.filter(page =>
         !childSegments.has(page.metadata.segment || '')
     );
 
@@ -436,8 +437,8 @@ export async function buildRoutes(): Promise<RouteObject[]> {
         children: layoutChildren,
     });
 
-    // Add special routes (like signin)
-    specialPages.forEach(page => {
+    // Add pages without layout (like signin)
+    pagesWithoutLayout.forEach(page => {
         routes.push({
             path: `/${resolveSegment(page.metadata)}`,
             Component: page.default,

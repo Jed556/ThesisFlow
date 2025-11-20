@@ -36,10 +36,16 @@ import {
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ThesisGroup } from '../../types/group';
+import type { ThesisGroup, ThesisGroupFormData } from '../../types/group';
 import type { UserProfile } from '../../types/profile';
+import type { GroupFormErrorKey } from '../../components/Group/GroupManageDialog';
 import { AnimatedPage, AnimatedList } from '../../components/Animate';
+import GroupCard from '../../components/Group/GroupCard';
+import GroupManageDialog from '../../components/Group/GroupManageDialog';
+import GroupDeleteDialog from '../../components/Group/GroupDeleteDialog';
 import { Avatar, Name } from '../../components/Avatar';
+import { useSnackbar } from '../../contexts/SnackbarContext';
+import { formatProfileLabel } from '../../utils/userUtils';
 import {
     createGroup,
     deleteGroup,
@@ -54,7 +60,8 @@ import {
     getGroupsByMember,
     acceptJoinRequest,
     rejectJoinRequest,
-} from '../../utils/firebase/firestore/groups';
+    getUsersByFilter,
+} from '../../utils/firebase/firestore';
 import { getUserById } from '../../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
@@ -89,6 +96,9 @@ export default function StudentGroupPage() {
     // My invites
     const [myInvites, setMyInvites] = React.useState<GroupWithInvites[]>([]);
 
+    // Users map for GroupCard
+    const [usersByUid, setUsersByUid] = React.useState<Map<string, UserProfile>>(new Map());
+
     // Loading & error states
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -100,13 +110,33 @@ export default function StudentGroupPage() {
     const [previewDialogOpen, setPreviewDialogOpen] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
-    // Form states
-    const [groupName, setGroupName] = React.useState('');
-    const [groupDescription, setGroupDescription] = React.useState('');
+    // Form states for GroupManageDialog
+    const [formData, setFormData] = React.useState<ThesisGroupFormData>({
+        name: '',
+        description: '',
+        leader: '',
+        members: [],
+        adviser: '',
+        editor: '',
+        status: 'draft',
+        thesisTitle: '',
+        department: '',
+        course: '',
+    });
+    const [formErrors, setFormErrors] = React.useState<Partial<Record<GroupFormErrorKey, string>>>({});
+    const [activeStep, setActiveStep] = React.useState(0);
+    const [saving, setSaving] = React.useState(false);
+    const [studentOptions, setStudentOptions] = React.useState<UserProfile[]>([]);
+    const [studentOptionsLoading, setStudentOptionsLoading] = React.useState(false);
+    const formSteps = React.useMemo(() => ['Group Details', 'Team', 'Review'], []);
+
+    // Simple dialog states
     const [inviteUid, setInviteUid] = React.useState('');
     const [searchGroupId, setSearchGroupId] = React.useState('');
     const [previewGroup, setPreviewGroup] = React.useState<ThesisGroup | null>(null);
     const [previewMembers, setPreviewMembers] = React.useState<Map<string, UserProfile>>(new Map());
+
+    const { showNotification } = useSnackbar();
 
     // Load user profile
     React.useEffect(() => {
@@ -180,11 +210,34 @@ export default function StudentGroupPage() {
                     }
                     const courseGroups = await getGroupsByCourse(userProfile.course);
 
-                    // Filter out my group and groups that are not draft/review/active
+                    // Filter groups by same department and course, exclude my group, and only include draft/review/active
                     const available = courseGroups.filter(g =>
                         g.id !== uniqueGroups[0]?.id &&
+                        g.department === userProfile.department &&
+                        g.course === userProfile.course &&
                         (g.status === 'draft' || g.status === 'review' || g.status === 'active')
                     );
+
+                    // Load user profiles for all groups
+                    const allMemberUids = new Set<string>();
+                    available.forEach(g => {
+                        allMemberUids.add(g.members.leader);
+                        g.members.members.forEach(m => allMemberUids.add(m));
+                    });
+
+                    const usersMap = new Map<string, UserProfile>();
+                    await Promise.all(
+                        Array.from(allMemberUids).map(async (uid) => {
+                            const profile = await getUserById(uid);
+                            if (profile) {
+                                usersMap.set(uid, profile);
+                            }
+                        })
+                    );
+
+                    if (!cancelled) {
+                        setUsersByUid(usersMap);
+                    }
 
                     // Separate groups where I have invites
                     const invites = available.filter(g => g.invites?.includes(userUid));
@@ -212,37 +265,171 @@ export default function StudentGroupPage() {
         };
     }, [userUid, userProfile?.course]);
 
-    const handleCreateGroup = async () => {
-        if (!userUid || !userProfile?.course) return;
+    const handleOpenCreateDialog = React.useCallback(() => {
+        if (!userUid || !userProfile) return;
 
+        // Pre-fill form with student's info
+        setFormData({
+            name: '',
+            description: '',
+            leader: userUid,
+            members: [],
+            adviser: '',
+            editor: '',
+            status: 'draft',
+            thesisTitle: '',
+            department: userProfile.department || '',
+            course: userProfile.course || '',
+        });
+        setFormErrors({});
+        setActiveStep(0);
+        setStudentOptions([]);
+        setStudentOptionsLoading(false);
+        setCreateDialogOpen(true);
+    }, [userUid, userProfile]);
+
+    const handleFormFieldChange = React.useCallback((changes: Partial<ThesisGroupFormData>) => {
+        // Prevent changes to department and course - these must match the creator
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { department, course, ...allowedChanges } = changes;
+        setFormData((prev) => ({ ...prev, ...allowedChanges }));
+        // Clear related errors
+        setFormErrors((prevErrors) => {
+            const nextErrors = { ...prevErrors };
+            if (changes.name && nextErrors.name) delete nextErrors.name;
+            return nextErrors;
+        });
+    }, []);
+
+    const handleNextStep = React.useCallback(async () => {
+        // Validate current step
+        const errors: Partial<Record<GroupFormErrorKey, string>> = {};
+
+        if (activeStep === 0) {
+            if (!formData.name.trim()) {
+                errors.name = 'Group name is required';
+            }
+        }
+
+        if (activeStep === 1) {
+            // Students manage their own members; validation handled by dialog
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFormErrors(errors);
+            return;
+        }
+
+        if (activeStep === 0 && userProfile?.course) {
+            // Load students from same course
+            try {
+                setStudentOptionsLoading(true);
+                const students = await getUsersByFilter({
+                    role: 'student',
+                    course: userProfile.course,
+                });
+                setStudentOptions(students.filter(s => s.uid !== userUid));
+            } catch (err) {
+                console.error('Failed to load students:', err);
+                showNotification('Failed to load students', 'error');
+            } finally {
+                setStudentOptionsLoading(false);
+            }
+        }
+
+        setActiveStep((prev) => Math.min(prev + 1, formSteps.length - 1));
+    }, [activeStep, formData.name, formSteps.length, userProfile?.course, userUid, showNotification]);
+
+    const handleBackStep = React.useCallback(() => {
+        setActiveStep((prev) => Math.max(prev - 1, 0));
+    }, []);
+
+    const handleLeaderChange = React.useCallback(() => {
+        // Students cannot change leader (it's pre-set to themselves)
+    }, []);
+
+    const handleMembersChange = React.useCallback((selectedUsers: UserProfile[]) => {
+        const memberUids = selectedUsers.map(u => u.uid).filter(Boolean) as string[];
+        // Keep department and course locked to creator's values
+        setFormData((prev: ThesisGroupFormData) => ({ ...prev, members: memberUids }));
+    }, []);
+
+    const handleSaveGroup = React.useCallback(async () => {
+        if (!userUid || !userProfile) return;
+
+        // Final validation
+        const errors: Partial<Record<GroupFormErrorKey, string>> = {};
+        if (!formData.name.trim()) {
+            errors.name = 'Group name is required';
+            setActiveStep(0);
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFormErrors(errors);
+            return;
+        }
+
+        setSaving(true);
         try {
-            await createGroup({
-                name: groupName,
-                description: groupDescription,
+            const newGroupData: Omit<ThesisGroup, 'id' | 'createdAt' | 'updatedAt'> = {
+                name: formData.name.trim(),
+                description: formData.description?.trim(),
                 members: {
                     leader: userUid,
-                    members: [],
+                    members: formData.members,
                 },
                 status: 'draft',
-                course: userProfile.course,
-                department: userProfile.department,
-            });
+                course: userProfile.course || '',
+                department: userProfile.department || '',
+                thesisTitle: formData.thesisTitle?.trim(),
+            };
 
+            const createdGroup = await createGroup(newGroupData);
+            setMyGroup(createdGroup);
+            setIsLeader(true);
             setCreateDialogOpen(false);
-            setGroupName('');
-            setGroupDescription('');
+            showNotification('Group created successfully', 'success');
 
-            // Reload groups
-            const leaderGroups = await getGroupsByLeader(userUid);
-            if (leaderGroups.length > 0) {
-                setMyGroup(leaderGroups[0]);
-                setIsLeader(true);
-            }
+            // Reset form
+            setFormData({
+                name: '',
+                description: '',
+                leader: userUid,
+                members: [],
+                adviser: '',
+                editor: '',
+                status: 'draft',
+                thesisTitle: '',
+                department: userProfile.department || '',
+                course: userProfile.course || '',
+            });
+            setActiveStep(0);
         } catch (err) {
             console.error('Failed to create group:', err);
-            setError('Failed to create group. Please try again.');
+            showNotification('Failed to create group. Please try again.', 'error');
+        } finally {
+            setSaving(false);
         }
-    };
+    }, [userUid, userProfile, formData, showNotification]);
+
+    const handleCloseCreateDialog = React.useCallback(() => {
+        setCreateDialogOpen(false);
+        setFormData({
+            name: '',
+            description: '',
+            leader: '',
+            members: [],
+            adviser: '',
+            editor: '',
+            status: 'draft',
+            thesisTitle: '',
+            department: '',
+            course: '',
+        });
+        setFormErrors({});
+        setActiveStep(0);
+        setSaving(false);
+    }, []);
 
     const handleDeleteGroup = async () => {
         if (!myGroup) return;
@@ -615,7 +802,7 @@ export default function StudentGroupPage() {
                         <Button
                             startIcon={<AddIcon />}
                             variant="contained"
-                            onClick={() => setCreateDialogOpen(true)}
+                            onClick={handleOpenCreateDialog}
                         >
                             Create Group
                         </Button>
@@ -676,81 +863,71 @@ export default function StudentGroupPage() {
 
             {/* Available Groups */}
             {!myGroup && availableGroups.length > 0 && (
-                <>
+                <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
-                        Groups in Your Course
+                        Groups in Your Department & Course
                     </Typography>
                     <AnimatedList variant="slideUp" staggerDelay={50}>
-                        {availableGroups.map((group) => (
-                            <Card key={group.id} sx={{ mb: 2 }}>
-                                <CardContent>
-                                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                        <Typography variant="h6">{group.name}</Typography>
-                                        <Chip
-                                            label={group.status.toUpperCase()}
-                                            size="small"
-                                            color={
-                                                group.status === 'active' ? 'success' :
-                                                    group.status === 'review' ? 'warning' : 'default'
-                                            }
-                                        />
-                                    </Stack>
-                                    {group.description && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            {group.description}
-                                        </Typography>
-                                    )}
-                                    <Typography variant="caption" color="text.secondary">
-                                        ID: {group.id}
-                                    </Typography>
-                                </CardContent>
-                                <CardActions>
-                                    <Button
-                                        size="small"
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: {
+                                    xs: '1fr',
+                                    sm: 'repeat(2, 1fr)',
+                                    lg: 'repeat(3, 1fr)',
+                                },
+                                gap: 2,
+                            }}
+                        >
+                            {availableGroups.map((group) => (
+                                <Box key={group.id}>
+                                    <GroupCard
+                                        group={group}
+                                        usersByUid={usersByUid}
                                         onClick={() => handleRequestToJoin(group.id)}
-                                        disabled={group.requests?.includes(userUid)}
-                                    >
-                                        {group.requests?.includes(userUid) ? 'Request Sent' : 'Request to Join'}
-                                    </Button>
-                                </CardActions>
-                            </Card>
-                        ))}
+                                    />
+                                </Box>
+                            ))}
+                        </Box>
                     </AnimatedList>
-                </>
+                </Box>
             )}
 
             {/* Create Group Dialog */}
-            <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
-                <DialogTitle>Create New Group</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Enter the details for your new thesis group. You will be set as the group leader.
-                    </DialogContentText>
-                    <TextField
-                        autoFocus
-                        margin="dense"
-                        label="Group Name"
-                        fullWidth
-                        value={groupName}
-                        onChange={(e) => setGroupName(e.target.value)}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Description (optional)"
-                        fullWidth
-                        multiline
-                        rows={3}
-                        value={groupDescription}
-                        onChange={(e) => setGroupDescription(e.target.value)}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCreateGroup} variant="contained" disabled={!groupName.trim()}>
-                        Create
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <GroupManageDialog
+                open={createDialogOpen}
+                editMode={false}
+                isAdmin={false}
+                activeStep={activeStep}
+                steps={formSteps}
+                formData={formData}
+                formErrors={formErrors}
+                students={studentOptions}
+                advisers={[]}
+                editors={[]}
+                departmentOptions={[]}
+                memberChipData={formData.members.map(uid => {
+                    const student = studentOptions.find(s => s.uid === uid);
+                    return {
+                        email: student?.email || uid,
+                        label: student ? formatProfileLabel(student) : uid,
+                    };
+                })}
+                reviewCourse={formData.course || ''}
+                saving={saving}
+                studentLoading={studentOptionsLoading}
+                onClose={handleCloseCreateDialog}
+                onFieldChange={handleFormFieldChange}
+                onLeaderChange={handleLeaderChange}
+                onMembersChange={handleMembersChange}
+                onNext={handleNextStep}
+                onBack={handleBackStep}
+                onSubmit={handleSaveGroup}
+                formatUserLabel={(uid) => {
+                    const student = studentOptions.find(s => s.uid === uid);
+                    return student ? formatProfileLabel(student) : uid || '—';
+                }}
+            />
 
             {/* Invite User Dialog */}
             <Dialog open={inviteDialogOpen} onClose={() => setInviteDialogOpen(false)}>
@@ -841,7 +1018,8 @@ export default function StudentGroupPage() {
                                                 <ListItemText
                                                     primary={
                                                         member
-                                                            ? `${member.name.first} ${member.name.last}${isLeaderMember ? ' (Leader)' : ''
+                                                            ? `${member.name.first} ${member.name.last}${isLeaderMember ?
+                                                                ' (Leader)' : ''
                                                             }`
                                                             : `${uid}${isLeaderMember ? ' (Leader)' : ''}`
                                                     }
@@ -849,7 +1027,7 @@ export default function StudentGroupPage() {
                                                 />
                                             </ListItem>
                                         );
-                                    })}
+                                    })}*
                             </List>
                         </>
                     )}
@@ -871,20 +1049,12 @@ export default function StudentGroupPage() {
             </Dialog>
 
             {/* Delete Group Dialog */}
-            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-                <DialogTitle>Delete Group</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Are you sure you want to delete this group? This action cannot be undone.
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleDeleteGroup} color="error" variant="contained">
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <GroupDeleteDialog
+                open={deleteDialogOpen}
+                group={myGroup}
+                onCancel={() => setDeleteDialogOpen(false)}
+                onConfirm={handleDeleteGroup}
+            />
         </AnimatedPage>
     );
 }

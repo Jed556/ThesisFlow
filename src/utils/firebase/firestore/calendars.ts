@@ -23,13 +23,15 @@ const DEFAULT_COLORS = {
  * @param calendar - Calendar data
  */
 export async function setCalendar(id: string | null, calendar: Calendar): Promise<string> {
-    const cleanedData = cleanData(calendar);
-
     if (id) {
+        // Update existing: use 'update' mode to keep null values (for field deletion)
+        const cleanedData = cleanData(calendar, 'update');
         const ref = doc(firebaseFirestore, CALENDARS_COLLECTION, id);
         await setDoc(ref, cleanedData, { merge: true });
         return id;
     } else {
+        // Create new: use 'create' mode to remove null/undefined/empty values
+        const cleanedData = cleanData(calendar, 'create');
         const ref = await addDoc(
             collection(firebaseFirestore, CALENDARS_COLLECTION),
             cleanedData as WithFieldValue<Calendar>

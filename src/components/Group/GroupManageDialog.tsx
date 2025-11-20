@@ -1,3 +1,4 @@
+import * as React from 'react';
 import {
     Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
     DialogTitle, Stack, Step, StepLabel, Stepper, TextField, Typography,
@@ -13,6 +14,7 @@ export type GroupFormErrorKey = keyof ThesisGroupFormData | 'members' | 'general
 interface GroupManageDialogProps {
     open: boolean;
     editMode: boolean;
+    isAdmin?: boolean; // If false, hide admin-only fields (status, department override, adviser/editor assignment)
     activeStep: number;
     steps: readonly string[];
     formData: ThesisGroupFormData;
@@ -42,6 +44,7 @@ interface GroupManageDialogProps {
 export default function GroupManageDialog({
     open,
     editMode,
+    isAdmin = true,
     activeStep,
     steps,
     formData,
@@ -63,6 +66,42 @@ export default function GroupManageDialog({
     onSubmit,
     formatUserLabel,
 }: GroupManageDialogProps) {
+    // Local state for Step 0 to prevent expensive parent state updates on every keystroke
+    const [localFormDetails, setLocalFormDetails] = React.useState({
+        name: formData.name,
+        description: formData.description || '',
+        thesisTitle: formData.thesisTitle || '',
+        department: formData.department || '',
+        status: formData.status,
+    });
+
+    // Sync local state when dialog opens/closes or formData changes from parent
+    React.useEffect(() => {
+        if (open) {
+            setLocalFormDetails({
+                name: formData.name,
+                description: formData.description || '',
+                thesisTitle: formData.thesisTitle || '',
+                department: formData.department || '',
+                status: formData.status,
+            });
+        }
+    }, [open, formData.name, formData.description, formData.thesisTitle, formData.department, formData.status]);
+
+    const handleNext = React.useCallback(() => {
+        // When leaving step 0, commit local changes to parent
+        if (activeStep === 0) {
+            onFieldChange({
+                name: localFormDetails.name,
+                description: localFormDetails.description,
+                thesisTitle: localFormDetails.thesisTitle,
+                department: localFormDetails.department,
+                status: localFormDetails.status,
+            });
+        }
+        void onNext();
+    }, [activeStep, localFormDetails, onFieldChange, onNext]);
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slots={{ transition: GrowTransition }}>
             <DialogTitle>{editMode ? 'Edit Group' : 'Create New Group'}</DialogTitle>
@@ -80,8 +119,8 @@ export default function GroupManageDialog({
                         <Stack spacing={2.5}>
                             <TextField
                                 label="Group Name"
-                                value={formData.name}
-                                onChange={(event) => onFieldChange({ name: event.target.value })}
+                                value={localFormDetails.name}
+                                onChange={(event) => setLocalFormDetails(prev => ({ ...prev, name: event.target.value }))}
                                 error={!!formErrors.name}
                                 helperText={formErrors.name}
                                 required
@@ -90,8 +129,8 @@ export default function GroupManageDialog({
 
                             <TextField
                                 label="Description"
-                                value={formData.description || ''}
-                                onChange={(event) => onFieldChange({ description: event.target.value })}
+                                value={localFormDetails.description}
+                                onChange={(event) => setLocalFormDetails(prev => ({ ...prev, description: event.target.value }))}
                                 multiline
                                 rows={2}
                                 fullWidth
@@ -99,75 +138,94 @@ export default function GroupManageDialog({
 
                             <TextField
                                 label="Thesis Title"
-                                value={formData.thesisTitle || ''}
-                                onChange={(event) => onFieldChange({ thesisTitle: event.target.value })}
+                                value={localFormDetails.thesisTitle}
+                                onChange={(event) => setLocalFormDetails(prev => ({ ...prev, thesisTitle: event.target.value }))}
                                 fullWidth
                             />
 
-                            <Autocomplete
-                                freeSolo
-                                options={departmentOptions}
-                                value={formData.department || ''}
-                                onChange={(_, newValue) => onFieldChange({ department: newValue || '' })}
-                                inputValue={formData.department || ''}
-                                onInputChange={(_, newInputValue) => onFieldChange({ department: newInputValue })}
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Department"
-                                        error={!!formErrors.department}
-                                        helperText={
-                                            formErrors.department || 'Select an existing department or type a new one'
-                                        }
+                            {isAdmin && (
+                                <Autocomplete
+                                    freeSolo
+                                    options={departmentOptions}
+                                    value={localFormDetails.department}
+                                    onChange={(_, newValue) =>
+                                        setLocalFormDetails(prev => ({ ...prev, department: newValue || '' }))
+                                    }
+                                    inputValue={localFormDetails.department}
+                                    onInputChange={(_, newInputValue) =>
+                                        setLocalFormDetails(prev => ({ ...prev, department: newInputValue }))
+                                    }
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Department"
+                                            error={!!formErrors.department}
+                                            helperText={
+                                                formErrors.department || 'Select an existing department or type a new one'
+                                            }
 
-                                    />
-                                )}
-                            />
+                                        />
+                                    )}
+                                />
+                            )}
 
-                            <TextField
-                                select
-                                label="Status"
-                                value={formData.status}
-                                onChange={(event) =>
-                                    onFieldChange({ status: event.target.value as ThesisGroupFormData['status'] })
-                                }
-                                slotProps={{ select: { native: true } }}
-                                fullWidth
-                            >
-                                {GROUP_STATUS_OPTIONS.map((status) => (
-                                    <option key={status} value={status}>
-                                        {formatGroupStatus(status)}
-                                    </option>
-                                ))}
-                            </TextField>
+                            {isAdmin && (
+                                <TextField
+                                    select
+                                    label="Status"
+                                    value={localFormDetails.status}
+                                    onChange={(event) => {
+                                        const newStatus = event.target.value as ThesisGroupFormData['status'];
+                                        setLocalFormDetails(prev => ({ ...prev, status: newStatus }));
+                                    }}
+                                    slotProps={{ select: { native: true } }}
+                                    fullWidth
+                                >
+                                    {GROUP_STATUS_OPTIONS.map((status) => (
+                                        <option key={status} value={status}>
+                                            {formatGroupStatus(status)}
+                                        </option>
+                                    ))}
+                                </TextField>
+                            )}
                         </Stack>
                     )}
 
                     {activeStep === 1 && (
                         <Stack spacing={2.5}>
-                            <Autocomplete
-                                options={students}
-                                loading={studentLoading}
-                                getOptionLabel={(option) => formatProfileLabel(option) || option.email}
-                                value={students.find((profile) => profile.email === formData.leader) || null}
-                                onChange={(_, newValue) => onLeaderChange(newValue)}
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Group Leader"
-                                        required
-                                        error={!!formErrors.leader}
-                                        helperText={formErrors.leader || 'Select the primary contact for the group'}
-                                    />
-                                )}
-                            />
+                            {isAdmin ? (
+                                <Autocomplete
+                                    options={students}
+                                    loading={studentLoading}
+                                    getOptionLabel={(option) => formatProfileLabel(option) || option.email}
+                                    value={students.find((profile) => profile.uid === formData.leader) || null}
+                                    onChange={(_, newValue) => onLeaderChange(newValue)}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Group Leader"
+                                            required
+                                            error={!!formErrors.leader}
+                                            helperText={formErrors.leader || 'Select the primary contact for the group'}
+                                        />
+                                    )}
+                                />
+                            ) : (
+                                <TextField
+                                    label="Group Leader"
+                                    value={formatUserLabel(formData.leader)}
+                                    disabled
+                                    helperText="You are the group leader"
+                                    fullWidth
+                                />
+                            )}
 
                             <Autocomplete
                                 multiple
-                                options={students.filter((student) => student.email !== formData.leader)}
+                                options={students.filter((student) => student.uid !== formData.leader)}
                                 loading={studentLoading}
                                 getOptionLabel={(option) => formatProfileLabel(option) || option.email}
-                                value={students.filter((profile) => formData.members.includes(profile.email))}
+                                value={students.filter((profile) => profile.uid && formData.members.includes(profile.uid))}
                                 onChange={(_, selected) => onMembersChange(selected)}
                                 renderInput={(params) => (
                                     <TextField
@@ -181,33 +239,49 @@ export default function GroupManageDialog({
                                 )}
                             />
 
-                            <TextField
-                                label="Course"
-                                value={formData.course || ''}
-                                disabled
-                                helperText={
-                                    formData.course
-                                        ? 'Derived from the selected leader and members'
-                                        : 'Select a leader and members to determine the course'
-                                }
-                                fullWidth
-                            />
+                            {!isAdmin && (
+                                <TextField
+                                    label="Course"
+                                    value={formData.course || ''}
+                                    disabled
+                                    helperText="Your course"
+                                    fullWidth
+                                />
+                            )}
 
-                            <Autocomplete
-                                options={advisers}
-                                getOptionLabel={(option) => formatProfileLabel(option) || option.email}
-                                value={advisers.find((profile) => profile.email === formData.adviser) || null}
-                                onChange={(_, newValue) => onFieldChange({ adviser: newValue?.email || '' })}
-                                renderInput={(params) => <TextField {...params} label="Adviser (Optional)" />}
-                            />
+                            {isAdmin && (
+                                <TextField
+                                    label="Course"
+                                    value={formData.course || ''}
+                                    disabled
+                                    helperText={
+                                        formData.course
+                                            ? 'Derived from the selected leader and members'
+                                            : 'Select a leader and members to determine the course'
+                                    }
+                                    fullWidth
+                                />
+                            )}
 
-                            <Autocomplete
-                                options={editors}
-                                getOptionLabel={(option) => formatProfileLabel(option) || option.email}
-                                value={editors.find((profile) => profile.email === formData.editor) || null}
-                                onChange={(_, newValue) => onFieldChange({ editor: newValue?.email || '' })}
-                                renderInput={(params) => <TextField {...params} label="Editor (Optional)" />}
-                            />
+                            {isAdmin && (
+                                <Autocomplete
+                                    options={advisers}
+                                    getOptionLabel={(option) => formatProfileLabel(option) || option.email}
+                                    value={advisers.find((profile) => profile.uid === formData.adviser) || null}
+                                    onChange={(_, newValue) => onFieldChange({ adviser: newValue?.uid || '' })}
+                                    renderInput={(params) => <TextField {...params} label="Adviser (Optional)" />}
+                                />
+                            )}
+
+                            {isAdmin && (
+                                <Autocomplete
+                                    options={editors}
+                                    getOptionLabel={(option) => formatProfileLabel(option) || option.email}
+                                    value={editors.find((profile) => profile.uid === formData.editor) || null}
+                                    onChange={(_, newValue) => onFieldChange({ editor: newValue?.uid || '' })}
+                                    renderInput={(params) => <TextField {...params} label="Editor (Optional)" />}
+                                />
+                            )}
                         </Stack>
                     )}
 
@@ -227,12 +301,16 @@ export default function GroupManageDialog({
                                     <Typography>
                                         <strong>Thesis Title:</strong> {formData.thesisTitle || '—'}
                                     </Typography>
-                                    <Typography>
-                                        <strong>Department:</strong> {formData.department || '—'}
-                                    </Typography>
-                                    <Typography>
-                                        <strong>Status:</strong> {formatGroupStatus(formData.status)}
-                                    </Typography>
+                                    {isAdmin && (
+                                        <Typography>
+                                            <strong>Department:</strong> {formData.department || '—'}
+                                        </Typography>
+                                    )}
+                                    {isAdmin && (
+                                        <Typography>
+                                            <strong>Status:</strong> {formatGroupStatus(formData.status)}
+                                        </Typography>
+                                    )}
                                 </Stack>
                             </Box>
 
@@ -261,12 +339,16 @@ export default function GroupManageDialog({
                                             )}
                                         </Stack>
                                     </Box>
-                                    <Typography>
-                                        <strong>Adviser:</strong> {formatUserLabel(formData.adviser)}
-                                    </Typography>
-                                    <Typography>
-                                        <strong>Editor:</strong> {formatUserLabel(formData.editor)}
-                                    </Typography>
+                                    {isAdmin && (
+                                        <Typography>
+                                            <strong>Adviser:</strong> {formatUserLabel(formData.adviser)}
+                                        </Typography>
+                                    )}
+                                    {isAdmin && (
+                                        <Typography>
+                                            <strong>Editor:</strong> {formatUserLabel(formData.editor)}
+                                        </Typography>
+                                    )}
                                 </Stack>
                             </Box>
                         </Stack>
@@ -284,9 +366,7 @@ export default function GroupManageDialog({
                 )}
                 {activeStep < steps.length - 1 ? (
                     <Button
-                        onClick={() => {
-                            void onNext();
-                        }}
+                        onClick={handleNext}
                         variant="contained"
                         startIcon={studentLoading ? <CircularProgress size={18} /> : undefined}
                         disabled={saving || studentLoading}

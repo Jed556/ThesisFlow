@@ -49,14 +49,15 @@ export async function getAllTheses(): Promise<ThesisRecord[]> {
  * Create or update a thesis document
  */
 export async function setThesis(id: string | null, data: ThesisData): Promise<string> {
-    // Clean the data to remove undefined, null, and empty string values
-    const cleanedData = cleanData(data);
-
     if (id) {
+        // Update existing: use 'update' mode to keep null values (for field deletion)
+        const cleanedData = cleanData(data, 'update');
         const ref = doc(firebaseFirestore, THESES_COLLECTION, id);
         await setDoc(ref, cleanedData, { merge: true });
         return id;
     } else {
+        // Create new: use 'create' mode to remove null/undefined/empty values
+        const cleanedData = cleanData(data, 'create');
         const ref = await addDoc(
             collection(firebaseFirestore, THESES_COLLECTION),
             cleanedData as WithFieldValue<ThesisData>

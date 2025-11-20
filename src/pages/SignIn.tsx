@@ -20,6 +20,7 @@ export const metadata: NavigationItem = {
     title: 'Sign In',
     segment: 'sign-in',
     hidden: true,
+    requiresLayout: false, // Sign-in page doesn't need app bar/drawer
 };
 
 const DEV_HELPER_USERNAME = import.meta.env.VITE_DEV_HELPER_USERNAME || '';
@@ -239,6 +240,7 @@ export default function SignIn() {
                 if (!active) return;
                 setNoUsersState(existing.length === 0);
             } catch (error) {
+                console.warn('Error checking existing users:', error);
                 if (!active) return;
                 setNoUsersState(null);
                 showNotification('Unable to check existing users', 'warning');

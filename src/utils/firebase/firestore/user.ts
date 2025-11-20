@@ -218,8 +218,8 @@ export async function setUserProfile(uid: string, data: Partial<UserProfile>): P
     const id = encodeURIComponent(uid);
     const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
 
-    // Clean the data to remove undefined, null, and empty string values
-    const cleanedData = cleanData({ uid, ...data });
+    // Clean data: use 'update' mode since we're using merge (keeps null to delete fields)
+    const cleanedData = cleanData({ uid, ...data }, 'update');
 
     await setDoc(ref, cleanedData, { merge: true });
 }
