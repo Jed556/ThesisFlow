@@ -363,9 +363,12 @@ export async function addEventToCalendar(calendarId: string, eventId: string): P
     const calendar = await getCalendarById(calendarId);
     if (!calendar) throw new Error('Calendar not found');
 
+    // Initialize eventIds array if it doesn't exist
+    const currentEventIds = calendar.eventIds || [];
+
     // Add event ID if not already present
-    if (!calendar.eventIds.includes(eventId)) {
-        const updatedEventIds = [...calendar.eventIds, eventId];
+    if (!currentEventIds.includes(eventId)) {
+        const updatedEventIds = [...currentEventIds, eventId];
         const ref = doc(firebaseFirestore, CALENDARS_COLLECTION, calendarId);
         await setDoc(ref, {
             eventIds: updatedEventIds,
@@ -384,8 +387,9 @@ export async function removeEventFromCalendar(calendarId: string, eventId: strin
     const calendar = await getCalendarById(calendarId);
     if (!calendar) throw new Error('Calendar not found');
 
-    // Remove event ID if present
-    const updatedEventIds = calendar.eventIds.filter(id => id !== eventId);
+    // Initialize eventIds array if it doesn't exist, then remove event ID if present
+    const currentEventIds = calendar.eventIds || [];
+    const updatedEventIds = currentEventIds.filter(id => id !== eventId);
     const ref = doc(firebaseFirestore, CALENDARS_COLLECTION, calendarId);
     await setDoc(ref, {
         eventIds: updatedEventIds,

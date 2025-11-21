@@ -1,5 +1,5 @@
 // User role types - System-wide roles
-export type UserRole = 'student' | 'editor' | 'adviser' | 'admin' | 'developer';
+export type UserRole = 'student' | 'statistician' | 'editor' | 'adviser' | 'moderator' | 'panel' | 'head' | 'admin' | 'developer';
 
 export interface UserName {
     /**
@@ -20,7 +20,7 @@ export interface UserName {
     last: string;
     /**
      * User's name suffix (e.g., "Jr.", "Sr.", "III", "Ph.D.")
-        */
+    */
     suffix?: string;
 }
 

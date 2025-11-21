@@ -39,6 +39,7 @@ export function cleanData<T extends object>(data: T, mode: 'create' | 'update' =
             }
         } else {
             // For update: keep null (to delete fields), remove undefined and empty strings
+            // eslint-disable-next-line no-lonely-if
             if (value !== '') {
                 // Special handling for arrays: filter out undefined elements but keep null
                 if (Array.isArray(value)) {

@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { addEventToCalendar, removeEventFromCalendar } from './calendars';
+import { cleanData } from './firestore';
 
 import type { ScheduleEvent } from '../../../types/schedule';
 
@@ -22,16 +23,19 @@ const EVENTS_COLLECTION = 'events';
  * Create or update a schedule event
  */
 export async function setEvent(id: string | null, event: ScheduleEvent): Promise<string> {
-    // Clean the data to remove undefined, null, and empty string values if needed
-    const cleanedData = event;
-
     let eventId: string;
 
     if (id) {
+        // Update existing event: use 'update' mode and remove 'id' field
+        const { id: _, ...eventWithoutId } = event;
+        const cleanedData = cleanData(eventWithoutId, 'update');
         const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
         await setDoc(ref, cleanedData, { merge: true });
         eventId = id;
     } else {
+        // Create new event: use 'create' mode and remove 'id' field
+        const { id: _, ...eventWithoutId } = event;
+        const cleanedData = cleanData(eventWithoutId, 'create');
         const ref = await addDoc(
             collection(firebaseFirestore, EVENTS_COLLECTION),
             cleanedData as WithFieldValue<ScheduleEvent>
