@@ -3,7 +3,7 @@ import ProfileCard, { type ProfileCardStat } from './ProfileCard';
 import type { MentorCardData } from '../../utils/recommendUtils';
 import type { UserProfile } from '../../types/profile';
 
-export interface MentorRecommendationCardProps {
+export interface RecommendationProfileCardProps {
     card: MentorCardData;
     roleLabel: 'Adviser' | 'Editor' | 'Statistician';
     onSelect?: (profile: UserProfile) => void;
@@ -18,7 +18,7 @@ export default function RecommendationProfileCard({
     roleLabel,
     onSelect,
     showRoleLabel = false,
-}: MentorRecommendationCardProps) {
+}: RecommendationProfileCardProps) {
     const stats = React.useMemo<ProfileCardStat[]>(() => {
         const baseStats: ProfileCardStat[] = [
             {
