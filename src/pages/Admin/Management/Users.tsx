@@ -326,7 +326,7 @@ export default function AdminUsersPage() {
                 if (isFirstUser && role !== 'admin') {
                     showNotification('Created as Admin. At least one admin account is required in the system.', 'info', 8000);
                 } else {
-                    showNotification(`User ${newUser.name.first} ${newUser.name.last} created successfully`, 'success');
+                    showNotification(`User ${newUser.name?.first ?? ''} ${newUser.name?.last ?? ''} created successfully`, 'success');
                 }
             } else {
                 // Update existing user
@@ -381,7 +381,7 @@ export default function AdminUsersPage() {
                     await setUserProfile(selectedUser.uid, updatedUser);
                 }
 
-                showNotification(`User ${updatedUser.name.first} ${updatedUser.name.last} updated successfully`, 'success');
+                showNotification(`User ${updatedUser.name?.first ?? ''} ${updatedUser.name?.last ?? ''} updated successfully`, 'success');
             }
 
             await loadUsers();
@@ -413,7 +413,7 @@ export default function AdminUsersPage() {
 
             // Delete Firestore profile
             await deleteUserProfile(selectedUser.email);
-            showNotification(`User ${selectedUser.name.first} ${selectedUser.name.last} deleted successfully`, 'success');
+            showNotification(`User ${selectedUser?.name?.first ?? selectedUser?.email} ${selectedUser?.name?.last ?? ''} deleted successfully`, 'success');
             await loadUsers();
             handleCloseDialog();
         } catch {
@@ -668,11 +668,11 @@ export default function AdminUsersPage() {
                             ...newRow,
                             email,
                             name: {
-                                first: newRow.name.first,
-                                middle: newRow.name.middle,
-                                last: newRow.name.last,
-                                prefix: newRow.name.prefix,
-                                suffix: newRow.name.suffix,
+                                first: newRow.name?.first ?? '',
+                                middle: newRow.name?.middle ?? '',
+                                last: newRow.name?.last ?? '',
+                                prefix: newRow.name?.prefix ?? '',
+                                suffix: newRow.name?.suffix ?? '',
                             },
                             department: newRow.department,
                             course: newRow.course,
@@ -832,11 +832,11 @@ export default function AdminUsersPage() {
                     rows={users.map(user => ({
                         ...user,
                         id: user.uid,
-                        namePrefix: user.name.prefix || '',
-                        nameFirst: user.name.first,
-                        nameMiddle: user.name.middle || '',
-                        nameLast: user.name.last,
-                        nameSuffix: user.name.suffix || '',
+                        namePrefix: user.name?.prefix || '',
+                        nameFirst: user.name?.first || '',
+                        nameMiddle: user.name?.middle || '',
+                        nameLast: user.name?.last || '',
+                        nameSuffix: user.name?.suffix || '',
                     }))}
                     columns={columns}
                     loading={loading}

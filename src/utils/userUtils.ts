@@ -35,15 +35,19 @@ export async function getDisplayName(uid: string): Promise<string> {
 
     const parts: string[] = [];
 
-    if (profile.name.prefix) {
+    if (profile.name?.prefix) {
         parts.push(profile.name.prefix);
     }
-    parts.push(profile.name.first);
-    if (profile.name.middle) {
+    if (profile.name?.first) {
+        parts.push(profile.name.first);
+    }
+    if (profile.name?.middle) {
         parts.push(profile.name.middle);
     }
-    parts.push(profile.name.last);
-    if (profile.name.suffix) {
+    if (profile.name?.last) {
+        parts.push(profile.name.last);
+    }
+    if (profile.name?.suffix) {
         parts.push(profile.name.suffix);
     }
 
