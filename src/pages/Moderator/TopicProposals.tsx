@@ -23,7 +23,7 @@ export const metadata: NavigationItem = {
     title: 'Moderator Topic Proposals',
     segment: 'moderator/topic-proposals',
     icon: <HowToVoteIcon />,
-    roles: ['moderator', 'admin'],
+    roles: ['moderator'],
 };
 
 interface DecisionDialogState {
@@ -94,7 +94,7 @@ export default function ModeratorTopicProposalsPage() {
             return [];
         }
 
-        const explicitSections = (profile.moderatedSections ?? []).filter(Boolean);
+        const explicitSections = (profile.moderatedCourses ?? []).filter(Boolean);
         if (explicitSections.length > 0) {
             return explicitSections;
         }

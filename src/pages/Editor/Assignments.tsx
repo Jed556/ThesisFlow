@@ -23,7 +23,7 @@ export const metadata: NavigationItem = {
     title: 'Editor Assignments',
     segment: 'editor/assignments',
     icon: <AssignmentTurnedInIcon />,
-    roles: ['editor', 'admin'],
+    roles: ['editor'],
 };
 
 /**

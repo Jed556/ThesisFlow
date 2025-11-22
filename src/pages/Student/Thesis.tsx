@@ -18,7 +18,7 @@ export const metadata: NavigationItem = {
     title: 'My Thesis',
     segment: 'thesis',
     icon: <School />,
-    roles: ['student', 'admin'],
+    roles: ['student'],
 };
 
 type ThesisRecord = ThesisData & { id: string };

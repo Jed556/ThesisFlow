@@ -25,7 +25,7 @@ export const metadata: NavigationItem = {
     segment: 'recommendation',
     icon: <PeopleAltIcon />,
     children: ['profile/:uid'],
-    roles: ['student', 'admin'],
+    roles: ['student'],
 };
 
 /**

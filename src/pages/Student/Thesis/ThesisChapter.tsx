@@ -20,7 +20,7 @@ export const metadata: NavigationItem = {
     icon: <Article />,
     children: [],
     // path: '/thesis',
-    roles: ['student', 'admin'],
+    roles: ['student'],
     // hidden: false,
 };
 

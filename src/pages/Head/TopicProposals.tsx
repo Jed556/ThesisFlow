@@ -23,7 +23,7 @@ export const metadata: NavigationItem = {
     title: 'Head Topic Proposals',
     segment: 'head/topic-proposals',
     icon: <GavelIcon />,
-    roles: ['head', 'admin'],
+    roles: ['head'],
 };
 
 interface DecisionDialogState {

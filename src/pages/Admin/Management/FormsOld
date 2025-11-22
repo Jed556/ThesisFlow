@@ -26,12 +26,8 @@ import type { FormTemplate, FormField, FormFieldType, FormFieldOption, FormWorkf
 import type { Session } from '../../../types/session';
 import type { ThesisGroup } from '../../../types/group';
 import {
-    getAllFormTemplates,
-    createFormTemplate,
-    updateFormTemplate,
-    deleteFormTemplate,
-    setFormTemplate,
-} from '../../../utils/firebase/firestore';
+    getAllFormTemplates, createFormTemplate, updateFormTemplate, deleteFormTemplate, setFormTemplate,
+} from '../../../utils/firebase/firestore/formsTemplatesOld';
 import { getAllGroups } from '../../../utils/firebase/firestore';
 import { importFormsFromCsv, exportFormsToCsv } from '../../../utils/csv/form';
 import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';

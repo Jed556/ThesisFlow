@@ -28,7 +28,7 @@ export const metadata: NavigationItem = {
     title: 'Topic Proposals',
     segment: 'topic-proposals',
     icon: <TopicIcon />,
-    roles: ['student', 'admin'],
+    roles: ['student'],
 };
 
 function pickPrimaryGroup(groups: ThesisGroup[]): ThesisGroup | null {

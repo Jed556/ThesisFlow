@@ -26,7 +26,7 @@ export const metadata: NavigationItem = {
     title: 'Editor Thesis Overview',
     segment: 'editor/thesis-overview',
     icon: <VisibilityIcon />,
-    roles: ['editor', 'admin'],
+    roles: ['editor'],
 };
 
 /**
