@@ -86,6 +86,13 @@ export function normalizeTimestamp(value: unknown, fallbackToNow?: boolean): str
 }
 
 /**
+ * Generates a new ISO8601 timestamp for the current moment.
+ */
+export function createTimestamp(): string {
+    return new Date().toISOString();
+}
+
+/**
  * Returns the start of the day (midnight) for a given date
  * @param date - Date object
  * @returns - Timestamp of the start of the day
