@@ -3,7 +3,7 @@
  */
 
 import type { UserProfile, UserRole } from '../../types/profile';
-import { parseCsvText, normalizeHeader, mapHeaderIndexes, generateCsvText } from './parser';
+import { parseCsvText, normalizeHeader, mapHeaderIndexes, splitArrayField, generateCsvText } from './parser';
 
 /**
  * User with optional password for CSV import
@@ -31,6 +31,31 @@ export function importUsersFromCsv(csvText: string): { parsed: ImportedUser[]; e
         const roleRaw = (get('role') || 'student').toLowerCase() as UserRole;
         const uidRaw = get('uid') || get('id') || '';
         const password = get('password') || get('pass');
+        const courseSource = get('courses') || get('course');
+        const courseEntries = splitArrayField(courseSource) || [];
+        const courseValue = courseEntries[0] || courseSource || undefined;
+        const moderatedCourseSource = get('moderatedCourses') || get('sections');
+        const moderatedCourseEntries = splitArrayField(moderatedCourseSource);
+
+        const normalizedRole: UserRole = (
+            [
+                'student',
+                'statistician',
+                'editor',
+                'adviser',
+                'panel',
+                'moderator',
+                'head',
+                'admin',
+                'developer'
+            ].includes(roleRaw)
+                ? roleRaw
+                : 'student'
+        );
+
+        const moderatorSections = normalizedRole === 'moderator'
+            ? Array.from(new Set([...moderatedCourseEntries, ...courseEntries])).filter(Boolean)
+            : moderatedCourseEntries;
 
         if (!email) {
             errors.push(`row ${idx + 2}: missing email`);
@@ -54,28 +79,18 @@ export function importUsersFromCsv(csvText: string): { parsed: ImportedUser[]; e
                 ...(middleName && { middle: middleName }),
                 ...(suffix && { suffix }),
             },
-            role: (
-                [
-                    'student',
-                    'statistician',
-                    'editor',
-                    'adviser',
-                    'panel',
-                    'moderator',
-                    'head',
-                    'admin',
-                    'developer'
-                ].includes(roleRaw)
-                    ? roleRaw
-                    : 'student'
-            ),
+            role: normalizedRole,
             department: get('department') || undefined,
-            course: get('course') || undefined,
+            course: courseValue,
             avatar: get('avatar') || undefined,
             banner: get('banner') || undefined,
             phone: get('phone') || undefined,
             bio: get('bio') || undefined,
         };
+
+        if (moderatorSections.length > 0) {
+            user.moderatedCourses = moderatorSections;
+        }
 
         parsed.push(password ? { ...user, password } : user);
     });
@@ -103,6 +118,7 @@ export function exportUsersToCsv(users: UserProfile[], includePassword: boolean 
         'role',
         'department',
         'course',
+        'moderatedCourses',
         'phone',
         'avatar',
         'banner',
@@ -121,6 +137,7 @@ export function exportUsersToCsv(users: UserProfile[], includePassword: boolean 
         user.role,
         user.department || '',
         user.course || '',
+        user.moderatedCourses?.join(';') || '',
         user.phone || '',
         user.avatar || '',
         user.banner || '',

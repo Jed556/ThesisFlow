@@ -36,6 +36,8 @@ export function importGroupsFromCsv(csvText: string): { parsed: ThesisGroup[]; e
         const adviser = get('adviser') || get('adviser_uid') || undefined;
         const editor = get('editor') || get('editor_uid') || undefined;
         const panels = splitArrayField(get('panels'));
+        const courseSource = get('courses') || get('course');
+        const normalizedCourse = splitArrayField(courseSource)[0] || courseSource || undefined;
 
         const group: ThesisGroup = {
             id: get('id') || `group_${Date.now()}_${idx}`,
@@ -53,7 +55,7 @@ export function importGroupsFromCsv(csvText: string): { parsed: ThesisGroup[]; e
             updatedAt: get('updatedAt') || get('updated_at') || new Date().toISOString(),
             thesisTitle: get('thesisTitle') || get('thesis_title') || undefined,
             department: get('department') || undefined,
-            course: get('course') || undefined,
+            course: normalizedCourse,
         };
 
         parsed.push(group);
