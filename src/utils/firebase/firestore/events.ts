@@ -246,3 +246,81 @@ export async function getEventsByIds(eventIds: string[]): Promise<(ScheduleEvent
 
     return events;
 }
+
+/**
+ * Listen to events that belong to the provided thesis IDs.
+ */
+export function listenEventsByThesisIds(
+    thesisIds: string[] | undefined,
+    options: EventsListenerOptions
+): () => void {
+    const uniqueIds = Array.from(new Set((thesisIds ?? []).filter((id): id is string => Boolean(id))));
+
+    if (uniqueIds.length === 0) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+
+    const chunkSize = 10; // Firestore `in` queries accept up to 10 values per chunk
+    const chunks: string[][] = [];
+    for (let index = 0; index < uniqueIds.length; index += chunkSize) {
+        chunks.push(uniqueIds.slice(index, index + chunkSize));
+    }
+
+    const aggregated = new Map<string, EventRecord>();
+    const chunkEventIds = new Map<number, Set<string>>();
+
+    const emit = (): void => {
+        const sorted = Array.from(aggregated.values()).sort((a, b) => {
+            const first = new Date(a.startDate ?? '').getTime();
+            const second = new Date(b.startDate ?? '').getTime();
+            if (Number.isNaN(first) || Number.isNaN(second)) {
+                return 0;
+            }
+            return first - second;
+        });
+        options.onData(sorted);
+    };
+
+    const unsubscribes = chunks.map((chunk, chunkIndex) => {
+        const eventsQuery = query(
+            collection(firebaseFirestore, EVENTS_COLLECTION),
+            where('thesisId', 'in', chunk)
+        );
+
+        return onSnapshot(
+            eventsQuery,
+            (snapshot: QuerySnapshot<DocumentData>) => {
+                const seenIds = new Set<string>();
+                snapshot.docs.forEach((docSnap) => {
+                    aggregated.set(docSnap.id, {
+                        id: docSnap.id,
+                        ...(docSnap.data() as Omit<ScheduleEvent, 'id'>),
+                    } as EventRecord);
+                    seenIds.add(docSnap.id);
+                });
+
+                const previousIds = chunkEventIds.get(chunkIndex) ?? new Set<string>();
+                previousIds.forEach((eventId) => {
+                    if (!seenIds.has(eventId)) {
+                        aggregated.delete(eventId);
+                    }
+                });
+
+                chunkEventIds.set(chunkIndex, seenIds);
+                emit();
+            },
+            (error) => {
+                if (options.onError) {
+                    options.onError(error as Error);
+                } else {
+                    console.error('Thesis events listener error:', error);
+                }
+            }
+        );
+    });
+
+    return () => {
+        unsubscribes.forEach((unsubscribe) => unsubscribe());
+    };
+}
