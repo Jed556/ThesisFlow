@@ -1,20 +1,7 @@
 import * as React from 'react';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    Skeleton,
-    Stack,
-    Typography,
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
+    DialogContent, DialogContentText, DialogTitle, Skeleton, Stack, Typography
 } from '@mui/material';
 import TopicIcon from '@mui/icons-material/Topic';
 import { useSession } from '@toolpad/core';
@@ -27,11 +14,8 @@ import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard, TopicProposalFormDialog, type TopicProposalFormValues } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import {
-    createTopicProposalSet,
-    listenTopicProposalSetsByGroup,
-    markProposalAsThesis,
-    submitTopicProposalSet,
-    updateTopicProposalDraftEntries,
+    createTopicProposalSet, listenTopicProposalSetsByGroup, markProposalAsThesis,
+    submitTopicProposalSet, updateTopicProposalDraftEntries,
 } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';

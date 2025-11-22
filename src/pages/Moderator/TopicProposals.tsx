@@ -1,21 +1,7 @@
 import * as React from 'react';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Skeleton,
-    Stack,
-    TextField,
-    Tooltip,
-    Typography,
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
+    DialogContent, DialogTitle, Skeleton, Stack, TextField, Tooltip, Typography
 } from '@mui/material';
 import HowToVoteIcon from '@mui/icons-material/HowToVote';
 import { useSession } from '@toolpad/core';

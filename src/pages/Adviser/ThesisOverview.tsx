@@ -30,7 +30,7 @@ export const metadata: NavigationItem = {
     title: 'Adviser Thesis Overview',
     segment: 'adviser/thesis-overview',
     icon: <SchoolIcon />,
-    roles: ['adviser', 'admin'],
+    roles: ['adviser'],
 };
 
 const EMPTY_STATE = 'No advisee selected. Assign yourself to a thesis to view its workspace.';

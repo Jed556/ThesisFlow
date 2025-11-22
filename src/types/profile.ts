@@ -1,5 +1,5 @@
 // User role types - System-wide roles
-export type UserRole = 'student' | 'statistician' | 'editor' | 'adviser' | 'moderator' | 'panel' | 'head' | 'admin' | 'developer';
+export type UserRole = 'student' | 'statistician' | 'editor' | 'adviser' | 'panel' | 'moderator' | 'head' | 'admin' | 'developer';
 
 export interface UserName {
     /**
@@ -59,7 +59,7 @@ export interface UserProfile {
     /**
      * Optional list of sections/courses the user moderates or manages
      */
-    moderatedSections?: string[];
+    moderatedCourses?: string[];
     /**
      * URL to the user's avatar image
      */

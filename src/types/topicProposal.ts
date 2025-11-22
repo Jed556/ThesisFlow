@@ -6,13 +6,15 @@ export const MAX_TOPIC_PROPOSALS = 3;
 /**
  * Possible workflow states for an individual topic proposal entry.
  */
-export type TopicProposalEntryStatus =
-    | 'draft'
-    | 'submitted'
-    | 'head_review'
-    | 'head_approved'
-    | 'head_rejected'
-    | 'moderator_rejected';
+export const TOPIC_PROPOSAL_ENTRY_STATUSES = [
+    'draft',
+    'submitted',
+    'head_review',
+    'head_approved',
+    'head_rejected',
+    'moderator_rejected',
+] as const;
+export type TopicProposalEntryStatus = typeof TOPIC_PROPOSAL_ENTRY_STATUSES[number];
 
 /**
  * Decision payload recorded whenever a reviewer completes an action.
@@ -45,12 +47,14 @@ export interface TopicProposalEntry {
 /**
  * High-level workflow states for a set of topic proposals belonging to a group.
  */
-export type TopicProposalSetStatus =
-    | 'draft'
-    | 'under_review'
-    | 'approved'
-    | 'rejected'
-    | 'archived';
+export const TOPIC_PROPOSAL_SET_STATUSES = [
+    'draft',
+    'under_review',
+    'approved',
+    'rejected',
+    'archived',
+] as const;
+export type TopicProposalSetStatus = typeof TOPIC_PROPOSAL_SET_STATUSES[number];
 
 /**
  * Historical review events for auditing the topic proposal lifecycle.

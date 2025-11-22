@@ -56,3 +56,9 @@ export {
     importFormsFromCsv,
     exportFormsToCsv,
 } from './form';
+
+// Topic proposal import/export
+export {
+    importTopicProposalsFromCsv,
+    exportTopicProposalsToCsv,
+} from './topicProposal';

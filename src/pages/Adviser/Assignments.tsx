@@ -15,7 +15,7 @@ export const metadata: NavigationItem = {
     title: 'Adviser Assignments',
     segment: 'adviser/assignments',
     icon: <FactCheckIcon />,
-    roles: ['adviser', 'admin'],
+    roles: ['adviser'],
 };
 
 function toPercent(value: number): string {

@@ -28,7 +28,7 @@ export const metadata: NavigationItem = {
     segment: 'settings',
     icon: <Settings />,
     children: [],
-    roles: ['admin', 'student', 'editor', 'adviser'],
+    roles: ['student', 'statistician', 'editor', 'adviser', 'panel', 'moderator', 'head', 'admin'],
 };
 
 /**
