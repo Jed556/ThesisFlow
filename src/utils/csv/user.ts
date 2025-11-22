@@ -54,7 +54,21 @@ export function importUsersFromCsv(csvText: string): { parsed: ImportedUser[]; e
                 ...(middleName && { middle: middleName }),
                 ...(suffix && { suffix }),
             },
-            role: (['student', 'editor', 'adviser', 'admin', 'developer'].includes(roleRaw) ? roleRaw : 'student'),
+            role: (
+                [
+                    'student',
+                    'statistician',
+                    'editor',
+                    'adviser',
+                    'panel',
+                    'moderator',
+                    'head',
+                    'admin',
+                    'developer'
+                ].includes(roleRaw)
+                    ? roleRaw
+                    : 'student'
+            ),
             department: get('department') || undefined,
             course: get('course') || undefined,
             avatar: get('avatar') || undefined,
