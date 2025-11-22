@@ -1,6 +1,11 @@
 import * as React from 'react';
-import { Alert, Box, Card, CardContent, Chip, LinearProgress, Paper, Skeleton, Stack, Typography } from '@mui/material';
-import { School } from '@mui/icons-material';
+import {
+    Alert, Box, Button, Card, CardContent, Chip, LinearProgress, Paper, Skeleton, Stack,
+    Step, StepContent, StepLabel, Stepper, Typography
+} from '@mui/material';
+import {
+    School, Groups, PersonAdd, Topic, Article, Upload
+} from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -11,6 +16,16 @@ import { Avatar, Name } from '../../components/Avatar';
 import { getThesisTeamMembers } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { normalizeDateInput } from '../../utils/dateUtils';
+import { useNavigate } from 'react-router';
+import type { WorkflowStep } from '../../types/workflow';
+import {
+    WORKFLOW_STATE_META,
+    resolveStepState,
+    applyPrerequisiteLocks,
+    getStepMeta,
+    getActiveStepIndex,
+    formatPrerequisiteMessage,
+} from '../../utils/workflowUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -39,6 +54,176 @@ function getStatusColor(status: ThesisChapter['status']): 'success' | 'warning' 
     return 'default';
 }
 
+function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMember[]): WorkflowStep[] {
+    if (!record) {
+        const baseSteps: WorkflowStep[] = [
+            {
+                id: 'create-group',
+                title: 'Create Research Group',
+                description: 'Form your research group with team members and submit for moderator approval.',
+                completedMessage: 'Your research group has been created and approved.',
+                state: 'in-progress',
+                actionLabel: 'Go to My Group',
+                actionPath: '/group',
+                icon: <Groups />,
+            },
+            {
+                id: 'request-advisers',
+                title: 'Request Adviser & Editor',
+                description: 'Select and request approval from your thesis adviser and research editor.',
+                completedMessage: 'Adviser and Editor have been assigned to your group.',
+                state: 'available',
+                actionLabel: 'Manage Group',
+                actionPath: '/group',
+                icon: <PersonAdd />,
+                prerequisites: [
+                    { stepId: 'create-group', type: 'prerequisite' },
+                ],
+            },
+            {
+                id: 'submit-proposals',
+                title: 'Submit Topic Proposals',
+                description: 'Upload up to 3 thesis title proposals for review and approval.',
+                completedMessage: 'Your topic proposal has been approved.',
+                state: 'available',
+                actionLabel: 'View Proposals',
+                actionPath: '/topic-proposals',
+                icon: <Topic />,
+                prerequisites: [
+                    { stepId: 'create-group', type: 'prerequisite' },
+                    { stepId: 'request-advisers', type: 'corequisite' },
+                ],
+            },
+            {
+                id: 'upload-chapters',
+                title: 'Upload Thesis Chapters',
+                description: 'Submit your thesis chapters for adviser and editor review.',
+                completedMessage: 'All thesis chapters have been approved.',
+                state: 'available',
+                actionLabel: 'View Chapters',
+                actionPath: '/thesis-chapters',
+                icon: <Article />,
+                prerequisites: [
+                    { stepId: 'submit-proposals', type: 'prerequisite' },
+                    { stepId: 'request-advisers', type: 'prerequisite' },
+                ],
+            },
+            {
+                id: 'terminal-requirements',
+                title: 'Submit Terminal Requirements',
+                description: 'Upload final documents and complete terminal requirements for submission.',
+                completedMessage: 'All terminal requirements have been submitted.',
+                state: 'available',
+                actionLabel: 'Coming Soon',
+                icon: <Upload />,
+                prerequisites: [
+                    { stepId: 'upload-chapters', type: 'prerequisite' },
+                ],
+            },
+        ];
+        return applyPrerequisiteLocks(baseSteps);
+    }
+
+    const chapters = record.chapters ?? [];
+    const totalMembers = members.length;
+    const hasGroup = Boolean(record.groupId) || totalMembers > 0;
+    const groupApproved = totalMembers > 1;
+    const adviserAssigned = Boolean(record.adviser);
+    const editorAssigned = Boolean(record.editor);
+    const advisersComplete = adviserAssigned && editorAssigned;
+    const hasTopicProposals = Boolean(record.title);
+    const topicApproved = (record.overallStatus ?? '').toLowerCase().includes('approved');
+    const chaptersSubmitted = chapters.some((chapter) => chapter.status !== 'not_submitted');
+    const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
+    const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
+
+    const baseSteps: WorkflowStep[] = [
+        {
+            id: 'create-group',
+            title: 'Create Research Group',
+            description: groupApproved
+                ? `Group created with ${totalMembers} members.`
+                : hasGroup
+                    ? 'Awaiting Research Moderator approval.'
+                    : 'Form your research group with team members and submit for moderator approval.',
+            completedMessage: `Your research group has been created and approved with ${totalMembers} members.`,
+            state: resolveStepState({ completed: groupApproved, started: hasGroup }),
+            actionLabel: 'Go to My Group',
+            actionPath: '/group',
+            icon: <Groups />,
+        },
+        {
+            id: 'request-advisers',
+            title: 'Request Adviser & Editor',
+            description: advisersComplete
+                ? 'Adviser and Editor assigned.'
+                : adviserAssigned
+                    ? 'Adviser assigned. Waiting for Editor.'
+                    : editorAssigned
+                        ? 'Editor assigned. Waiting for Adviser.'
+                        : 'Select and request approval from your thesis adviser and research editor.',
+            completedMessage: 'Adviser and Editor have been assigned to your group.',
+            state: resolveStepState({ completed: advisersComplete, started: adviserAssigned || editorAssigned }),
+            actionLabel: 'Manage Group',
+            actionPath: '/group',
+            icon: <PersonAdd />,
+            prerequisites: [
+                { stepId: 'create-group', type: 'prerequisite' },
+            ],
+        },
+        {
+            id: 'submit-proposals',
+            title: 'Submit Topic Proposals',
+            description: topicApproved
+                ? `Topic approved: "${record.title}"`
+                : hasTopicProposals
+                    ? 'Proposals submitted. Awaiting approval.'
+                    : 'Upload up to 3 thesis title proposals for review and approval.',
+            completedMessage: `Your topic proposal "${record.title}" has been approved.`,
+            state: resolveStepState({ completed: topicApproved, started: hasTopicProposals }),
+            actionLabel: 'View Proposals',
+            actionPath: '/topic-proposals',
+            icon: <Topic />,
+            prerequisites: [
+                { stepId: 'create-group', type: 'prerequisite' },
+                { stepId: 'request-advisers', type: 'corequisite' },
+            ],
+        },
+        {
+            id: 'upload-chapters',
+            title: 'Upload Thesis Chapters',
+            description: allChaptersApproved
+                ? `All ${chapters.length} chapters approved.`
+                : chaptersSubmitted
+                    ? `${approvedCount}/${chapters.length} chapters approved.`
+                    : 'Submit your thesis chapters for adviser and editor review.',
+            completedMessage: `All ${chapters.length} thesis chapters have been approved.`,
+            state: resolveStepState({ completed: allChaptersApproved, started: chaptersSubmitted }),
+            actionLabel: 'View Chapters',
+            actionPath: '/thesis-chapters',
+            icon: <Article />,
+            prerequisites: [
+                { stepId: 'submit-proposals', type: 'prerequisite' },
+                { stepId: 'request-advisers', type: 'prerequisite' },
+            ],
+        },
+        {
+            id: 'terminal-requirements',
+            title: 'Submit Terminal Requirements',
+            description: 'Upload final documents and complete terminal requirements for submission.',
+            completedMessage: 'All terminal requirements have been submitted successfully.',
+            state: 'available',
+            actionLabel: 'Coming Soon',
+            icon: <Upload />,
+            prerequisites: [
+                { stepId: 'upload-chapters', type: 'prerequisite' },
+            ],
+        },
+    ];
+
+    return applyPrerequisiteLocks(baseSteps);
+}
+
 function formatDateLabel(value?: string | null): string {
     const date = normalizeDateInput(value ?? undefined);
     return date ? date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
@@ -64,6 +249,7 @@ function computeThesisProgressPercent(record: ThesisRecord): number {
 export default function ThesisPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid;
+    const navigate = useNavigate();
 
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [userTheses, setUserTheses] = React.useState<ThesisRecord[]>([]);
@@ -72,6 +258,7 @@ export default function ThesisPage() {
     const [loading, setLoading] = React.useState<boolean>(true);
     const [error, setError] = React.useState<string | null>(null);
     const [hasNoThesis, setHasNoThesis] = React.useState<boolean>(false);
+    const [expandedSteps, setExpandedSteps] = React.useState<Set<string>>(new Set());
 
     React.useEffect(() => {
         if (!userUid) {
@@ -153,6 +340,44 @@ export default function ThesisPage() {
         };
     }, [thesis]);
 
+    // Compute workflow steps before any conditional returns (hooks must be called unconditionally)
+    const workflowSteps = React.useMemo(
+        () => buildThesisWorkflowSteps(thesis, teamMembers),
+        [thesis, teamMembers]
+    );
+    const activeStepIndex = React.useMemo(() => getActiveStepIndex(workflowSteps), [workflowSteps]);
+
+    // Initialize expanded steps on mount or when workflow changes
+    React.useEffect(() => {
+        const initialExpanded = new Set<string>();
+        workflowSteps.forEach((step) => {
+            const meta = getStepMeta(step);
+            if (meta.defaultExpanded) {
+                initialExpanded.add(step.id);
+            }
+        });
+        setExpandedSteps(initialExpanded);
+    }, [workflowSteps]);
+
+    const handleNavigateToStep = React.useCallback((path?: string) => {
+        if (path) {
+            navigate(path);
+        }
+    }, [navigate]);
+
+    const handleStepToggle = React.useCallback((stepId: string, expandable: boolean) => {
+        if (!expandable) return;
+
+        setExpandedSteps((prev) => {
+            const next = new Set(prev);
+            if (next.has(stepId)) {
+                next.delete(stepId);
+            } else {
+                next.add(stepId);
+            }
+            return next;
+        });
+    }, []);
 
     if (session?.loading) {
         return (
@@ -205,9 +430,74 @@ export default function ThesisPage() {
     }
 
     if (hasNoThesis || !thesis) {
+        // Show workflow even without thesis record
         return (
             <AnimatedPage variant="slideUp">
-                <Alert severity="info">No thesis record found for your account yet.</Alert>
+                <Paper sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="h4" gutterBottom>
+                        My Thesis Journey
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                        Follow these steps to complete your thesis from group formation to final submission.
+                    </Typography>
+
+                    <Stepper orientation="vertical" activeStep={activeStepIndex} sx={{ mt: 3 }}>
+                        {workflowSteps.map((step) => {
+                            const chipMeta = WORKFLOW_STATE_META[step.state];
+                            const stepMeta = getStepMeta(step);
+                            const isExpanded = expandedSteps.has(step.id);
+                            const isLocked = step.state === 'locked';
+
+                            return (
+                                <Step
+                                    key={step.id}
+                                    completed={step.state === 'completed'}
+                                    disabled={!stepMeta.accessible}
+                                    expanded={isExpanded}
+                                >
+                                    <StepLabel
+                                        icon={step.icon}
+                                        optional={<Chip size="small" label={chipMeta.label} color={chipMeta.color} />}
+                                        onClick={() => handleStepToggle(step.id, stepMeta.expandable)}
+                                        sx={{
+                                            cursor: stepMeta.expandable ? 'pointer' : 'default',
+                                            opacity: stepMeta.accessible ? 1 : 0.5,
+                                        }}
+                                    >
+                                        {step.title}
+                                    </StepLabel>
+                                    <StepContent>
+                                        {isLocked ? (
+                                            <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                                                {formatPrerequisiteMessage(step, workflowSteps)}
+                                            </Typography>
+                                        ) : (
+                                            <>
+                                                <Typography variant="body2" sx={{ mb: 2 }}>
+                                                    {stepMeta.displayMessage}
+                                                </Typography>
+                                                {stepMeta.showActionButton && step.actionPath && (
+                                                    <Button
+                                                        variant="contained"
+                                                        size="small"
+                                                        onClick={() => handleNavigateToStep(step.actionPath)}
+                                                    >
+                                                        {step.actionLabel}
+                                                    </Button>
+                                                )}
+                                                {stepMeta.showActionButton && !step.actionPath && step.actionLabel && (
+                                                    <Button variant="outlined" size="small" disabled>
+                                                        {step.actionLabel}
+                                                    </Button>
+                                                )}
+                                            </>
+                                        )}
+                                    </StepContent>
+                                </Step>
+                            );
+                        })}
+                    </Stepper>
+                </Paper>
             </AnimatedPage>
         );
     }
@@ -271,6 +561,72 @@ export default function ThesisPage() {
                         sx={{ height: 8, borderRadius: 4 }}
                     />
                 </Box>
+            </Paper>
+
+            <Paper sx={{ p: 3, mb: 3 }}>
+                <Typography variant="h5" gutterBottom>
+                    Thesis Workflow
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Follow these steps to complete your thesis journey.
+                </Typography>
+
+                <Stepper orientation="vertical" activeStep={activeStepIndex} sx={{ mt: 2 }}>
+                    {workflowSteps.map((step) => {
+                        const chipMeta = WORKFLOW_STATE_META[step.state];
+                        const stepMeta = getStepMeta(step);
+                        const isExpanded = expandedSteps.has(step.id);
+                        const isLocked = step.state === 'locked';
+
+                        return (
+                            <Step
+                                key={step.id}
+                                completed={step.state === 'completed'}
+                                disabled={!stepMeta.accessible}
+                                expanded={isExpanded}
+                            >
+                                <StepLabel
+                                    icon={step.icon}
+                                    optional={<Chip size="small" label={chipMeta.label} color={chipMeta.color} />}
+                                    onClick={() => handleStepToggle(step.id, stepMeta.expandable)}
+                                    sx={{
+                                        cursor: stepMeta.expandable ? 'pointer' : 'default',
+                                        opacity: stepMeta.accessible ? 1 : 0.5,
+                                    }}
+                                >
+                                    {step.title}
+                                </StepLabel>
+                                <StepContent>
+                                    {isLocked ? (
+                                        <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                                            {formatPrerequisiteMessage(step, workflowSteps)}
+                                        </Typography>
+                                    ) : (
+                                        <>
+                                            <Typography variant="body2" sx={{ mb: 2 }}>
+                                                {stepMeta.displayMessage}
+                                            </Typography>
+                                            {stepMeta.showActionButton && step.actionPath && (
+                                                <Button
+                                                    variant="contained"
+                                                    size="small"
+                                                    onClick={() => handleNavigateToStep(step.actionPath)}
+                                                >
+                                                    {step.actionLabel}
+                                                </Button>
+                                            )}
+                                            {stepMeta.showActionButton && !step.actionPath && step.actionLabel && (
+                                                <Button variant="outlined" size="small" disabled>
+                                                    {step.actionLabel}
+                                                </Button>
+                                            )}
+                                        </>
+                                    )}
+                                </StepContent>
+                            </Step>
+                        );
+                    })}
+                </Stepper>
             </Paper>
 
             <Typography variant="h5" sx={{ mb: 2 }}>

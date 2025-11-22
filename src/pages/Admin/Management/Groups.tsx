@@ -430,25 +430,32 @@ export default function AdminGroupManagementPage() {
         lastStudentFilterRef.current = null;
     }, []);
 
-    const collectErrorsForStep = React.useCallback((step: number): Partial<Record<GroupFormErrorKey, string>> => {
+    const collectErrorsForStep = React.useCallback((
+        step: number,
+        draftChanges?: Partial<ThesisGroupFormData>
+    ): Partial<Record<GroupFormErrorKey, string>> => {
+        const currentName = draftChanges?.name ?? formData.name;
+        const currentDepartment = draftChanges?.department ?? formData.department;
+        const currentLeader = draftChanges?.leader ?? formData.leader;
+        const currentMembers = draftChanges?.members ?? formData.members;
         const errors: Partial<Record<GroupFormErrorKey, string>> = {};
 
         if (step === 0) {
-            if (!formData.name.trim()) {
+            if (!currentName.trim()) {
                 errors.name = 'Group name is required';
             }
 
-            if (!formData.department?.trim()) {
+            if (!currentDepartment?.trim()) {
                 errors.department = 'Department is required';
             }
         }
 
         if (step === 1) {
-            if (!formData.leader) {
+            if (!currentLeader) {
                 errors.leader = 'Group leader is required';
             }
 
-            const courseCheck = computeCourseInfo(formData.leader, formData.members);
+            const courseCheck = computeCourseInfo(currentLeader, currentMembers);
             if (courseCheck.error) {
                 errors.members = courseCheck.error;
             }
@@ -457,8 +464,8 @@ export default function AdminGroupManagementPage() {
         return errors;
     }, [computeCourseInfo, formData.department, formData.leader, formData.members, formData.name]);
 
-    const validateStep = React.useCallback((step: number): boolean => {
-        const errors = collectErrorsForStep(step);
+    const validateStep = React.useCallback((step: number, draftChanges?: Partial<ThesisGroupFormData>): boolean => {
+        const errors = collectErrorsForStep(step, draftChanges);
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
     }, [collectErrorsForStep]);
@@ -479,8 +486,8 @@ export default function AdminGroupManagementPage() {
         });
     }, []);
 
-    const handleNextStep = React.useCallback(async () => {
-        if (!validateStep(activeStep)) {
+    const handleNextStep = React.useCallback(async (pendingChanges?: Partial<ThesisGroupFormData>) => {
+        if (!validateStep(activeStep, pendingChanges)) {
             return;
         }
 

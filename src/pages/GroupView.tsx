@@ -275,7 +275,7 @@ export default function GroupViewPage() {
         setFormData((prev) => ({ ...prev, members: memberUids }));
     }, []);
 
-    const handleNextStep = React.useCallback(() => {
+    const handleNextStep = React.useCallback((pendingChanges?: Partial<ThesisGroupFormData>) => {
         setActiveStep((prev) => Math.min(prev + 1, formSteps.length - 1));
     }, [formSteps.length]);
 

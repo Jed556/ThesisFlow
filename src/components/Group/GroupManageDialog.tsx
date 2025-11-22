@@ -31,10 +31,11 @@ interface GroupManageDialogProps {
     onFieldChange: (changes: Partial<ThesisGroupFormData>) => void;
     onLeaderChange: (value: UserProfile | null) => void;
     onMembersChange: (value: UserProfile[]) => void;
-    onNext: () => void | Promise<void>;
+    onNext: (pendingChanges?: Partial<ThesisGroupFormData>) => void | Promise<void>;
     onBack: () => void;
     onSubmit: () => void | Promise<void>;
     formatUserLabel: (email: string | null | undefined) => string;
+    formatMemberOptionLabel?: (profile: UserProfile) => string;
 }
 
 /**
@@ -65,6 +66,7 @@ export default function GroupManageDialog({
     onBack,
     onSubmit,
     formatUserLabel,
+    formatMemberOptionLabel,
 }: GroupManageDialogProps) {
     // Local state for Step 0 to prevent expensive parent state updates on every keystroke
     const [localFormDetails, setLocalFormDetails] = React.useState({
@@ -89,17 +91,21 @@ export default function GroupManageDialog({
     }, [open, formData.name, formData.description, formData.thesisTitle, formData.department, formData.status]);
 
     const handleNext = React.useCallback(() => {
-        // When leaving step 0, commit local changes to parent
+        let pendingChanges: Partial<ThesisGroupFormData> | undefined;
+
         if (activeStep === 0) {
-            onFieldChange({
+            pendingChanges = {
                 name: localFormDetails.name,
                 description: localFormDetails.description,
                 thesisTitle: localFormDetails.thesisTitle,
                 department: localFormDetails.department,
                 status: localFormDetails.status,
-            });
+            };
+
+            onFieldChange(pendingChanges);
         }
-        void onNext();
+
+        void onNext(pendingChanges);
     }, [activeStep, localFormDetails, onFieldChange, onNext]);
 
     return (
@@ -224,7 +230,9 @@ export default function GroupManageDialog({
                                 multiple
                                 options={students.filter((student) => student.uid !== formData.leader)}
                                 loading={studentLoading}
-                                getOptionLabel={(option) => formatProfileLabel(option) || option.email}
+                                getOptionLabel={(option) => (
+                                    formatMemberOptionLabel ? formatMemberOptionLabel(option) : (formatProfileLabel(option) || option.email)
+                                )}
                                 value={students.filter((profile) => profile.uid && formData.members.includes(profile.uid))}
                                 onChange={(_, selected) => onMembersChange(selected)}
                                 renderInput={(params) => (

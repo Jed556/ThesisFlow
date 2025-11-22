@@ -12,6 +12,7 @@ import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/top
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard, TopicProposalFormDialog, type TopicProposalFormValues } from '../../components/TopicProposals';
+import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import {
     createTopicProposalSet, listenTopicProposalSetsByGroup, markProposalAsThesis,
@@ -374,6 +375,18 @@ export default function StudentTopicProposalsPage() {
         );
     }
 
+    if (!group) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <UnauthorizedNotice
+                    variant='box'
+                    title="Topic proposals locked"
+                    description="Create or join a thesis group first. Topic proposals are only available to active groups that have been submitted to the Research Moderator."
+                />
+            </AnimatedPage>
+        );
+    }
+
     if (groupLoading) {
         return (
             <AnimatedPage variant="slideUp">
@@ -389,14 +402,6 @@ export default function StudentTopicProposalsPage() {
         return (
             <AnimatedPage variant="slideUp">
                 <Alert severity="error">{groupError}</Alert>
-            </AnimatedPage>
-        );
-    }
-
-    if (!group) {
-        return (
-            <AnimatedPage variant="slideUp">
-                <Alert severity="info">Create or join a thesis group to start proposing topics.</Alert>
             </AnimatedPage>
         );
     }

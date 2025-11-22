@@ -9,6 +9,7 @@ import { AnimatedPage, AnimatedList } from '../../../components/Animate';
 import ChapterAccordion from '../../../layouts/ChapterAccordion/ChapterAccordion';
 import { uploadThesisFile, validateThesisDocument } from '../../../utils/firebase/storage/thesis';
 import { listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
+import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 
 type ThesisRecord = ThesisData & { id: string };
 
@@ -179,6 +180,18 @@ export default function ThesisChaptersPage() {
         );
     }
 
+    if (hasNoThesis || !thesis) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <UnauthorizedNotice
+                    variant='box'
+                    title="Chapters locked"
+                    description="No approved thesis proposal found for your group yet."
+                />
+            </AnimatedPage>
+        );
+    }
+
     if (loadingThesis) {
         return (
             <AnimatedPage variant="fade">
@@ -193,14 +206,6 @@ export default function ThesisChaptersPage() {
         return (
             <AnimatedPage variant="fade">
                 <Alert severity="error">{thesisError}</Alert>
-            </AnimatedPage>
-        );
-    }
-
-    if (hasNoThesis || !thesis) {
-        return (
-            <AnimatedPage variant="fade">
-                <Alert severity="info">No thesis record found for your account yet.</Alert>
             </AnimatedPage>
         );
     }

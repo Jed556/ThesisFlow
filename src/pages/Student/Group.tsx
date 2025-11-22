@@ -98,6 +98,8 @@ export default function StudentGroupPage() {
 
     // Users map for GroupCard
     const [usersByUid, setUsersByUid] = React.useState<Map<string, UserProfile>>(new Map());
+    // Profiles for the active group (used for richer member cards)
+    const [myGroupProfiles, setMyGroupProfiles] = React.useState<Map<string, UserProfile>>(new Map());
 
     // Loading & error states
     const [loading, setLoading] = React.useState(true);
@@ -137,6 +139,31 @@ export default function StudentGroupPage() {
     const [previewMembers, setPreviewMembers] = React.useState<Map<string, UserProfile>>(new Map());
 
     const { showNotification } = useSnackbar();
+    const isInviteLocked = (status?: ThesisGroup['status']) => status === 'review' || status === 'active';
+    const buildGroupProfileMap = React.useCallback(async (groupData: ThesisGroup) => {
+        const ids = new Set<string>();
+        ids.add(groupData.members.leader);
+        groupData.members.members.forEach((uid) => ids.add(uid));
+        if (groupData.members.adviser) {
+            ids.add(groupData.members.adviser);
+        }
+        if (groupData.members.editor) {
+            ids.add(groupData.members.editor);
+        }
+        (groupData.members.panels ?? []).forEach((uid) => ids.add(uid));
+
+        const profileMap = new Map<string, UserProfile>();
+        await Promise.all(
+            Array.from(ids).map(async (uid) => {
+                const profile = await getUserById(uid);
+                if (profile) {
+                    profileMap.set(uid, profile);
+                }
+            })
+        );
+
+        return profileMap;
+    }, []);
 
     // Load user profile
     React.useEffect(() => {
@@ -171,6 +198,7 @@ export default function StudentGroupPage() {
             setLoading(false);
             setMyGroup(null);
             setIsLeader(false);
+            setMyGroupProfiles(new Map());
             return;
         }
 
@@ -201,9 +229,15 @@ export default function StudentGroupPage() {
                         const group = uniqueGroups[0];
                         setMyGroup(group);
                         setIsLeader(group.members.leader === userUid);
+
+                        const profileMap = await buildGroupProfileMap(group);
+                        if (!cancelled) {
+                            setMyGroupProfiles(profileMap);
+                        }
                     } else {
                         setMyGroup(null);
                         setIsLeader(false);
+                        setMyGroupProfiles(new Map());
                     }
 
                     // Get all groups in my course
@@ -269,7 +303,7 @@ export default function StudentGroupPage() {
         return () => {
             cancelled = true;
         };
-    }, [userUid, userProfile?.course]);
+    }, [userUid, userProfile?.course, buildGroupProfileMap]);
 
     const handleOpenCreateDialog = React.useCallback(() => {
         if (!userUid || !userProfile) return;
@@ -307,12 +341,13 @@ export default function StudentGroupPage() {
         });
     }, []);
 
-    const handleNextStep = React.useCallback(async () => {
+    const handleNextStep = React.useCallback(async (pendingChanges?: Partial<ThesisGroupFormData>) => {
         // Validate current step
         const errors: Partial<Record<GroupFormErrorKey, string>> = {};
+        const pendingName = pendingChanges?.name ?? formData.name;
 
         if (activeStep === 0) {
-            if (!formData.name.trim()) {
+            if (!pendingName.trim()) {
                 errors.name = 'Group name is required';
             }
         }
@@ -360,6 +395,49 @@ export default function StudentGroupPage() {
         setFormData((prev: ThesisGroupFormData) => ({ ...prev, members: memberUids }));
     }, []);
 
+    const resolveProfileByUid = React.useCallback((uid: string | null | undefined): UserProfile | undefined => {
+        if (!uid) {
+            return undefined;
+        }
+
+        if (uid === userProfile?.uid) {
+            return userProfile;
+        }
+
+        return studentOptions.find((student) => student.uid === uid)
+            ?? myGroupProfiles.get(uid)
+            ?? usersByUid.get(uid);
+    }, [studentOptions, userProfile, myGroupProfiles, usersByUid]);
+
+    const formatParticipantLabel = React.useCallback((uid: string | null | undefined): string => {
+        if (!uid) {
+            return '—';
+        }
+
+        const profile = resolveProfileByUid(uid);
+        if (!profile) {
+            return uid;
+        }
+
+        const first = profile.name?.first?.trim();
+        const last = profile.name?.last?.trim();
+        const fullName = [first, last].filter(Boolean).join(' ');
+
+        if (fullName) {
+            return `${fullName} (${uid})`;
+        }
+
+        if (profile.email) {
+            return `${profile.email} (${uid})`;
+        }
+
+        return uid;
+    }, [resolveProfileByUid]);
+
+    const formatParticipantOptionLabel = React.useCallback((profile: UserProfile): string => (
+        formatParticipantLabel(profile.uid)
+    ), [formatParticipantLabel]);
+
     const handleSaveGroup = React.useCallback(async () => {
         if (!userUid || !userProfile) return;
 
@@ -393,6 +471,8 @@ export default function StudentGroupPage() {
             const createdGroup = await createGroup(newGroupData);
             setMyGroup(createdGroup);
             setIsLeader(true);
+            const profileMap = await buildGroupProfileMap(createdGroup);
+            setMyGroupProfiles(profileMap);
             setCreateDialogOpen(false);
             showNotification('Group created successfully', 'success');
 
@@ -416,7 +496,7 @@ export default function StudentGroupPage() {
         } finally {
             setSaving(false);
         }
-    }, [userUid, userProfile, formData, showNotification]);
+    }, [userUid, userProfile, formData, showNotification, buildGroupProfileMap]);
 
     const handleCloseCreateDialog = React.useCallback(() => {
         setCreateDialogOpen(false);
@@ -445,6 +525,7 @@ export default function StudentGroupPage() {
             setMyGroup(null);
             setIsLeader(false);
             setDeleteDialogOpen(false);
+            setMyGroupProfiles(new Map());
         } catch (err) {
             console.error('Failed to delete group:', err);
             setError('Failed to delete group. Please try again.');
@@ -454,8 +535,8 @@ export default function StudentGroupPage() {
     const handleInviteUser = async () => {
         if (!myGroup || !inviteUid.trim()) return;
 
-        if (myGroup.status === 'active') {
-            showNotification('Invites are disabled once your group has been approved.', 'info');
+        if (isInviteLocked(myGroup.status)) {
+            showNotification('Invites are disabled once your group has been submitted for review or approved.', 'info');
             return;
         }
 
@@ -468,6 +549,8 @@ export default function StudentGroupPage() {
             const updated = await getGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
+                const profileMap = await buildGroupProfileMap(updated);
+                setMyGroupProfiles(profileMap);
             }
         } catch (err) {
             console.error('Failed to invite user:', err);
@@ -547,7 +630,9 @@ export default function StudentGroupPage() {
             const updated = await getGroupById(groupId);
             if (updated) {
                 setMyGroup(updated);
-                setIsLeader(false);
+                setIsLeader(updated.members.leader === userUid);
+                const profileMap = await buildGroupProfileMap(updated);
+                setMyGroupProfiles(profileMap);
             }
 
             // Remove from invites list
@@ -582,6 +667,8 @@ export default function StudentGroupPage() {
             const updated = await getGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
+                const profileMap = await buildGroupProfileMap(updated);
+                setMyGroupProfiles(profileMap);
             }
         } catch (err) {
             console.error('Failed to submit for review:', err);
@@ -599,6 +686,8 @@ export default function StudentGroupPage() {
             const updated = await getGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
+                const profileMap = await buildGroupProfileMap(updated);
+                setMyGroupProfiles(profileMap);
             }
         } catch (err) {
             console.error('Failed to accept request:', err);
@@ -616,6 +705,8 @@ export default function StudentGroupPage() {
             const updated = await getGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
+                const profileMap = await buildGroupProfileMap(updated);
+                setMyGroupProfiles(profileMap);
             }
         } catch (err) {
             console.error('Failed to reject request:', err);
@@ -629,7 +720,7 @@ export default function StudentGroupPage() {
                 <AnimatedPage variant="slideUp">
                     <Paper sx={{ p: 3, mb: 3 }}>
                         <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
-                        <Skeleton variant="rectangular" height={120} />
+                        <Skeleton variant="rounded" height={120} />
                     </Paper>
                 </AnimatedPage>
             );
@@ -647,16 +738,93 @@ export default function StudentGroupPage() {
             return (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={120} />
+                    <Skeleton variant="rounded" height={120} />
                 </Paper>
             );
         }
 
         if (myGroup) {
+            const renderPersonCard = (uid: string, roleLabel: string) => {
+                if (!uid) return null;
+                const profile = myGroupProfiles.get(uid);
+                const displayName = profile ? formatProfileLabel(profile) : uid;
+                const secondaryText = profile?.email ?? roleLabel;
+
+                return (
+                    <Paper
+                        key={`${roleLabel}-${uid}`}
+                        variant="outlined"
+                        sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            bgcolor: 'background.default',
+                            borderColor: 'divider',
+                        }}
+                    >
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <Avatar uid={uid} size={48} tooltip="full" />
+                            <Box>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                    {displayName}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {secondaryText}
+                                </Typography>
+                            </Box>
+                        </Stack>
+                    </Paper>
+                );
+            };
+
+            const renderRoleSection = (title: string, people: { uid: string; role: string }[]) => {
+                const cards = people
+                    .filter(({ uid }) => Boolean(uid))
+                    .map(({ uid, role }) => renderPersonCard(uid, role))
+                    .filter(Boolean) as React.ReactNode[];
+
+                if (cards.length === 0) {
+                    return null;
+                }
+
+                return (
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                            {title}
+                        </Typography>
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: {
+                                    xs: '1fr',
+                                    sm: 'repeat(2, minmax(0, 1fr))',
+                                    lg: 'repeat(3, minmax(0, 1fr))',
+                                },
+                                gap: 2,
+                            }}
+                        >
+                            {cards}
+                        </Box>
+                    </Box>
+                );
+            };
+
+            const researcherEntries = [
+                { uid: myGroup.members.leader, role: 'Lead Researcher' },
+                ...myGroup.members.members.map((uid) => ({ uid, role: 'Researcher' })),
+            ];
+            const adviserEntries = myGroup.members.adviser ? [{ uid: myGroup.members.adviser, role: 'Adviser' }] : [];
+            const editorEntries = myGroup.members.editor ? [{ uid: myGroup.members.editor, role: 'Editor' }] : [];
+            const panelEntries = (myGroup.members.panels ?? []).map((uid) => ({ uid, role: 'Panelist' }));
+
             return (
-                <Paper sx={{ p: 3, mb: 3 }}>
+                <Paper sx={{ p: 3, mb: 3, borderRadius: 3 }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                        <Typography variant="h5">{myGroup.name}</Typography>
+                        <Box>
+                            <Typography variant="overline" color="text.secondary">
+                                Thesis Group
+                            </Typography>
+                            <Typography variant="h5">{myGroup.name}</Typography>
+                        </Box>
                         <Stack direction="row" spacing={1}>
                             <Chip
                                 label={myGroup.status.toUpperCase()}
@@ -683,41 +851,18 @@ export default function StudentGroupPage() {
                         </Alert>
                     )}
 
-                    <Divider sx={{ my: 2 }} />
+                    <Divider sx={{ my: 3 }} />
 
-                    <Typography variant="subtitle2" gutterBottom>
-                        Members
-                    </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-                        <Avatar
-                            uid={myGroup.members.leader}
-                            initials={[Name.FIRST]}
-                            mode="chip"
-                            tooltip="email"
-                            label="Leader"
-                            size="small"
-                            chipProps={{ variant: 'outlined', size: 'small', color: 'primary' }}
-                        />
-                        {myGroup.members.members.map((uid) => (
-                            <Avatar
-                                key={uid}
-                                uid={uid}
-                                initials={[Name.FIRST]}
-                                mode="chip"
-                                tooltip="email"
-                                label="Member"
-                                size="small"
-                                chipProps={{ variant: 'outlined', size: 'small' }}
-                            />
-                        ))}
-                    </Stack>
+                    {renderRoleSection('Researchers', researcherEntries)}
+                    {renderRoleSection('Adviser', adviserEntries)}
+                    {renderRoleSection('Editor', editorEntries)}
+                    {renderRoleSection('Panelists', panelEntries)}
 
                     {isLeader && (
                         <>
-                            {/* Pending Invites */}
                             {(myGroup.invites ?? []).length > 0 && (
                                 <>
-                                    <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                                         Pending Invites
                                     </Typography>
                                     <Stack spacing={1} sx={{ mb: 2 }}>
@@ -728,10 +873,9 @@ export default function StudentGroupPage() {
                                 </>
                             )}
 
-                            {/* Join Requests */}
                             {(myGroup.requests ?? []).length > 0 && (
                                 <>
-                                    <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                                         Join Requests
                                     </Typography>
                                     <Stack spacing={1} sx={{ mb: 2 }}>
@@ -770,7 +914,7 @@ export default function StudentGroupPage() {
                                     startIcon={<PersonAddIcon />}
                                     variant="outlined"
                                     onClick={() => setInviteDialogOpen(true)}
-                                    disabled={myGroup.status === 'active'}
+                                    disabled={isInviteLocked(myGroup.status)}
                                 >
                                     Invite Member
                                 </Button>
@@ -828,14 +972,6 @@ export default function StudentGroupPage() {
 
     return (
         <AnimatedPage variant="slideUp">
-            <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    My Thesis Group
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                    Create or join a thesis group to collaborate with your peers.
-                </Typography>
-            </Box>
 
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -934,13 +1070,10 @@ export default function StudentGroupPage() {
                 advisers={[]}
                 editors={[]}
                 departmentOptions={[]}
-                memberChipData={formData.members.map(uid => {
-                    const student = studentOptions.find(s => s.uid === uid);
-                    return {
-                        email: student?.email || uid,
-                        label: student ? formatProfileLabel(student) : uid,
-                    };
-                })}
+                memberChipData={formData.members.map((uid) => ({
+                    email: uid,
+                    label: formatParticipantLabel(uid),
+                }))}
                 reviewCourse={formData.course || ''}
                 saving={saving}
                 studentLoading={studentOptionsLoading}
@@ -951,10 +1084,8 @@ export default function StudentGroupPage() {
                 onNext={handleNextStep}
                 onBack={handleBackStep}
                 onSubmit={handleSaveGroup}
-                formatUserLabel={(uid) => {
-                    const student = studentOptions.find(s => s.uid === uid);
-                    return student ? formatProfileLabel(student) : uid || '—';
-                }}
+                formatUserLabel={formatParticipantLabel}
+                formatMemberOptionLabel={formatParticipantOptionLabel}
             />
 
             {/* Invite User Dialog */}
@@ -978,7 +1109,7 @@ export default function StudentGroupPage() {
                     <Button
                         onClick={handleInviteUser}
                         variant="contained"
-                        disabled={!inviteUid.trim() || myGroup?.status === 'active'}
+                        disabled={!inviteUid.trim() || isInviteLocked(myGroup?.status)}
                     >
                         Send Invite
                     </Button>
