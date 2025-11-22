@@ -28,7 +28,7 @@ import { formatGroupStatus, GROUP_STATUS_COLORS } from '../components/Group/cons
 import { AnimatedPage } from '../components/Animate';
 import { Avatar, Name } from '../components/Avatar';
 import { getGroupById, approveGroup, rejectGroup, deleteGroup, updateGroup } from '../utils/firebase/firestore/groups';
-import { getAllUsers, getUsersByFilter } from '../utils/firebase/firestore';
+import { getAllUsers } from '../utils/firebase/firestore';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import GroupManageDialog, { type GroupFormErrorKey } from '../components/Group/GroupManageDialog';
 import type { ThesisGroupFormData, ThesisGroupMembers } from '../types/group';
@@ -222,7 +222,6 @@ export default function GroupViewPage() {
     const createdAtLabel = group?.createdAt ? new Date(group.createdAt).toLocaleString() : '—';
 
     // Filter users for dialog
-    const students = React.useMemo(() => users.filter((u) => u.role === 'student'), [users]);
     const advisers = React.useMemo(() => users.filter((u) => u.role === 'adviser'), [users]);
     const editors = React.useMemo(() => users.filter((u) => u.role === 'editor'), [users]);
 
@@ -275,7 +274,7 @@ export default function GroupViewPage() {
         setFormData((prev) => ({ ...prev, members: memberUids }));
     }, []);
 
-    const handleNextStep = React.useCallback((pendingChanges?: Partial<ThesisGroupFormData>) => {
+    const handleNextStep = React.useCallback(() => {
         setActiveStep((prev) => Math.min(prev + 1, formSteps.length - 1));
     }, [formSteps.length]);
 

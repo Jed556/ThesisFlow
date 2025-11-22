@@ -21,7 +21,7 @@ export const metadata: NavigationItem = {
     group: 'management',
     index: 1,
     title: 'Head Topic Proposals',
-    segment: 'head/topic-proposals',
+    segment: 'head-topic-proposals',
     icon: <GavelIcon />,
     roles: ['head'],
 };

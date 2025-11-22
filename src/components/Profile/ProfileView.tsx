@@ -1,6 +1,6 @@
 import * as React from 'react';
 import {
-    Box, Button, Card, CardContent, Chip, Divider, Grid, List, ListItem,
+    Box, Button, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem,
     ListItemAvatar, ListItemText, Paper, Stack, Typography,
     Avatar as MuiAvatar,
 } from '@mui/material';
@@ -10,7 +10,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { alpha, lighten, useTheme } from '@mui/material/styles';
 import Avatar from '../Avatar/Avatar';
 import { getInitialsFromFullName } from '../../utils/avatarUtils';
-import type { UserProfile, HistoricalThesisEntry } from '../../types/profile';
+import type { UserProfile, HistoricalThesisEntry, SkillRating } from '../../types/profile';
 import type { ThesisData } from '../../types/thesis';
 
 export interface ProfilePrimaryAction {
@@ -29,6 +29,7 @@ export interface ProfileViewProps {
     profile: UserProfile;
     currentTheses?: ThesisData[];
     skills?: string[];
+    skillRatings?: SkillRating[];
     timeline?: HistoricalThesisEntry[];
     contacts?: { icon: React.ReactNode; text: string }[];
     primaryAction?: ProfilePrimaryAction;
@@ -70,6 +71,7 @@ export default function ProfileView({
     profile,
     currentTheses,
     skills,
+    skillRatings,
     timeline,
     contacts,
     primaryAction,
@@ -87,6 +89,16 @@ export default function ProfileView({
 
     const contactItems = React.useMemo(() => buildContacts(profile, contacts), [contacts, profile]);
     const roleLabel = React.useMemo(() => profile.role.charAt(0).toUpperCase() + profile.role.slice(1), [profile.role]);
+
+    const normalizedSkillRatings = React.useMemo(() => {
+        if (!skillRatings || skillRatings.length === 0) {
+            return [] as SkillRating[];
+        }
+        return skillRatings.map((entry) => ({
+            ...entry,
+            rating: Math.max(0, Math.min(typeof entry.rating === 'number' ? entry.rating : 0, 5)),
+        }));
+    }, [skillRatings]);
 
     const avatarStyles: SxProps<Theme> = React.useMemo(() => ({
         bgcolor: profile.avatar ? undefined : accentColor,
@@ -167,7 +179,38 @@ export default function ProfileView({
                             <CardContent>
                                 <Typography variant="h6" gutterBottom>Expertise</Typography>
                                 <Divider sx={{ mb: 2 }} />
-                                {skills && skills.length > 0 ? (
+                                {normalizedSkillRatings.length > 0 ? (
+                                    <Stack spacing={2}>
+                                        {normalizedSkillRatings.map((skill) => {
+                                            const ratingValue = skill.rating;
+                                            const ratingLabel = Number.isInteger(ratingValue)
+                                                ? ratingValue.toString()
+                                                : ratingValue.toFixed(1);
+                                            return (
+                                                <Stack key={`${skill.name}-${ratingLabel}`} spacing={0.75}>
+                                                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                                        <Typography variant="body2" fontWeight={600}>
+                                                            {skill.name}
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {ratingLabel}/5
+                                                        </Typography>
+                                                    </Stack>
+                                                    <LinearProgress
+                                                        variant="determinate"
+                                                        value={(ratingValue / 5) * 100}
+                                                        sx={{ height: 6, borderRadius: 999 }}
+                                                    />
+                                                    {typeof skill.endorsements === 'number' && skill.endorsements > 0 ? (
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {skill.endorsements} endorsement{skill.endorsements === 1 ? '' : 's'}
+                                                        </Typography>
+                                                    ) : null}
+                                                </Stack>
+                                            );
+                                        })}
+                                    </Stack>
+                                ) : skills && skills.length > 0 ? (
                                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                                         {skills.map((skill) => (
                                             <Chip key={skill} label={skill} variant="outlined" color="primary" size="small" />
@@ -188,18 +231,6 @@ export default function ProfileView({
                                 <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                     {contactItems.map((item, idx) => (
                                         <ListItem key={idx} sx={{ p: 0 }}>
-                                            <ListItemAvatar>
-                                                <MuiAvatar
-                                                    sx={{
-                                                        bgcolor: alpha(accentColor, 0.15),
-                                                        color: accentColor,
-                                                        width: 32,
-                                                        height: 32
-                                                    }}
-                                                >
-                                                    {getInitialsFromFullName(item.text)}
-                                                </MuiAvatar>
-                                            </ListItemAvatar>
                                             <ListItemText
                                                 primary={
                                                     <Stack direction="row" spacing={1} alignItems="center">

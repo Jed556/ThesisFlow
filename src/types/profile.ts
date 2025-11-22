@@ -25,6 +25,20 @@ export interface UserName {
 }
 
 /**
+ * Skill rating metadata for mentor expertise
+ */
+export interface SkillRating {
+    /** Display name of the skill */
+    name: string;
+    /** Mentor self- or system-assessed rating using a 0-5 scale */
+    rating: number;
+    /** Optional count of endorsements backing the rating */
+    endorsements?: number;
+    /** Optional free-form note or description */
+    note?: string;
+}
+
+/**
  * Interface for user profiles in the ThesisFlow system
  */
 export interface UserProfile {
@@ -78,21 +92,20 @@ export interface UserProfile {
     bio?: string;
 
     /**
-     * Expertise areas or skills (for advisers and editors)
+     * Expertise areas or skills (for advisers)
      */
     skills?: string[];
 
     /**
-     * Capacity for advising theses (only for advisers)
-     * If 0 or undefined, not accepting advisees
+     * Optional skill ratings with proficiency scores (0-5 scale)
      */
-    adviserCapacity?: number;
+    skillRatings?: SkillRating[];
 
     /**
-     * Capacity for editing theses (only for editors)
-     * If 0 or undefined, not accepting editing assignments
+     * Capacity for handled theses (only for advisers, editors and statisticians)
+     * If 0 or undefined, not accepting advisees
      */
-    editorCapacity?: number;
+    capacity?: number;
 
     preferences?: {
         /**

@@ -5,6 +5,7 @@ import { normalizeDateInput } from './dateUtils';
 export interface ThesisRoleStats {
     adviserCount: number;
     editorCount: number;
+    statisticianCount: number;
 }
 
 export interface MentorCardData {
@@ -26,18 +27,35 @@ export function aggregateThesisStats(theses: (ThesisData & { id: string })[]): M
     const stats = new Map<string, ThesisRoleStats>();
 
     theses.forEach((thesis) => {
+        const ensureRecord = (uid: string): ThesisRoleStats => {
+            if (!stats.has(uid)) {
+                stats.set(uid, { adviserCount: 0, editorCount: 0, statisticianCount: 0 });
+            }
+            return stats.get(uid)!;
+        };
+
         if (thesis.adviser) {
-            const record = stats.get(thesis.adviser) ?? { adviserCount: 0, editorCount: 0 };
+            const record = ensureRecord(thesis.adviser);
             stats.set(thesis.adviser, {
                 adviserCount: record.adviserCount + 1,
                 editorCount: record.editorCount,
+                statisticianCount: record.statisticianCount,
             });
         }
         if (thesis.editor) {
-            const record = stats.get(thesis.editor) ?? { adviserCount: 0, editorCount: 0 };
+            const record = ensureRecord(thesis.editor);
             stats.set(thesis.editor, {
                 adviserCount: record.adviserCount,
                 editorCount: record.editorCount + 1,
+                statisticianCount: record.statisticianCount,
+            });
+        }
+        if (thesis.statistician) {
+            const record = ensureRecord(thesis.statistician);
+            stats.set(thesis.statistician, {
+                adviserCount: record.adviserCount,
+                editorCount: record.editorCount,
+                statisticianCount: record.statisticianCount + 1,
             });
         }
     });
@@ -48,19 +66,23 @@ export function aggregateThesisStats(theses: (ThesisData & { id: string })[]): M
 /**
  * Computes mentor recommendation cards sorted by compatibility, capacity, and expertise.
  * @param profiles List of user profiles to evaluate as mentors
- * @param role Role to consider ('adviser' or 'editor')
+ * @param role Role to consider ('adviser', 'editor', or 'statistician')
  * @param statsMap Precomputed thesis role statistics for users
  * @return List of MentorCardData sorted by rank
  */
 export function computeMentorCards(
     profiles: UserProfile[],
-    role: 'adviser' | 'editor',
+    role: 'adviser' | 'editor' | 'statistician',
     statsMap: Map<string, ThesisRoleStats>,
 ): MentorCardData[] {
     const scored = profiles.map((profile) => {
-        const stats = statsMap.get(profile.uid) ?? { adviserCount: 0, editorCount: 0 };
-        const capacity = role === 'adviser' ? profile.adviserCapacity ?? 0 : profile.editorCapacity ?? 0;
-        const active = role === 'adviser' ? stats.adviserCount : stats.editorCount;
+        const stats = statsMap.get(profile.uid) ?? { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
+        const capacity = profile.capacity ?? 0;
+        const active = role === 'adviser'
+            ? stats.adviserCount
+            : role === 'editor'
+                ? stats.editorCount
+                : stats.statisticianCount;
         const openSlots = capacity > 0 ? Math.max(capacity - active, 0) : 0;
         const compatibility = computeCompatibility(profile, stats, role);
         const score = compatibility + openSlots * 5 + (profile.skills?.length ?? 0) * 2;
@@ -90,6 +112,17 @@ export function computeMentorCards(
 }
 
 /**
+ * Reusable compatibility evaluator for mentor detail views.
+ */
+export function evaluateMentorCompatibility(
+    profile: UserProfile,
+    stats: ThesisRoleStats,
+    role: 'adviser' | 'editor' | 'statistician'
+): number {
+    return computeCompatibility(profile, stats, role);
+}
+
+/**
  * Generates a recency score that weights mentors who were active recently.
  */
 function computeRecencyScore(date: Date | null): number {
@@ -107,9 +140,17 @@ function computeRecencyScore(date: Date | null): number {
 /**
  * Calculates mentor compatibility using availability, skills coverage, and activity recency.
  */
-function computeCompatibility(profile: UserProfile, stats: ThesisRoleStats, role: 'adviser' | 'editor'): number {
-    const capacity = role === 'adviser' ? profile.adviserCapacity ?? 0 : profile.editorCapacity ?? 0;
-    const active = role === 'adviser' ? stats.adviserCount : stats.editorCount;
+function computeCompatibility(
+    profile: UserProfile,
+    stats: ThesisRoleStats,
+    role: 'adviser' | 'editor' | 'statistician'
+): number {
+    const capacity = profile.capacity ?? 0;
+    const active = role === 'adviser'
+        ? stats.adviserCount
+        : role === 'editor'
+            ? stats.editorCount
+            : stats.statisticianCount;
     const openSlots = capacity > 0 ? Math.max(capacity - active, 0) : 0;
     const availabilityRatio = capacity > 0 ? openSlots / capacity : 0;
     const availabilityScore = Math.round(availabilityRatio * 40);

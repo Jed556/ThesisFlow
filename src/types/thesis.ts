@@ -45,6 +45,7 @@ export interface ThesisData {
     members?: string[];
     adviser?: string;
     editor?: string;
+    statistician?: string;
     submissionDate: string;
     lastUpdated: string;
     overallStatus: string;

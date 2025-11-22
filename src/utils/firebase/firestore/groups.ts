@@ -1,5 +1,5 @@
 import {
-    collection, doc, getDocs, getDoc, query, where, orderBy, serverTimestamp, writeBatch
+    collection, doc, getDocs, getDoc, query, where, orderBy, serverTimestamp, writeBatch, onSnapshot
 } from 'firebase/firestore';
 import type {
     DocumentData, DocumentReference, DocumentSnapshot, QueryDocumentSnapshot, Timestamp,
@@ -87,6 +87,11 @@ function extractSnapshotDataAndMeta(snapshot: DocumentSnapshot<DocumentData>): {
         data: cloned,
         meta: meta ?? buildGroupMeta(cloned as Partial<ThesisGroup>),
     };
+}
+
+export interface GroupListenerOptions {
+    onData: (groups: ThesisGroup[]) => void;
+    onError?: (error: Error) => void;
 }
 
 function getCanonicalGroupRef(groupId: string, meta: GroupMeta): DocumentReference<DocumentData> {
@@ -356,6 +361,39 @@ function mapGroupDocument(snapshot: GroupSnapshot): ThesisGroup {
         createdAt: normalizeTimestamp(createdAt) ?? new Date().toISOString(),
         updatedAt: normalizeTimestamp(updatedAt) ?? new Date().toISOString(),
     };
+}
+
+/**
+ * Listen to groups where the specified mentor is assigned as adviser or editor.
+ */
+export function listenGroupsByMentorRole(
+    role: 'adviser' | 'editor',
+    mentorUid: string | null | undefined,
+    options: GroupListenerOptions
+): () => void {
+    if (!mentorUid) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+
+    const fieldPath = role === 'adviser' ? 'members.adviser' : 'members.editor';
+    const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+    const groupsQuery = query(groupsRef, where(fieldPath, '==', mentorUid));
+
+    return onSnapshot(
+        groupsQuery,
+        (snapshot) => {
+            const groups = snapshot.docs.map((docSnap) => mapGroupDocument(docSnap));
+            options.onData(groups);
+        },
+        (error) => {
+            if (options.onError) {
+                options.onError(error as Error);
+            } else {
+                console.error('Group mentor listener error:', error);
+            }
+        }
+    );
 }
 
 /**

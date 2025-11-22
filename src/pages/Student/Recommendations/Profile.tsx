@@ -1,103 +1,67 @@
 import * as React from 'react';
-import { Alert, Button, Skeleton, Stack } from '@mui/material';
+import {
+    Alert, Button, Card, CardContent, Chip, Skeleton, Stack, Typography,
+} from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
-import ProfileView from '../../../components/Profile/ProfileView';
-import { onUserProfile } from '../../../utils/firebase/firestore/user';
+import ProfileView from '../../ProfileView';
+import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
+import { onUserProfile, getUsersByIds } from '../../../utils/firebase/firestore/user';
 import { listenThesesForMentor } from '../../../utils/firebase/firestore/thesis';
+import { listenGroupsByMentorRole } from '../../../utils/firebase/firestore/groups';
+import { filterActiveMentorTheses, deriveMentorThesisHistory } from '../../../utils/mentorProfileUtils';
+import { evaluateMentorCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisData } from '../../../types/thesis';
-import type { UserProfile, HistoricalThesisEntry } from '../../../types/profile';
+import type { UserProfile, HistoricalThesisEntry, UserRole } from '../../../types/profile';
+import type { ThesisGroup } from '../../../types/group';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
-    title: (params) => {
-        const uid = params?.uid as string | undefined;
-        if (!uid) return 'User Profile';
-        return 'User Profile'; // Will be updated when profile loads
-    },
-    segment: 'profile/:uid',
+    title: 'Mentor Profile',
+    segment: 'mentor/:uid',
     hidden: true,
 };
 
-/**
- * Derive historical thesis entries from completed theses
- */
-const COMPLETED_STATUSES = ['completed', 'defended', 'published', 'archived'] as const;
+type MentorRole = 'adviser' | 'editor';
 
-function deriveThesisHistory(
-    allTheses: (ThesisData & { id: string })[],
-    userUid: string,
-    userRole: 'adviser' | 'editor'
-): HistoricalThesisEntry[] {
-    // Filter theses where user was adviser/editor and thesis is completed
-    const userTheses = allTheses.filter((thesis) => {
-        const isUserInvolved = userRole === 'adviser'
-            ? thesis.adviser === userUid
-            : thesis.editor === userUid;
-        const statusValue = (thesis.overallStatus ?? '').toLowerCase();
-        const isCompleted = COMPLETED_STATUSES.some((status) => statusValue.includes(status));
-        return isUserInvolved && isCompleted;
-    });
-
-    // Map to HistoricalThesisEntry format
-    return userTheses.map((thesis) => {
-        const rawDate = thesis.submissionDate ? new Date(thesis.submissionDate) : null;
-        const submissionYear = rawDate && !Number.isNaN(rawDate.getTime())
-            ? rawDate.getFullYear().toString()
-            : '—';
-        return {
-            year: submissionYear,
-            title: thesis.title,
-            role: userRole === 'adviser' ? 'Adviser' : 'Editor',
-            outcome: thesis.overallStatus,
-        };
-    }).sort((a, b) => parseInt(b.year) - parseInt(a.year)); // Sort by year descending
+function isMentorRole(role: UserRole | undefined): role is MentorRole {
+    return role === 'adviser' || role === 'editor';
 }
 
 export default function MentorProfilePage() {
     const navigate = useNavigate();
     const { uid = '' } = useParams<{ uid: string }>();
 
-    // State for async data
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
-    const [currentAssignments, setCurrentAssignments] = React.useState<ThesisData[]>([]);
-    const [history, setHistory] = React.useState<HistoricalThesisEntry[]>([]);
-    const [loading, setLoading] = React.useState(true);
+    const [assignments, setAssignments] = React.useState<(ThesisData & { id: string })[]>([]);
+    const [groups, setGroups] = React.useState<ThesisGroup[]>([]);
+    const [membersByUid, setMembersByUid] = React.useState<Map<string, UserProfile>>(new Map());
+    const [profileLoading, setProfileLoading] = React.useState(true);
+    const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
+    const [groupsLoading, setGroupsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
-    const [profileLoaded, setProfileLoaded] = React.useState(false);
-    const [thesesLoaded, setThesesLoaded] = React.useState(false);
 
     React.useEffect(() => {
-        setLoading(!(profileLoaded && thesesLoaded));
-    }, [profileLoaded, thesesLoaded]);
-
-    // Load profile and thesis data
-    React.useEffect(() => {
-        setError(null);
-        setProfile(null);
-        setCurrentAssignments([]);
-        setHistory([]);
-        setProfileLoaded(false);
-        setThesesLoaded(false);
-
         if (!uid) {
+            setProfile(null);
             setError('Profile not found');
-            setProfileLoaded(true);
-            setThesesLoaded(true);
+            setProfileLoading(false);
             return () => { /* no-op */ };
         }
 
+        setProfileLoading(true);
         const unsubscribeProfile = onUserProfile(uid, (profileData) => {
             if (!profileData) {
                 setProfile(null);
                 setError('Profile not found');
-                setProfileLoaded(true);
-                return;
+            } else if (!isMentorRole(profileData.role)) {
+                setProfile(profileData);
+                setError('Only adviser or editor profiles can be viewed here.');
+            } else {
+                setProfile(profileData);
+                setError(null);
             }
-
-            setProfile(profileData);
-            setProfileLoaded(true);
+            setProfileLoading(false);
         });
 
         return () => {
@@ -105,63 +69,207 @@ export default function MentorProfilePage() {
         };
     }, [uid]);
 
+    const mentorRole = React.useMemo<MentorRole | null>(() => (
+        isMentorRole(profile?.role) ? profile.role : null
+    ), [profile?.role]);
+
     React.useEffect(() => {
-        if (!profile || (profile.role !== 'adviser' && profile.role !== 'editor')) {
-            setCurrentAssignments([]);
-            setHistory([]);
-            setThesesLoaded(true);
+        if (!uid || !mentorRole) {
+            setAssignments([]);
+            setAssignmentsLoading(false);
             return () => { /* no-op */ };
         }
- 
-        setThesesLoaded(false);
 
-        const unsubscribe = listenThesesForMentor(profile.role, profile.uid, {
+        setAssignmentsLoading(true);
+        const unsubscribe = listenThesesForMentor(mentorRole, uid, {
             onData: (records) => {
-                setError(null);
-                const activeTheses = records.filter((thesis) => {
-                    const statusValue = (thesis.overallStatus ?? '').toLowerCase();
-                    const isCompleted = COMPLETED_STATUSES.some((status) => statusValue.includes(status));
-                    return !isCompleted;
-                });
-
-                setCurrentAssignments(activeTheses);
-                // Narrow role to adviser|editor — this branch already ensures profile.role is one of those values
-                const role = profile.role as 'adviser' | 'editor';
-                const thesisHistory = deriveThesisHistory(records, profile.uid, role);
-                setHistory(thesisHistory);
-                setThesesLoaded(true);
+                setAssignments(records);
+                setAssignmentsLoading(false);
             },
             onError: (listenerError) => {
                 console.error('Failed to listen for mentor assignments:', listenerError);
-                setError('Unable to load thesis assignments for this mentor at the moment.');
-                setThesesLoaded(true);
+                setAssignments([]);
+                setAssignmentsLoading(false);
             },
         });
 
         return () => {
             unsubscribe();
         };
-    }, [profile]);
+    }, [mentorRole, uid]);
+
+    React.useEffect(() => {
+        if (!uid || !mentorRole) {
+            setGroups([]);
+            setGroupsLoading(false);
+            return () => { /* no-op */ };
+        }
+
+        setGroupsLoading(true);
+        const unsubscribe = listenGroupsByMentorRole(mentorRole, uid, {
+            onData: (records) => {
+                setGroups(records);
+                setGroupsLoading(false);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to load mentor groups:', listenerError);
+                setGroups([]);
+                setGroupsLoading(false);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [mentorRole, uid]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        if (groups.length === 0) {
+            setMembersByUid(new Map());
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        const memberIds = new Set<string>();
+        groups.forEach((group) => {
+            memberIds.add(group.members.leader);
+            group.members.members.forEach((memberUid) => memberIds.add(memberUid));
+        });
+
+        void (async () => {
+            try {
+                const profiles = await getUsersByIds(Array.from(memberIds));
+                if (cancelled) return;
+                const next = new Map<string, UserProfile>();
+                profiles.forEach((entry) => next.set(entry.uid, entry));
+                setMembersByUid(next);
+            } catch (memberError) {
+                if (!cancelled) {
+                    console.error('Failed to hydrate group members:', memberError);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [groups]);
+
+    const activeAssignments = React.useMemo<ThesisData[]>(
+        () => filterActiveMentorTheses(assignments),
+        [assignments]
+    );
+
+    const history = React.useMemo<HistoricalThesisEntry[]>(() => {
+        if (!profile || !mentorRole) {
+            return [];
+        }
+        return deriveMentorThesisHistory(assignments, profile.uid, mentorRole);
+    }, [assignments, mentorRole, profile]);
+
+    const roleStats = React.useMemo<ThesisRoleStats>(() => {
+        if (!mentorRole) {
+            return { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
+        }
+        const total = assignments.length;
+        return mentorRole === 'adviser'
+            ? { adviserCount: total, editorCount: 0, statisticianCount: 0 }
+            : { adviserCount: 0, editorCount: total, statisticianCount: 0 };
+    }, [assignments.length, mentorRole]);
+
+    const capacity = profile?.capacity ?? 0;
+    const openSlots = capacity > 0 ? Math.max(capacity - activeAssignments.length, 0) : 0;
+    const compatibility = profile && mentorRole
+        ? evaluateMentorCompatibility(profile, roleStats, mentorRole)
+        : null;
+
+    const sortedGroups = React.useMemo(() => {
+        const priority: Record<ThesisGroup['status'], number> = {
+            active: 0,
+            review: 1,
+            draft: 2,
+            inactive: 3,
+            rejected: 4,
+            completed: 5,
+            archived: 6,
+        };
+        return [...groups].sort((a, b) => priority[a.status] - priority[b.status]);
+    }, [groups]);
+
+    const loading = profileLoading || assignmentsLoading;
 
     const skills = React.useMemo(
         () => profile?.skills ?? [],
         [profile?.skills]
     );
 
-    const roleLabel = React.useMemo(() => {
-        if (!profile?.role) {
-            return 'Mentor';
-        }
-        return profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
-    }, [profile?.role]);
+    const roleLabel = mentorRole === 'adviser'
+        ? 'Adviser'
+        : mentorRole === 'editor'
+            ? 'Editor'
+            : 'Mentor';
+
+    const summaryCard = profile ? (
+        <Card variant="outlined">
+            <CardContent>
+                <Typography variant="h6" gutterBottom>Mentor workload</Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} useFlexGap>
+                    {[
+                        { label: 'Active Teams', value: activeAssignments.length },
+                        { label: 'Total Assignments', value: assignments.length },
+                        { label: 'Open Slots', value: capacity > 0 ? `${openSlots}/${capacity}` : `${openSlots}/0` },
+                        { label: 'Compatibility', value: compatibility != null ? `${compatibility}%` : '—' },
+                    ].map((stat) => (
+                        <Stack key={stat.label} spacing={0.5} minWidth={140}>
+                            <Typography variant="caption" color="text.secondary">
+                                {stat.label}
+                            </Typography>
+                            <Typography variant="h6">{stat.value}</Typography>
+                        </Stack>
+                    ))}
+                </Stack>
+            </CardContent>
+        </Card>
+    ) : null;
+
+    const handledGroupsCard = profile ? (
+        <Card variant="outlined">
+            <CardContent>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                    <Typography variant="h6">Handled groups</Typography>
+                    <Chip label={`${groups.length} total`} size="small" />
+                </Stack>
+                {groupsLoading ? (
+                    <Stack spacing={2}>
+                        {Array.from({ length: 2 }).map((_, idx) => (
+                            <GroupCardSkeleton key={idx} />
+                        ))}
+                    </Stack>
+                ) : sortedGroups.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                        No groups are currently assigned to this {roleLabel.toLowerCase()}.
+                    </Typography>
+                ) : (
+                    <Stack spacing={2}>
+                        {sortedGroups.map((group) => (
+                            <GroupCard
+                                key={group.id}
+                                group={group}
+                                usersByUid={membersByUid}
+                                onClick={() => navigate(`/group/${group.id}`)}
+                            />
+                        ))}
+                    </Stack>
+                )}
+            </CardContent>
+        </Card>
+    ) : null;
 
     const handleBack = React.useCallback(() => {
-        navigate('/advisers');
+        navigate(-1);
     }, [navigate]);
-
-    const handleRequestMentor = React.useCallback(() => {
-        window.alert(`Request sent! A coordinator will confirm ${roleLabel.toLowerCase()} availability shortly.`);
-    }, [roleLabel]);
 
     // Loading state
     if (loading) {
@@ -176,14 +284,14 @@ export default function MentorProfilePage() {
     }
 
     // Error or not found state
-    if (error || !profile) {
+    if (error || !profile || !mentorRole) {
         return (
             <AnimatedPage variant="fade">
                 <Stack spacing={2} alignItems="flex-start">
                     <Alert severity="warning" sx={{ maxWidth: 480 }}>
-                        {error || 'Mentor not found. Please return to the recommendations page and choose another profile.'}
+                        {error || 'Mentor profile not available.'}
                     </Alert>
-                    <Button onClick={handleBack}>Back to recommendations</Button>
+                    <Button onClick={handleBack}>Back</Button>
                 </Stack>
             </AnimatedPage>
         );
@@ -193,19 +301,23 @@ export default function MentorProfilePage() {
         <AnimatedPage variant="slideUp">
             <ProfileView
                 profile={profile}
-                currentTheses={currentAssignments}
+                currentTheses={activeAssignments}
                 skills={skills}
+                skillRatings={profile.skillRatings}
                 timeline={history}
                 assignmentsEmptyMessage={`No active theses assigned as ${roleLabel.toLowerCase()} yet.`}
                 timelineEmptyMessage="Historical thesis records will appear here once available."
-                primaryAction={{
-                    label: `Request as ${roleLabel.toLowerCase()}`,
-                    onClick: handleRequestMentor,
-                }}
                 backAction={{
-                    label: 'Back to recommendations',
+                    label: 'Back',
                     onClick: handleBack,
                 }}
+                floatingBackButton
+                additionalSections={(
+                    <Stack spacing={3}>
+                        {summaryCard}
+                        {handledGroupsCard}
+                    </Stack>
+                )}
             />
         </AnimatedPage>
     );

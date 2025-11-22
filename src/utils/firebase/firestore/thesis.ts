@@ -596,14 +596,14 @@ export function listenThesesForParticipant(
 }
 
 /**
- * Subscribe to theses where the specified user serves as adviser or editor.
- * @param role - Mentor role to filter by (adviser/editor)
+ * Subscribe to theses where the specified user serves as adviser, editor, or statistician.
+ * @param role - Mentor role to filter by (adviser/editor/statistician)
  * @param userUid - Firebase Auth UID of the mentor
  * @param options - Listener callbacks invoked on data updates or errors
  * @returns Unsubscribe handler to detach the listener
  */
 export function listenThesesForMentor(
-    role: 'adviser' | 'editor',
+    role: 'adviser' | 'editor' | 'statistician',
     userUid: string | null | undefined,
     options: ThesisListenerOptions
 ): () => void {
@@ -612,7 +612,7 @@ export function listenThesesForMentor(
         return () => { /* no-op */ };
     }
 
-    const roleField = role === 'adviser' ? 'adviser' : 'editor';
+    const roleField = role === 'adviser' ? 'adviser' : role === 'editor' ? 'editor' : 'statistician';
     return listenTheses([
         where(roleField, '==', userUid),
     ], options);

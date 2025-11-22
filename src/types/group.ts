@@ -26,8 +26,9 @@ export interface ThesisGroup {
 export interface ThesisGroupMembers {
     leader: string; // Firebase UID of the group leader
     members: string[]; // Array of member Firebase UIDs
-    adviser?: string; // Firebase UID of the assigned adviser
     editor?: string; // Firebase UID of the assigned editor
+    statistician?: string; // Firebase UID of the assigned statistician
+    adviser?: string; // Firebase UID of the assigned adviser
     panels?: string[]; // Array of panel member Firebase UIDs
 }
 

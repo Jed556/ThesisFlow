@@ -32,12 +32,18 @@ export const metadata: NavigationItem = {
     roles: ['admin', 'developer'],
 };
 
-const ROLE_OPTIONS: UserRole[] = ['student', 'editor', 'adviser', 'admin', 'developer'];
+const ROLE_OPTIONS: UserRole[] = [
+    'student', 'statistician', 'editor', 'adviser', 'panel', 'moderator', 'head', 'admin', 'developer'
+];
 
 const ROLE_COLORS: Record<UserRole, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
     student: 'default',
+    statistician: 'info',
     editor: 'info',
     adviser: 'primary',
+    panel: 'secondary',
+    moderator: 'warning',
+    head: 'success',
     admin: 'error',
     developer: 'secondary',
 };
@@ -381,7 +387,9 @@ export default function AdminUsersPage() {
                     await setUserProfile(selectedUser.uid, updatedUser);
                 }
 
-                showNotification(`User ${updatedUser.name?.first ?? ''} ${updatedUser.name?.last ?? ''} updated successfully`, 'success');
+                showNotification(
+                    `User ${updatedUser.name?.first ?? ''} ${updatedUser.name?.last ?? ''} updated successfully`,
+                    'success');
             }
 
             await loadUsers();
@@ -413,7 +421,9 @@ export default function AdminUsersPage() {
 
             // Delete Firestore profile
             await deleteUserProfile(selectedUser.email);
-            showNotification(`User ${selectedUser?.name?.first ?? selectedUser?.email} ${selectedUser?.name?.last ?? ''} deleted successfully`, 'success');
+            showNotification(
+                `User ${selectedUser?.name?.first ?? selectedUser?.email} ${selectedUser?.name?.last ?? ''} deleted successfully`,
+                'success');
             await loadUsers();
             handleCloseDialog();
         } catch {

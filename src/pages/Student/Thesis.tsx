@@ -4,7 +4,8 @@ import {
     Step, StepContent, StepLabel, Stepper, Typography
 } from '@mui/material';
 import {
-    School, Groups, PersonAdd, Topic, Article, Upload
+    School as SchoolIcon, Groups as GroupsIcon, PersonAdd as PersonAddIcon,
+    Topic as TopicIcon, Article as ArticleIcon, Upload as UploadIcon
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
@@ -19,12 +20,7 @@ import { normalizeDateInput } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router';
 import type { WorkflowStep } from '../../types/workflow';
 import {
-    WORKFLOW_STATE_META,
-    resolveStepState,
-    applyPrerequisiteLocks,
-    getStepMeta,
-    getActiveStepIndex,
-    formatPrerequisiteMessage,
+    WORKFLOW_STATE_META, resolveStepState, applyPrerequisiteLocks, getStepMeta, getActiveStepIndex, formatPrerequisiteMessage,
 } from '../../utils/workflowUtils';
 
 export const metadata: NavigationItem = {
@@ -32,7 +28,7 @@ export const metadata: NavigationItem = {
     index: 0,
     title: 'My Thesis',
     segment: 'thesis',
-    icon: <School />,
+    icon: <SchoolIcon />,
     roles: ['student'],
 };
 
@@ -65,7 +61,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
                 state: 'in-progress',
                 actionLabel: 'Go to My Group',
                 actionPath: '/group',
-                icon: <Groups />,
+                icon: <GroupsIcon />,
             },
             {
                 id: 'request-advisers',
@@ -75,7 +71,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
                 state: 'available',
                 actionLabel: 'Manage Group',
                 actionPath: '/group',
-                icon: <PersonAdd />,
+                icon: <PersonAddIcon />,
                 prerequisites: [
                     { stepId: 'create-group', type: 'prerequisite' },
                 ],
@@ -88,7 +84,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
                 state: 'available',
                 actionLabel: 'View Proposals',
                 actionPath: '/topic-proposals',
-                icon: <Topic />,
+                icon: <TopicIcon />,
                 prerequisites: [
                     { stepId: 'create-group', type: 'prerequisite' },
                     { stepId: 'request-advisers', type: 'corequisite' },
@@ -102,7 +98,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
                 state: 'available',
                 actionLabel: 'View Chapters',
                 actionPath: '/thesis-chapters',
-                icon: <Article />,
+                icon: <ArticleIcon />,
                 prerequisites: [
                     { stepId: 'submit-proposals', type: 'prerequisite' },
                     { stepId: 'request-advisers', type: 'prerequisite' },
@@ -115,7 +111,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
                 completedMessage: 'All terminal requirements have been submitted.',
                 state: 'available',
                 actionLabel: 'Coming Soon',
-                icon: <Upload />,
+                icon: <UploadIcon />,
                 prerequisites: [
                     { stepId: 'upload-chapters', type: 'prerequisite' },
                 ],
@@ -150,7 +146,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
             state: resolveStepState({ completed: groupApproved, started: hasGroup }),
             actionLabel: 'Go to My Group',
             actionPath: '/group',
-            icon: <Groups />,
+            icon: <GroupsIcon />,
         },
         {
             id: 'request-advisers',
@@ -166,7 +162,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
             state: resolveStepState({ completed: advisersComplete, started: adviserAssigned || editorAssigned }),
             actionLabel: 'Manage Group',
             actionPath: '/group',
-            icon: <PersonAdd />,
+            icon: <PersonAddIcon />,
             prerequisites: [
                 { stepId: 'create-group', type: 'prerequisite' },
             ],
@@ -183,7 +179,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
             state: resolveStepState({ completed: topicApproved, started: hasTopicProposals }),
             actionLabel: 'View Proposals',
             actionPath: '/topic-proposals',
-            icon: <Topic />,
+            icon: <TopicIcon />,
             prerequisites: [
                 { stepId: 'create-group', type: 'prerequisite' },
                 { stepId: 'request-advisers', type: 'corequisite' },
@@ -201,7 +197,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
             state: resolveStepState({ completed: allChaptersApproved, started: chaptersSubmitted }),
             actionLabel: 'View Chapters',
             actionPath: '/thesis-chapters',
-            icon: <Article />,
+            icon: <ArticleIcon />,
             prerequisites: [
                 { stepId: 'submit-proposals', type: 'prerequisite' },
                 { stepId: 'request-advisers', type: 'prerequisite' },
@@ -214,7 +210,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
             completedMessage: 'All terminal requirements have been submitted successfully.',
             state: 'available',
             actionLabel: 'Coming Soon',
-            icon: <Upload />,
+            icon: <UploadIcon />,
             prerequisites: [
                 { stepId: 'upload-chapters', type: 'prerequisite' },
             ],

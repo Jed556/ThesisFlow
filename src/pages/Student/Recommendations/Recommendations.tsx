@@ -3,14 +3,16 @@ import {
     Avatar as MuiAvatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle, Grid, Alert,
     IconButton, List, ListItem, ListItemAvatar, ListItemText, Tab, Tabs, Typography, Skeleton
 } from '@mui/material';
-import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
-import SchoolIcon from '@mui/icons-material/School';
-import EditNoteIcon from '@mui/icons-material/EditNote';
-import StarRateIcon from '@mui/icons-material/StarRate';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { useNavigate, Outlet, useLocation } from 'react-router-dom';
+import {
+    PeopleAlt as PeopleAltIcon,
+    School as SchoolIcon,
+    EditNote as EditNoteIcon,
+    StarRate as StarRateIcon,
+    InfoOutlined as InfoOutlinedIcon
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
-import { type ProfileCardStat, ProfileCard } from '../../../components/Profile';
+import { MentorRecommendationCard } from '../../../components/Profile';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { listenTheses } from '../../../utils/firebase/firestore/thesis';
@@ -24,7 +26,6 @@ export const metadata: NavigationItem = {
     title: 'Recommendations',
     segment: 'recommendation',
     icon: <PeopleAltIcon />,
-    children: ['profile/:uid'],
     roles: ['student'],
 };
 
@@ -33,22 +34,22 @@ export const metadata: NavigationItem = {
  */
 export default function AdviserEditorRecommendationsPage() {
     const navigate = useNavigate();
-    const location = useLocation();
     const [activeTab, setActiveTab] = React.useState(0);
     const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
     const [adviserProfiles, setAdviserProfiles] = React.useState<UserProfile[]>([]);
     const [editorProfiles, setEditorProfiles] = React.useState<UserProfile[]>([]);
     const [theses, setTheses] = React.useState<(ThesisData & { id: string })[]>([]);
+    const [statisticianProfiles, setStatisticianProfiles] = React.useState<UserProfile[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         let active = true;
-        const loaded = { advisers: false, editors: false, theses: false };
+        const loaded = { advisers: false, editors: false, statisticians: false, theses: false };
 
         const tryResolveLoading = () => {
             if (!active) return;
-            if (loaded.advisers && loaded.editors && loaded.theses) {
+            if (loaded.advisers && loaded.editors && loaded.statisticians && loaded.theses) {
                 setLoading(false);
             }
         };
@@ -94,6 +95,25 @@ export default function AdviserEditorRecommendationsPage() {
             }
         );
 
+        const unsubscribeStatisticians = listenUsersByFilter(
+            { role: 'statistician' },
+            {
+                onData: (profilesData) => {
+                    if (!active) return;
+                    setError(null);
+                    setStatisticianProfiles(profilesData);
+                    loaded.statisticians = true;
+                    tryResolveLoading();
+                },
+                onError: (err) => {
+                    if (!active) return;
+                    console.error('Failed to load statistician recommendations:', err);
+                    setError('Unable to load statistician recommendations right now.');
+                    setLoading(false);
+                },
+            }
+        );
+
         const unsubscribeTheses = listenTheses(undefined, {
             onData: (thesisData) => {
                 if (!active) return;
@@ -115,6 +135,7 @@ export default function AdviserEditorRecommendationsPage() {
             unsubscribeAdvisers();
             unsubscribeEditors();
             unsubscribeTheses();
+            unsubscribeStatisticians();
         };
     }, []);
 
@@ -127,55 +148,26 @@ export default function AdviserEditorRecommendationsPage() {
         () => computeMentorCards(editorProfiles, 'editor', thesisStats),
         [editorProfiles, thesisStats]
     );
+    const statisticianCards = React.useMemo(
+        () => computeMentorCards(statisticianProfiles, 'statistician', thesisStats),
+        [statisticianProfiles, thesisStats]
+    );
 
     const handleTabChange = React.useCallback((_event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
     }, []);
 
     const handleOpenProfile = React.useCallback((profile: UserProfile) => {
-        navigate(`profile/${profile.uid}`);
+        navigate(`/mentor/${profile.uid}`);
     }, [navigate]);
 
-    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor') => {
-        const cardStats: ProfileCardStat[] = [
-            {
-                label: 'Active Teams',
-                value: model.activeCount,
-            },
-            {
-                label: 'Open Slots',
-                value: model.capacity > 0 ? `${model.openSlots}/${model.capacity}` : 'Not accepting',
-            },
-            {
-                label: 'Compatibility',
-                value: `${model.compatibility}%`,
-                icon: <StarRateIcon sx={{ fontSize: 18, color: 'warning.main' }} />,
-                color: 'primary.main',
-            },
-        ];
-
-        return (
-            <ProfileCard
-                key={model.profile.uid}
-                profile={model.profile}
-                roleLabel={roleLabel}
-                skills={model.profile.skills ?? []}
-                stats={cardStats}
-                cornerNumber={model.rank}
-                showDivider
-                showSkills={(model.profile.skills?.length ?? 0) > 0}
-                onClick={() => handleOpenProfile(model.profile)}
-            />
-        );
-    }, [handleOpenProfile]);
-
-    // Check if we're on a child route (profile page)
-    const isProfileRoute = location.pathname.includes('/profile/');
-
-    // If on profile route, render the nested route
-    if (isProfileRoute) {
-        return <Outlet />;
-    }
+    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => (
+        <MentorRecommendationCard
+            card={model}
+            roleLabel={roleLabel}
+            onSelect={handleOpenProfile}
+        />
+    ), [handleOpenProfile]);
 
     if (loading) {
         return (
@@ -216,6 +208,7 @@ export default function AdviserEditorRecommendationsPage() {
                 <Tabs value={activeTab} onChange={handleTabChange} aria-label="mentor recommendations tabs">
                     <Tab label={`Advisers (${adviserCards.length})`} icon={<SchoolIcon />} iconPosition="start" />
                     <Tab label={`Editors (${editorCards.length})`} icon={<EditNoteIcon />} iconPosition="start" />
+                    <Tab label={`Statisticians (${statisticianCards.length})`} icon={<StarRateIcon />} iconPosition="start" />
                 </Tabs>
                 <IconButton
                     onClick={() => setInfoDialogOpen(true)}
@@ -266,6 +259,28 @@ export default function AdviserEditorRecommendationsPage() {
                                 <CardContent>
                                     <Typography variant="body2" color="text.secondary">
                                         No editors found. Update the directory to see recommendations.
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                    )}
+                </Grid>
+            )}
+
+            {/* Statisticians Tab */}
+            {activeTab === 2 && (
+                <Grid container spacing={2}>
+                    {statisticianCards.map((card) => (
+                        <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                            {renderMentorCard(card, 'Statistician')}
+                        </Grid>
+                    ))}
+                    {statisticianCards.length === 0 && (
+                        <Grid size={{ xs: 12 }}>
+                            <Card variant="outlined">
+                                <CardContent>
+                                    <Typography variant="body2" color="text.secondary">
+                                        No statisticians found. Update the directory to see recommendations.
                                     </Typography>
                                 </CardContent>
                             </Card>

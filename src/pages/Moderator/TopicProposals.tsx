@@ -21,7 +21,7 @@ export const metadata: NavigationItem = {
     group: 'management',
     index: 0,
     title: 'Moderator Topic Proposals',
-    segment: 'moderator/topic-proposals',
+    segment: 'mod-topic-proposals',
     icon: <HowToVoteIcon />,
     roles: ['moderator'],
 };

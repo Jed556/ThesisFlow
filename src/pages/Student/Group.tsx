@@ -1,27 +1,7 @@
 import * as React from 'react';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardActions,
-    CardContent,
-    Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    Divider,
-    IconButton,
-    List,
-    ListItem,
-    ListItemText,
-    Paper,
-    Skeleton,
-    Stack,
-    TextField,
-    Typography,
+    Alert, Box, Button, Card, CardActions, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogContentText,
+    DialogTitle, Divider, IconButton, List, ListItem, ListItemText, Paper, Skeleton, Stack, TextField, Typography,
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -47,20 +27,8 @@ import { Avatar, Name } from '../../components/Avatar';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { formatProfileLabel } from '../../utils/userUtils';
 import {
-    createGroup,
-    deleteGroup,
-    getGroupsByCourse,
-    getGroupById,
-    inviteUserToGroup,
-    removeInviteFromGroup,
-    requestToJoinGroup,
-    acceptInvite,
-    submitGroupForReview,
-    getGroupsByLeader,
-    getGroupsByMember,
-    acceptJoinRequest,
-    rejectJoinRequest,
-    getUsersByFilter,
+    createGroup, deleteGroup, getGroupsByCourse, getGroupById, inviteUserToGroup, removeInviteFromGroup, requestToJoinGroup,
+    acceptInvite, submitGroupForReview, getGroupsByLeader, getGroupsByMember, acceptJoinRequest, rejectJoinRequest, getUsersByFilter,
 } from '../../utils/firebase/firestore';
 import { getUserById } from '../../utils/firebase/firestore/user';
 
@@ -817,7 +785,7 @@ export default function StudentGroupPage() {
             const panelEntries = (myGroup.members.panels ?? []).map((uid) => ({ uid, role: 'Panelist' }));
 
             return (
-                <Paper sx={{ p: 3, mb: 3, borderRadius: 3 }}>
+                <Paper sx={{ p: 3, mb: 3 }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                         <Box>
                             <Typography variant="overline" color="text.secondary">
