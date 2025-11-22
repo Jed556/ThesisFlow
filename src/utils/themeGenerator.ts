@@ -249,7 +249,13 @@ export function generateThemeFromSeedColor(seedColor: string): Theme {
                         palette: darkPalette,
                     },
                 },
+                breakpoints: baseTheme.breakpoints,
+                shape: baseTheme.shape,
+                shadows: baseTheme.shadows,
+                typography: baseTheme.typography,
+                transitions: baseTheme.transitions,
                 components: componentOverrides,
+                zIndex: baseTheme.zIndex,
             })
         );
 

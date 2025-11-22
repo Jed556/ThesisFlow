@@ -551,6 +551,7 @@ const components = {
                     duration: base.transitions.duration.short,
                     easing: base.transitions.easing.easeInOut,
                 }),
+                borderRadius: base.shape?.borderRadius ?? 8,
             },
         },
     },

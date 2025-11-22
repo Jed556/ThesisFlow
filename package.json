@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "3.6.2",
+    "version": "3.6.4",
     "type": "module",
     "scripts": {
         "dev": "vite",
