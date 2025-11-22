@@ -93,15 +93,74 @@ const fileTypes = [
 const formAudiences = ['student', 'adviser', 'editor'];
 const formStatuses = ['draft', 'active', 'archived'];
 const thesisStatuses = ['under_review', 'revision_required', 'approved', 'not_submitted'];
+const topicProposalEntryStatuses = ['draft', 'submitted', 'head_review', 'head_approved', 'head_rejected', 'moderator_rejected'];
+const MAX_TOPIC_PROPOSALS = 3;
 
-// Role percentages (applied when generating users):
-// developers: 1%, admins: 9%, advisers+editors: 25% (split roughly equally), rest students
+const ROLE_KEYS = ['admin', 'adviser', 'editor', 'panel', 'developer', 'moderator', 'statistician', 'head', 'student'];
+const defaultRoleCounts = {
+    admin: 9,
+    adviser: 12,
+    editor: 13,
+    panel: 10,
+    developer: 1,
+    moderator: 3,
+    statistician: 2,
+    head: 1,
+    student: 49,
+};
+const roleArgMap = {
+    admin: 'admins',
+    adviser: 'advisers',
+    editor: 'editors',
+    panel: 'panels',
+    developer: 'developers',
+    statistician: 'statisticians',
+    student: 'students',
+};
+const rolePromptLabels = {
+    admin: 'admins',
+    adviser: 'advisers',
+    editor: 'editors',
+    panel: 'panel members',
+    developer: 'developers',
+    statistician: 'statisticians',
+    student: 'students',
+};
+
+const sumRoleCounts = counts => ROLE_KEYS.reduce((total, key) => total + (counts[key] || 0), 0);
+const parseCountOrFallback = (value, fallback) => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const parsed = Number.parseInt(String(value), 10);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    return fallback;
+};
+const scaleRoleCounts = (targetTotal) => {
+    const baseTotal = sumRoleCounts(defaultRoleCounts) || 1;
+    const scaled = {};
+    let assigned = 0;
+    ROLE_KEYS.forEach((role, idx) => {
+        if (idx === ROLE_KEYS.length - 1) {
+            scaled[role] = Math.max(0, targetTotal - assigned);
+            return;
+        }
+        const value = Math.round((defaultRoleCounts[role] / baseTotal) * targetTotal);
+        scaled[role] = value;
+        assigned += value;
+    });
+    return scaled;
+};
+
+// Default role counts (sum ~100) guide the generated campus mix (students 49, advisers 12, editors 13, panels 10, moderators 3, statisticians 2, heads 1).
 // Prefixes used to generate unique UIDs per role
 const rolePrefixes = {
     admin: 'ADM',
     developer: 'DEV',
     adviser: 'ADV',
     editor: 'EDT',
+    panel: 'PNL',
+    moderator: 'MOD',
+    statistician: 'STT',
+    head: 'HED',
     student: 'STD',
 };
 
@@ -170,37 +229,37 @@ const generateUniqueThesisTitles = (count) => {
 };
 
 /**
- * Generate users using a scaled role distribution based on `totalUsers`.
- * roleDistribution count fields are treated as weights (they sum to ~100 in default)
+ * Generate users using explicit per-role counts. Defaults follow the historical distribution
+ * but callers can override each role to model different campuses or cohorts.
  */
-const generateUsers = (totalUsers = 100) => {
+const generateUsers = (roleCounts = defaultRoleCounts) => {
+    const normalizedCounts = { ...defaultRoleCounts, ...(roleCounts || {}) };
     const users = [];
     const userEmails = new Map();
     const usersByRole = {
         admin: [],
         adviser: [],
         editor: [],
+        panel: [],
         developer: [],
+        moderator: [],
+        statistician: [],
+        head: [],
         student: [],
     };
     const userDetails = new Map();
-
-    // Calculate counts per role
-    const devCount = Math.max(1, Math.round(totalUsers * 0.01));
-    const adminCount = Math.max(1, Math.round(totalUsers * 0.09));
-    // Split advisers/editors roughly equally
-    const advisersCount = Math.round(totalUsers * 0.125);
-    const editorsCount = Math.round(totalUsers * 0.125);
-    let assigned = devCount + adminCount + advisersCount + editorsCount;
-    let studentCount = totalUsers - assigned;
-    if (studentCount < 0) studentCount = 0;
+    const totalUsers = sumRoleCounts(normalizedCounts);
 
     const rolePlan = [
-        { role: 'developer', count: devCount, prefix: rolePrefixes.developer, honorific: '' },
-        { role: 'admin', count: adminCount, prefix: rolePrefixes.admin, honorific: 'Dr.' },
-        { role: 'adviser', count: advisersCount, prefix: rolePrefixes.adviser, honorific: 'Prof.' },
-        { role: 'editor', count: editorsCount, prefix: rolePrefixes.editor, honorific: '' },
-        { role: 'student', count: studentCount, prefix: rolePrefixes.student, honorific: '' },
+        { role: 'developer', count: normalizedCounts.developer, prefix: rolePrefixes.developer, honorific: '' },
+        { role: 'admin', count: normalizedCounts.admin, prefix: rolePrefixes.admin, honorific: 'Dr.' },
+        { role: 'adviser', count: normalizedCounts.adviser, prefix: rolePrefixes.adviser, honorific: 'Prof.' },
+        { role: 'editor', count: normalizedCounts.editor, prefix: rolePrefixes.editor, honorific: '' },
+        { role: 'panel', count: normalizedCounts.panel, prefix: rolePrefixes.panel, honorific: 'Prof.' },
+        { role: 'moderator', count: normalizedCounts.moderator, prefix: rolePrefixes.moderator, honorific: 'Prof.' },
+        { role: 'statistician', count: normalizedCounts.statistician, prefix: rolePrefixes.statistician, honorific: '' },
+        { role: 'head', count: normalizedCounts.head, prefix: rolePrefixes.head, honorific: 'Head' },
+        { role: 'student', count: normalizedCounts.student, prefix: rolePrefixes.student, honorific: '' },
     ];
 
     let globalIndex = 0;
@@ -222,23 +281,39 @@ const generateUsers = (totalUsers = 100) => {
         }
         if (role === 'developer') {
             // Developers must be only from IT Department or School of Computer Studies and Technology
-            const devDepts = ['IT Department', 'School of Computer Studies and Technology'];
+            const devDepts = ['IT Department', 'Research Department'];
             return pickWithOffset(devDepts, idx);
         }
         if (role === 'adviser') {
             // Advisers cannot be from Research Department
-            return pickWithOffset(departments.filter(d => d !== 'Research Department'), idx + 1);
+            return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 1);
         }
         if (role === 'editor') {
             // Editors only come from School of Education, Arts, and Sciences
             return 'School of Education, Arts, and Sciences';
         }
+        if (role === 'panel') {
+            // Panel members are faculty outside Research Department for broader coverage
+            return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 3);
+        }
+        if (role === 'moderator') {
+            const moderatorDepts = departments.filter(d => d !== 'Research Department' && d !== 'IT Department');
+            return pickWithOffset(moderatorDepts, idx + 4);
+        }
+        if (role === 'statistician') {
+            const statDepts = departments.filter(d => d !== 'Research Department' && d !== 'IT Department');
+            return pickWithOffset(statDepts, idx + 5);
+        }
+        if (role === 'head') {
+            const headDepts = departments.filter(d => d !== 'Research Department' && d !== 'IT Department');
+            return pickWithOffset(headDepts, idx + 6);
+        }
         if (role === 'student') {
             // Students must not be assigned to Research Department or IT Department
             return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 2);
         }
-        // Fallback for any other role: avoid Research Department
-        return pickWithOffset(departments.filter(d => d !== 'Research Department'), idx + 2);
+        // Fallback for any other role: avoid Research Department and IT Department
+        return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 2);
     };
 
     for (const plan of rolePlan) {
@@ -267,7 +342,16 @@ const generateUsers = (totalUsers = 100) => {
             usedFullNames.add(fullName || `${pickWithOffset(firstNames, globalIndex)} ${pickWithOffset(familyNames, i)} ${pickWithOffset(familyNames, globalIndex)}`);
             const uid = `${prefix}${pad(i + 1)}`;
             const email = `${role.charAt(0).toUpperCase() + role.slice(1)}${pad(i + 1)}@thesisflow.dev`;
+            // special-case to ensure one-per-department assignment for moderator and head roles
             let department = pickDepartmentForRole(role, globalIndex + i);
+            if (role === 'moderator') {
+                // assign moderators so each maps to a department (round-robin), and they cover all courses
+                department = departments[i % departments.length];
+            }
+            if (role === 'head') {
+                // each head maps to a department (one per department)
+                department = departments[i % departments.length];
+            }
             const suffix = (globalIndex % 10 === 0 && role !== 'student') ? 'PhD' : '';
             const password = 'Password_123';
 
@@ -275,6 +359,10 @@ const generateUsers = (totalUsers = 100) => {
             if (department === 'Research Department' && role !== 'admin') {
                 department = pickWithOffset(departments.filter(d => d !== 'Research Department'), globalIndex + i);
             }
+
+            const userCourse = (role === 'moderator')
+                ? (Array.isArray(coursesByDepartment[department]) ? coursesByDepartment[department].join(';') : '')
+                : (role === 'student' ? pickCourseForDepartment(department, globalIndex + i) : '');
 
             const userRow = [
                 uid,
@@ -286,7 +374,7 @@ const generateUsers = (totalUsers = 100) => {
                 suffix,
                 role,
                 department,
-                role === 'student' ? pickCourseForDepartment(department, globalIndex + i) : '',
+                userCourse,
                 `+1-555-${pad(1000 + globalIndex)}`,
                 `https://storage.thesisflow.edu/avatars/${uid.toLowerCase()}.png`,
                 `https://storage.thesisflow.edu/banners/${uid.toLowerCase()}.jpg`,
@@ -346,7 +434,7 @@ const generateUsers = (totalUsers = 100) => {
         });
     }
 
-    return { users, userEmails, usersByRole, userDetails };
+    return { users, userEmails, usersByRole, userDetails, totalUsers, roleCounts: normalizedCounts };
 };
 
 const pickUniqueFromList = (source, count, seed) => {
@@ -409,6 +497,20 @@ const generateGroups = (usersByRole, userDetails, ungroupedStudents = []) => {
             ? pickWithOffset(usersByRole.editor, i * 2)
             : pickWithOffset(usersByRole.admin, i * 3);
 
+        let panelSource = (usersByRole.panel && usersByRole.panel.length > 0) ? usersByRole.panel.slice() : [];
+        if (panelSource.length === 0) {
+            const fallbackPanelCandidates = Array.from(new Set([
+                ...usersByRole.moderator,
+                ...usersByRole.head,
+                ...usersByRole.adviser,
+                ...usersByRole.editor,
+                ...usersByRole.admin,
+            ].filter(Boolean)));
+            panelSource = fallbackPanelCandidates.length > 0 ? fallbackPanelCandidates : [leader];
+        }
+        const panelTargetCount = Math.max(1, Math.min(3, panelSource.length));
+        const panels = pickUniqueFromList(panelSource, panelTargetCount, i * 5 + 11);
+
         const statuses = ['active', 'completed', 'inactive', 'archived'];
         const status = pickWithOffset(statuses, i);
         const createdAt = buildIso(baseDate, i * 2, 9, 30);
@@ -423,6 +525,7 @@ const generateGroups = (usersByRole, userDetails, ungroupedStudents = []) => {
             students.join(';'),
             adviser,
             editor,
+            panels.join(';'),
             `Team researching ${pickWithOffset(thesisTopics, i)} applications.`,
             status,
             createdAt,
@@ -502,7 +605,14 @@ const generateSchedule = (usersByRole, calendarIds) => {
 const generateFiles = (usersByRole, userEmails) => {
     const files = [];
     const baseDate = new Date('2025-02-10T08:00:00.000Z');
-    const allAuthors = usersByRole.student.concat(usersByRole.adviser, usersByRole.editor);
+    const allAuthors = usersByRole.student.concat(
+        usersByRole.adviser,
+        usersByRole.editor,
+        usersByRole.panel,
+        usersByRole.moderator,
+        usersByRole.head,
+        usersByRole.statistician
+    );
 
     for (let i = 0; i < RECORD_COUNT; i += 1) {
         const fileMeta = pickWithOffset(fileTypes, i);
@@ -534,7 +644,14 @@ const generateFiles = (usersByRole, userEmails) => {
 const generateForms = (usersByRole, userEmails) => {
     const forms = [];
     const baseDate = new Date('2025-01-15T08:00:00.000Z');
-    const authors = usersByRole.admin.concat(usersByRole.adviser, usersByRole.editor);
+    const authors = usersByRole.admin.concat(
+        usersByRole.adviser,
+        usersByRole.editor,
+        usersByRole.panel,
+        usersByRole.moderator,
+        usersByRole.head,
+        usersByRole.statistician
+    );
 
     for (let i = 0; i < RECORD_COUNT; i += 1) {
         const audience = pickWithOffset(formAudiences, i);
@@ -628,6 +745,7 @@ const generateCalendars = (usersByRole, groups) => {
         const groupMembers = groupRow[3].split(';').filter(Boolean);
         const adviser = groupRow[4];
         const editor = groupRow[5];
+        const panelMembers = (groupRow[6] || '').split(';').filter(Boolean);
 
         // Build permissions for group calendar
         const permissions = [
@@ -635,6 +753,7 @@ const generateCalendars = (usersByRole, groups) => {
             ...groupMembers.map(uid => ({ uid, role: 'member', canView: true, canEdit: true, canDelete: false })),
             { uid: adviser, role: 'adviser', canView: true, canEdit: true, canDelete: false },
             { uid: editor, role: 'editor', canView: true, canEdit: true, canDelete: false },
+            ...panelMembers.map(uid => ({ uid, role: 'panel', canView: true, canEdit: false, canDelete: false })),
         ];
 
         calendars.push([
@@ -710,6 +829,144 @@ const generateTheses = (groups, usersByRole, thesisTitles) => {
 
     return theses;
 };
+
+const generateTopicProposals = (groups, usersByRole) => {
+    const baseDate = new Date('2025-01-05T09:00:00.000Z');
+    const moderatorPool = (usersByRole.moderator && usersByRole.moderator.length > 0)
+        ? usersByRole.moderator
+        : ((usersByRole.adviser && usersByRole.adviser.length > 0) ? usersByRole.adviser : usersByRole.admin);
+    const headPool = (usersByRole.head && usersByRole.head.length > 0)
+        ? usersByRole.head
+        : ((usersByRole.admin && usersByRole.admin.length > 0)
+            ? usersByRole.admin
+            : (usersByRole.editor && usersByRole.editor.length > 0 ? usersByRole.editor : moderatorPool));
+
+    return groups.map((groupRow, idx) => {
+        const groupId = groupRow[0];
+        const groupName = groupRow[1];
+        const leader = groupRow[2];
+        const memberList = (groupRow[3] || '')
+            .split(';')
+            .map(uid => uid.trim())
+            .filter(Boolean);
+        const department = groupRow[12] || pickWithOffset(departments, idx);
+        const cycle = (idx % 4) + 1;
+        const entryCount = idx % 5 === 0 ? 0 : Math.min(MAX_TOPIC_PROPOSALS, (idx % MAX_TOPIC_PROPOSALS) + 1);
+        const reviewHistory = [];
+        const entries = [];
+
+        for (let entryIdx = 0; entryIdx < entryCount; entryIdx += 1) {
+            const proposalId = `${groupId}_TP${entryIdx + 1}`;
+            const status = topicProposalEntryStatuses[(idx + entryIdx) % topicProposalEntryStatuses.length];
+            const proposerPool = memberList.length > 0 ? memberList : [leader];
+            const proposedBy = pickWithOffset(proposerPool, idx + entryIdx);
+            const createdAt = buildIso(baseDate, idx + entryIdx, 9 + (entryIdx % 3), (entryIdx % 2) * 15);
+            const updatedAt = buildIso(baseDate, idx + entryIdx + 1, 14, (entryIdx % 2) * 20);
+            const keywords = [department, pickWithOffset(thesisTopics, idx + entryIdx)]
+                .filter(Boolean)
+                .map((word, wordIdx, arr) => arr.indexOf(word) === wordIdx ? word : null)
+                .filter(Boolean);
+
+            const entry = {
+                id: proposalId,
+                title: `${groupName} Topic ${entryIdx + 1}`,
+                abstract: `Explores ${pickWithOffset(thesisTopics, idx + entryIdx)} applications for ${department}.`,
+                problemStatement: `Addresses challenges faced by ${department} teams in adopting ${pickWithOffset(thesisTopics, idx + entryIdx + 5)}.`,
+                expectedOutcome: `Deliver a validated framework leveraging ${pickWithOffset(thesisTopics, idx + entryIdx + 9)}.`,
+                keywords,
+                proposedBy,
+                createdAt,
+                updatedAt,
+                status,
+            };
+
+            if (['head_review', 'head_approved', 'head_rejected', 'moderator_rejected'].includes(status)) {
+                const moderatorSource = (moderatorPool && moderatorPool.length > 0) ? moderatorPool : usersByRole.admin;
+                const moderatorUid = pickWithOffset(moderatorSource.length > 0 ? moderatorSource : [leader], idx + entryIdx);
+                const moderatorDecision = {
+                    reviewerUid: moderatorUid,
+                    decision: status === 'moderator_rejected' ? 'rejected' : 'approved',
+                    decidedAt: buildIso(baseDate, idx + entryIdx + 1, 10, 0),
+                    notes: `Moderator review for ${proposalId}`,
+                };
+                entry.moderatorDecision = moderatorDecision;
+                reviewHistory.push({
+                    stage: 'moderator',
+                    decision: moderatorDecision.decision,
+                    reviewerUid: moderatorUid,
+                    proposalId,
+                    notes: moderatorDecision.notes,
+                    reviewedAt: moderatorDecision.decidedAt,
+                });
+            }
+
+            if (status === 'head_approved' || status === 'head_rejected') {
+                const headSource = (headPool && headPool.length > 0) ? headPool : moderatorPool;
+                const reviewerPool = (headSource && headSource.length > 0) ? headSource : [leader];
+                const headUid = pickWithOffset(reviewerPool, idx + entryIdx * 2);
+                const headDecision = {
+                    reviewerUid: headUid,
+                    decision: status === 'head_approved' ? 'approved' : 'rejected',
+                    decidedAt: buildIso(baseDate, idx + entryIdx + 2, 11, 30),
+                    notes: `Head decision for ${proposalId}`,
+                };
+                entry.headDecision = headDecision;
+                reviewHistory.push({
+                    stage: 'head',
+                    decision: headDecision.decision,
+                    reviewerUid: headUid,
+                    proposalId,
+                    notes: headDecision.notes,
+                    reviewedAt: headDecision.decidedAt,
+                });
+            }
+
+            entries.push(entry);
+        }
+
+        const awaitingModerator = entries.some(entry => entry.status === 'submitted');
+        const awaitingHead = entries.some(entry => entry.status === 'head_review');
+        const approvedEntry = entries.find(entry => entry.status === 'head_approved');
+        const rejectedOnly = entries.length > 0 && entries.every(entry => (
+            entry.status === 'moderator_rejected' || entry.status === 'head_rejected'
+        ));
+        const nonDraft = entries.find(entry => entry.status !== 'draft');
+
+        let setStatus = 'draft';
+        if (approvedEntry) {
+            setStatus = 'approved';
+        } else if (awaitingModerator || awaitingHead) {
+            setStatus = 'under_review';
+        } else if (rejectedOnly) {
+            setStatus = 'rejected';
+        }
+
+        const lockedEntryId = approvedEntry?.id
+            || entries.find(entry => entry.status === 'head_review')?.id
+            || entries.find(entry => entry.status === 'submitted')?.id
+            || '';
+
+        return [
+            `TPS${pad(idx + 1)}`,
+            groupId,
+            leader,
+            buildIso(baseDate, idx, 8, 0),
+            buildIso(baseDate, idx + entryCount + 1, 16, 0),
+            setStatus,
+            String(cycle),
+            awaitingModerator ? 'true' : 'false',
+            awaitingHead ? 'true' : 'false',
+            nonDraft?.proposedBy || '',
+            nonDraft?.createdAt || '',
+            approvedEntry?.id || '',
+            lockedEntryId,
+            approvedEntry ? leader : '',
+            approvedEntry ? buildIso(baseDate, idx + 20, 12, 30) : '',
+            JSON.stringify(entries),
+            JSON.stringify(reviewHistory),
+        ];
+    });
+};
 // Interactive prompt to let the user override counts at runtime.
 const parseArg = (key) => {
     // Use globalThis to avoid linter warnings about `process` being undefined in some configs.
@@ -721,7 +978,8 @@ const parseArg = (key) => {
 };
 
 const promptInputs = async () => {
-    // Support command-line overrides: --users=200 --groups=50 --ungrouped=10 --schedules=80 --files=100 --forms=50 --theses=50 --calendars=10
+    // Support command-line overrides: --users=200 --admins=15 --advisers=20 --editors=12 --panels=10 --statisticians=2 --developers=2 --students=60
+    // plus --groups=50 --ungrouped=10 --schedules=80 --files=100 --forms=50 --theses=50 --calendars=10
     const usersArg = parseArg('users');
     const groupsArg = parseArg('groups');
     const ungroupedArg = parseArg('ungrouped');
@@ -731,41 +989,91 @@ const promptInputs = async () => {
     const thesesArg = parseArg('theses');
     const calendarsArg = parseArg('calendars');
 
+    const cliRoleCounts = { ...defaultRoleCounts };
+    let hasRoleArg = false;
+    // skip moderator/head: they are enforced per-department and not accepted via CLI args
+    ROLE_KEYS.forEach((role) => {
+        if (role === 'moderator' || role === 'head') return;
+        const argKey = roleArgMap[role];
+        const argValue = parseArg(argKey);
+        if (argValue !== null) {
+            hasRoleArg = true;
+            cliRoleCounts[role] = parseCountOrFallback(argValue, cliRoleCounts[role]);
+        }
+    });
+
     if (usersArg !== null || groupsArg !== null || ungroupedArg !== null || schedulesArg !== null ||
-        filesArg !== null || formsArg !== null || thesesArg !== null || calendarsArg !== null) {
-        const usersToCreate = Number.parseInt(usersArg || '100', 10) || 100;
-        const groupsToCreate = Number.parseInt(groupsArg || '100', 10) || 100;
-        const ungroupedCount = ungroupedArg == null ? null : (Number.parseInt(ungroupedArg, 10) || 0);
-        const schedulesToCreate = Number.parseInt(schedulesArg || '100', 10) || 100;
-        const filesToCreate = Number.parseInt(filesArg || '100', 10) || 100;
-        const formsToCreate = Number.parseInt(formsArg || '100', 10) || 100;
-        const thesesCount = Number.parseInt(thesesArg || '100', 10) || 100;
-        const calendarsToCreate = Number.parseInt(calendarsArg || '10', 10) || 10;
-        return { usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate, formsToCreate, thesesCount, calendarsToCreate };
+        filesArg !== null || formsArg !== null || thesesArg !== null || calendarsArg !== null || hasRoleArg) {
+        // Enforce exact one moderator/head per department regardless of CLI input
+        const enforcedCounts = { ...defaultRoleCounts };
+        if (hasRoleArg) Object.assign(enforcedCounts, cliRoleCounts);
+        else if (usersArg !== null) Object.assign(enforcedCounts, scaleRoleCounts(parseCountOrFallback(usersArg, sumRoleCounts(defaultRoleCounts))));
+        const roleCounts = enforcedCounts;
+        roleCounts.moderator = departments.length;
+        roleCounts.head = departments.length;
+
+        const groupsToCreate = parseCountOrFallback(groupsArg, 100);
+        const ungroupedCount = ungroupedArg == null ? null : parseCountOrFallback(ungroupedArg, 0);
+        const schedulesToCreate = parseCountOrFallback(schedulesArg, 100);
+        const filesToCreate = parseCountOrFallback(filesArg, 100);
+        const formsToCreate = parseCountOrFallback(formsArg, 100);
+        const thesesCount = parseCountOrFallback(thesesArg, 100);
+        const calendarsToCreate = parseCountOrFallback(calendarsArg, 10);
+
+        return {
+            roleCounts,
+            totalUsers: sumRoleCounts(roleCounts),
+            groupsToCreate,
+            ungroupedCount,
+            schedulesToCreate,
+            filesToCreate,
+            formsToCreate,
+            thesesCount,
+            calendarsToCreate,
+        };
     }
 
     const rl = createInterface({ input: stdin, output: stdout });
     try {
-        const usersAnswer = await rl.question(`How many total users should be created? (default 100): `);
+        // Interactive prompts: do not ask for moderators or heads — we enforce one-per-department
+        const roleCounts = { ...defaultRoleCounts };
+        for (const role of ROLE_KEYS) {
+            if (role === 'moderator' || role === 'head') continue;
+            const promptLabel = rolePromptLabels[role];
+            const answer = await rl.question(`How many ${promptLabel} should be created? (default ${roleCounts[role]}): `);
+            roleCounts[role] = parseCountOrFallback(answer.trim(), roleCounts[role]);
+        }
+        // Ensure one moderator and one head per department
+        roleCounts.moderator = departments.length;
+        roleCounts.head = departments.length;
+
         const groupsAnswer = await rl.question(`How many groups should be created? (default 100): `);
-        const ungroupedAnswer = await rl.question(`How many users should remain ungrouped? (leave empty for ~10% default): `);
+        const ungroupedAnswer = await rl.question(`How many students should remain ungrouped? (leave empty for ~10% default): `);
         const schedulesAnswer = await rl.question(`How many schedules/events should be created? (default 100): `);
         const filesAnswer = await rl.question(`How many files should be created? (default 100): `);
         const formsAnswer = await rl.question(`How many forms should be created? (default 100): `);
         const thesesAnswer = await rl.question(`How many theses should be created? (default 100): `);
-
         const calendarsAnswer = await rl.question(`How many extra shared calendars should be created? (default 10): `);
 
-        const usersToCreate = Number.parseInt(usersAnswer || '100', 10) || 100;
-        const groupsToCreate = Number.parseInt(groupsAnswer || '100', 10) || 100;
-        const ungroupedCount = ungroupedAnswer === '' ? null : (Number.parseInt(ungroupedAnswer, 10) || 0);
-        const schedulesToCreate = Number.parseInt(schedulesAnswer || '100', 10) || 100;
-        const filesToCreate = Number.parseInt(filesAnswer || '100', 10) || 100;
-        const formsToCreate = Number.parseInt(formsAnswer || '100', 10) || 100;
-        const thesesCount = Number.parseInt(thesesAnswer || '100', 10) || 100;
-        const calendarsToCreate = Number.parseInt(calendarsAnswer || '10', 10) || 10;
+        const groupsToCreate = parseCountOrFallback(groupsAnswer, 100);
+        const ungroupedCount = (ungroupedAnswer || '').trim() === '' ? null : parseCountOrFallback(ungroupedAnswer, 0);
+        const schedulesToCreate = parseCountOrFallback(schedulesAnswer, 100);
+        const filesToCreate = parseCountOrFallback(filesAnswer, 100);
+        const formsToCreate = parseCountOrFallback(formsAnswer, 100);
+        const thesesCount = parseCountOrFallback(thesesAnswer, 100);
+        const calendarsToCreate = parseCountOrFallback(calendarsAnswer, 10);
 
-        return { usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate, formsToCreate, thesesCount, calendarsToCreate };
+        return {
+            roleCounts,
+            totalUsers: sumRoleCounts(roleCounts),
+            groupsToCreate,
+            ungroupedCount,
+            schedulesToCreate,
+            filesToCreate,
+            formsToCreate,
+            thesesCount,
+            calendarsToCreate,
+        };
     } finally {
         rl.close();
     }
@@ -781,11 +1089,24 @@ const main = async () => {
     }
 
     const {
-        usersToCreate, groupsToCreate, ungroupedCount, schedulesToCreate, filesToCreate,
-        formsToCreate, thesesCount, calendarsToCreate,
+        roleCounts,
+        groupsToCreate,
+        ungroupedCount,
+        schedulesToCreate,
+        filesToCreate,
+        formsToCreate,
+        thesesCount,
+        calendarsToCreate,
     } = await promptInputs();
 
-    const { users, userEmails, usersByRole, userDetails } = generateUsers(usersToCreate);
+    const {
+        users,
+        userEmails,
+        usersByRole,
+        userDetails,
+        totalUsers: generatedTotalUsers,
+        roleCounts: resolvedRoleCounts,
+    } = generateUsers(roleCounts);
     writeCsv('users.mock.csv', [
         'uid', 'email', 'firstName', 'middleName', 'lastName', 'prefix', 'suffix', 'role', 'department', 'course',
         'phone', 'avatar', 'banner', 'bio', 'password',
@@ -803,7 +1124,7 @@ const main = async () => {
 
     const groups = generateGroups(usersByRole, userDetails, ungroupedStudents);
     writeCsv('groups.mock.csv', [
-        'id', 'name', 'leader', 'members', 'adviser', 'editor', 'description', 'status', 'createdAt',
+        'id', 'name', 'leader', 'members', 'adviser', 'editor', 'panels', 'description', 'status', 'createdAt',
         'updatedAt', 'thesisTitle', 'department', 'course',
     ], groups);
 
@@ -874,6 +1195,13 @@ const main = async () => {
         'reviewerNotes', 'dueInDays', 'fields', 'workflow', 'availableToGroups',
     ], forms);
 
+    // Generate topic proposal sets based on group distribution
+    const topicProposals = generateTopicProposals(groups, usersByRole);
+    writeCsv('topicProposals.mock.csv', [
+        'id', 'groupId', 'createdBy', 'createdAt', 'updatedAt', 'status', 'cycle', 'awaitingModerator', 'awaitingHead',
+        'submittedBy', 'submittedAt', 'approvedEntryId', 'lockedEntryId', 'usedBy', 'usedAsThesisAt', 'entries', 'reviewHistory',
+    ], topicProposals);
+
     // Generate theses
     RECORD_COUNT = thesesCount;
     const thesisGroupsSlice = groups.slice(0, thesesCount);
@@ -883,9 +1211,13 @@ const main = async () => {
         'title', 'leader', 'members', 'adviser', 'editor', 'submissionDate', 'lastUpdated', 'overallStatus', 'chapters',
     ], theses);
 
+    const roleSummary = ROLE_KEYS
+        .map(role => `${role}=${resolvedRoleCounts[role] || 0}`)
+        .join(', ');
     log('Mock CSV generation complete.');
-    log(`Summary: Users=${usersToCreate}, Groups=${groupsToCreate}, Calendars=${totalCalendars} (personal=${personalCalendarCount}, group=${groupCalendarCount}, shared=${extraCalendarCount}), `
-        + `Schedules=${schedule.length}, Files=${files.length}, Forms=${forms.length}, Theses=${theses.length}`);
+    log(`Summary: Users=${generatedTotalUsers} (${roleSummary}), Groups=${groupsToCreate}, `
+        + `Calendars=${totalCalendars} (personal=${personalCalendarCount}, group=${groupCalendarCount}, shared=${extraCalendarCount}), `
+        + `Schedules=${schedule.length}, Files=${files.length}, Forms=${forms.length}, TopicProposals=${topicProposals.length}, Theses=${theses.length}`);
 };
 
 main();

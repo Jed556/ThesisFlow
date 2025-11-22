@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "3.4.1",
+    "version": "3.5.2",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -17,7 +17,7 @@
         "@mui/x-data-grid": "^8.19.0",
         "@mui/x-date-pickers": "^8.19.0",
         "@toolpad/core": "^0.16.0",
-        "@vercel/node": "^5.5.8",
+        "@vercel/node": "^5.5.9",
         "@vercel/speed-insights": "^1.2.0",
         "date-fns": "^4.1.0",
         "firebase": "^12.6.0",
