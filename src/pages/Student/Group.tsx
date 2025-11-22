@@ -70,7 +70,7 @@ export const metadata: NavigationItem = {
     title: 'My Group',
     segment: 'group',
     icon: <GroupIcon />,
-    roles: ['student', 'admin'],
+    roles: ['student'],
 };
 
 type GroupWithInvites = ThesisGroup & {
@@ -167,8 +167,14 @@ export default function StudentGroupPage() {
 
     // Load my group and available groups
     React.useEffect(() => {
-        if (!userUid || !userProfile?.course) {
+        if (!userUid) {
             setLoading(false);
+            setMyGroup(null);
+            setIsLeader(false);
+            return;
+        }
+
+        if (!userProfile?.course) {
             return;
         }
 
@@ -448,6 +454,11 @@ export default function StudentGroupPage() {
     const handleInviteUser = async () => {
         if (!myGroup || !inviteUid.trim()) return;
 
+        if (myGroup.status === 'active') {
+            showNotification('Invites are disabled once your group has been approved.', 'info');
+            return;
+        }
+
         try {
             await inviteUserToGroup(myGroup.id, inviteUid.trim());
             setInviteDialogOpen(false);
@@ -612,18 +623,18 @@ export default function StudentGroupPage() {
         }
     };
 
-    if (loading) {
-        return (
-            <AnimatedPage variant="slideUp">
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={120} />
-                </Paper>
-            </AnimatedPage>
-        );
-    }
-
     if (!userUid) {
+        if (loading) {
+            return (
+                <AnimatedPage variant="slideUp">
+                    <Paper sx={{ p: 3, mb: 3 }}>
+                        <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
+                        <Skeleton variant="rectangular" height={120} />
+                    </Paper>
+                </AnimatedPage>
+            );
+        }
+
         return (
             <AnimatedPage variant="slideUp">
                 <Alert severity="info">Sign in to manage your thesis group.</Alert>
@@ -631,25 +642,18 @@ export default function StudentGroupPage() {
         );
     }
 
-    return (
-        <AnimatedPage variant="slideUp">
-            <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    My Thesis Group
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                    Create or join a thesis group to collaborate with your peers.
-                </Typography>
-            </Box>
+    const renderPrimaryCard = () => {
+        if (loading) {
+            return (
+                <Paper sx={{ p: 3, mb: 3 }}>
+                    <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
+                    <Skeleton variant="rectangular" height={120} />
+                </Paper>
+            );
+        }
 
-            {error && (
-                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-                    {error}
-                </Alert>
-            )}
-
-            {/* My Group Section */}
-            {myGroup ? (
+        if (myGroup) {
+            return (
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                         <Typography variant="h5">{myGroup.name}</Typography>
@@ -766,6 +770,7 @@ export default function StudentGroupPage() {
                                     startIcon={<PersonAddIcon />}
                                     variant="outlined"
                                     onClick={() => setInviteDialogOpen(true)}
+                                    disabled={myGroup.status === 'active'}
                                 >
                                     Invite Member
                                 </Button>
@@ -793,32 +798,55 @@ export default function StudentGroupPage() {
                         </>
                     )}
                 </Paper>
-            ) : (
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                        You are not part of any group yet. Create a new group or join an existing one.
-                    </Typography>
-                    <Stack direction="row" spacing={2}>
-                        <Button
-                            startIcon={<AddIcon />}
-                            variant="contained"
-                            onClick={handleOpenCreateDialog}
-                        >
-                            Create Group
-                        </Button>
-                        <Button
-                            startIcon={<SearchIcon />}
-                            variant="outlined"
-                            onClick={() => setSearchDialogOpen(true)}
-                        >
-                            Search Group by ID
-                        </Button>
-                    </Stack>
-                </Paper>
+            );
+        }
+
+        return (
+            <Paper sx={{ p: 3, mb: 3 }}>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                    You are not part of any group yet. Create a new group or join an existing one.
+                </Typography>
+                <Stack direction="row" spacing={2}>
+                    <Button
+                        startIcon={<AddIcon />}
+                        variant="contained"
+                        onClick={handleOpenCreateDialog}
+                    >
+                        Create Group
+                    </Button>
+                    <Button
+                        startIcon={<SearchIcon />}
+                        variant="outlined"
+                        onClick={() => setSearchDialogOpen(true)}
+                    >
+                        Search Group by ID
+                    </Button>
+                </Stack>
+            </Paper>
+        );
+    };
+
+    return (
+        <AnimatedPage variant="slideUp">
+            <Box sx={{ mb: 3 }}>
+                <Typography variant="h4" gutterBottom>
+                    My Thesis Group
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                    Create or join a thesis group to collaborate with your peers.
+                </Typography>
+            </Box>
+
+            {error && (
+                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+                    {error}
+                </Alert>
             )}
 
+            {renderPrimaryCard()}
+
             {/* My Invites */}
-            {myInvites.length > 0 && (
+            {!loading && myInvites.length > 0 && (
                 <>
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         Group Invites
@@ -862,7 +890,7 @@ export default function StudentGroupPage() {
             )}
 
             {/* Available Groups */}
-            {!myGroup && availableGroups.length > 0 && (
+            {!loading && !myGroup && availableGroups.length > 0 && (
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         Groups in Your Department & Course
@@ -947,7 +975,11 @@ export default function StudentGroupPage() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setInviteDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleInviteUser} variant="contained" disabled={!inviteUid.trim()}>
+                    <Button
+                        onClick={handleInviteUser}
+                        variant="contained"
+                        disabled={!inviteUid.trim() || myGroup?.status === 'active'}
+                    >
                         Send Invite
                     </Button>
                 </DialogActions>

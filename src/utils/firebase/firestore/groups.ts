@@ -1,28 +1,162 @@
 import {
-    collection,
-    doc,
-    getDocs,
-    getDoc,
-    setDoc,
-    deleteDoc,
-    query,
-    where,
-    orderBy,
-    updateDoc,
-    serverTimestamp,
+    collection, doc, getDocs, getDoc, query, where, orderBy, serverTimestamp, writeBatch
 } from 'firebase/firestore';
 import type {
-    DocumentData,
-    DocumentSnapshot,
-    QueryDocumentSnapshot,
-    Timestamp,
+    DocumentData, DocumentReference, DocumentSnapshot, QueryDocumentSnapshot, Timestamp,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ThesisGroup } from '../../../types/group';
 
-const COLLECTION_NAME = 'groups';
+const COLLECTION_NAME = 'groupIndex';
+const GROUP_HIERARCHY_ROOT = 'groups';
+const GROUP_META_FIELD = '__meta';
+const DEFAULT_DEPARTMENT_SEGMENT = 'general';
+const DEFAULT_COURSE_SEGMENT = 'common';
 
 type GroupSnapshot = QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>;
+
+interface GroupMeta {
+    departmentKey: string;
+    courseKey: string;
+}
+
+interface ResolvedGroupRefs {
+    canonicalRef: DocumentReference<DocumentData>;
+    indexRef: DocumentReference<DocumentData>;
+    snapshot: DocumentSnapshot<DocumentData>;
+    meta: GroupMeta;
+    dataWithoutMeta: Record<string, unknown>;
+}
+
+const INTERNAL_FIELD_NAMES = [GROUP_META_FIELD];
+
+function sanitizePathSegment(value: string | null | undefined, fallback: string): string {
+    if (!value) {
+        return fallback;
+    }
+
+    const normalised = value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+    return normalised || fallback;
+}
+
+function buildGroupMeta(group: Partial<ThesisGroup>): GroupMeta {
+    return {
+        departmentKey: sanitizePathSegment(group.department ?? group.course ?? null, DEFAULT_DEPARTMENT_SEGMENT),
+        courseKey: sanitizePathSegment(group.course ?? null, DEFAULT_COURSE_SEGMENT),
+    };
+}
+
+function attachMeta(payload: Record<string, unknown>, meta: GroupMeta): Record<string, unknown> {
+    return {
+        ...payload,
+        [GROUP_META_FIELD]: meta,
+    };
+}
+
+function extractSnapshotDataAndMeta(snapshot: DocumentSnapshot<DocumentData>): {
+    data: Record<string, unknown>;
+    meta: GroupMeta;
+} {
+    const raw = snapshot.data();
+
+    if (!raw) {
+        throw new Error(`Group document "${snapshot.id}" is missing data.`);
+    }
+
+    const cloned = { ...(raw as Record<string, unknown>) };
+    const metaSource = cloned[GROUP_META_FIELD];
+
+    let meta: GroupMeta | undefined;
+    if (metaSource && typeof metaSource === 'object') {
+        const metaRecord = metaSource as Record<string, unknown>;
+        const departmentKey = typeof metaRecord.departmentKey === 'string' ? metaRecord.departmentKey : undefined;
+        const courseKey = typeof metaRecord.courseKey === 'string' ? metaRecord.courseKey : undefined;
+        if (departmentKey && courseKey) {
+            meta = { departmentKey, courseKey };
+        }
+    }
+
+    delete cloned[GROUP_META_FIELD];
+
+    return {
+        data: cloned,
+        meta: meta ?? buildGroupMeta(cloned as Partial<ThesisGroup>),
+    };
+}
+
+function getCanonicalGroupRef(groupId: string, meta: GroupMeta): DocumentReference<DocumentData> {
+    return doc(firebaseFirestore, GROUP_HIERARCHY_ROOT, meta.departmentKey, meta.courseKey, groupId);
+}
+
+async function resolveGroupRefs(groupId: string): Promise<ResolvedGroupRefs> {
+    const indexRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+    const snapshot = await getDoc(indexRef);
+
+    if (!snapshot.exists()) {
+        throw new Error('Group not found');
+    }
+
+    const { data, meta } = extractSnapshotDataAndMeta(snapshot);
+
+    return {
+        canonicalRef: getCanonicalGroupRef(groupId, meta),
+        indexRef,
+        snapshot,
+        meta,
+        dataWithoutMeta: data,
+    };
+}
+
+async function commitGroupUpdate(
+    refs: ResolvedGroupRefs,
+    updatePayload: Record<string, unknown>
+): Promise<void> {
+    const payloadWithTimestamps = attachMeta(
+        {
+            ...updatePayload,
+            updatedAt: serverTimestamp(),
+        },
+        refs.meta
+    );
+
+    const batch = writeBatch(firebaseFirestore);
+    batch.update(refs.canonicalRef, payloadWithTimestamps);
+    batch.update(refs.indexRef, payloadWithTimestamps);
+    await batch.commit();
+}
+
+async function moveGroupDocument(
+    groupId: string,
+    refs: ResolvedGroupRefs,
+    nextData: Record<string, unknown>,
+    nextMeta: GroupMeta
+): Promise<void> {
+    const batch = writeBatch(firebaseFirestore);
+    batch.delete(refs.canonicalRef);
+
+    const basePayload = { ...nextData };
+    if (!basePayload.createdAt) {
+        basePayload.createdAt = refs.dataWithoutMeta.createdAt ?? serverTimestamp();
+    }
+
+    const payloadWithTimestamps = attachMeta(
+        {
+            ...basePayload,
+            updatedAt: serverTimestamp(),
+        },
+        nextMeta
+    );
+
+    batch.set(getCanonicalGroupRef(groupId, nextMeta), payloadWithTimestamps);
+    batch.set(refs.indexRef, payloadWithTimestamps);
+
+    await batch.commit();
+}
 
 /**
  * Normalizes Firestore timestamp values into ISO8601 strings.
@@ -177,6 +311,10 @@ function mapGroupDocument(snapshot: GroupSnapshot): ThesisGroup {
 
     const docData = { ...(data as Record<string, unknown>) };
 
+    INTERNAL_FIELD_NAMES.forEach((field) => {
+        delete docData[field];
+    });
+
     const rawMembersField = docData.members;
     const legacyMembersArray = Array.isArray(rawMembersField)
         ? rawMembersField
@@ -260,10 +398,12 @@ export async function getGroupById(groupId: string): Promise<ThesisGroup | null>
 export async function getGroupsByStatus(status: ThesisGroup['status']): Promise<ThesisGroup[]> {
     try {
         const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
-        const q = query(groupsRef, where('status', '==', status), orderBy('createdAt', 'desc'));
+        const q = query(groupsRef, where('status', '==', status));
         const snapshot = await getDocs(q);
 
-        return snapshot.docs.map((doc) => mapGroupDocument(doc));
+        return snapshot.docs
+            .map((doc) => mapGroupDocument(doc))
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     } catch (error) {
         console.error('Error getting groups by status:', error);
         throw new Error('Failed to fetch groups by status');
@@ -307,30 +447,42 @@ export async function getGroupsByMember(memberUid: string): Promise<ThesisGroup[
  */
 export async function createGroup(group: Omit<ThesisGroup, 'id' | 'createdAt' | 'updatedAt'>): Promise<ThesisGroup> {
     try {
-        const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
-        // Use leader's UID as the group ID for organized setup
         const leaderUid = typeof group.members === 'object' && 'leader' in group.members
             ? group.members.leader
             : '';
+
         if (!leaderUid) {
             throw new Error('Leader UID is required to create a group');
         }
-        const newGroupRef = doc(groupsRef, leaderUid);
+
+        const groupId = leaderUid;
+        const meta = buildGroupMeta(group);
+        const canonicalRef = getCanonicalGroupRef(groupId, meta);
+        const indexRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
 
         const sanitizedGroup = sanitizeGroupForWrite(group, { includeDefaultMembers: true });
+        const payload = attachMeta(
+            {
+                ...sanitizedGroup,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            },
+            meta
+        );
 
-        await setDoc(newGroupRef, {
-            ...sanitizedGroup,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        });
+        const batch = writeBatch(firebaseFirestore);
+        batch.set(canonicalRef, payload);
+        batch.set(indexRef, payload);
+        await batch.commit();
+
+        const now = new Date().toISOString();
 
         return {
-            id: newGroupRef.id,
+            id: groupId,
             ...group,
             members: normalizeGroupMembers(group.members),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            createdAt: now,
+            updatedAt: now,
         };
     } catch (error) {
         console.error('Error creating group:', error);
@@ -343,7 +495,7 @@ export async function createGroup(group: Omit<ThesisGroup, 'id' | 'createdAt' | 
  */
 export async function updateGroup(groupId: string, updates: Partial<ThesisGroup>): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const refs = await resolveGroupRefs(groupId);
 
         const rest = { ...updates } as Partial<Omit<ThesisGroup, 'id'>>;
         const restRecord = rest as Record<string, unknown>;
@@ -353,10 +505,26 @@ export async function updateGroup(groupId: string, updates: Partial<ThesisGroup>
 
         const updatePayload = sanitizeGroupForWrite(rest, { includeDefaultMembers: false });
 
-        await updateDoc(groupRef, {
-            ...updatePayload,
-            updatedAt: serverTimestamp(),
-        });
+        if (Object.keys(updatePayload).length === 0) {
+            return;
+        }
+
+        const mergedData = { ...refs.dataWithoutMeta, ...updatePayload } as Record<string, unknown>;
+        const nextMeta = buildGroupMeta(mergedData as Partial<ThesisGroup>);
+        const metaChanged =
+            nextMeta.departmentKey !== refs.meta.departmentKey ||
+            nextMeta.courseKey !== refs.meta.courseKey;
+
+        if (metaChanged) {
+            if (!mergedData.createdAt) {
+                mergedData.createdAt = refs.dataWithoutMeta.createdAt ?? serverTimestamp();
+            }
+
+            await moveGroupDocument(groupId, refs, mergedData, nextMeta);
+            return;
+        }
+
+        await commitGroupUpdate(refs, updatePayload);
     } catch (error) {
         console.error('Error updating group:', error);
         throw new Error('Failed to update group');
@@ -368,8 +536,19 @@ export async function updateGroup(groupId: string, updates: Partial<ThesisGroup>
  */
 export async function deleteGroup(groupId: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        await deleteDoc(groupRef);
+        const indexRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const snapshot = await getDoc(indexRef);
+
+        if (!snapshot.exists()) {
+            return;
+        }
+
+        const { meta } = extractSnapshotDataAndMeta(snapshot);
+
+        const batch = writeBatch(firebaseFirestore);
+        batch.delete(indexRef);
+        batch.delete(getCanonicalGroupRef(groupId, meta));
+        await batch.commit();
     } catch (error) {
         console.error('Error deleting group:', error);
         throw new Error('Failed to delete group');
@@ -381,7 +560,9 @@ export async function deleteGroup(groupId: string): Promise<void> {
  */
 export async function setGroup(groupId: string, group: ThesisGroup): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+        const meta = buildGroupMeta(group);
+        const canonicalRef = getCanonicalGroupRef(groupId, meta);
+        const indexRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
 
         const rest = { ...group } as Partial<Omit<ThesisGroup, 'id'>>;
         const restRecord = rest as Record<string, unknown>;
@@ -398,9 +579,14 @@ export async function setGroup(groupId: string, group: ThesisGroup): Promise<voi
             sanitized.createdAt = serverTimestamp();
         }
 
-        sanitized.updatedAt = serverTimestamp();
+        sanitized.updatedAt = sanitized.updatedAt ?? serverTimestamp();
 
-        await setDoc(groupRef, sanitized);
+        const payload = attachMeta(sanitized, meta);
+
+        const batch = writeBatch(firebaseFirestore);
+        batch.set(canonicalRef, payload);
+        batch.set(indexRef, payload);
+        await batch.commit();
     } catch (error) {
         console.error('Error setting group:', error);
         throw new Error('Failed to set group');
@@ -413,10 +599,12 @@ export async function setGroup(groupId: string, group: ThesisGroup): Promise<voi
 export async function getGroupsByCourse(course: string): Promise<ThesisGroup[]> {
     try {
         const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
-        const q = query(groupsRef, where('course', '==', course), orderBy('createdAt', 'desc'));
+        const q = query(groupsRef, where('course', '==', course));
         const snapshot = await getDocs(q);
 
-        return snapshot.docs.map((doc) => mapGroupDocument(doc));
+        return snapshot.docs
+            .map((doc) => mapGroupDocument(doc))
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     } catch (error) {
         console.error('Error getting groups by course:', error);
         throw new Error('Failed to fetch groups by course');
@@ -429,13 +617,35 @@ export async function getGroupsByCourse(course: string): Promise<ThesisGroup[]> 
 export async function getGroupsByDepartment(department: string): Promise<ThesisGroup[]> {
     try {
         const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
-        const q = query(groupsRef, where('department', '==', department), orderBy('createdAt', 'desc'));
+        const q = query(groupsRef, where('department', '==', department));
         const snapshot = await getDocs(q);
 
-        return snapshot.docs.map((doc) => mapGroupDocument(doc));
+        return snapshot.docs
+            .map((doc) => mapGroupDocument(doc))
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     } catch (error) {
         console.error('Error getting groups by department:', error);
         throw new Error('Failed to fetch groups by department');
+    }
+}
+
+/**
+ * Fetch groups via the new hierarchical Firestore path for a specific department/course pair.
+ */
+export async function getGroupsInDepartmentCourse(
+    department: string,
+    course: string
+): Promise<ThesisGroup[]> {
+    try {
+        const departmentKey = sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT);
+        const courseKey = sanitizePathSegment(course, DEFAULT_COURSE_SEGMENT);
+        const groupsRef = collection(firebaseFirestore, GROUP_HIERARCHY_ROOT, departmentKey, courseKey);
+        const snapshot = await getDocs(query(groupsRef, orderBy('createdAt', 'desc')));
+
+        return snapshot.docs.map((doc) => mapGroupDocument(doc));
+    } catch (error) {
+        console.error('Error getting hierarchical groups:', error);
+        throw new Error('Failed to fetch hierarchical groups');
     }
 }
 
@@ -444,23 +654,16 @@ export async function getGroupsByDepartment(department: string): Promise<ThesisG
  */
 export async function inviteUserToGroup(groupId: string, userUid: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        const groupSnap = await getDoc(groupRef);
-
-        if (!groupSnap.exists()) {
-            throw new Error('Group not found');
-        }
-
-        const group = mapGroupDocument(groupSnap);
+        const refs = await resolveGroupRefs(groupId);
+        const group = mapGroupDocument(refs.snapshot as GroupSnapshot);
         const invites = group.invites ?? [];
 
         if (invites.includes(userUid)) {
             throw new Error('User already invited');
         }
 
-        await updateDoc(groupRef, {
+        await commitGroupUpdate(refs, {
             invites: [...invites, userUid],
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error inviting user to group:', error);
@@ -473,19 +676,12 @@ export async function inviteUserToGroup(groupId: string, userUid: string): Promi
  */
 export async function removeInviteFromGroup(groupId: string, userUid: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        const groupSnap = await getDoc(groupRef);
-
-        if (!groupSnap.exists()) {
-            throw new Error('Group not found');
-        }
-
-        const group = mapGroupDocument(groupSnap);
+        const refs = await resolveGroupRefs(groupId);
+        const group = mapGroupDocument(refs.snapshot as GroupSnapshot);
         const invites = (group.invites ?? []).filter(uid => uid !== userUid);
 
-        await updateDoc(groupRef, {
+        await commitGroupUpdate(refs, {
             invites,
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error removing invite from group:', error);
@@ -498,23 +694,16 @@ export async function removeInviteFromGroup(groupId: string, userUid: string): P
  */
 export async function requestToJoinGroup(groupId: string, userUid: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        const groupSnap = await getDoc(groupRef);
-
-        if (!groupSnap.exists()) {
-            throw new Error('Group not found');
-        }
-
-        const group = mapGroupDocument(groupSnap);
+        const refs = await resolveGroupRefs(groupId);
+        const group = mapGroupDocument(refs.snapshot as GroupSnapshot);
         const requests = group.requests ?? [];
 
         if (requests.includes(userUid)) {
             throw new Error('Request already sent');
         }
 
-        await updateDoc(groupRef, {
+        await commitGroupUpdate(refs, {
             requests: [...requests, userUid],
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error requesting to join group:', error);
@@ -527,21 +716,14 @@ export async function requestToJoinGroup(groupId: string, userUid: string): Prom
  */
 export async function acceptJoinRequest(groupId: string, userUid: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        const groupSnap = await getDoc(groupRef);
-
-        if (!groupSnap.exists()) {
-            throw new Error('Group not found');
-        }
-
-        const group = mapGroupDocument(groupSnap);
+        const refs = await resolveGroupRefs(groupId);
+        const group = mapGroupDocument(refs.snapshot as GroupSnapshot);
         const requests = (group.requests ?? []).filter(uid => uid !== userUid);
-        const members = [...group.members.members, userUid];
+        const members = [...new Set([...group.members.members, userUid])];
 
-        await updateDoc(groupRef, {
+        await commitGroupUpdate(refs, {
             'members.members': members,
             requests,
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error accepting join request:', error);
@@ -554,19 +736,12 @@ export async function acceptJoinRequest(groupId: string, userUid: string): Promi
  */
 export async function rejectJoinRequest(groupId: string, userUid: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        const groupSnap = await getDoc(groupRef);
-
-        if (!groupSnap.exists()) {
-            throw new Error('Group not found');
-        }
-
-        const group = mapGroupDocument(groupSnap);
+        const refs = await resolveGroupRefs(groupId);
+        const group = mapGroupDocument(refs.snapshot as GroupSnapshot);
         const requests = (group.requests ?? []).filter(uid => uid !== userUid);
 
-        await updateDoc(groupRef, {
+        await commitGroupUpdate(refs, {
             requests,
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error rejecting join request:', error);
@@ -579,21 +754,14 @@ export async function rejectJoinRequest(groupId: string, userUid: string): Promi
  */
 export async function acceptInvite(groupId: string, userUid: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        const groupSnap = await getDoc(groupRef);
-
-        if (!groupSnap.exists()) {
-            throw new Error('Group not found');
-        }
-
-        const group = mapGroupDocument(groupSnap);
+        const refs = await resolveGroupRefs(groupId);
+        const group = mapGroupDocument(refs.snapshot as GroupSnapshot);
         const invites = (group.invites ?? []).filter(uid => uid !== userUid);
-        const members = [...group.members.members, userUid];
+        const members = [...new Set([...group.members.members, userUid])];
 
-        await updateDoc(groupRef, {
+        await commitGroupUpdate(refs, {
             'members.members': members,
             invites,
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error accepting invite:', error);
@@ -606,11 +774,8 @@ export async function acceptInvite(groupId: string, userUid: string): Promise<vo
  */
 export async function submitGroupForReview(groupId: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        await updateDoc(groupRef, {
-            status: 'review',
-            updatedAt: serverTimestamp(),
-        });
+        const refs = await resolveGroupRefs(groupId);
+        await commitGroupUpdate(refs, { status: 'review' });
     } catch (error) {
         console.error('Error submitting group for review:', error);
         throw new Error('Failed to submit group for review');
@@ -622,11 +787,10 @@ export async function submitGroupForReview(groupId: string): Promise<void> {
  */
 export async function approveGroup(groupId: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        await updateDoc(groupRef, {
+        const refs = await resolveGroupRefs(groupId);
+        await commitGroupUpdate(refs, {
             status: 'active',
             rejectionReason: null,
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error approving group:', error);
@@ -639,11 +803,10 @@ export async function approveGroup(groupId: string): Promise<void> {
  */
 export async function rejectGroup(groupId: string, reason: string): Promise<void> {
     try {
-        const groupRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
-        await updateDoc(groupRef, {
+        const refs = await resolveGroupRefs(groupId);
+        await commitGroupUpdate(refs, {
             status: 'rejected',
             rejectionReason: reason,
-            updatedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error('Error rejecting group:', error);

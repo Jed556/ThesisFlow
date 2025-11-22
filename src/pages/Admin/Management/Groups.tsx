@@ -868,97 +868,96 @@ export default function AdminGroupManagementPage() {
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ width: '100%', py: 3 }}>
-                <Stack
-                    direction={{ xs: 'column', md: 'row' }}
-                    spacing={2}
-                    alignItems={{ xs: 'flex-start', md: 'center' }}
-                    justifyContent="space-between"
-                    sx={{ mb: 3 }}
-                >
-                    <Box>
-                        <Typography variant="h4" sx={{ mb: 0.5 }}>
-                            Thesis Groups
-                        </Typography>
-                        <Typography color="text.secondary">
-                            Manage thesis teams, review membership, and coordinate advisers.
-                        </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        <Button
-                            variant="outlined"
-                            startIcon={<RefreshIcon />}
-                            onClick={handleRefresh}
-                            disabled={loading}
+                <Stack spacing={3}>
+                    <Stack
+                        direction={{ xs: 'column', lg: 'row' }}
+                        spacing={2}
+                        alignItems={{ xs: 'stretch', lg: 'center' }}
+                        justifyContent="space-between"
+                    >
+                        <Stack
+                            direction={{ xs: 'column', md: 'row' }}
+                            spacing={2}
+                            flexWrap="wrap"
+                            useFlexGap
+                            sx={{ flex: 1, minWidth: 0 }}
                         >
-                            Refresh
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            startIcon={<FileDownloadIcon />}
-                            onClick={() => handleExport(groups)}
-                            disabled={loading || groups.length === 0}
-                        >
-                            Export
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            startIcon={<CloudUploadIcon />}
-                            onClick={handleImportButtonClick}
-                            disabled={hasActiveImport}
-                        >
-                            Import
-                        </Button>
-                        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateDialog}>
-                            New Group
-                        </Button>
+                            <Autocomplete
+                                options={departmentOptions}
+                                value={selectedDepartment}
+                                onChange={(_, newValue) => {
+                                    setSelectedDepartment(newValue || '');
+                                    setSelectedCourse(''); // Reset course when department changes
+                                }}
+                                renderInput={(params) => (
+                                    <TextField {...params} label="Filter by Department" placeholder="Select department" />
+                                )}
+                                sx={{ minWidth: 220, flexBasis: { xs: '100%', md: 250 }, flexGrow: 1 }}
+                                size="small"
+                            />
+                            <Autocomplete
+                                options={courseOptions}
+                                value={selectedCourse}
+                                onChange={(_, newValue) => setSelectedCourse(newValue || '')}
+                                renderInput={(params) => (
+                                    <TextField {...params} label="Filter by Course" placeholder="Select course" />
+                                )}
+                                sx={{ minWidth: 220, flexBasis: { xs: '100%', md: 250 }, flexGrow: 1 }}
+                                size="small"
+                                disabled={!selectedDepartment}
+                            />
+                            {(selectedDepartment || selectedCourse) && (
+                                <Button
+                                    variant="text"
+                                    onClick={() => {
+                                        setSelectedDepartment('');
+                                        setSelectedCourse('');
+                                    }}
+                                    sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}
+                                >
+                                    Clear Filters
+                                </Button>
+                            )}
+                        </Stack>
+
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+                            <Button
+                                variant="outlined"
+                                startIcon={<RefreshIcon />}
+                                onClick={handleRefresh}
+                                disabled={loading}
+                            >
+                                Refresh
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={<FileDownloadIcon />}
+                                onClick={() => handleExport(groups)}
+                                disabled={loading || groups.length === 0}
+                            >
+                                Export
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={<CloudUploadIcon />}
+                                onClick={handleImportButtonClick}
+                                disabled={hasActiveImport}
+                            >
+                                Import
+                            </Button>
+                            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateDialog}>
+                                New Group
+                            </Button>
+                        </Stack>
                     </Stack>
-                </Stack>
 
-                <input
-                    type="file"
-                    hidden
-                    ref={fileInputRef}
-                    accept=".csv,text/csv"
-                    onChange={handleFileInputChange}
-                />
-
-                {/* Filters */}
-                <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-                    <Autocomplete
-                        options={departmentOptions}
-                        value={selectedDepartment}
-                        onChange={(_, newValue) => {
-                            setSelectedDepartment(newValue || '');
-                            setSelectedCourse(''); // Reset course when department changes
-                        }}
-                        renderInput={(params) => (
-                            <TextField {...params} label="Filter by Department" placeholder="Select department" />
-                        )}
-                        sx={{ minWidth: 250 }}
-                        size="small"
+                    <input
+                        type="file"
+                        hidden
+                        ref={fileInputRef}
+                        accept=".csv,text/csv"
+                        onChange={handleFileInputChange}
                     />
-                    <Autocomplete
-                        options={courseOptions}
-                        value={selectedCourse}
-                        onChange={(_, newValue) => setSelectedCourse(newValue || '')}
-                        renderInput={(params) => (
-                            <TextField {...params} label="Filter by Course" placeholder="Select course" />
-                        )}
-                        sx={{ minWidth: 250 }}
-                        size="small"
-                        disabled={!selectedDepartment}
-                    />
-                    {(selectedDepartment || selectedCourse) && (
-                        <Button
-                            variant="text"
-                            onClick={() => {
-                                setSelectedDepartment('');
-                                setSelectedCourse('');
-                            }}
-                        >
-                            Clear Filters
-                        </Button>
-                    )}
                 </Stack>
 
                 {loading ? (
