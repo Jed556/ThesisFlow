@@ -12,9 +12,9 @@ import {
     type DocumentData,
     type DocumentSnapshot,
     type QueryDocumentSnapshot,
-    type Timestamp,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
+import { normalizeTimestamp } from '../../dateUtils';
 import { updateGroup } from './groups';
 import type {
     TopicProposalEntry,
@@ -63,28 +63,6 @@ export interface UseTopicPayload {
     requestedBy: string;
 }
 
-/**
- * Normalizes Firestore timestamp-like values into ISO8601 strings.
- */
-function normalizeTimestamp(value: unknown): string {
-    if (!value) {
-        return new Date().toISOString();
-    }
-
-    if (typeof value === 'string') {
-        return value;
-    }
-
-    if (value instanceof Date) {
-        return value.toISOString();
-    }
-
-    if (typeof (value as Timestamp)?.toDate === 'function') {
-        return (value as Timestamp).toDate().toISOString();
-    }
-
-    return new Date().toISOString();
-}
 
 /**
  * Converts raw Firestore keyword arrays into trimmed string arrays.
@@ -156,7 +134,7 @@ function mapDecision(raw: unknown): TopicProposalReviewerDecision | undefined {
     return {
         reviewerUid,
         decision,
-        decidedAt: normalizeTimestamp(payload.decidedAt),
+        decidedAt: normalizeTimestamp(payload.decidedAt, true),
         notes: typeof payload.notes === 'string' ? payload.notes : undefined,
     } satisfies TopicProposalReviewerDecision;
 }
@@ -171,8 +149,8 @@ function mapEntry(raw: unknown): TopicProposalEntry {
         expectedOutcome: typeof entry.expectedOutcome === 'string' ? entry.expectedOutcome : undefined,
         keywords: normalizeKeywords(entry.keywords),
         proposedBy: typeof entry.proposedBy === 'string' ? entry.proposedBy : '',
-        createdAt: normalizeTimestamp(entry.createdAt),
-        updatedAt: normalizeTimestamp(entry.updatedAt),
+        createdAt: normalizeTimestamp(entry.createdAt, true),
+        updatedAt: normalizeTimestamp(entry.updatedAt, true),
         status: (typeof entry.status === 'string' ? entry.status : 'draft') as TopicProposalEntryStatus,
         moderatorDecision: mapDecision(entry.moderatorDecision),
         headDecision: mapDecision(entry.headDecision),
@@ -206,7 +184,7 @@ function mapReviewHistory(raw: unknown): TopicProposalReviewEvent[] {
                 reviewerUid: typeof payload.reviewerUid === 'string' ? payload.reviewerUid : '',
                 proposalId: typeof payload.proposalId === 'string' ? payload.proposalId : '',
                 notes: typeof payload.notes === 'string' ? payload.notes : undefined,
-                reviewedAt: normalizeTimestamp(payload.reviewedAt),
+                reviewedAt: normalizeTimestamp(payload.reviewedAt, true),
             } satisfies TopicProposalReviewEvent;
         })
         .filter((event): event is TopicProposalReviewEvent => Boolean(event));
@@ -223,19 +201,19 @@ function mapTopicProposalDocument(snapshot: TopicProposalSnapshot): TopicProposa
         id: snapshot.id,
         groupId: typeof data.groupId === 'string' ? data.groupId : '',
         createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
-        createdAt: normalizeTimestamp(data.createdAt),
-        updatedAt: normalizeTimestamp(data.updatedAt),
+        createdAt: normalizeTimestamp(data.createdAt, true),
+        updatedAt: normalizeTimestamp(data.updatedAt, true),
         status: (typeof data.status === 'string' ? data.status : 'draft') as TopicProposalSet['status'],
         cycle: typeof data.cycle === 'number' ? data.cycle : 1,
         entries: entriesRaw.map((entry) => mapEntry(entry)),
         awaitingModerator: Boolean(data.awaitingModerator),
         awaitingHead: Boolean(data.awaitingHead),
         submittedBy: typeof data.submittedBy === 'string' ? data.submittedBy : undefined,
-        submittedAt: data.submittedAt ? normalizeTimestamp(data.submittedAt) : undefined,
+        submittedAt: data.submittedAt ? normalizeTimestamp(data.submittedAt, true) : undefined,
         approvedEntryId: typeof data.approvedEntryId === 'string' ? data.approvedEntryId : undefined,
         lockedEntryId: typeof data.lockedEntryId === 'string' ? data.lockedEntryId : undefined,
         usedBy: typeof data.usedBy === 'string' ? data.usedBy : undefined,
-        usedAsThesisAt: data.usedAsThesisAt ? normalizeTimestamp(data.usedAsThesisAt) : undefined,
+        usedAsThesisAt: data.usedAsThesisAt ? normalizeTimestamp(data.usedAsThesisAt, true) : undefined,
         reviewHistory: mapReviewHistory(data.reviewHistory),
     } satisfies TopicProposalSetRecord;
 }

@@ -2,9 +2,10 @@ import {
     collection, doc, getDocs, getDoc, query, where, orderBy, serverTimestamp, writeBatch, onSnapshot
 } from 'firebase/firestore';
 import type {
-    DocumentData, DocumentReference, DocumentSnapshot, QueryDocumentSnapshot, Timestamp,
+    DocumentData, DocumentReference, DocumentSnapshot, QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
+import { normalizeTimestamp } from '../../dateUtils';
 import type { ThesisGroup } from '../../../types/group';
 
 const COLLECTION_NAME = 'groupIndex';
@@ -163,28 +164,6 @@ async function moveGroupDocument(
     await batch.commit();
 }
 
-/**
- * Normalizes Firestore timestamp values into ISO8601 strings.
- */
-function normalizeTimestamp(value: unknown): string | undefined {
-    if (!value) {
-        return undefined;
-    }
-
-    if (typeof value === 'string') {
-        return value;
-    }
-
-    if (value instanceof Date) {
-        return value.toISOString();
-    }
-
-    if (typeof (value as Timestamp)?.toDate === 'function') {
-        return (value as Timestamp).toDate().toISOString();
-    }
-
-    return undefined;
-}
 
 /**
  * Builds a strongly typed ThesisGroup.members object from the Firestore payload.

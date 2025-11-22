@@ -73,6 +73,19 @@ export function normalizeDateInput(value: unknown): Date | null {
 }
 
 /**
+ * Normalize a timestamp-like value and return an ISO8601 string or undefined.
+ * @param value - Date | ISO string | Firestore Timestamp | null/undefined
+ * @param fallbackToNow - when true, return current time ISO if value is missing/invalid
+ * @returns ISO string or undefined
+ */
+export function normalizeTimestamp(value: unknown, fallbackToNow?: boolean): string {
+    const date = normalizeDateInput(value);
+    if (date) return date.toISOString();
+    if (fallbackToNow) return new Date().toISOString();
+    return '';
+}
+
+/**
  * Returns the start of the day (midnight) for a given date
  * @param date - Date object
  * @returns - Timestamp of the start of the day

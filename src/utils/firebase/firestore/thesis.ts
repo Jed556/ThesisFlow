@@ -3,6 +3,7 @@ import {
     type WithFieldValue, type QueryConstraint, type QuerySnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
+import { normalizeTimestamp } from '../../dateUtils';
 import { cleanData } from './firestore';
 import { getUserById, getUsersByIds } from './user';
 import { getGroupById } from './groups';
@@ -250,7 +251,7 @@ async function buildReviewerAssignments(
             dueDate: undefined,
             assignedTo,
             priority: determinePriority(progressRatio, thesis.lastUpdated),
-            lastUpdated: normalizeTimestamp(thesis.lastUpdated ?? thesis.submissionDate),
+            lastUpdated: normalizeTimestamp(thesis.lastUpdated ?? thesis.submissionDate, true),
             studentEmails,
         } satisfies ReviewerAssignment;
     });
@@ -361,16 +362,6 @@ function determinePriority(progressRatio: number, lastUpdated?: string): Reviewe
     return 'low';
 }
 
-function normalizeTimestamp(value?: string): string {
-    if (!value) {
-        return new Date().toISOString();
-    }
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-        return new Date().toISOString();
-    }
-    return parsed.toISOString();
-}
 
 export async function getReviewerAssignmentsForUser(role: ReviewerRole, userUid?: string | null): Promise<ReviewerAssignment[]> {
     if (!userUid) {
