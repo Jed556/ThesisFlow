@@ -7,3 +7,4 @@ export * from './formTemplates';
 export * from './groups';
 export * from './user';
 export * from './thesis';
+export * from './topicProposals';

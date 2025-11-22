@@ -49,9 +49,17 @@ export interface UserProfile {
      */
     department?: string;
     /**
+     * Optional list of departments the user is associated with (for multi-department heads/admins)
+     */
+    departments?: string[];
+    /**
      * User's degree program or course (e.g., BS Computer Science)
      */
     course?: string;
+    /**
+     * Optional list of sections/courses the user moderates or manages
+     */
+    moderatedSections?: string[];
     /**
      * URL to the user's avatar image
      */

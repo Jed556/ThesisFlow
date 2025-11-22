@@ -424,6 +424,22 @@ export async function getGroupsByCourse(course: string): Promise<ThesisGroup[]> 
 }
 
 /**
+ * Get groups by department (heads can only see groups in their department)
+ */
+export async function getGroupsByDepartment(department: string): Promise<ThesisGroup[]> {
+    try {
+        const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+        const q = query(groupsRef, where('department', '==', department), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map((doc) => mapGroupDocument(doc));
+    } catch (error) {
+        console.error('Error getting groups by department:', error);
+        throw new Error('Failed to fetch groups by department');
+    }
+}
+
+/**
  * Send an invite to a student to join a group
  */
 export async function inviteUserToGroup(groupId: string, userUid: string): Promise<void> {
