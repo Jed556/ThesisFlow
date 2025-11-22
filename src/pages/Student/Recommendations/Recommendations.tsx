@@ -128,6 +128,47 @@ export default function AdviserEditorRecommendationsPage() {
         [editorProfiles, thesisStats]
     );
 
+    const handleTabChange = React.useCallback((_event: React.SyntheticEvent, newValue: number) => {
+        setActiveTab(newValue);
+    }, []);
+
+    const handleOpenProfile = React.useCallback((profile: UserProfile) => {
+        navigate(`profile/${profile.uid}`);
+    }, [navigate]);
+
+    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor') => {
+        const cardStats: ProfileCardStat[] = [
+            {
+                label: 'Active Teams',
+                value: model.activeCount,
+            },
+            {
+                label: 'Open Slots',
+                value: model.capacity > 0 ? `${model.openSlots}/${model.capacity}` : 'Not accepting',
+            },
+            {
+                label: 'Compatibility',
+                value: `${model.compatibility}%`,
+                icon: <StarRateIcon sx={{ fontSize: 18, color: 'warning.main' }} />,
+                color: 'primary.main',
+            },
+        ];
+
+        return (
+            <ProfileCard
+                key={model.profile.uid}
+                profile={model.profile}
+                roleLabel={roleLabel}
+                skills={model.profile.skills ?? []}
+                stats={cardStats}
+                cornerNumber={model.rank}
+                showDivider
+                showSkills={(model.profile.skills?.length ?? 0) > 0}
+                onClick={() => handleOpenProfile(model.profile)}
+            />
+        );
+    }, [handleOpenProfile]);
+
     // Check if we're on a child route (profile page)
     const isProfileRoute = location.pathname.includes('/profile/');
 
@@ -168,47 +209,6 @@ export default function AdviserEditorRecommendationsPage() {
             </AnimatedPage>
         );
     }
-
-    const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-        setActiveTab(newValue);
-    };
-
-    const handleOpenProfile = React.useCallback((profile: UserProfile) => {
-        navigate(`profile/${profile.uid}`);
-    }, [navigate]);
-
-    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor') => {
-        const cardStats: ProfileCardStat[] = [
-            {
-                label: 'Active Teams',
-                value: model.activeCount,
-            },
-            {
-                label: 'Open Slots',
-                value: model.capacity > 0 ? `${model.openSlots}/${model.capacity}` : 'Not accepting',
-            },
-            {
-                label: 'Compatibility',
-                value: `${model.compatibility}%`,
-                icon: <StarRateIcon sx={{ fontSize: 18, color: 'warning.main' }} />,
-                color: 'primary.main',
-            },
-        ];
-
-        return (
-            <ProfileCard
-                key={model.profile.uid}
-                profile={model.profile}
-                roleLabel={roleLabel}
-                skills={model.profile.skills ?? []}
-                stats={cardStats}
-                cornerNumber={model.rank}
-                showDivider
-                showSkills={(model.profile.skills?.length ?? 0) > 0}
-                onClick={() => handleOpenProfile(model.profile)}
-            />
-        );
-    }, [handleOpenProfile]);
 
     return (
         <AnimatedPage variant="fade">
