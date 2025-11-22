@@ -43,18 +43,28 @@ export default function SettingsPage() {
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Form state
-    const [formData, setFormData] = useState({
-        prefix: '',
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        suffix: '',
+    // Form state -- use a shallow partial of UserProfile, with nested fields optional
+    type UserProfileForm = Partial<UserProfile> & {
+        name?: Partial<UserProfile['name']>;
+        preferences?: Partial<UserProfile['preferences']>;
+    };
+
+    // Form state -- using UserProfileForm so nested name/preferences fields are optional
+    const [formData, setFormData] = useState<UserProfileForm>({
+        name: {
+            prefix: '',
+            first: '',
+            middle: '',
+            last: '',
+            suffix: '',
+        },
         phone: '',
         department: '',
         bio: '',
-        themeColor: '#2196F3',
-        reduceAnimations: false,
+        preferences: {
+            themeColor: '#2196F3',
+            reduceAnimations: false,
+        },
     });
 
     // Image upload state
@@ -92,17 +102,14 @@ export default function SettingsPage() {
             if (userProfile) {
                 setProfile(userProfile);
                 const themeColor = userProfile.preferences?.themeColor || '#2196F3';
+                // Populate the form with the profile (make nested objects optional)
                 setFormData({
-                    prefix: userProfile.name.prefix || '',
-                    firstName: userProfile.name.first || '',
-                    middleName: userProfile.name.middle || '',
-                    lastName: userProfile.name.last || '',
-                    suffix: userProfile.name.suffix || '',
-                    phone: userProfile.phone || '',
-                    department: userProfile.department || '',
-                    bio: userProfile.bio || '',
-                    themeColor,
-                    reduceAnimations: userProfile.preferences?.reduceAnimations || false,
+                    ...userProfile,
+                    // keep preferences present and ensure only needed properties are included
+                    preferences: {
+                        ...(userProfile.preferences ?? {}),
+                        themeColor,
+                    },
                 });
 
                 // Check if theme should be updated
@@ -119,39 +126,45 @@ export default function SettingsPage() {
         }
     };
 
-    const handleInputChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (field: keyof UserProfile) => (event: React.ChangeEvent<HTMLInputElement>) => {
+        // Generic top-level field updater (phone, department, bio, etc.)
         setFormData(prev => ({ ...prev, [field]: event.target.value }));
     };
 
-    const handleSwitchChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData(prev => ({ ...prev, [field]: event.target.checked }));
+    const handleSwitchChange = (field: keyof NonNullable<UserProfile['preferences']>) => (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({
+            ...prev,
+            preferences: {
+                ...(prev.preferences ?? {}),
+                [field]: event.target.checked,
+            }
+        }));
+    };
+
+    const handleNameChange = (field: keyof NonNullable<UserProfile['name']>) => (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({
+            ...prev,
+            name: {
+                ...(prev.name ?? {}),
+                [field]: event.target.value,
+            }
+        } as UserProfileForm));
     };
 
     const handleSave = async () => {
-        if (!session?.user?.email) return;
+        if (!session?.user?.uid) {
+            showNotification('Unable to update profile because the user ID is missing.', 'error');
+            return;
+        }
 
         try {
             setSaving(true);
-            await setUserProfile(session.user.email, {
-                name: {
-                    prefix: formData.prefix,
-                    first: formData.firstName,
-                    middle: formData.middleName,
-                    last: formData.lastName,
-                    suffix: formData.suffix,
-                },
-                phone: formData.phone,
-                department: formData.department,
-                bio: formData.bio,
-                preferences: {
-                    themeColor: formData.themeColor,
-                    reduceAnimations: formData.reduceAnimations,
-                }
-            });
+            // We store a partial UserProfile object in formData, so pass it directly
+            await setUserProfile(session.user.uid, formData as Partial<UserProfile>);
 
             // Update theme if color changed
-            if (formData.themeColor !== currentThemeColor) {
-                updateThemeFromSeedColor(formData.themeColor);
+            if ((formData.preferences?.themeColor ?? '') !== currentThemeColor) {
+                updateThemeFromSeedColor(formData.preferences?.themeColor ?? '');
             }
 
             await loadProfile();
@@ -169,16 +182,11 @@ export default function SettingsPage() {
     const handleCancel = () => {
         if (profile) {
             setFormData({
-                prefix: profile.name.prefix || '',
-                firstName: profile.name.first || '',
-                middleName: profile.name.middle || '',
-                lastName: profile.name.last || '',
-                suffix: profile.name.suffix || '',
-                phone: profile.phone || '',
-                department: profile.department || '',
-                bio: profile.bio || '',
-                themeColor: profile.preferences?.themeColor || '#2196F3',
-                reduceAnimations: profile.preferences?.reduceAnimations || false,
+                ...profile,
+                preferences: {
+                    ...(profile.preferences ?? {}),
+                    themeColor: profile.preferences?.themeColor ?? '#2196F3',
+                }
             });
         }
         setEditing(false);
@@ -226,7 +234,7 @@ export default function SettingsPage() {
 
     const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (!file || !session?.user?.email) return;
+        if (!file || !session?.user?.email || !session?.user?.uid) return;
 
         try {
             setUploadingBanner(true);
@@ -244,7 +252,7 @@ export default function SettingsPage() {
             }
 
             // Update profile
-            await setUserProfile(session.user.email, { banner: downloadURL });
+            await setUserProfile(session.user.uid, { banner: downloadURL });
             await loadProfile();
 
             showNotification('Banner updated successfully', 'success');
@@ -262,22 +270,35 @@ export default function SettingsPage() {
     };
 
     const handleThemeColorConfirm = async (color: string) => {
-        setFormData(prev => ({ ...prev, themeColor: color }));
+        setFormData(prev => ({
+            ...(prev ?? {}),
+            preferences: {
+                ...(prev?.preferences ?? {}),
+                themeColor: color,
+            }
+        } as UserProfileForm));
         setColorPickerOpen(false);
 
-        if (!session?.user?.email) return;
+        if (!session?.user?.uid) return;
 
         try {
             // Update theme immediately
             updateThemeFromSeedColor(color);
 
             // Save to database
-            await setUserProfile(session.user.email, {
+            // apply change to local form data and persist the updated preferences
+            const updated = {
+                ...(formData ?? {}),
                 preferences: {
+                    ...(formData?.preferences ?? {}),
                     themeColor: color,
-                    reduceAnimations: formData.reduceAnimations
+                    reduceAnimations: formData?.preferences?.reduceAnimations ?? false,
                 }
-            });
+            } as UserProfileForm;
+
+            setFormData(updated);
+
+            await setUserProfile(session.user.uid, { preferences: updated.preferences });
 
             showNotification('Theme color updated successfully', 'success');
         } catch (error: unknown) {
@@ -445,7 +466,7 @@ export default function SettingsPage() {
                         ) : (
                             <>
                                 <Typography variant="h4" fontWeight={700}>
-                                    {[formData.prefix, formData.firstName, formData.middleName, formData.lastName, formData.suffix]
+                                    {[formData.name?.prefix, formData.name?.first, formData.name?.middle, formData.name?.last, formData.name?.suffix]
                                         .filter(Boolean)
                                         .join(' ')}
                                 </Typography>
@@ -498,16 +519,16 @@ export default function SettingsPage() {
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                             <TextField
                                 label="Prefix"
-                                value={formData.prefix}
-                                onChange={handleInputChange('prefix')}
+                                value={formData.name?.prefix ?? ''}
+                                onChange={handleNameChange('prefix')}
                                 disabled={!editing}
                                 placeholder="Dr., Prof., Mr., Ms."
                                 sx={{ width: { xs: '100%', sm: '20%' } }}
                             />
                             <TextField
                                 label="First Name"
-                                value={formData.firstName}
-                                onChange={handleInputChange('firstName')}
+                                value={formData.name?.first ?? ''}
+                                onChange={handleNameChange('first')}
                                 disabled={!editing}
                                 required
                                 fullWidth
@@ -517,23 +538,23 @@ export default function SettingsPage() {
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                             <TextField
                                 label="Middle Name"
-                                value={formData.middleName}
-                                onChange={handleInputChange('middleName')}
+                                value={formData.name?.middle ?? ''}
+                                onChange={handleNameChange('middle')}
                                 disabled={!editing}
                                 fullWidth
                             />
                             <TextField
                                 label="Last Name"
-                                value={formData.lastName}
-                                onChange={handleInputChange('lastName')}
+                                value={formData.name?.last ?? ''}
+                                onChange={handleNameChange('last')}
                                 disabled={!editing}
                                 required
                                 fullWidth
                             />
                             <TextField
                                 label="Suffix"
-                                value={formData.suffix}
-                                onChange={handleInputChange('suffix')}
+                                value={formData.name?.suffix ?? ''}
+                                onChange={handleNameChange('suffix')}
                                 disabled={!editing}
                                 placeholder="Jr., Sr., III"
                                 sx={{ width: { xs: '100%', sm: '20%' } }}
@@ -588,7 +609,7 @@ export default function SettingsPage() {
                                 <Typography variant="subtitle2">
                                     Theme Color
                                 </Typography>
-                                {currentThemeColor && currentThemeColor === formData.themeColor && (
+                                {currentThemeColor && currentThemeColor === (formData.preferences?.themeColor ?? '') && (
                                     <Chip
                                         icon={<CheckCircle />}
                                         label="Active"
@@ -607,9 +628,9 @@ export default function SettingsPage() {
                                     sx={{
                                         width: 80,
                                         height: 56,
-                                        bgcolor: formData.themeColor,
+                                        bgcolor: formData.preferences?.themeColor ?? 'primary.main',
                                         border: '3px solid',
-                                        borderColor: currentThemeColor === formData.themeColor ? 'primary.main' : 'divider',
+                                        borderColor: currentThemeColor === (formData.preferences?.themeColor ?? '') ? 'primary.main' : 'divider',
                                         borderRadius: 2,
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
@@ -623,10 +644,10 @@ export default function SettingsPage() {
                                 />
                                 <Box sx={{ flex: 1 }}>
                                     <Typography variant="body2" fontWeight={600}>
-                                        {formData.themeColor.toUpperCase()}
+                                        {(formData.preferences?.themeColor ?? '').toUpperCase()}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        {currentThemeColor === formData.themeColor
+                                        {currentThemeColor === (formData.preferences?.themeColor ?? '')
                                             ? 'Currently applied to your interface'
                                             : 'Click the color box to change'}
                                     </Typography>
@@ -645,7 +666,7 @@ export default function SettingsPage() {
                         <FormControlLabel
                             control={
                                 <Switch
-                                    checked={formData.reduceAnimations}
+                                    checked={formData.preferences?.reduceAnimations ?? false}
                                     onChange={handleSwitchChange('reduceAnimations')}
                                     disabled={!editing && !session?.user?.email}
                                 />
@@ -682,7 +703,7 @@ export default function SettingsPage() {
                 <ColorPickerDialog
                     open={colorPickerOpen}
                     onClose={() => setColorPickerOpen(false)}
-                    value={formData.themeColor}
+                    value={formData.preferences?.themeColor ?? '#2196F3'}
                     onConfirm={handleThemeColorConfirm}
                     title="Choose Theme Color"
                 />
