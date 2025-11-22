@@ -60,6 +60,7 @@ export interface ProfileViewProps {
     headerCaption?: string;
     sectionVisibility?: Partial<ProfileViewSections>;
     floatingBackButton?: boolean;
+    bannerActionSlot?: React.ReactNode;
 }
 
 function deriveContactItems(
@@ -101,6 +102,7 @@ export default function ProfileView({
     headerCaption,
     sectionVisibility,
     floatingBackButton = false,
+    bannerActionSlot,
 }: ProfileViewProps) {
     const theme = useTheme();
     const accentColor = profile.preferences?.themeColor ?? theme.palette.primary.main;
@@ -171,7 +173,7 @@ export default function ProfileView({
             ) : null}
 
             <Stack spacing={3}>
-                <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+                <Paper variant="outlined" sx={{ overflow: 'hidden', position: 'relative' }}>
                     <Box sx={{ position: 'relative', height: 140, background: bannerImage ? undefined : background }}>
                         {bannerImage ? (
                             <Box
@@ -192,6 +194,20 @@ export default function ProfileView({
                                 bgcolor: bannerImage ? overlay : 'transparent',
                             }}
                         />
+                        {bannerActionSlot ? (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    right: { xs: 16, md: 24 },
+                                    bottom: -24,
+                                    zIndex: 3,
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                }}
+                            >
+                                {bannerActionSlot}
+                            </Box>
+                        ) : null}
                     </Box>
                     <Box sx={{ p: { xs: 3, md: 4 } }}>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems={{ xs: 'flex-start', sm: 'center' }}>

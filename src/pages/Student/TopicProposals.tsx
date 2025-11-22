@@ -377,7 +377,7 @@ export default function StudentTopicProposalsPage() {
 
     if (!group) {
         return (
-            <AnimatedPage variant="slideUp">
+            <AnimatedPage variant="fade">
                 <UnauthorizedNotice
                     variant='box'
                     title="Topic proposals locked"

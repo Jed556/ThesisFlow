@@ -17,6 +17,16 @@ import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../u
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { getUserById } from '../../utils/firebase/firestore/user';
 
+function splitSectionList(value?: string | null): string[] {
+    if (!value) {
+        return [];
+    }
+    return value
+        .split(/[;|\u007C]/)
+        .map((section) => section.trim())
+        .filter(Boolean);
+}
+
 export const metadata: NavigationItem = {
     group: 'management',
     index: 0,
@@ -99,7 +109,12 @@ export default function ModeratorTopicProposalsPage() {
             return explicitSections;
         }
 
-        return profile.course ? [profile.course] : [];
+        const fallbackSections = splitSectionList(profile.course);
+        if (fallbackSections.length > 0) {
+            return fallbackSections;
+        }
+
+        return [];
     }, [profile]);
 
     React.useEffect(() => {

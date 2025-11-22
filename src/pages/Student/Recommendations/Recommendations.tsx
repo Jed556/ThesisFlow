@@ -1,7 +1,8 @@
 import * as React from 'react';
 import {
-    Avatar as MuiAvatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle, Grid, Alert,
-    IconButton, List, ListItem, ListItemAvatar, ListItemText, Tab, Tabs, Typography, Skeleton
+    Avatar as MuiAvatar, Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle,
+    Grid, Alert, IconButton, List, ListItem, ListItemAvatar, ListItemText, Skeleton, Stack, Tab,
+    Tabs, Typography
 } from '@mui/material';
 import {
     PeopleAlt as PeopleAltIcon,
@@ -12,13 +13,18 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
+import { useSession } from '@toolpad/core';
 import { MentorRecommendationCard } from '../../../components/Profile';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
-import { listenTheses } from '../../../utils/firebase/firestore/thesis';
+import { listenTheses, listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
+import { listenTopicProposalSetsByGroup } from '../../../utils/firebase/firestore/topicProposals';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { ThesisData } from '../../../types/thesis';
+import type { Session } from '../../../types/session';
+import { hasApprovedProposal, pickActiveProposalSet } from '../../../utils/topicProposalUtils';
+import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',
@@ -33,7 +39,13 @@ export const metadata: NavigationItem = {
  * Draft recommendations page listing advisers and editors with quick stats.
  */
 export default function AdviserEditorRecommendationsPage() {
+    const session = useSession<Session>();
+    const studentUid = session?.user?.uid ?? null;
     const navigate = useNavigate();
+    const [studentGroupId, setStudentGroupId] = React.useState<string | null>(null);
+    const [topicApproved, setTopicApproved] = React.useState(false);
+    const [topicGateResolved, setTopicGateResolved] = React.useState(false);
+    const [topicGateError, setTopicGateError] = React.useState<string | null>(null);
     const [activeTab, setActiveTab] = React.useState(0);
     const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
     const [adviserProfiles, setAdviserProfiles] = React.useState<UserProfile[]>([]);
@@ -43,7 +55,75 @@ export default function AdviserEditorRecommendationsPage() {
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
+    const topicCheckLoading = !topicGateResolved;
+
     React.useEffect(() => {
+        setTopicGateError(null);
+        if (!studentUid) {
+            setStudentGroupId(null);
+            setTopicApproved(false);
+            setTopicGateResolved(true);
+            return () => { /* no-op */ };
+        }
+
+        setTopicGateResolved(false);
+        const unsubscribe = listenThesesForParticipant(studentUid, {
+            onData: (records) => {
+                const prioritized = [...records].sort((a, b) => (
+                    new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
+                ));
+                const primary = prioritized.find((record) => record.leader === studentUid) ?? prioritized[0] ?? null;
+                const groupId = primary?.groupId ?? null;
+                setStudentGroupId(groupId);
+                if (!groupId) {
+                    setTopicApproved(false);
+                    setTopicGateResolved(true);
+                }
+            },
+            onError: (err) => {
+                console.error('Failed to resolve thesis membership for recommendations:', err);
+                setTopicGateError('Unable to verify your thesis status right now.');
+                setTopicGateResolved(true);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [studentUid]);
+
+    React.useEffect(() => {
+        if (!studentGroupId) {
+            return () => { /* no-op */ };
+        }
+
+        setTopicGateResolved(false);
+        const unsubscribe = listenTopicProposalSetsByGroup(studentGroupId, {
+            onData: (records) => {
+                const activeSet = pickActiveProposalSet(records);
+                const approved = Boolean(activeSet && (hasApprovedProposal(activeSet) || activeSet.lockedEntryId));
+                setTopicApproved(approved);
+                setTopicGateResolved(true);
+                setTopicGateError(null);
+            },
+            onError: (err) => {
+                console.error('Failed to verify topic proposal approval:', err);
+                setTopicGateError('Unable to verify your topic approval right now.');
+                setTopicGateResolved(true);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [studentGroupId]);
+
+    React.useEffect(() => {
+        if (!topicApproved) {
+            setLoading(false);
+            return () => { /* no-op */ };
+        }
+
         let active = true;
         const loaded = { advisers: false, editors: false, statisticians: false, theses: false };
 
@@ -137,7 +217,7 @@ export default function AdviserEditorRecommendationsPage() {
             unsubscribeTheses();
             unsubscribeStatisticians();
         };
-    }, []);
+    }, [topicApproved]);
 
     const thesisStats = React.useMemo(() => aggregateThesisStats(theses), [theses]);
     const adviserCards = React.useMemo(
@@ -161,15 +241,31 @@ export default function AdviserEditorRecommendationsPage() {
         navigate(`/mentor/${profile.uid}`);
     }, [navigate]);
 
-    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => (
-        <MentorRecommendationCard
-            card={model}
-            roleLabel={roleLabel}
-            onSelect={handleOpenProfile}
-        />
-    ), [handleOpenProfile]);
+    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => {
+        const slotsFull = model.capacity > 0 && model.openSlots === 0;
+        return (
+            <MentorRecommendationCard
+                card={model}
+                roleLabel={roleLabel}
+                onSelect={handleOpenProfile}
+                disabled={slotsFull}
+            />
+        );
+    }, [handleOpenProfile]);
 
-    if (loading) {
+    const showLoading = topicCheckLoading || (topicApproved && loading);
+
+    if (topicGateError) {
+        return (
+            <AnimatedPage variant="fade">
+                <Alert severity="error" sx={{ maxWidth: 520 }}>
+                    {topicGateError}
+                </Alert>
+            </AnimatedPage>
+        );
+    }
+
+    if (showLoading) {
         return (
             <AnimatedPage variant="fade">
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -188,6 +284,24 @@ export default function AdviserEditorRecommendationsPage() {
                         ))}
                     </Grid>
                 </Box>
+            </AnimatedPage>
+        );
+    }
+
+    if (topicGateResolved && !topicApproved) {
+        // const primaryActionPath = studentGroupId ? '/topic-proposals' : '/group';
+        // const primaryActionLabel = studentGroupId ? 'Review Topic Proposals' : 'Create My Group';
+        const description = studentGroupId
+            ? 'Mentor recommendations unlock once your topic proposal receives head approval.'
+            : 'Create a thesis group and submit topic proposals to unlock mentor recommendations.';
+
+        return (
+            <AnimatedPage variant="fade">
+                <UnauthorizedNotice
+                    variant='box'
+                    title='Mentor Recommendations Locked'
+                    description={description}
+                />
             </AnimatedPage>
         );
     }

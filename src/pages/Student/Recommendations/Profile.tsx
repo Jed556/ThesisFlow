@@ -1,20 +1,26 @@
 import * as React from 'react';
 import {
-    Alert, Button, Card, CardContent, Chip, Skeleton, Stack, Typography,
+    Alert, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    FormControl, FormControlLabel, Radio, RadioGroup, Skeleton, Stack, TextField, Tooltip,
+    Typography,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useSession } from '@toolpad/core';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
 import { onUserProfile, getUsersByIds } from '../../../utils/firebase/firestore/user';
 import { listenThesesForMentor } from '../../../utils/firebase/firestore/thesis';
-import { listenGroupsByMentorRole } from '../../../utils/firebase/firestore/groups';
+import { getGroupsByLeader, listenGroupsByMentorRole } from '../../../utils/firebase/firestore/groups';
+import { createMentorRequest } from '../../../utils/firebase/firestore/mentorRequests';
 import { filterActiveMentorTheses, deriveMentorThesisHistory } from '../../../utils/mentorProfileUtils';
 import { evaluateMentorCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile, HistoricalThesisEntry, UserRole } from '../../../types/profile';
 import type { ThesisGroup } from '../../../types/group';
+import type { Session } from '../../../types/session';
 
 export const metadata: NavigationItem = {
     title: 'Mentor Profile',
@@ -22,15 +28,20 @@ export const metadata: NavigationItem = {
     hidden: true,
 };
 
-type MentorRole = 'adviser' | 'editor';
+type MentorRole = 'adviser' | 'editor' | 'statistician';
 
 function isMentorRole(role: UserRole | undefined): role is MentorRole {
-    return role === 'adviser' || role === 'editor';
+    return role === 'adviser' || role === 'editor' || role === 'statistician';
 }
 
 export default function MentorProfilePage() {
     const navigate = useNavigate();
     const { uid = '' } = useParams<{ uid: string }>();
+    const session = useSession<Session>();
+    const viewerUid = session?.user?.uid ?? null;
+    const viewerRole = session?.user?.role;
+    const viewerEmail = session?.user?.email ?? undefined;
+    const { showNotification } = useSnackbar();
 
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
     const [assignments, setAssignments] = React.useState<(ThesisData & { id: string })[]>([]);
@@ -40,6 +51,13 @@ export default function MentorProfilePage() {
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
     const [groupsLoading, setGroupsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
+    const [viewerProfile, setViewerProfile] = React.useState<UserProfile | null>(null);
+    const [ownedGroups, setOwnedGroups] = React.useState<ThesisGroup[]>([]);
+    const [ownedGroupsLoading, setOwnedGroupsLoading] = React.useState(false);
+    const [requestDialogOpen, setRequestDialogOpen] = React.useState(false);
+    const [selectedGroupId, setSelectedGroupId] = React.useState('');
+    const [requestMessage, setRequestMessage] = React.useState('');
+    const [requestSubmitting, setRequestSubmitting] = React.useState(false);
 
     React.useEffect(() => {
         if (!uid) {
@@ -68,6 +86,21 @@ export default function MentorProfilePage() {
             unsubscribeProfile();
         };
     }, [uid]);
+
+    React.useEffect(() => {
+        if (!viewerUid) {
+            setViewerProfile(null);
+            return () => { /* no-op */ };
+        }
+
+        const unsubscribe = onUserProfile(viewerUid, (viewerData) => {
+            setViewerProfile(viewerData);
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [viewerUid]);
 
     const mentorRole = React.useMemo<MentorRole | null>(() => (
         isMentorRole(profile?.role) ? profile.role : null
@@ -125,6 +158,37 @@ export default function MentorProfilePage() {
 
     React.useEffect(() => {
         let cancelled = false;
+
+        if (!viewerUid) {
+            setOwnedGroups([]);
+            setOwnedGroupsLoading(false);
+            return () => { cancelled = true; };
+        }
+
+        setOwnedGroupsLoading(true);
+        void getGroupsByLeader(viewerUid)
+            .then((records) => {
+                if (cancelled) return;
+                setOwnedGroups(records);
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    console.error('Failed to load owned groups:', err);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setOwnedGroupsLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [viewerUid]);
+
+    React.useEffect(() => {
+        let cancelled = false;
         if (groups.length === 0) {
             setMembersByUid(new Map());
             return () => {
@@ -157,6 +221,7 @@ export default function MentorProfilePage() {
         };
     }, [groups]);
 
+
     const activeAssignments = React.useMemo<ThesisData[]>(
         () => filterActiveMentorTheses(assignments),
         [assignments]
@@ -174,9 +239,13 @@ export default function MentorProfilePage() {
             return { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
         }
         const total = assignments.length;
-        return mentorRole === 'adviser'
-            ? { adviserCount: total, editorCount: 0, statisticianCount: 0 }
-            : { adviserCount: 0, editorCount: total, statisticianCount: 0 };
+        if (mentorRole === 'adviser') {
+            return { adviserCount: total, editorCount: 0, statisticianCount: 0 };
+        }
+        if (mentorRole === 'editor') {
+            return { adviserCount: 0, editorCount: total, statisticianCount: 0 };
+        }
+        return { adviserCount: 0, editorCount: 0, statisticianCount: total };
     }, [assignments.length, mentorRole]);
 
     const capacity = profile?.capacity ?? 0;
@@ -209,7 +278,47 @@ export default function MentorProfilePage() {
         ? 'Adviser'
         : mentorRole === 'editor'
             ? 'Editor'
-            : 'Mentor';
+            : mentorRole === 'statistician'
+                ? 'Statistician'
+                : 'Mentor';
+
+    const requestableGroups = React.useMemo(
+        () => ownedGroups.filter((group) => group.members.leader === viewerUid),
+        [ownedGroups, viewerUid]
+    );
+
+    const slotsFull = capacity > 0 && openSlots <= 0;
+    const canShowRequestButton = viewerRole === 'student' && Boolean(mentorRole);
+
+    let requestDisabledReason: string | undefined;
+    if (slotsFull) {
+        requestDisabledReason = 'This mentor has no available slots right now.';
+    } else if (requestableGroups.length === 0) {
+        requestDisabledReason = 'Create and lead a thesis group before sending requests.';
+    }
+
+    const requestButtonDisabled = Boolean(slotsFull || requestableGroups.length === 0 || requestSubmitting);
+    const requestButtonLabel = slotsFull ? 'Slots Full' : `Request as ${roleLabel}`;
+    const canSubmitMentorRequest = Boolean(selectedGroupId && requestableGroups.length > 0 && !requestSubmitting);
+    const dialogDisabled = requestableGroups.length === 0 || ownedGroupsLoading;
+
+    React.useEffect(() => {
+        if (!requestDialogOpen) {
+            return;
+        }
+
+        if (requestableGroups.length === 0) {
+            setSelectedGroupId('');
+            return;
+        }
+
+        const exists = requestableGroups.some((group) => group.id === selectedGroupId);
+        if (!exists) {
+            setSelectedGroupId(requestableGroups[0].id);
+        }
+    }, [requestDialogOpen, requestableGroups, selectedGroupId]);
+
+    let bannerRequestButton: React.ReactNode;
 
     const summaryCard = profile ? (
         <Card variant="outlined">
@@ -267,6 +376,81 @@ export default function MentorProfilePage() {
         </Card>
     ) : null;
 
+    const handleOpenRequestDialog = React.useCallback(() => {
+        if (requestableGroups.length === 0) {
+            showNotification('Create a thesis group first to send mentor requests.', 'info');
+            return;
+        }
+
+        setSelectedGroupId((prev) => {
+            const stillValid = prev && requestableGroups.some((group) => group.id === prev);
+            if (stillValid) {
+                return prev;
+            }
+            return requestableGroups[0]?.id ?? '';
+        });
+        setRequestMessage('');
+        setRequestDialogOpen(true);
+    }, [requestableGroups, showNotification]);
+
+    const handleCloseRequestDialog = React.useCallback(() => {
+        setRequestDialogOpen(false);
+    }, []);
+
+    const handleSubmitMentorRequest = React.useCallback(async () => {
+        if (!profile || !mentorRole || !viewerUid) {
+            return;
+        }
+
+        const targetGroup = requestableGroups.find((group) => group.id === selectedGroupId);
+        if (!targetGroup) {
+            showNotification('Select a group to continue.', 'warning');
+            return;
+        }
+
+        setRequestSubmitting(true);
+        try {
+            await createMentorRequest({
+                groupId: targetGroup.id,
+                mentorUid: profile.uid,
+                role: mentorRole,
+                requestedBy: viewerUid,
+                message: requestMessage.trim() || undefined,
+            });
+            showNotification('Request sent successfully.', 'success');
+            setRequestDialogOpen(false);
+            setRequestMessage('');
+        } catch (err) {
+            console.error('Failed to send mentor request:', err);
+            const fallback = err instanceof Error ? err.message : 'Failed to send request.';
+            showNotification(fallback, 'error');
+        } finally {
+            setRequestSubmitting(false);
+        }
+    }, [mentorRole, profile, requestMessage, requestableGroups, selectedGroupId, showNotification, viewerEmail, viewerProfile, viewerUid]);
+
+    if (canShowRequestButton) {
+        bannerRequestButton = (
+            <Tooltip
+                title={requestDisabledReason}
+                disableHoverListener={!requestDisabledReason}
+                placement="top"
+            >
+                <span>
+                    <Button
+                        variant="contained"
+                        color="secondary"
+                        size="medium"
+                        disabled={requestButtonDisabled}
+                        onClick={handleOpenRequestDialog}
+                    >
+                        {requestButtonLabel}
+                    </Button>
+                </span>
+            </Tooltip>
+        );
+    }
+
     const handleBack = React.useCallback(() => {
         navigate(-1);
     }, [navigate]);
@@ -312,6 +496,7 @@ export default function MentorProfilePage() {
                     onClick: handleBack,
                 }}
                 floatingBackButton
+                bannerActionSlot={bannerRequestButton}
                 additionalSections={(
                     <Stack spacing={3}>
                         {summaryCard}
@@ -319,6 +504,73 @@ export default function MentorProfilePage() {
                     </Stack>
                 )}
             />
+
+            <Dialog
+                open={requestDialogOpen}
+                onClose={handleCloseRequestDialog}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    Request {roleLabel}
+                </DialogTitle>
+                <DialogContent dividers>
+                    {ownedGroupsLoading ? (
+                        <Stack spacing={2} sx={{ mb: 2 }}>
+                            {Array.from({ length: 2 }).map((_, idx) => (
+                                <Skeleton key={idx} variant="rounded" height={56} />
+                            ))}
+                        </Stack>
+                    ) : requestableGroups.length === 0 ? (
+                        <Alert severity="info">
+                            Create and lead a thesis group first before sending mentor requests.
+                        </Alert>
+                    ) : (
+                        <FormControl component="fieldset" sx={{ width: '100%', mb: 2 }}>
+                            <RadioGroup
+                                value={selectedGroupId}
+                                onChange={(event) => setSelectedGroupId(event.target.value)}
+                            >
+                                {requestableGroups.map((group) => (
+                                    <FormControlLabel
+                                        key={group.id}
+                                        value={group.id}
+                                        control={<Radio />}
+                                        label={(<Stack spacing={0.25}>
+                                            <Typography variant="subtitle2">{group.name}</Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {(group.course ?? 'Course TBD')} · {group.status.toUpperCase()}
+                                            </Typography>
+                                        </Stack>)}
+                                    />
+                                ))}
+                            </RadioGroup>
+                        </FormControl>
+                    )}
+                    <TextField
+                        label="Message (optional)"
+                        placeholder={`Explain why this ${roleLabel.toLowerCase()} is a good fit`}
+                        multiline
+                        minRows={3}
+                        fullWidth
+                        value={requestMessage}
+                        onChange={(event) => setRequestMessage(event.target.value)}
+                        disabled={dialogDisabled}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseRequestDialog} disabled={requestSubmitting}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleSubmitMentorRequest}
+                        disabled={!canSubmitMentorRequest}
+                    >
+                        {requestSubmitting ? 'Sending…' : 'Send request'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </AnimatedPage>
     );
 }

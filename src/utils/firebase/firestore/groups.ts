@@ -346,7 +346,7 @@ function mapGroupDocument(snapshot: GroupSnapshot): ThesisGroup {
  * Listen to groups where the specified mentor is assigned as adviser or editor.
  */
 export function listenGroupsByMentorRole(
-    role: 'adviser' | 'editor',
+    role: 'adviser' | 'editor' | 'statistician',
     mentorUid: string | null | undefined,
     options: GroupListenerOptions
 ): () => void {
@@ -354,8 +354,14 @@ export function listenGroupsByMentorRole(
         options.onData([]);
         return () => { /* no-op */ };
     }
-
-    const fieldPath = role === 'adviser' ? 'members.adviser' : 'members.editor';
+    let fieldPath: string;
+    if (role === 'adviser') {
+        fieldPath = 'members.adviser';
+    } else if (role === 'editor') {
+        fieldPath = 'members.editor';
+    } else {
+        fieldPath = 'members.statistician';
+    }
     const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
     const groupsQuery = query(groupsRef, where(fieldPath, '==', mentorUid));
 
@@ -373,6 +379,30 @@ export function listenGroupsByMentorRole(
             }
         }
     );
+}
+
+/**
+ * Assign the provided mentor to a group by updating the relevant members.* slot.
+ */
+export async function assignMentorToGroup(
+    groupId: string,
+    role: 'adviser' | 'editor' | 'statistician',
+    mentorUid: string,
+): Promise<void> {
+    if (!groupId || !mentorUid) {
+        throw new Error('Group ID and mentor UID are required to assign a mentor.');
+    }
+
+    const refs = await resolveGroupRefs(groupId);
+    const fieldPath = role === 'adviser'
+        ? 'members.adviser'
+        : role === 'editor'
+            ? 'members.editor'
+            : 'members.statistician';
+
+    await commitGroupUpdate(refs, {
+        [fieldPath]: mentorUid,
+    });
 }
 
 /**
