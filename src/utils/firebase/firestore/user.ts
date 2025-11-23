@@ -1,22 +1,7 @@
 import {
-    collection,
-    collectionGroup,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    limit,
-    onSnapshot,
-    query,
-    serverTimestamp,
-    setDoc,
-    where,
-    writeBatch,
-    type DocumentData,
-    type DocumentReference,
-    type DocumentSnapshot,
-    type QueryConstraint,
-    type QuerySnapshot,
+    collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc,
+    where, writeBatch, type DocumentData, type DocumentReference, type DocumentSnapshot, type QueryDocumentSnapshot,
+    type QueryConstraint, type QuerySnapshot
 } from 'firebase/firestore';
 import { firebaseAuth, firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
@@ -54,6 +39,8 @@ interface LocatedUserDocument {
     docRef: DocumentReference<DocumentData>;
     snapshot: DocumentSnapshot<DocumentData>;
 }
+
+type AnyDocSnapshot = QueryDocumentSnapshot<unknown> | DocumentSnapshot<unknown>;
 
 interface ScopeMaps {
     root: Map<string, UserProfile>;
@@ -135,14 +122,14 @@ function getUserDocRef(uid: string, info: UserPathInfo): DocumentReference<Docum
     return doc(firebaseFirestore, USER_HIERARCHY_ROOT, ...info.pathSegments, uid);
 }
 
-function mapUserSnapshot(snapshot: DocumentSnapshot<DocumentData>): UserProfile | null {
-    const data = snapshot.data();
-    if (!data || typeof data.role !== 'string') {
+function mapUserSnapshot(snapshot: AnyDocSnapshot): UserProfile | null {
+    const raw = snapshot.data() as Record<string, unknown> | undefined;
+    if (!raw || typeof raw.role !== 'string') {
         return null;
     }
 
-    const uid = typeof data.uid === 'string' ? data.uid : snapshot.id;
-    return { ...(data as UserProfile), uid };
+    const uid = typeof raw.uid === 'string' ? raw.uid : snapshot.id;
+    return { ...(raw as unknown as UserProfile), uid };
 }
 
 async function queryCollectionGroupForUid(collectionId: string, uid: string): Promise<DocumentSnapshot<DocumentData> | null> {
@@ -205,10 +192,15 @@ function buildScopeQuery(scope: ScopeIdentifier, constraints: QueryConstraint[])
     return constraints.length > 0 ? query(base, ...constraints) : base;
 }
 
-async function queryScopeSnapshots(scope: ScopeIdentifier, constraints: QueryConstraint[]): Promise<DocumentSnapshot<DocumentData>[]> {
+type UserDocArray = QueryDocumentSnapshot<DocumentData>[];
+
+async function queryScopeSnapshots(
+    scope: ScopeIdentifier,
+    constraints: QueryConstraint[]
+): Promise<UserDocArray> {
     const scopeQuery = buildScopeQuery(scope, constraints);
     const snap = await getDocs(scopeQuery);
-    return snap.docs;
+    return snap.docs as UserDocArray;
 }
 
 async function queryUsersAcrossScopes(constraints: QueryConstraint[] = []): Promise<UserProfile[]> {
@@ -271,7 +263,7 @@ function createEmptyScopeMaps(): ScopeMaps {
 function handleScopeSnapshot(
     scopeMaps: ScopeMaps,
     scope: ScopeIdentifier,
-    snapshot: QuerySnapshot<DocumentData>,
+    snapshot: QuerySnapshot<unknown>,
     emit: () => void,
 ): void {
     const targetMap = scopeMaps[scope];
