@@ -9,19 +9,19 @@ import { normalizeTimestamp } from '../../dateUtils';
 import type { ThesisGroup } from '../../../types/group';
 
 const COLLECTION_NAME = 'groupIndex';
-const GROUP_HIERARCHY_ROOT = 'groups';
+export const GROUP_HIERARCHY_ROOT = 'groups';
 const GROUP_META_FIELD = '__meta';
 const DEFAULT_DEPARTMENT_SEGMENT = 'general';
 const DEFAULT_COURSE_SEGMENT = 'common';
 
 type GroupSnapshot = QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>;
 
-interface GroupMeta {
+export interface GroupMeta {
     departmentKey: string;
     courseKey: string;
 }
 
-interface ResolvedGroupRefs {
+export interface ResolvedGroupRefs {
     canonicalRef: DocumentReference<DocumentData>;
     indexRef: DocumentReference<DocumentData>;
     snapshot: DocumentSnapshot<DocumentData>;
@@ -45,7 +45,7 @@ function sanitizePathSegment(value: string | null | undefined, fallback: string)
     return normalised || fallback;
 }
 
-function buildGroupMeta(group: Partial<ThesisGroup>): GroupMeta {
+export function buildGroupMeta(group: Partial<ThesisGroup>): GroupMeta {
     return {
         departmentKey: sanitizePathSegment(group.department ?? group.course ?? null, DEFAULT_DEPARTMENT_SEGMENT),
         courseKey: sanitizePathSegment(group.course ?? null, DEFAULT_COURSE_SEGMENT),
@@ -95,11 +95,11 @@ export interface GroupListenerOptions {
     onError?: (error: Error) => void;
 }
 
-function getCanonicalGroupRef(groupId: string, meta: GroupMeta): DocumentReference<DocumentData> {
+export function getCanonicalGroupRef(groupId: string, meta: GroupMeta): DocumentReference<DocumentData> {
     return doc(firebaseFirestore, GROUP_HIERARCHY_ROOT, meta.departmentKey, meta.courseKey, groupId);
 }
 
-async function resolveGroupRefs(groupId: string): Promise<ResolvedGroupRefs> {
+export async function resolveGroupRefs(groupId: string): Promise<ResolvedGroupRefs> {
     const indexRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
     const snapshot = await getDoc(indexRef);
 

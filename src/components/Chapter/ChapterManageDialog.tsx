@@ -1,28 +1,17 @@
 import * as React from 'react';
 import {
-    Autocomplete,
-    Box,
-    Button,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    Stack,
-    TextField,
-    Typography,
-    Paper,
+    Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
+    IconButton, Stack, Tab, Tabs, TextField, Typography, Paper,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    ArrowUpward as ArrowUpwardIcon,
-    ArrowDownward as ArrowDownwardIcon,
-    Delete as DeleteIcon,
+    Add as AddIcon, ArrowUpward as ArrowUpwardIcon,
+    ArrowDownward as ArrowDownwardIcon, Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { ChapterConfigFormData, ChapterFormErrorKey, ChapterTemplate } from '../../types/chapter';
 import { GrowTransition } from '../Animate';
 import { createEmptyChapterTemplate, moveChapterTemplate, normalizeChapterOrder } from '../../utils/chapterUtils';
 import { buildDefaultChapters } from './constants';
+import ChapterStageManagementStepper from './ChapterStageManagementStepper';
 
 interface ChapterManageDialogProps {
     open: boolean;
@@ -52,6 +41,8 @@ export default function ChapterManageDialog({
     onFieldChange,
     onSubmit,
 }: ChapterManageDialogProps) {
+    const [currentTab, setCurrentTab] = React.useState(0);
+
     // Seed default chapters when creating a new entry and the form is empty
     React.useEffect(() => {
         if (!open) {
@@ -62,6 +53,13 @@ export default function ChapterManageDialog({
             onFieldChange({ chapters: buildDefaultChapters() });
         }
     }, [open, formData.chapters.length, onFieldChange]);
+
+    // Reset tab when dialog closes
+    React.useEffect(() => {
+        if (!open) {
+            setCurrentTab(0);
+        }
+    }, [open]);
 
     const isCourseDisabled = !formData.department.trim();
 
@@ -124,137 +122,154 @@ export default function ChapterManageDialog({
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slots={{ transition: GrowTransition }}>
             <DialogTitle>{editMode ? 'Edit Chapter Requirements' : 'Create Chapter Requirements'}</DialogTitle>
+            <Tabs
+                value={currentTab}
+                onChange={(_, newValue) => setCurrentTab(newValue)}
+                sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}
+            >
+                <Tab label="Basic Info" />
+                <Tab label="Stage Configuration" disabled={formData.chapters.length === 0} />
+            </Tabs>
             <DialogContent dividers sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
-                <Stack spacing={3}>
-                    {formErrors.general && (
-                        <Typography color="error" variant="body2">
-                            {formErrors.general}
-                        </Typography>
-                    )}
-                    <Stack
-                        spacing={2}
-                        direction={{ xs: 'column', md: 'row' }}
-                        sx={{ '& > *': { flex: 1 } }}
-                    >
-                        <Autocomplete
-                            freeSolo
-                            options={departmentOptions}
-                            value={formData.department}
-                            onChange={handleDepartmentChange}
-                            inputValue={formData.department}
-                            onInputChange={(_, newValue) => {
-                                if (newValue === formData.department) {
-                                    return;
-                                }
-                                onFieldChange({ department: newValue, course: '' });
-                            }}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Department"
-                                    required
-                                    error={!!formErrors.department}
-                                    helperText={
-                                        formErrors.department || 'Select an existing department or type a new one'
-                                    }
-                                />
-                            )}
-                        />
-                        <Autocomplete
-                            freeSolo
-                            options={courseOptions}
-                            disabled={isCourseDisabled}
-                            value={formData.course}
-                            onChange={handleCourseChange}
-                            inputValue={formData.course}
-                            onInputChange={(_, newValue) => onFieldChange({ course: newValue })}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Course"
-                                    required
-                                    error={!!formErrors.course}
-                                    helperText={
-                                        formErrors.course ||
-                                        (isCourseDisabled
-                                            ? 'Select a department first'
-                                            : 'Select an existing course or type a new one')
-                                    }
-                                />
-                            )}
-                        />
-                    </Stack>
-
-                    <Box>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                            <Typography variant="subtitle1">Chapter Requirements</Typography>
-                            <Button startIcon={<AddIcon />} onClick={handleAddChapter}>
-                                Add Chapter
-                            </Button>
-                        </Stack>
-                        {formErrors.chapters && (
-                            <Typography color="error" variant="body2" sx={{ mb: 1 }}>
-                                {formErrors.chapters}
+                {currentTab === 0 && (
+                    <Stack spacing={3}>
+                        {formErrors.general && (
+                            <Typography color="error" variant="body2">
+                                {formErrors.general}
                             </Typography>
                         )}
-                        <Stack spacing={2}>
-                            {formData.chapters.map((chapter, index) => (
-                                <Paper key={chapter.id} variant="outlined" sx={{ p: 2 }}>
-                                    <Stack spacing={1.5}>
-                                        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                                            <Typography variant="subtitle2">
-                                                Chapter {chapter.id}
-                                            </Typography>
-                                            <Stack direction="row" spacing={1}>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleMoveChapter(index, -1)}
-                                                    disabled={index === 0}
-                                                    aria-label="Move chapter up"
-                                                >
-                                                    <ArrowUpwardIcon fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleMoveChapter(index, 1)}
-                                                    disabled={index === formData.chapters.length - 1}
-                                                    aria-label="Move chapter down"
-                                                >
-                                                    <ArrowDownwardIcon fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleRemoveChapter(index)}
-                                                    disabled={formData.chapters.length <= MIN_CHAPTERS}
-                                                    aria-label="Remove chapter"
-                                                >
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
-                                            </Stack>
-                                        </Stack>
-                                        <TextField
-                                            label="Title"
-                                            value={chapter.title}
-                                            onChange={(event) => handleChapterFieldChange(index, { title: event.target.value })}
-                                            fullWidth
-                                            required
-                                            helperText="Provide the chapter title as it should appear in ThesisData"
-                                        />
-                                        <TextField
-                                            label="Description"
-                                            value={chapter.description || ''}
-                                            onChange={(event) => handleChapterFieldChange(index, { description: event.target.value })}
-                                            fullWidth
-                                            multiline
-                                            minRows={2}
-                                            helperText="Optional: add guidance or requirements for this chapter"
-                                        />
-                                    </Stack>
-                                </Paper>
-                            ))}
+                        <Stack
+                            spacing={2}
+                            direction={{ xs: 'column', md: 'row' }}
+                            sx={{ '& > *': { flex: 1 } }}
+                        >
+                            <Autocomplete
+                                freeSolo
+                                options={departmentOptions}
+                                value={formData.department}
+                                onChange={handleDepartmentChange}
+                                inputValue={formData.department}
+                                onInputChange={(_, newValue) => {
+                                    if (newValue === formData.department) {
+                                        return;
+                                    }
+                                    onFieldChange({ department: newValue, course: '' });
+                                }}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="Department"
+                                        required
+                                        error={!!formErrors.department}
+                                        helperText={
+                                            formErrors.department || 'Select an existing department or type a new one'
+                                        }
+                                    />
+                                )}
+                            />
+                            <Autocomplete
+                                freeSolo
+                                options={courseOptions}
+                                disabled={isCourseDisabled}
+                                value={formData.course}
+                                onChange={handleCourseChange}
+                                inputValue={formData.course}
+                                onInputChange={(_, newValue) => onFieldChange({ course: newValue })}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="Course"
+                                        required
+                                        error={!!formErrors.course}
+                                        helperText={
+                                            formErrors.course ||
+                                            (isCourseDisabled
+                                                ? 'Select a department first'
+                                                : 'Select an existing course or type a new one')
+                                        }
+                                    />
+                                )}
+                            />
                         </Stack>
-                    </Box>
-                </Stack>
+
+                        <Box>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                                <Typography variant="subtitle1">Chapter Requirements</Typography>
+                                <Button startIcon={<AddIcon />} onClick={handleAddChapter}>
+                                    Add Chapter
+                                </Button>
+                            </Stack>
+                            {formErrors.chapters && (
+                                <Typography color="error" variant="body2" sx={{ mb: 1 }}>
+                                    {formErrors.chapters}
+                                </Typography>
+                            )}
+                            <Stack spacing={2}>
+                                {formData.chapters.map((chapter, index) => (
+                                    <Paper key={chapter.id} variant="outlined" sx={{ p: 2 }}>
+                                        <Stack spacing={1.5}>
+                                            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                                                <Typography variant="subtitle2">
+                                                    Chapter {chapter.id}
+                                                </Typography>
+                                                <Stack direction="row" spacing={1}>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleMoveChapter(index, -1)}
+                                                        disabled={index === 0}
+                                                        aria-label="Move chapter up"
+                                                    >
+                                                        <ArrowUpwardIcon fontSize="small" />
+                                                    </IconButton>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleMoveChapter(index, 1)}
+                                                        disabled={index === formData.chapters.length - 1}
+                                                        aria-label="Move chapter down"
+                                                    >
+                                                        <ArrowDownwardIcon fontSize="small" />
+                                                    </IconButton>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleRemoveChapter(index)}
+                                                        disabled={formData.chapters.length <= MIN_CHAPTERS}
+                                                        aria-label="Remove chapter"
+                                                    >
+                                                        <DeleteIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Stack>
+                                            </Stack>
+                                            <TextField
+                                                label="Title"
+                                                value={chapter.title}
+                                                onChange={(event) => handleChapterFieldChange(index, { title: event.target.value })}
+                                                fullWidth
+                                                required
+                                                helperText="Provide the chapter title as it should appear in ThesisData"
+                                            />
+                                            <TextField
+                                                label="Description"
+                                                value={chapter.description || ''}
+                                                onChange={(event) => handleChapterFieldChange(index, { description: event.target.value })}
+                                                fullWidth
+                                                multiline
+                                                minRows={2}
+                                                helperText="Optional: add guidance or requirements for this chapter"
+                                            />
+                                        </Stack>
+                                    </Paper>
+                                ))}
+                            </Stack>
+                        </Box>
+                    </Stack>
+                )}
+                {currentTab === 1 && (
+                    <ChapterStageManagementStepper
+                        chapters={formData.chapters}
+                        onStagesUpdate={(updatedChapters) => onFieldChange({ chapters: updatedChapters })}
+                        readOnly={saving}
+                    />
+                )}
             </DialogContent>
             <DialogActions>
                 <Button onClick={onClose} disabled={saving}>

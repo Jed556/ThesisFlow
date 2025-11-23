@@ -1,5 +1,5 @@
 import {
-    collection,
+    collectionGroup,
     doc,
     getDoc,
     onSnapshot,
@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
-import { updateGroup } from './groups';
+import { resolveGroupRefs, updateGroup } from './groups';
 import type {
     TopicProposalEntry,
     TopicProposalEntryStatus,
@@ -26,7 +26,16 @@ import type {
 } from '../../../types/topicProposal';
 import { MAX_TOPIC_PROPOSALS } from '../../../types/topicProposal';
 
-const COLLECTION_NAME = 'topicProposals';
+const PROPOSALS_SUBCOLLECTION = 'proposals';
+
+async function getProposalDocRef(groupId: string) {
+    const refs = await resolveGroupRefs(groupId);
+    return doc(refs.canonicalRef, PROPOSALS_SUBCOLLECTION, groupId);
+}
+
+function getProposalsCollectionGroup() {
+    return collectionGroup(firebaseFirestore, PROPOSALS_SUBCOLLECTION);
+}
 
 type TopicProposalSnapshot = QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>;
 
@@ -222,7 +231,7 @@ function mapTopicProposalDocument(snapshot: TopicProposalSnapshot): TopicProposa
  * Fetches a topic proposal set by its Firestore document ID.
  */
 export async function getTopicProposalSetById(setId: string): Promise<TopicProposalSetRecord | null> {
-    const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
+    const ref = await getProposalDocRef(setId);
     const snapshot = await getDoc(ref);
     if (!snapshot.exists()) {
         return null;
@@ -240,7 +249,7 @@ export async function createTopicProposalSet(payload: CreateTopicProposalSetPayl
         throw new Error('Group ID is required to create a topic proposal set.');
     }
 
-    const ref = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+    const ref = await getProposalDocRef(groupId);
     const existingSnapshot = await getDoc(ref);
 
     if (existingSnapshot.exists()) {
@@ -297,7 +306,7 @@ export async function updateTopicProposalDraftEntries(setId: string, entries: To
 
     // sanitize to avoid writing undefined into Firestore
     const sanitized = normalizedEntries.map((e) => stripUndefined(e));
-    const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
+    const ref = await getProposalDocRef(setId);
     await setDoc(ref, {
         entries: sanitized,
         updatedAt: serverTimestamp(),
@@ -329,7 +338,7 @@ export async function submitTopicProposalSet(payload: SubmitTopicProposalPayload
         updatedAt: now,
     } satisfies TopicProposalEntry));
 
-    const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
+    const ref = await getProposalDocRef(setId);
     const cleaned = updatedEntries.map((e) => stripUndefined(e));
     await updateDoc(ref, {
         entries: cleaned,
@@ -413,7 +422,7 @@ export async function recordModeratorDecision(payload: ProposalDecisionPayload):
 
     const sanitizedEntries = nextEntries.map((e) => stripUndefined(e));
     const meta = evaluateEntries(sanitizedEntries as unknown as TopicProposalEntry[]);
-    const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
+    const ref = await getProposalDocRef(setId);
     await updateDoc(ref, {
         entries: sanitizedEntries,
         awaitingModerator: meta.awaitingModerator,
@@ -462,9 +471,9 @@ export async function recordHeadDecision(payload: ProposalDecisionPayload): Prom
     const sanitizedEntries = nextEntries.map((e) => stripUndefined(e));
     const meta = evaluateEntries(sanitizedEntries as unknown as TopicProposalEntry[]);
     const nextStatus = deriveStatus(record.status, meta);
-    const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
+    const ref = await getProposalDocRef(setId);
 
-    await updateDoc(ref, {
+    const updatePayload: Record<string, unknown> = {
         entries: sanitizedEntries,
         awaitingHead: meta.awaitingHead,
         awaitingModerator: meta.awaitingModerator,
@@ -472,7 +481,20 @@ export async function recordHeadDecision(payload: ProposalDecisionPayload): Prom
         approvedEntryId: approved ? proposalId : record.approvedEntryId,
         updatedAt: serverTimestamp(),
         reviewHistory: [...record.reviewHistory, buildReviewEvent(payload, 'head')],
-    });
+    };
+
+    // Automatically set the approved proposal as the group's thesis
+    if (approved) {
+        updatePayload.lockedEntryId = proposalId;
+        updatePayload.usedBy = payload.reviewerUid;
+        updatePayload.usedAsThesisAt = serverTimestamp();
+    }
+
+    await Promise.all([
+        updateDoc(ref, updatePayload),
+        // Update the group's thesis title when approved
+        approved ? updateGroup(record.groupId, { thesisTitle: targetEntry.title }) : Promise.resolve(),
+    ]);
 }
 
 /**
@@ -488,26 +510,51 @@ export function listenTopicProposalSetsByGroup(
         return () => { /* no-op */ };
     }
 
-    const docRef = doc(firebaseFirestore, COLLECTION_NAME, groupId);
+    let unsubscribe: (() => void) | null = null;
+    let cancelled = false;
 
-    return onSnapshot(
-        docRef,
-        (snapshot) => {
-            if (snapshot.exists()) {
-                const record = mapTopicProposalDocument(snapshot);
-                options.onData([record]);
-            } else {
-                options.onData([]);
+    const attachListener = async () => {
+        try {
+            const docRef = await getProposalDocRef(groupId);
+            if (cancelled) {
+                return;
             }
-        },
-        (error) => {
-            if (options.onError) {
+
+            unsubscribe = onSnapshot(
+                docRef,
+                (snapshot) => {
+                    if (snapshot.exists()) {
+                        const record = mapTopicProposalDocument(snapshot);
+                        options.onData([record]);
+                    } else {
+                        options.onData([]);
+                    }
+                },
+                (error) => {
+                    if (options.onError) {
+                        options.onError(error);
+                    } else {
+                        console.error('Topic proposal listener error:', error);
+                    }
+                },
+            );
+        } catch (error) {
+            if (options.onError && error instanceof Error) {
                 options.onError(error);
             } else {
-                console.error('Topic proposal listener error:', error);
+                console.error('Failed to attach topic proposal listener:', error);
             }
-        },
-    );
+        }
+    };
+
+    void attachListener();
+
+    return () => {
+        cancelled = true;
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
 }
 
 /**
@@ -519,7 +566,7 @@ export function listenTopicProposalReviewQueue(
 ): () => void {
     const field = role === 'moderator' ? 'awaitingModerator' : 'awaitingHead';
     const proposalsQuery = query(
-        collection(firebaseFirestore, COLLECTION_NAME),
+        getProposalsCollectionGroup(),
         where(field, '==', true),
         orderBy('submittedAt', 'asc'),
     );
@@ -542,6 +589,8 @@ export function listenTopicProposalReviewQueue(
 
 /**
  * Locks the approved topic and updates the corresponding thesis group metadata.
+ * Note: This is now mostly handled automatically when a head approves a proposal,
+ * but this function can still be used for manual confirmation or edge cases.
  */
 export async function markProposalAsThesis(payload: UseTopicPayload): Promise<void> {
     const { setId, proposalId, groupId, requestedBy } = payload;
@@ -550,16 +599,23 @@ export async function markProposalAsThesis(payload: UseTopicPayload): Promise<vo
         throw new Error('Topic proposal set not found.');
     }
 
-    if (record.lockedEntryId) {
-        throw new Error('An approved topic has already been selected for this proposal set.');
-    }
-
     const entry = record.entries.find((item) => item.id === proposalId);
     if (!entry || entry.status !== 'head_approved') {
         throw new Error('Only head-approved proposals can be used as the thesis topic.');
     }
 
-    const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
+    // If already locked to this proposal, just ensure group title is synced
+    if (record.lockedEntryId === proposalId) {
+        await updateGroup(groupId, { thesisTitle: entry.title });
+        return;
+    }
+
+    // If locked to a different proposal, prevent change
+    if (record.lockedEntryId && record.lockedEntryId !== proposalId) {
+        throw new Error('An approved topic has already been selected for this proposal set.');
+    }
+
+    const ref = await getProposalDocRef(setId);
     await Promise.all([
         updateDoc(ref, {
             lockedEntryId: proposalId,

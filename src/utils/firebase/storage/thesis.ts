@@ -42,6 +42,7 @@ interface UploadThesisFileOptions {
     file: File;
     userUid: string;
     thesisId: string;
+    groupId: string;
     chapterId?: number;
     commentId?: string;
     category?: 'submission' | 'attachment' | 'revision';
@@ -153,11 +154,16 @@ export async function uploadThesisFile(
         file,
         userUid,
         thesisId,
+        groupId,
         chapterId,
         commentId,
         category = 'submission',
         metadata = {}
     } = options;
+
+    if (!groupId) {
+        throw new Error('groupId is required to upload thesis files');
+    }
 
     try {
         // Validate file
@@ -217,12 +223,14 @@ export async function uploadThesisFile(
             author: userUid,
             uploadDate: new Date().toISOString(),
             category: category === 'revision' ? 'submission' : category as 'submission' | 'attachment',
+            groupId,
+            thesisId,
             ...(chapterId !== undefined && { chapterId }),
             ...(commentId && { commentId })
         };
 
         // Save metadata to Firestore
-        await setFileMetadata(fileHash, fileAttachment, userUid);
+        await setFileMetadata(fileHash, fileAttachment, userUid, { groupId });
 
         return {
             url: downloadURL,

@@ -1,21 +1,9 @@
 import * as React from 'react';
 import {
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    Divider,
-    IconButton,
-    List,
-    ListItem,
-    ListItemText,
-    Paper,
-    Stack,
-    Typography,
-    Skeleton,
-
+    Box, Button, Card, CardContent, Chip, Divider, IconButton,
+    List, ListItem, ListItemText, Paper, Stack, Typography,
 } from '@mui/material';
+import Skeleton from '@mui/material/Skeleton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -240,6 +228,7 @@ export default function ChapterViewPage() {
                                         <Chip label={`Order ${chapter.id}`} variant="outlined" size="small" />
                                     </Stack>
                                     <ListItemText
+                                        slotProps={{ primary: { variant: 'body2', color: 'text.secondary' } }}
                                         primary={chapter.description || 'No additional guidance provided.'}
                                     />
                                 </ListItem>

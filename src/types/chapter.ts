@@ -1,3 +1,18 @@
+import type { FileAttachment } from './file';
+
+/**
+ * Ordered list of supported thesis chapter stages.
+ */
+export const CHAPTER_STAGE_OPTIONS = [
+    'Pre-Proposal',
+    'Post-Proposal',
+    'Pre Defense',
+    'Post Defense',
+] as const;
+
+export type ChapterStage = (typeof CHAPTER_STAGE_OPTIONS)[number];
+export type ChapterStageKey = ChapterStage;
+
 /**
  * Chapter template definition for a course
  */
@@ -8,6 +23,15 @@ export interface ChapterTemplate {
     title: string;
     /** Chapter description or requirements */
     description?: string;
+
+    /** Stage tabs where the chapter should appear */
+    stages?: ChapterStage[];
+
+    /** Optional files associated with this chapter template (e.g., sample files, resources) */
+    files?: FileAttachment[];
+
+    /** Comments or notes related to this chapter template */
+    comments?: ChapterComment[];
 }
 
 /**
@@ -39,6 +63,19 @@ export interface ChapterConfigFormData {
 }
 
 /**
+ * Simple, reusable comment type for chapters/forms
+ */
+export interface ChapterComment {
+    id?: string;
+    author: string; // user id or email
+    date: string; // ISO string
+    message: string;
+    attachments?: FileAttachment[]; // file refs or objects
+    resolved?: boolean;
+    replies?: ChapterComment[];
+}
+
+/**
  * Supported validation error keys for the chapter configuration form.
  */
 export type ChapterFormErrorKey = keyof ChapterConfigFormData | 'general';
@@ -49,4 +86,12 @@ export type ChapterFormErrorKey = keyof ChapterConfigFormData | 'general';
 export interface ChapterConfigIdentifier {
     department: string;
     course: string;
+}
+
+
+export interface GroupChapter {
+    id?: string;
+    department: string;
+    course: string;
+    chapters: ChapterTemplate[];
 }

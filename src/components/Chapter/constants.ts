@@ -1,4 +1,5 @@
 import type { ChapterTemplate } from '../../types/chapter';
+import { getDefaultStagesForChapter } from '../../config/chapters';
 import { normalizeChapterOrder } from '../../utils/chapterUtils';
 
 /** Number of chapter names to preview in the management card. */
@@ -21,6 +22,7 @@ export function buildDefaultChapters(): ChapterTemplate[] {
         id: index + 1,
         title,
         description: '',
+        stages: getDefaultStagesForChapter(index + 1),
     }));
 
     return normalizeChapterOrder(seeded);

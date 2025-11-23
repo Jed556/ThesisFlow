@@ -3,13 +3,61 @@
  * Unified file metadata storage with support for various contexts (thesis, user, etc.)
  */
 
-import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, query, where, orderBy, limit, writeBatch } from 'firebase/firestore';
+import {
+    doc,
+    setDoc,
+    collection,
+    getDocs,
+    deleteDoc,
+    query,
+    where,
+    orderBy,
+    limit,
+    writeBatch,
+    collectionGroup,
+    type DocumentReference,
+    type DocumentData,
+} from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import type { FileAttachment } from '../../../types/file';
+import { resolveGroupRefs, type ResolvedGroupRefs } from './groups';
 
-/** Firestore collection name for file metadata */
-const FILES_COLLECTION = 'files';
+/** Subcollection name for storing file metadata under group documents */
+const FILES_SUBCOLLECTION = 'files';
+
+export interface FileMetadataContext {
+    groupId: string;
+}
+
+async function getGroupFilesCollection(groupId: string): Promise<{
+    refs: ResolvedGroupRefs;
+    collectionRef: ReturnType<typeof collection>;
+}> {
+    const refs = await resolveGroupRefs(groupId);
+    return {
+        refs,
+        collectionRef: collection(refs.canonicalRef, FILES_SUBCOLLECTION),
+    };
+}
+
+function getFilesCollectionGroup() {
+    return collectionGroup(firebaseFirestore, FILES_SUBCOLLECTION);
+}
+
+async function findFileDocRefById(fileId: string): Promise<DocumentReference<DocumentData> | null> {
+    const filesQuery = query(
+        getFilesCollectionGroup(),
+        where('id', '==', fileId),
+        limit(1)
+    );
+    const snapshot = await getDocs(filesQuery);
+    if (snapshot.empty) {
+        return null;
+    }
+
+    return snapshot.docs[0].ref;
+}
 
 /**
  * Generate a unique file ID
@@ -27,21 +75,29 @@ export function generateFileId(uid: string, timestamp: number = Date.now()): str
 export async function setFileMetadata(
     fileId: string,
     fileInfo: FileAttachment,
-    ownerUid: string
+    ownerUid: string,
+    context: FileMetadataContext
 ): Promise<void> {
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
+    if (!context.groupId) {
+        throw new Error('groupId is required to store file metadata');
+    }
 
-    const metadata = {
+    const { refs, collectionRef } = await getGroupFilesCollection(context.groupId);
+    const ref = doc(collectionRef, fileId);
+    const now = new Date().toISOString();
+
+    const metadata: FileAttachment = {
         ...fileInfo,
         id: fileId,
         owner: ownerUid,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        groupId: context.groupId,
+        departmentKey: refs.meta.departmentKey,
+        courseKey: refs.meta.courseKey,
+        createdAt: fileInfo.createdAt ?? now,
+        updatedAt: now,
     };
 
-    // Clean the data to remove undefined, null, and empty values (create mode)
     const cleanedData = cleanData(metadata, 'create');
-
     await setDoc(ref, cleanedData, { merge: true });
 }
 
@@ -51,10 +107,17 @@ export async function setFileMetadata(
  * @returns File metadata or null if not found
  */
 export async function getFileById(fileId: string): Promise<FileAttachment | null> {
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    return snap.data() as FileAttachment;
+    const filesQuery = query(
+        getFilesCollectionGroup(),
+        where('id', '==', fileId),
+        limit(1)
+    );
+    const snap = await getDocs(filesQuery);
+    if (snap.empty) {
+        return null;
+    }
+
+    return snap.docs[0].data() as FileAttachment;
 }
 
 /**
@@ -71,8 +134,7 @@ export async function getFilesByIds(fileIds: string[]): Promise<FileAttachment[]
     const batchSize = 10;
     for (let i = 0; i < fileIds.length; i += batchSize) {
         const batch = fileIds.slice(i, i + batchSize);
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-        const q = query(filesRef, where('id', 'in', batch));
+        const q = query(getFilesCollectionGroup(), where('id', 'in', batch));
 
         const querySnapshot = await getDocs(q);
         files.push(...querySnapshot.docs.map(doc => doc.data() as FileAttachment));
@@ -92,7 +154,7 @@ export async function getFilesByOwner(
     limitCount?: number
 ): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
+        const filesRef = getFilesCollectionGroup();
         let q = query(
             filesRef,
             where('owner', '==', ownerUid),
@@ -124,7 +186,7 @@ export async function getFilesByThesis(
     category?: 'submission' | 'attachment'
 ): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
+        const filesRef = getFilesCollectionGroup();
 
         if (chapterId !== undefined && category) {
             const q = query(
@@ -176,7 +238,7 @@ export async function getFilesByThesis(
  */
 export async function getFilesByComment(commentId: string): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
+        const filesRef = getFilesCollectionGroup();
         const q = query(
             filesRef,
             where('commentId', '==', commentId),
@@ -202,7 +264,7 @@ export async function getFilesByAuthor(
     thesisId?: string
 ): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
+        const filesRef = getFilesCollectionGroup();
         let constraints = [
             where('author', '==', authorUid),
             orderBy('uploadDate', 'desc')
@@ -231,7 +293,11 @@ export async function getFilesByAuthor(
  */
 export async function deleteFileMetadata(fileId: string): Promise<void> {
     if (!fileId) throw new Error('File ID required');
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
+    const ref = await findFileDocRefById(fileId);
+    if (!ref) {
+        return;
+    }
+
     await deleteDoc(ref);
 }
 
@@ -243,10 +309,12 @@ export async function bulkDeleteFileMetadata(fileIds: string[]): Promise<void> {
     if (!fileIds || fileIds.length === 0) throw new Error('File IDs required');
     const batch = writeBatch(firebaseFirestore);
 
-    fileIds.forEach((fileId) => {
-        const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-        batch.delete(ref);
-    });
+    for (const fileId of fileIds) {
+        const ref = await findFileDocRefById(fileId);
+        if (ref) {
+            batch.delete(ref);
+        }
+    }
 
     await batch.commit();
 }
@@ -260,7 +328,10 @@ export async function updateFileMetadata(
     fileId: string,
     updates: Partial<FileAttachment>
 ): Promise<void> {
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
+    const ref = await findFileDocRefById(fileId);
+    if (!ref) {
+        throw new Error('File not found');
+    }
     // Clean data: remove undefined (keep null to delete fields in update mode)
     const cleanedUpdates = cleanData({
         ...updates,
@@ -276,7 +347,7 @@ export async function updateFileMetadata(
  * @returns Array of file attachments with IDs
  */
 export async function getAllFiles(limitCount: number = 100): Promise<(FileAttachment & { id: string })[]> {
-    const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
+    const filesRef = getFilesCollectionGroup();
     const q = query(filesRef, orderBy('createdAt', 'desc'), limit(limitCount));
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as FileAttachment & { id: string }));

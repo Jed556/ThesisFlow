@@ -229,7 +229,10 @@ export default function HeadTopicProposalsPage() {
                 decision: decisionDialog.decision,
                 notes: decisionNotes.trim() || undefined,
             });
-            showNotification('Final decision recorded', 'success');
+            const message = decisionDialog.decision === 'approved'
+                ? 'Topic approved and set as group thesis'
+                : 'Final decision recorded';
+            showNotification(message, 'success');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to record decision';
             showNotification(message, 'error');

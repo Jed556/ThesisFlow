@@ -1,165 +1,248 @@
 import {
-    doc, setDoc, onSnapshot, collection, query, where, getDocs, getDoc,
-    deleteDoc, documentId, writeBatch, type QueryConstraint, type QuerySnapshot,
+    collection,
+    collectionGroup,
+    deleteDoc,
+    doc,
+    getDoc,
+    getDocs,
+    limit,
+    onSnapshot,
+    query,
+    serverTimestamp,
+    setDoc,
+    where,
+    writeBatch,
     type DocumentData,
+    type DocumentReference,
+    type DocumentSnapshot,
+    type QueryConstraint,
+    type QuerySnapshot,
 } from 'firebase/firestore';
-import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
+import { firebaseAuth, firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 
 import type { UserProfile, UserRole } from '../../../types/profile';
 
-/** Firestore collection name used for user documents */
-const USERS_COLLECTION = 'users';
+export const USER_HIERARCHY_ROOT = 'users';
+const DEFAULT_DEPARTMENT_SEGMENT = 'general';
+const DEFAULT_COURSE_SEGMENT = 'common';
+const DEPARTMENT_USERS_COLLECTION = 'departmentUsers';
+const COURSES_COLLECTION = 'courses';
+const STUDENTS_COLLECTION = 'students';
 
-/**
- * Get the currently signed-in user's email from Firebase Auth.
- * @returns User email string or null when no user is signed in.
- */
-export function getCurrentUserId(): string | null {
-    const user = firebaseAuth.currentUser;
-    return user?.uid ?? null;
+const ROOT_SCOPE_ROLES: ReadonlySet<UserRole> = new Set(['admin', 'developer']);
+const DEPARTMENT_SCOPE_ROLES: ReadonlySet<UserRole> = new Set([
+    'moderator',
+    'head',
+    'adviser',
+    'editor',
+    'statistician',
+    'panel',
+]);
+const COURSE_SCOPE_ROLES: ReadonlySet<UserRole> = new Set(['student']);
+
+type UserScope = 'root' | 'department' | 'course';
+type ScopeIdentifier = UserScope;
+
+interface UserPathInfo {
+    scope: UserScope;
+    pathSegments: string[];
 }
 
-/**
- * Convenience: fetch the currently signed-in user's profile from Firestore.
- * @returns UserProfile or null when no user is signed in or profile does not exist
- */
-export async function getCurrentUserProfile(): Promise<UserProfile | null> {
-    const uid = getCurrentUserId();
-    if (!uid) return null;
-    return await getUserById(uid);
+interface LocatedUserDocument {
+    scope: UserScope;
+    docRef: DocumentReference<DocumentData>;
+    snapshot: DocumentSnapshot<DocumentData>;
 }
 
-// Generic users collection helpers
-/**
- * Fetch a user profile by email from the `users` collection.
- * @param email - Email address to look up
- * @returns UserProfile or null when not found
- */
-export async function getUserByEmail(email: string): Promise<UserProfile | null> {
-    if (!email) return null;
-    const q = query(collection(firebaseFirestore, USERS_COLLECTION), where('email', '==', email));
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return snap.docs[0].data() as UserProfile;
+interface ScopeMaps {
+    root: Map<string, UserProfile>;
+    department: Map<string, UserProfile>;
+    course: Map<string, UserProfile>;
 }
 
-/**
- * Fetch a user profile by UID from the `users` collection.
- * @param uid - User ID to look up
- * @returns UserProfile or null when not found
- */
-export async function getUserById(uid: string): Promise<UserProfile | null> {
-    if (!uid) return null;
-    const docRef = doc(firebaseFirestore, USERS_COLLECTION, uid);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) return null;
-    return docSnap.data() as UserProfile;
-}
-
-/**
- * Find users by an arbitrary field/value pair.
- * Useful for quick queries such as `findUserByField('department', 'CS')`.
- * @param field - Firestore field to query
- * @param value - Value to match
- * @returns Array of matching UserProfile documents
- */
-export async function findUserByField(field: string, value: unknown): Promise<UserProfile[]> {
-    const q = query(collection(firebaseFirestore, USERS_COLLECTION), where(field, '==', value));
-    const snap = await getDocs(q);
-    return snap.docs.map((doc) => doc.data() as UserProfile);
-}
-
-/**
- * Get all users in the `users` collection.
- * Note: For large collections this should be paginated or limited.
- * @returns Array of UserProfile
- */
-export async function getAllUsers(): Promise<UserProfile[]> {
-    const snap = await getDocs(collection(firebaseFirestore, USERS_COLLECTION));
-    return snap.docs.map(d => d.data() as UserProfile);
-}
-
-/**
- * Fetch multiple user profiles by their Firebase Auth UIDs in chunks of 10.
- * @param uids - Array of user UIDs to resolve
- * @returns Array of UserProfile documents matching the provided UIDs
- */
-export async function getUsersByIds(uids: string[]): Promise<UserProfile[]> {
-    if (!uids || uids.length === 0) {
-        return [];
+function sanitizePathSegment(value: string | null | undefined, fallback: string): string {
+    if (!value) {
+        return fallback;
     }
 
-    const uniqueIds = Array.from(new Set(uids.map((uid) => encodeURIComponent(uid))));
-    const users: UserProfile[] = [];
-    const chunkSize = 10;
+    const normalised = value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-');
 
-    for (let index = 0; index < uniqueIds.length; index += chunkSize) {
-        const chunk = uniqueIds.slice(index, index + chunkSize);
-        const usersRef = collection(firebaseFirestore, USERS_COLLECTION);
-        const usersQuery = query(usersRef, where(documentId(), 'in', chunk));
-        const snapshot = await getDocs(usersQuery);
+    return normalised || fallback;
+}
 
-        snapshot.docs.forEach((docSnap) => {
-            const data = docSnap.data() as UserProfile;
-            const resolvedUid = data.uid ?? decodeURIComponent(docSnap.id);
-            users.push({ ...data, uid: resolvedUid });
+function resolveDepartmentKey(profile: Partial<UserProfile>): string {
+    const departmentSource = profile.department
+        ?? profile.departments?.[0]
+        ?? profile.course
+        ?? DEFAULT_DEPARTMENT_SEGMENT;
+    return sanitizePathSegment(departmentSource, DEFAULT_DEPARTMENT_SEGMENT);
+}
+
+function resolveCourseKey(profile: Partial<UserProfile>): string {
+    const courseSource = profile.course
+        ?? profile.moderatedCourses?.[0]
+        ?? profile.department
+        ?? DEFAULT_COURSE_SEGMENT;
+    return sanitizePathSegment(courseSource, DEFAULT_COURSE_SEGMENT);
+}
+
+function determineScope(profile: Partial<UserProfile>): UserScope {
+    const role = profile.role as UserRole | undefined;
+    if (role && ROOT_SCOPE_ROLES.has(role)) {
+        return 'root';
+    }
+    if (role && COURSE_SCOPE_ROLES.has(role)) {
+        return 'course';
+    }
+    if (role && DEPARTMENT_SCOPE_ROLES.has(role)) {
+        return 'department';
+    }
+    if (profile.course) {
+        return 'course';
+    }
+    return 'department';
+}
+
+function buildUserPathInfo(profile: Partial<UserProfile>): UserPathInfo {
+    const scope = determineScope(profile);
+    if (scope === 'root') {
+        return { scope, pathSegments: [] };
+    }
+
+    const departmentKey = resolveDepartmentKey(profile);
+    if (scope === 'department') {
+        return {
+            scope,
+            pathSegments: [departmentKey, DEPARTMENT_USERS_COLLECTION],
+        };
+    }
+
+    const courseKey = resolveCourseKey(profile);
+    return {
+        scope: 'course',
+        pathSegments: [departmentKey, COURSES_COLLECTION, courseKey, STUDENTS_COLLECTION],
+    };
+}
+
+function getUserDocRef(uid: string, info: UserPathInfo): DocumentReference<DocumentData> {
+    if (info.scope === 'root') {
+        return doc(firebaseFirestore, USER_HIERARCHY_ROOT, uid);
+    }
+    return doc(firebaseFirestore, USER_HIERARCHY_ROOT, ...info.pathSegments, uid);
+}
+
+function mapUserSnapshot(snapshot: DocumentSnapshot<DocumentData>): UserProfile | null {
+    const data = snapshot.data();
+    if (!data || typeof data.role !== 'string') {
+        return null;
+    }
+
+    const uid = typeof data.uid === 'string' ? data.uid : snapshot.id;
+    return { ...(data as UserProfile), uid };
+}
+
+async function queryCollectionGroupForUid(collectionId: string, uid: string): Promise<DocumentSnapshot<DocumentData> | null> {
+    const cg = collectionGroup(firebaseFirestore, collectionId);
+    const cgQuery = query(cg, where('uid', '==', uid), limit(1));
+    const cgSnapshot = await getDocs(cgQuery);
+    if (cgSnapshot.empty) {
+        return null;
+    }
+    return cgSnapshot.docs[0];
+}
+
+async function locateUserDocument(uid: string): Promise<LocatedUserDocument | null> {
+    const rootRef = doc(firebaseFirestore, USER_HIERARCHY_ROOT, uid);
+    const rootSnap = await getDoc(rootRef);
+    if (rootSnap.exists()) {
+        return { scope: 'root', docRef: rootRef, snapshot: rootSnap };
+    }
+
+    const departmentSnap = await queryCollectionGroupForUid(DEPARTMENT_USERS_COLLECTION, uid);
+    if (departmentSnap) {
+        return { scope: 'department', docRef: departmentSnap.ref, snapshot: departmentSnap };
+    }
+
+    const courseSnap = await queryCollectionGroupForUid(STUDENTS_COLLECTION, uid);
+    if (courseSnap) {
+        return { scope: 'course', docRef: courseSnap.ref, snapshot: courseSnap };
+    }
+
+    return null;
+}
+
+function buildWritePayload(
+    uid: string,
+    mergedData: Record<string, unknown>,
+    existingCreatedAt: unknown
+): Record<string, unknown> {
+    const timestamp = serverTimestamp();
+    const payload: Record<string, unknown> = {
+        ...mergedData,
+        uid,
+        updatedAt: timestamp,
+    };
+
+    if (!('createdAt' in mergedData) || mergedData.createdAt === undefined) {
+        payload.createdAt = existingCreatedAt ?? timestamp;
+    }
+
+    return payload;
+}
+
+function buildScopeQuery(scope: ScopeIdentifier, constraints: QueryConstraint[]): ReturnType<typeof query> {
+    if (scope === 'root') {
+        const base = collection(firebaseFirestore, USER_HIERARCHY_ROOT);
+        return constraints.length > 0 ? query(base, ...constraints) : query(base);
+    }
+
+    const collectionId = scope === 'department' ? DEPARTMENT_USERS_COLLECTION : STUDENTS_COLLECTION;
+    const base = collectionGroup(firebaseFirestore, collectionId);
+    return constraints.length > 0 ? query(base, ...constraints) : base;
+}
+
+async function queryScopeSnapshots(scope: ScopeIdentifier, constraints: QueryConstraint[]): Promise<DocumentSnapshot<DocumentData>[]> {
+    const scopeQuery = buildScopeQuery(scope, constraints);
+    const snap = await getDocs(scopeQuery);
+    return snap.docs;
+}
+
+async function queryUsersAcrossScopes(constraints: QueryConstraint[] = []): Promise<UserProfile[]> {
+    const scopes: ScopeIdentifier[] = ['root', 'department', 'course'];
+    const results = await Promise.all(scopes.map((scope) => queryScopeSnapshots(scope, constraints)));
+    const merged = new Map<string, UserProfile>();
+
+    results.forEach((docs) => {
+        docs.forEach((docSnap) => {
+            const profile = mapUserSnapshot(docSnap);
+            if (profile) {
+                merged.set(profile.uid, profile);
+            }
         });
-    }
+    });
 
-    return users;
+    return Array.from(merged.values());
 }
 
-/**
- * Options accepted by the real-time user listener.
- */
-export interface UserListenerOptions {
-    onData: (profiles: UserProfile[]) => void;
-    onError?: (error: Error) => void;
-}
-
-/**
- * Subscribe to users collection changes given optional filter constraints.
- * @param constraints - Optional Firestore query constraints to scope the listener
- * @param options - Listener callbacks invoked for data updates or errors
- * @returns Unsubscribe handler to detach the snapshot listener
- */
-export function listenUsers(
-    constraints: QueryConstraint[] | undefined,
-    options: UserListenerOptions
-): () => void {
-    const { onData, onError } = options;
-    const baseCollection = collection(firebaseFirestore, USERS_COLLECTION);
-    const usersQuery = constraints && constraints.length > 0
-        ? query(baseCollection, ...constraints)
-        : baseCollection;
-
-    return onSnapshot(
-        usersQuery,
-        (snapshot: QuerySnapshot<DocumentData>) => {
-            const profiles = snapshot.docs.map((docSnap) => docSnap.data() as UserProfile);
-            onData(profiles);
-        },
-        (error) => {
-            if (onError) {
-                onError(error);
-            } else {
-                console.error('Users listener error:', error);
+async function fetchFirstUserByConstraints(constraints: QueryConstraint[]): Promise<UserProfile | null> {
+    const scopes: ScopeIdentifier[] = ['root', 'department', 'course'];
+    for (const scope of scopes) {
+        const docs = await queryScopeSnapshots(scope, constraints);
+        if (docs.length > 0) {
+            const profile = mapUserSnapshot(docs[0]);
+            if (profile) {
+                return profile;
             }
         }
-    );
+    }
+    return null;
 }
 
-/**
- * Subscribe to users filtered by role/department with real-time updates.
- * @param filter - Filter options applied to the users query
- * @param options - Listener callbacks invoked for updates or errors
- * @returns Unsubscribe handler to detach the listener
- */
-export function listenUsersByFilter(
-    filter: UserFilterOptions,
-    options: UserListenerOptions
-): () => void {
+function buildConstraintsFromFilter(filter: UserFilterOptions): QueryConstraint[] {
     const constraints: QueryConstraint[] = [];
 
     if (filter.role) {
@@ -174,7 +257,137 @@ export function listenUsersByFilter(
         constraints.push(where('course', '==', filter.course));
     }
 
-    return listenUsers(constraints, options);
+    return constraints;
+}
+
+function createEmptyScopeMaps(): ScopeMaps {
+    return {
+        root: new Map(),
+        department: new Map(),
+        course: new Map(),
+    };
+}
+
+function handleScopeSnapshot(
+    scopeMaps: ScopeMaps,
+    scope: ScopeIdentifier,
+    snapshot: QuerySnapshot<DocumentData>,
+    emit: () => void,
+): void {
+    const targetMap = scopeMaps[scope];
+    targetMap.clear();
+
+    snapshot.docs.forEach((docSnap) => {
+        const profile = mapUserSnapshot(docSnap);
+        if (profile) {
+            targetMap.set(profile.uid, profile);
+        }
+    });
+
+    emit();
+}
+
+function mergeScopeMaps(scopeMaps: ScopeMaps): UserProfile[] {
+    const merged = new Map<string, UserProfile>();
+    (['root', 'department', 'course'] as ScopeIdentifier[]).forEach((scope) => {
+        scopeMaps[scope].forEach((profile, uid) => {
+            merged.set(uid, profile);
+        });
+    });
+    return Array.from(merged.values());
+}
+
+export function getCurrentUserId(): string | null {
+    const user = firebaseAuth.currentUser;
+    return user?.uid ?? null;
+}
+
+export async function getCurrentUserProfile(): Promise<UserProfile | null> {
+    const uid = getCurrentUserId();
+    if (!uid) {
+        return null;
+    }
+    return await getUserById(uid);
+}
+
+export async function getUserByEmail(email: string): Promise<UserProfile | null> {
+    if (!email) {
+        return null;
+    }
+    return await fetchFirstUserByConstraints([where('email', '==', email)]);
+}
+
+export async function getUserById(uid: string): Promise<UserProfile | null> {
+    if (!uid) {
+        return null;
+    }
+
+    const located = await locateUserDocument(uid);
+    if (!located) {
+        return null;
+    }
+
+    const profile = mapUserSnapshot(located.snapshot);
+    return profile;
+}
+
+export async function findUserByField(field: string, value: unknown): Promise<UserProfile[]> {
+    if (!field) {
+        return [];
+    }
+    return await queryUsersAcrossScopes([where(field, '==', value)]);
+}
+
+export async function getAllUsers(): Promise<UserProfile[]> {
+    return await queryUsersAcrossScopes();
+}
+
+export async function getUsersByIds(uids: string[]): Promise<UserProfile[]> {
+    if (!uids || uids.length === 0) {
+        return [];
+    }
+
+    const profiles = await Promise.all(uids.map(async (uid) => await getUserById(uid)));
+    return profiles.filter((profile): profile is UserProfile => Boolean(profile));
+}
+
+export interface UserListenerOptions {
+    onData: (profiles: UserProfile[]) => void;
+    onError?: (error: Error) => void;
+}
+
+export function listenUsers(
+    constraints: QueryConstraint[] | undefined,
+    options: UserListenerOptions
+): () => void {
+    const { onData, onError } = options;
+    const scopeMaps = createEmptyScopeMaps();
+    const scopes: ScopeIdentifier[] = ['root', 'department', 'course'];
+
+    const emit = (): void => {
+        onData(mergeScopeMaps(scopeMaps));
+    };
+
+    const handleError = (error: Error): void => {
+        if (onError) {
+            onError(error);
+        } else {
+            console.error('Users listener error:', error);
+        }
+    };
+
+    const unsubscribers = scopes.map((scope) => {
+        const scopeQuery = buildScopeQuery(scope, constraints ?? []);
+        return onSnapshot(
+            scopeQuery,
+            (snapshot) => handleScopeSnapshot(scopeMaps, scope, snapshot, emit),
+            (error) => handleError(error as Error)
+        );
+    });
+
+    return () => {
+        unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
 }
 
 export interface UserFilterOptions {
@@ -183,125 +396,194 @@ export interface UserFilterOptions {
     course?: string;
 }
 
-/**
- * Query users by optional role and department filters.
- * @param options Optional role and department to narrow the results
- */
+export function listenUsersByFilter(
+    filter: UserFilterOptions,
+    options: UserListenerOptions
+): () => void {
+    const constraints = buildConstraintsFromFilter(filter);
+    return listenUsers(constraints, options);
+}
+
 export async function getUsersByFilter(options: UserFilterOptions = {}): Promise<UserProfile[]> {
-    const constraints = [];
-
-    if (options.role) {
-        constraints.push(where('role', '==', options.role));
-    }
-
-    if (options.department) {
-        constraints.push(where('department', '==', options.department));
-    }
-
-    if (options.course) {
-        constraints.push(where('course', '==', options.course));
-    }
-
-    const baseCollection = collection(firebaseFirestore, USERS_COLLECTION);
-    const usersQuery = constraints.length > 0 ? query(baseCollection, ...constraints) : baseCollection;
-    const snap = await getDocs(usersQuery);
-    return snap.docs.map((docSnap) => docSnap.data() as UserProfile);
+    const constraints = buildConstraintsFromFilter(options);
+    return await queryUsersAcrossScopes(constraints);
 }
 
-/**
- * Create or update a user's profile in Firestore (merge mode).
- * @param uid - User ID to use as the document key
- * @param data - Partial UserProfile fields to write/merge
- */
 export async function setUserProfile(uid: string, data: Partial<UserProfile>): Promise<void> {
-    if (!uid) throw new Error('uid required');
-    const id = encodeURIComponent(uid);
-    const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
+    if (!uid) {
+        throw new Error('uid required');
+    }
 
-    // Clean data: use 'update' mode since we're using merge (keeps null to delete fields)
-    const cleanedData = cleanData({ uid, ...data }, 'update');
+    const cleanedData = cleanData({ uid, ...data }, 'update') as Record<string, unknown>;
+    const existing = await locateUserDocument(uid);
+    const existingData = existing?.snapshot.data() ?? {};
+    const mergedData = { ...existingData, ...cleanedData };
 
-    await setDoc(ref, cleanedData, { merge: true });
-}
+    const pathInfo = buildUserPathInfo(mergedData as Partial<UserProfile>);
+    const targetRef = getUserDocRef(uid, pathInfo);
+    const payload = buildWritePayload(uid, mergedData, existingData.createdAt);
 
-/**
- * Delete a user profile document entirely from Firestore.
- * @param uid - User ID used for the document key
- */
-export async function deleteUserProfile(uid: string): Promise<void> {
-    if (!uid) throw new Error('User ID required');
-    const id = encodeURIComponent(uid);
-    const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
-    await deleteDoc(ref);
-}
+    if (!existing) {
+        await setDoc(targetRef, payload, { merge: true });
+        return;
+    }
 
-/**
- * Delete multiple user profiles by their UIDs
- * @param uids - Array of user UIDs to delete
- * @returns Promise that resolves when all deletions are complete
- */
-export async function bulkDeleteUserProfiles(uids: string[]): Promise<void> {
-    if (!uids || uids.length === 0) throw new Error('UIDs required');
+    if (existing.docRef.path === targetRef.path) {
+        await setDoc(targetRef, payload, { merge: true });
+        return;
+    }
+
     const batch = writeBatch(firebaseFirestore);
-
-    uids.forEach((uid) => {
-        const id = encodeURIComponent(uid);
-        const ref = doc(firebaseFirestore, USERS_COLLECTION, id);
-        batch.delete(ref);
-    });
-
+    batch.delete(existing.docRef);
+    batch.set(targetRef, payload);
     await batch.commit();
 }
 
-/**
- * Subscribe to realtime updates for a user profile document.
- * @param uid - User ID of the user to subscribe to
- * @param callback - Called with UserProfile|null on each change
- * @returns Unsubscribe function
- */
+export async function deleteUserProfile(uid: string): Promise<void> {
+    if (!uid) {
+        throw new Error('User ID required');
+    }
+
+    const located = await locateUserDocument(uid);
+    if (!located) {
+        throw new Error('User not found');
+    }
+
+    await deleteDoc(located.docRef);
+}
+
+export async function bulkDeleteUserProfiles(uids: string[]): Promise<void> {
+    if (!uids || uids.length === 0) {
+        throw new Error('UIDs required');
+    }
+
+    const refs: DocumentReference<DocumentData>[] = [];
+    for (const uid of uids) {
+        const located = await locateUserDocument(uid);
+        if (located) {
+            refs.push(located.docRef);
+        }
+    }
+
+    const chunkSize = 400;
+    for (let index = 0; index < refs.length; index += chunkSize) {
+        const batch = writeBatch(firebaseFirestore);
+        refs.slice(index, index + chunkSize).forEach((ref) => {
+            batch.delete(ref);
+        });
+        await batch.commit();
+    }
+}
+
 export function onUserProfile(
     uid: string | null | undefined,
     onData: (profile: UserProfile | null) => void,
     onError?: (error: Error) => void
 ): () => void {
-    if (!uid) return () => { /* no-op */ };
-    const docRef = doc(firebaseFirestore, USERS_COLLECTION, uid);
-    return onSnapshot(
-        docRef,
-        (snap) => {
-            onData(snap.exists() ? (snap.data() as UserProfile) : null);
-        },
-        (error) => {
-            if (onError) {
-                onError(error as Error);
-            } else {
-                console.error('User profile listener error:', error);
-            }
-        }
-    );
-}
+    if (!uid) {
+        return () => { /* no-op */ };
+    }
 
-/**
- * Subscribe to realtime updates for the currently signed-in user's profile.
- * Useful to reflect role or profile changes live in the UI.
- * @param callback - Called with UserProfile|null when profile updates
- * @returns Unsubscribe function
- */
+    let activeSource: ScopeIdentifier | null = null;
+    const emit = (scope: ScopeIdentifier, profile: UserProfile | null): void => {
+        if (profile) {
+            activeSource = scope;
+            onData(profile);
+            return;
+        }
+
+        if (activeSource === scope) {
+            activeSource = null;
+            onData(null);
+        }
+    };
+
+    const handleError = (error: Error): void => {
+        if (onError) {
+            onError(error);
+        } else {
+            console.error('User profile listener error:', error);
+        }
+    };
+
+    const unsubscribers: (() => void)[] = [];
+
+    const rootUnsub = onSnapshot(
+        doc(firebaseFirestore, USER_HIERARCHY_ROOT, uid),
+        (snapshot) => {
+            if (!snapshot.exists()) {
+                emit('root', null);
+                return;
+            }
+
+            const profile = mapUserSnapshot(snapshot);
+            if (profile) {
+                emit('root', profile);
+            }
+        },
+        (error) => handleError(error as Error)
+    );
+    unsubscribers.push(rootUnsub);
+
+    const departmentQuery = query(
+        collectionGroup(firebaseFirestore, DEPARTMENT_USERS_COLLECTION),
+        where('uid', '==', uid)
+    );
+    const departmentUnsub = onSnapshot(
+        departmentQuery,
+        (snapshot) => {
+            if (snapshot.empty) {
+                emit('department', null);
+                return;
+            }
+
+            const profile = mapUserSnapshot(snapshot.docs[0]);
+            if (profile) {
+                emit('department', profile);
+            }
+        },
+        (error) => handleError(error as Error)
+    );
+    unsubscribers.push(departmentUnsub);
+
+    const studentQuery = query(
+        collectionGroup(firebaseFirestore, STUDENTS_COLLECTION),
+        where('uid', '==', uid)
+    );
+    const studentUnsub = onSnapshot(
+        studentQuery,
+        (snapshot) => {
+            if (snapshot.empty) {
+                emit('course', null);
+                return;
+            }
+
+            const profile = mapUserSnapshot(snapshot.docs[0]);
+            if (profile) {
+                emit('course', profile);
+            }
+        },
+        (error) => handleError(error as Error)
+    );
+    unsubscribers.push(studentUnsub);
+
+    return () => {
+        unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+
+}
 export function onCurrentUserProfile(
     onData: (profile: UserProfile | null) => void,
     onError?: (error: Error) => void
 ): () => void {
     const uid = getCurrentUserId();
-    if (!uid) return () => { /* no-op */ };
+    if (!uid) {
+        return () => { /* no-op */ };
+    }
     return onUserProfile(uid, onData, onError);
 }
 
-/**
- * Get user profile by email (alias for getUserByEmail for backward compatibility)
- * @param uid - User ID to look up
- * @returns UserProfile or undefined when not found
- */
 export async function getProfile(uid: string): Promise<UserProfile | undefined> {
     const profile = await getUserById(uid);
-    return profile || undefined;
+    return profile ?? undefined;
 }

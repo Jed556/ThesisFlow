@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
-import { Typography, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Alert, CircularProgress } from '@mui/material';
-import { Article, Upload, CloudUpload } from '@mui/icons-material';
+import { useEffect, useMemo, useState } from 'react';
+import { Box, Alert, CircularProgress } from '@mui/material';
+import { Article } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../../types/navigation';
 import type { ThesisChapter, ThesisData } from '../../../types/thesis';
+import type { ThesisGroup } from '../../../types/group';
 import type { Session } from '../../../types/session';
 import { AnimatedPage, AnimatedList } from '../../../components/Animate';
 import ChapterAccordion from '../../../layouts/ChapterAccordion/ChapterAccordion';
-import { uploadThesisFile, validateThesisDocument } from '../../../utils/firebase/storage/thesis';
+import { FileUploadDialog } from '../../../components/FileUploadDialog';
+import { validateThesisDocument } from '../../../utils/firebase/storage/thesis';
 import { listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
+import { getGroupById } from '../../../utils/firebase/firestore/groups';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
 import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 
 type ThesisRecord = ThesisData & { id: string };
@@ -31,17 +35,15 @@ export const metadata: NavigationItem = {
 export default function ThesisChaptersPage() {
     const session = useSession() as Session;
     const userUid = session?.user?.uid;
+    const { showNotification } = useSnackbar();
     const [uploadDialog, setUploadDialog] = useState(false);
-    const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
-    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-    const [uploadError, setUploadError] = useState<string>('');
-    const [uploading, setUploading] = useState(false);
-    const [uploadSuccess, setUploadSuccess] = useState(false);
-    const [chapterTitle, setChapterTitle] = useState('');
+    const [selectedChapter, setSelectedChapter] = useState<ThesisChapter | null>(null);
     const [thesis, setThesis] = useState<ThesisRecord | null>(null);
     const [loadingThesis, setLoadingThesis] = useState(true);
     const [thesisError, setThesisError] = useState<string | null>(null);
     const [hasNoThesis, setHasNoThesis] = useState(false);
+    const [groupInfo, setGroupInfo] = useState<ThesisGroup | null>(null);
+    const [groupInfoError, setGroupInfoError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!userUid) {
@@ -82,84 +84,55 @@ export default function ThesisChaptersPage() {
         };
     }, [userUid]);
 
-    const handleUploadClick = (chapterId: number, chapterTitle: string) => {
-        setSelectedChapter(chapterId);
-        setChapterTitle(chapterTitle);
-        setUploadDialog(true);
-        setUploadError('');
-        setUploadedFile(null);
-    };
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        // Use the validation from thesis storage utils
-        const validation = validateThesisDocument(file);
-        if (!validation.isValid) {
-            setUploadError(validation.error || 'Invalid file');
-            setUploadedFile(null);
+    useEffect(() => {
+        if (!thesis?.groupId) {
+            setGroupInfo(null);
+            setGroupInfoError(null);
             return;
         }
 
-        setUploadError('');
-        setUploadedFile(file);
-    };
+        let cancelled = false;
+        setGroupInfoError(null);
 
-    const handleUploadSubmit = async () => {
-        if (!uploadedFile || !selectedChapter || !session?.user?.uid || !thesis?.id) {
-            setUploadError('Missing required information');
-            return;
-        }
-
-        setUploading(true);
-        setUploadError('');
-
-        try {
-            // Upload file to Firebase Storage
-            const result = await uploadThesisFile({
-                file: uploadedFile,
-                userUid: session.user.uid,
-                thesisId: thesis.id,
-                chapterId: selectedChapter,
-                category: 'submission',
-                metadata: {
-                    chapterTitle: chapterTitle
+        void (async () => {
+            try {
+                const group = await getGroupById(thesis.groupId);
+                if (cancelled) {
+                    return;
                 }
-            });
+                setGroupInfo(group);
+                if (!group) {
+                    setGroupInfoError('Unable to load group details. Uploads may be temporarily unavailable.');
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('Failed to load group information:', error);
+                    setGroupInfo(null);
+                    setGroupInfoError('Unable to determine your group department and course.');
+                }
+            } finally {
+                // no-op
+            }
+        })();
 
-            console.log('File uploaded successfully:', result.url);
-            setUploadSuccess(true);
+        return () => {
+            cancelled = true;
+        };
+    }, [thesis?.groupId]);
 
-            // Close dialog after short delay
-            setTimeout(() => {
-                setUploadDialog(false);
-                setUploadedFile(null);
-                setSelectedChapter(null);
-                setUploadSuccess(false);
-                // TODO: Refresh chapter data
-            }, 1500);
-        } catch (error) {
-            console.error('Upload error:', error);
-            setUploadError(error instanceof Error ? error.message : 'Failed to upload file');
-        } finally {
-            setUploading(false);
+    const handleUploadClick = (chapter: ThesisChapter) => {
+        if (!groupInfo?.department || !groupInfo?.course) {
+            showNotification('Group department or course is missing. Please try again later.', 'error');
+            return;
         }
+
+        setSelectedChapter(chapter);
+        setUploadDialog(true);
     };
 
     const handleCloseDialog = () => {
         setUploadDialog(false);
-        setUploadedFile(null);
         setSelectedChapter(null);
-        setUploadError('');
-    };
-
-    const formatFileSize = (bytes: number): string => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
     if (session?.loading) {
@@ -210,10 +183,44 @@ export default function ThesisChaptersPage() {
         );
     }
 
+    const uploadContext = useMemo(() => {
+        if (!selectedChapter || !thesis || !groupInfo?.department || !groupInfo?.course) {
+            return null;
+        }
+
+        return {
+            department: groupInfo.department,
+            course: groupInfo.course,
+            groupId: thesis.groupId,
+            chapterId: selectedChapter.id,
+            chapterTitle: selectedChapter.title,
+        };
+    }, [groupInfo, selectedChapter, thesis]);
+
+    const chapterStageOptions = useMemo(() => {
+        if (!selectedChapter) {
+            return undefined;
+        }
+
+        if (selectedChapter.stages && selectedChapter.stages.length > 0) {
+            return selectedChapter.stages;
+        }
+
+        return selectedChapter.stage ? [selectedChapter.stage] : undefined;
+    }, [selectedChapter]);
+
+    const fixedStage = chapterStageOptions && chapterStageOptions.length === 1 ? chapterStageOptions[0] : undefined;
+
     const chapters = thesis.chapters ?? [];
 
     return (
         <AnimatedPage variant="fade">
+            {groupInfoError && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    {groupInfoError}
+                </Alert>
+            )}
+
             {/* Chapter Submissions */}
             <AnimatedList variant="slideUp" staggerDelay={60}>
                 {
@@ -231,73 +238,26 @@ export default function ThesisChaptersPage() {
             </AnimatedList>
             <Box sx={{ mb: 2 }}></Box>
 
-            {/* Upload Dialog */}
-            <Dialog open={uploadDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                <DialogTitle>
-                    Upload Document for {chapterTitle}
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Upload your chapter document in PDF or DOCX format (max 50MB).
-                    </Typography>
-
-                    {uploadError && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {uploadError}
-                        </Alert>
-                    )}
-
-                    {uploadSuccess && (
-                        <Alert severity="success" sx={{ mb: 2 }}>
-                            File uploaded successfully!
-                        </Alert>
-                    )}
-
-                    <Box
-                        sx={{
-                            border: 2,
-                            borderColor: uploadedFile ? 'success.main' : 'divider',
-                            borderStyle: 'dashed',
-                            borderRadius: 2,
-                            p: 3,
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            '&:hover': {
-                                borderColor: 'primary.main',
-                                bgcolor: 'action.hover'
-                            }
-                        }}
-                        component="label"
-                    >
-                        <input
-                            type="file"
-                            hidden
-                            accept=".pdf,.docx"
-                            onChange={handleFileChange}
-                        />
-                        <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-                        <Typography variant="body1" sx={{ mb: 1 }}>
-                            {uploadedFile ? uploadedFile.name : 'Click to browse or drag and drop'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {uploadedFile ? formatFileSize(uploadedFile.size) : 'PDF or DOCX files only'}
-                        </Typography>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog} disabled={uploading}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleUploadSubmit}
-                        variant="contained"
-                        disabled={!uploadedFile || uploading}
-                        startIcon={uploading ? <CircularProgress size={20} /> : <Upload />}
-                    >
-                        {uploading ? 'Uploading...' : 'Upload'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            {selectedChapter && uploadContext && session?.user?.uid && (
+                <FileUploadDialog
+                    open={uploadDialog}
+                    onClose={handleCloseDialog}
+                    context={uploadContext}
+                    authorUid={session.user.uid}
+                    allowedStages={chapterStageOptions}
+                    fixedStage={fixedStage}
+                    validator={validateThesisDocument}
+                    onCompleted={(results) => {
+                        showNotification(
+                            `${results.length} file${results.length === 1 ? '' : 's'} uploaded for ${selectedChapter.title}.`,
+                            'success'
+                        );
+                    }}
+                    onError={(error) => {
+                        showNotification(error.message, 'error');
+                    }}
+                />
+            )}
         </AnimatedPage>
     );
 }

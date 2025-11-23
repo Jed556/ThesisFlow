@@ -149,24 +149,6 @@ export interface ChatInputState {
 }
 
 /**
- * Re-export types for convenience
- * @deprecated Use FileAttachment from file.ts directly
- */
-export type { FileAttachment as ChatAttachment };
-
-/**
- * Re-export types for convenience
- * @deprecated Use FileCategory from file.ts directly
- */
-export type { FileCategory as ChatAttachmentType };
-
-/**
- * Re-export types for convenience  
- * @deprecated Use SortOrder from sort.ts directly
- */
-export type { SortOrder as ChatSortOrder };
-
-/**
  * Chat box configuration interface
  */
 export interface ChatBoxConfig {

@@ -1,4 +1,4 @@
-
+import type { ChapterStageKey } from './chapter';
 /**
  * Thesis-specific role types - Based on thesis data context
  */
@@ -32,6 +32,8 @@ export interface ThesisChapter {
     lastModified: string | null;
     submissions: string[]; // Array of file hashes for submitted documents
     comments: ThesisComment[];
+    stage?: ChapterStageKey;
+    stages?: ChapterStageKey[];
 }
 
 /**

@@ -6,8 +6,8 @@
 import type { ThesisRole, ThesisData } from '../types/thesis';
 import type { UserRole } from '../types/profile';
 import { firebaseAuth, firebaseFirestore } from './firebase/firebaseConfig';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { getUserById } from './firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { getUserById, getUserByEmail } from './firebase/firestore';
 
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
@@ -15,7 +15,7 @@ import { getUserById } from './firebase/firestore';
  * @param forceRefresh - Whether to force refresh the ID token to get latest claims
  * @returns Promise resolving to the user's role
  */
-export async function getUserRole( forceRefresh: boolean = true): Promise<UserRole> {
+export async function getUserRole(forceRefresh: boolean = true): Promise<UserRole> {
     const user = firebaseAuth.currentUser;
 
     if (!user) {
@@ -35,14 +35,9 @@ export async function getUserRole( forceRefresh: boolean = true): Promise<UserRo
         // Fallback to Firestore if no claim exists
         const userEmail = user.email;
         if (userEmail) {
-            const userDocRef = doc(firebaseFirestore, 'users', encodeURIComponent(userEmail));
-            const docSnap = await getDoc(userDocRef);
-
-            if (docSnap.exists()) {
-                const userData = docSnap.data();
-                if (userData.role) {
-                    return userData.role as UserRole;
-                }
+            const profile = await getUserByEmail(userEmail);
+            if (profile?.role) {
+                return profile.role;
             }
         }
 
@@ -114,7 +109,7 @@ export async function isUserInRole(uid: string, role: UserRole): Promise<boolean
 async function getThesisByUserUid(uid: string): Promise<ThesisData | null> {
     try {
         const thesesRef = collection(firebaseFirestore, 'theses');
-        
+
         // Query for theses where user is leader
         const leaderQuery = query(thesesRef, where('leader', '==', uid));
         const leaderSnap = await getDocs(leaderQuery);
@@ -155,14 +150,14 @@ async function getThesisByUserUid(uid: string): Promise<ThesisData | null> {
  */
 export async function getThesisRole(uid: string): Promise<ThesisRole> {
     const thesis = await getThesisByUserUid(uid);
-    
+
     if (!thesis) return 'unknown';
-    
+
     if (uid === thesis.leader) return 'leader';
     if (thesis.members.includes(uid)) return 'member';
     if (uid === thesis.adviser) return 'adviser';
     if (uid === thesis.editor) return 'editor';
-    
+
     return 'unknown';
 }
 

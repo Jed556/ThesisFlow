@@ -84,6 +84,7 @@ export async function uploadAudio(
     file: File,
     ownerUid: string,
     context?: {
+        groupId: string;
         thesisId?: string;
         chapterId?: number;
         commentId?: string;
@@ -94,6 +95,10 @@ export async function uploadAudio(
     const validation = validateAudio(file);
     if (!validation.isValid) {
         throw new Error(validation.error);
+    }
+
+    if (!context?.groupId) {
+        throw new Error('groupId is required to upload audio files');
     }
 
     // Generate file ID and path
@@ -129,13 +134,14 @@ export async function uploadAudio(
         author: ownerUid,
         category: context?.category || 'attachment',
         metadata: audioMetadata,
+        groupId: context.groupId,
         ...(context?.thesisId && { thesisId: context.thesisId }),
         ...(context?.chapterId !== undefined && { chapterId: context.chapterId }),
         ...(context?.commentId && { commentId: context.commentId })
     };
 
     // Save to Firestore
-    await setFileMetadata(fileId, metadata, ownerUid);
+    await setFileMetadata(fileId, metadata, ownerUid, { groupId: context.groupId });
 
     return { fileId, url: downloadURL, metadata };
 }

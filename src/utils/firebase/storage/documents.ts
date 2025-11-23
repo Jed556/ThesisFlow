@@ -57,6 +57,7 @@ export async function uploadDocument(
     file: File,
     ownerUid: string,
     context?: {
+        groupId: string;
         thesisId?: string;
         chapterId?: number;
         commentId?: string;
@@ -67,6 +68,10 @@ export async function uploadDocument(
     const validation = validateDocument(file);
     if (!validation.isValid) {
         throw new Error(validation.error);
+    }
+
+    if (!context?.groupId) {
+        throw new Error('groupId is required to upload documents');
     }
 
     // Generate file ID and path
@@ -98,13 +103,14 @@ export async function uploadDocument(
         uploadDate: new Date().toISOString(),
         author: ownerUid,
         category: context?.category || 'attachment',
+        groupId: context.groupId,
         ...(context?.thesisId && { thesisId: context.thesisId }),
         ...(context?.chapterId !== undefined && { chapterId: context.chapterId }),
         ...(context?.commentId && { commentId: context.commentId })
     };
 
     // Save to Firestore
-    await setFileMetadata(fileId, metadata, ownerUid);
+    await setFileMetadata(fileId, metadata, ownerUid, { groupId: context.groupId });
 
     return { fileId, url: downloadURL, metadata };
 }

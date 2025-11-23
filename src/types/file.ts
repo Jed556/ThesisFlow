@@ -72,8 +72,17 @@ export interface FileAttachment {
     duration?: string; // For audio/video files (e.g., "3:45")
     uploadDate: string;
     metadata?: MediaMetadata; // Additional metadata for media files
-    author: string; // email
+    author: string; // Firebase UID of the uploader
     category?: 'submission' | 'attachment';
+    thesisId?: string;
+    chapterId?: number;
+    commentId?: string;
+    groupId?: string;
+    departmentKey?: string;
+    courseKey?: string;
+    owner?: string;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 /**
@@ -108,7 +117,7 @@ export interface BatchUploadConfig {
  * File upload type
  */
 export interface FileUploadContext {
-    author: string; // email
+    author: string; // Firebase UID
     category: 'submission' | 'attachment';
     chapterId?: number;
     commentId?: string;

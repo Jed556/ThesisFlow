@@ -6,3 +6,4 @@ export * from './documents';
 export * from './videos';
 export * from './audio';
 export * from './thesis';
+export * from './chapterFiles';

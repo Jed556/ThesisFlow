@@ -1,23 +1,32 @@
-import { Typography, Box, Chip, Accordion, AccordionSummary, AccordionDetails, Button, } from '@mui/material';
-import { ExpandMore, CheckCircle, Pending, Cancel, Schedule, Upload, CloudUpload, } from '@mui/icons-material';
+import * as React from 'react';
+import { Typography, Box, Chip, Accordion, AccordionSummary, AccordionDetails, Button } from '@mui/material';
+import { ExpandMore, CheckCircle, Pending, Cancel, Schedule, Upload, CloudUpload } from '@mui/icons-material';
 import type { StatusColor, ThesisChapter } from '../../types/thesis';
 import ChapterItem from './ChapterItem';
 
 /**
  * Props for the ChapterAccordion component
  */
-interface ChapterAccordionProps {
-    /**
-     * Thesis chapter to display
-     */
-    chapter: ThesisChapter;
-    /**
-     * Callback when the upload button is clicked
-     * @param chapterId - ID of the chapter being uploaded
-     * @param chapterTitle - Title of the chapter being uploaded
-     */
-    onUploadClick: (chapterId: number, chapterTitle: string) => void;
+export interface ChapterAccordionUploadLabels {
+    empty?: string;
+    existing?: string;
 }
+
+interface ChapterAccordionProps {
+    /** Thesis chapter to display */
+    chapter: ThesisChapter;
+    /** Callback when the upload button is clicked */
+    onUploadClick?: (chapter: ThesisChapter) => void;
+    /** Optional override for upload button labels */
+    uploadLabels?: ChapterAccordionUploadLabels;
+    /** Optional override for the upload button icon */
+    uploadIcon?: React.ReactNode;
+}
+
+const DEFAULT_UPLOAD_LABELS = {
+    empty: 'Upload Document',
+    existing: 'Replace Document',
+};
 
 /**
  * Get the color for a chapter's status
@@ -84,8 +93,13 @@ const getStatusDisplayText = (status: string): string => {
  * @param chapter - Chapter object
  * @param onUploadClick - Callback function for upload button click
  */
-export default function ChapterAccordion({ chapter, onUploadClick }: ChapterAccordionProps) {
+export default function ChapterAccordion({ chapter, onUploadClick, uploadLabels, uploadIcon }: ChapterAccordionProps) {
     const hasSubmissions = (chapter.submissions ?? []).length > 0;
+    const uploadLabel = hasSubmissions
+        ? uploadLabels?.existing ?? DEFAULT_UPLOAD_LABELS.existing
+        : uploadLabels?.empty ?? DEFAULT_UPLOAD_LABELS.empty;
+    const uploadDisabled = chapter.status === 'approved' || !onUploadClick;
+    const UploadIcon = uploadIcon ?? <Upload />;
 
     return (
         <Accordion>
@@ -124,11 +138,11 @@ export default function ChapterAccordion({ chapter, onUploadClick }: ChapterAcco
                             <Button
                                 variant="contained"
                                 size="small"
-                                startIcon={<Upload />}
-                                onClick={() => onUploadClick(chapter.id, chapter.title)}
-                                disabled={chapter.status === 'approved'}
+                                startIcon={UploadIcon}
+                                onClick={() => onUploadClick?.(chapter)}
+                                disabled={uploadDisabled}
                             >
-                                {hasSubmissions ? 'Replace Document' : 'Upload Document'}
+                                {uploadLabel}
                             </Button>
                         </Box>
 

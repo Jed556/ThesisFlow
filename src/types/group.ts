@@ -10,6 +10,7 @@ export interface ThesisGroup {
     updatedAt: string;
     status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
+    thesisId?: string | null;
     department?: string;
     course?: string;
     /** Pending invites to other students (array of UIDs) */
@@ -45,6 +46,7 @@ export interface ThesisGroupFormData {
     editor?: string;
     status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
+    thesisId?: string | null;
     department?: string;
     course?: string;
 }

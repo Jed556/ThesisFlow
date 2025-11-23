@@ -1,19 +1,11 @@
 import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    deleteDoc,
-    onSnapshot,
-    collectionGroup,
-    type DocumentData,
-    type QuerySnapshot,
+    collection, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot,
+    collectionGroup, type DocumentData, type QuerySnapshot
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import type { ChapterTemplate, ThesisChapterConfig } from '../../../types/chapter';
-import { normalizeChapterOrder } from '../../chapterUtils';
+import { normalizeChapterOrder, normalizeChapterStages } from '../../chapterUtils';
 
 /** Base collection name for chapters tree structure */
 const CHAPTERS_COLLECTION = 'chapters';
@@ -43,13 +35,17 @@ function getChapterConfigRef(department: string, course: string) {
 function normalizeChaptersForWrite(chapters: ChapterTemplate[]): ChapterTemplate[] {
     return normalizeChapterOrder(chapters).map((chapter) => {
         const normalized: ChapterTemplate = {
+            ...chapter,
             id: chapter.id,
-            title: chapter.title.trim(),
+            title: chapter.title?.trim() || `Chapter ${chapter.id}`,
+            stages: normalizeChapterStages(chapter.stages),
         };
 
         const description = chapter.description?.trim();
         if (description) {
             normalized.description = description;
+        } else if (normalized.description) {
+            delete normalized.description;
         }
 
         return normalized;

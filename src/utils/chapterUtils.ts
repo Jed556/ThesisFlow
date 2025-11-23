@@ -1,13 +1,33 @@
-import type { ChapterTemplate } from '../types/chapter';
+import type { ChapterTemplate, ChapterStage } from '../types/chapter';
+import { CHAPTER_STAGE_OPTIONS } from '../types/chapter';
+
+const ALLOWED_STAGE_SET = new Set<ChapterStage>(CHAPTER_STAGE_OPTIONS);
+
+export const normalizeChapterStages = (stages?: ChapterStage[]): ChapterStage[] => {
+    if (!stages?.length) {
+        return [];
+    }
+
+    const seen = new Set<ChapterStage>();
+
+    return stages.filter((stage) => {
+        if (!ALLOWED_STAGE_SET.has(stage) || seen.has(stage)) {
+            return false;
+        }
+
+        seen.add(stage);
+        return true;
+    });
+};
 
 /**
  * Creates a normalized copy of the provided chapters array with sequential IDs starting at 1.
  */
 export function normalizeChapterOrder(chapters: ChapterTemplate[]): ChapterTemplate[] {
     return chapters.map((chapter, index) => ({
+        ...chapter,
         id: index + 1,
-        title: chapter.title,
-        description: chapter.description,
+        stages: normalizeChapterStages(chapter.stages),
     }));
 }
 
@@ -19,6 +39,7 @@ export function createEmptyChapterTemplate(order: number): ChapterTemplate {
         id: order,
         title: '',
         description: '',
+        stages: [],
     };
 }
 

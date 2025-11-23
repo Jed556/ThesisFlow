@@ -347,7 +347,7 @@ export default function StudentTopicProposalsPage() {
                 groupId: group.id,
                 requestedBy: userUid,
             });
-            showNotification('Topic ready to be used as thesis title', 'success');
+            showNotification('Thesis title synchronized with approved topic', 'success');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to mark topic as thesis';
             showNotification(message, 'error');
@@ -532,16 +532,13 @@ export default function StudentTopicProposalsPage() {
 
                             if (entry.status === 'head_approved') {
                                 entryActions.push(
-                                    <Button
-                                        key="use-topic"
-                                        variant="contained"
+                                    <Chip
+                                        key="approved-chip"
+                                        label={activeSet.lockedEntryId === entry.id ? 'Set as thesis' : 'Approved'}
                                         color="success"
                                         size="small"
-                                        disabled={Boolean(activeSet.lockedEntryId) && activeSet.lockedEntryId !== entry.id}
-                                        onClick={() => setUseTopicDialog(entry)}
-                                    >
-                                        {activeSet.lockedEntryId === entry.id ? 'In use' : 'Use this topic'}
-                                    </Button>
+                                        variant={activeSet.lockedEntryId === entry.id ? 'filled' : 'outlined'}
+                                    />
                                 );
                             }
 
@@ -626,11 +623,11 @@ export default function StudentTopicProposalsPage() {
             </Dialog>
 
             <Dialog open={Boolean(useTopicDialog)} onClose={() => setUseTopicDialog(null)}>
-                <DialogTitle>Use this topic as your thesis</DialogTitle>
+                <DialogTitle>Sync thesis title</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Confirm using “{useTopicDialog?.title}” as your official thesis title. This action will pin the
-                        topic and update your group record.
+                        Your approved topic "{useTopicDialog?.title}" has been automatically set as your thesis title.
+                        This action will ensure your group record is synchronized.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
@@ -638,7 +635,7 @@ export default function StudentTopicProposalsPage() {
                         Cancel
                     </Button>
                     <Button onClick={handleUseTopic} color="success" disabled={useTopicLoading}>
-                        Confirm
+                        Sync now
                     </Button>
                 </DialogActions>
             </Dialog>

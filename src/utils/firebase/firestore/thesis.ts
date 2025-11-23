@@ -1,12 +1,28 @@
 import {
-    doc, setDoc, collection, getDocs, addDoc, getDoc, deleteDoc, query, where, onSnapshot, writeBatch,
-    type WithFieldValue, type QueryConstraint, type QuerySnapshot, type DocumentData,
+    doc,
+    setDoc,
+    collection,
+    getDocs,
+    deleteDoc,
+    query,
+    where,
+    onSnapshot,
+    writeBatch,
+    collectionGroup,
+    documentId,
+    limit,
+    type WithFieldValue,
+    type QueryConstraint,
+    type QuerySnapshot,
+    type DocumentData,
+    type DocumentReference,
+    type DocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
 import { cleanData } from './firestore';
 import { getUserById, getUsersByIds } from './user';
-import { getGroupById } from './groups';
+import { getGroupById, updateGroup, resolveGroupRefs } from './groups';
 
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
@@ -15,18 +31,91 @@ import type { ThesisGroupMembers } from '../../../types/group';
 
 export type ThesisRecord = ThesisData & { id: string };
 
-/** Firestore collection name used for user documents */
-const THESES_COLLECTION = 'theses';
+const THESIS_SUBCOLLECTION = 'theses';
+const THESIS_CHAPTERS_SUBCOLLECTION = 'chapters';
+
+function getThesesCollectionGroup() {
+    return collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
+}
+
+async function getGroupThesisCollection(groupId: string): Promise<{
+    collectionRef: ReturnType<typeof collection>;
+}> {
+    const refs = await resolveGroupRefs(groupId);
+    return {
+        collectionRef: collection(refs.canonicalRef, THESIS_SUBCOLLECTION),
+    };
+}
+
+async function getThesisSnapshotById(id: string): Promise<DocumentSnapshot<DocumentData> | null> {
+    const thesisQuery = query(
+        getThesesCollectionGroup(),
+        where('id', '==', id),
+        limit(1)
+    );
+    const snapshot = await getDocs(thesisQuery);
+    if (!snapshot.empty) {
+        return snapshot.docs[0];
+    }
+
+    const fallback = await getDocs(query(
+        getThesesCollectionGroup(),
+        where(documentId(), '==', id),
+        limit(1)
+    ));
+
+    if (fallback.empty) {
+        return null;
+    }
+
+    return fallback.docs[0];
+}
+
+async function deleteThesisChapters(thesisRef: DocumentReference<DocumentData>): Promise<void> {
+    const chaptersCollection = collection(thesisRef, THESIS_CHAPTERS_SUBCOLLECTION);
+    const snapshot = await getDocs(chaptersCollection);
+    if (snapshot.empty) {
+        return;
+    }
+
+    const batch = writeBatch(firebaseFirestore);
+    snapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit();
+}
+
+async function syncThesisChapters(
+    thesisRef: DocumentReference<DocumentData>,
+    chapters: ThesisData['chapters'] | undefined
+): Promise<void> {
+    if (!chapters || chapters.length === 0) {
+        await deleteThesisChapters(thesisRef);
+        return;
+    }
+
+    const chaptersCollection = collection(thesisRef, THESIS_CHAPTERS_SUBCOLLECTION);
+    const existing = await getDocs(chaptersCollection);
+    const batch = writeBatch(firebaseFirestore);
+
+    existing.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    chapters.forEach((chapter) => {
+        const chapterRef = doc(chaptersCollection, chapter.id.toString());
+        batch.set(chapterRef, chapter);
+    });
+
+    await batch.commit();
+}
 
 /**
  * Get a thesis data by id
  * @param id - thesis id
  */
 export async function getThesisById(id: string): Promise<ThesisData | null> {
-    const ref = doc(firebaseFirestore, THESES_COLLECTION, id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    return snap.data() as ThesisData;
+    const snapshot = await getThesisSnapshotById(id);
+    if (!snapshot) {
+        return null;
+    }
+
+    return snapshot.data() as ThesisData;
 }
 
 /**
@@ -34,7 +123,7 @@ export async function getThesisById(id: string): Promise<ThesisData | null> {
  * @returns Array of ThesisData with their Firestore document IDs
  */
 export async function getAllTheses(): Promise<ThesisRecord[]> {
-    const snap = await getDocs(collection(firebaseFirestore, THESES_COLLECTION));
+    const snap = await getDocs(getThesesCollectionGroup());
     return snap.docs.map((docSnap) => {
         const data = docSnap.data() as ThesisData;
         const { id: _ignored, ...rest } = data;
@@ -50,21 +139,27 @@ export async function getAllTheses(): Promise<ThesisRecord[]> {
  * Create or update a thesis document
  */
 export async function setThesis(id: string | null, data: ThesisData): Promise<string> {
-    if (id) {
-        // Update existing: use 'update' mode to keep null values (for field deletion)
-        const cleanedData = cleanData(data, 'update');
-        const ref = doc(firebaseFirestore, THESES_COLLECTION, id);
-        await setDoc(ref, cleanedData, { merge: true });
-        return id;
-    } else {
-        // Create new: use 'create' mode to remove null/undefined/empty values
-        const cleanedData = cleanData(data, 'create');
-        const ref = await addDoc(
-            collection(firebaseFirestore, THESES_COLLECTION),
-            cleanedData as WithFieldValue<ThesisData>
-        );
-        return ref.id;
+    if (!data.groupId) {
+        throw new Error('groupId is required to create or update a thesis');
     }
+
+    const { collectionRef } = await getGroupThesisCollection(data.groupId);
+    const targetRef = id ? doc(collectionRef, id) : doc(collectionRef);
+    const thesisId = id ?? targetRef.id;
+    const payload: ThesisData = {
+        ...data,
+        id: thesisId,
+    };
+    const cleanedData = cleanData(
+        payload,
+        id ? 'update' : 'create'
+    ) as WithFieldValue<ThesisData>;
+
+    await setDoc(targetRef, cleanedData, { merge: true });
+    await syncThesisChapters(targetRef, data.chapters);
+    await updateGroup(data.groupId, { thesisId });
+
+    return thesisId;
 }
 
 /**
@@ -73,8 +168,18 @@ export async function setThesis(id: string | null, data: ThesisData): Promise<st
  */
 export async function deleteThesis(id: string): Promise<void> {
     if (!id) throw new Error('Thesis ID required');
-    const ref = doc(firebaseFirestore, THESES_COLLECTION, id);
-    await deleteDoc(ref);
+    const snapshot = await getThesisSnapshotById(id);
+    if (!snapshot) {
+        return;
+    }
+
+    const data = snapshot.data() as ThesisData;
+    await deleteThesisChapters(snapshot.ref);
+    await deleteDoc(snapshot.ref);
+
+    if (data.groupId) {
+        await updateGroup(data.groupId, { thesisId: null });
+    }
 }
 
 /**
@@ -85,10 +190,20 @@ export async function bulkDeleteTheses(ids: string[]): Promise<void> {
     if (!ids || ids.length === 0) throw new Error('Thesis IDs required');
     const batch = writeBatch(firebaseFirestore);
 
-    ids.forEach((id) => {
-        const ref = doc(firebaseFirestore, THESES_COLLECTION, id);
-        batch.delete(ref);
-    });
+    for (const id of ids) {
+        const snapshot = await getThesisSnapshotById(id);
+        if (!snapshot) {
+            continue;
+        }
+
+        const data = snapshot.data() as ThesisData;
+        await deleteThesisChapters(snapshot.ref);
+        batch.delete(snapshot.ref);
+
+        if (data.groupId) {
+            await updateGroup(data.groupId, { thesisId: null });
+        }
+    }
 
     await batch.commit();
 }
@@ -370,7 +485,7 @@ export async function getReviewerAssignmentsForUser(role: ReviewerRole, userUid?
 
     const roleField = role === 'adviser' ? 'adviser' : 'editor';
     const roleQuery = query(
-        collection(firebaseFirestore, THESES_COLLECTION),
+        getThesesCollectionGroup(),
         where(roleField, '==', userUid)
     );
     const snapshot = await getDocs(roleQuery);
@@ -420,7 +535,7 @@ export function listenTheses(
     options: ThesisListenerOptions
 ): () => void {
     const { onData, onError } = options;
-    const baseCollection = collection(firebaseFirestore, THESES_COLLECTION);
+    const baseCollection = getThesesCollectionGroup();
     const thesesQuery = constraints && constraints.length > 0
         ? query(baseCollection, ...constraints)
         : baseCollection;
@@ -471,7 +586,7 @@ export function listenReviewerAssignmentsForUser(
 
     const roleField = role === 'adviser' ? 'adviser' : 'editor';
     const roleQuery = query(
-        collection(firebaseFirestore, THESES_COLLECTION),
+        getThesesCollectionGroup(),
         where(roleField, '==', userUid)
     );
     const profileCache = new Map<string, UserProfile>();
