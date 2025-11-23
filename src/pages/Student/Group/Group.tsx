@@ -4,33 +4,41 @@ import {
     DialogTitle, Divider, IconButton, List, ListItem, ListItemText, Paper, Skeleton, Stack, TextField, Typography,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Group as GroupIcon,
-    PersonAdd as PersonAddIcon,
-    Search as SearchIcon,
-    Send as SendIcon,
-    Check as CheckIcon,
-    Close as CloseIcon,
+    Add as AddIcon, Delete as DeleteIcon, Group as GroupIcon, PersonAdd as PersonAddIcon,
+    Search as SearchIcon, Send as SendIcon, Check as CheckIcon, Close as CloseIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
-import type { NavigationItem } from '../../types/navigation';
-import type { Session } from '../../types/session';
-import type { ThesisGroup, ThesisGroupFormData } from '../../types/group';
-import type { UserProfile } from '../../types/profile';
-import type { GroupFormErrorKey } from '../../components/Group/GroupManageDialog';
-import { AnimatedPage, AnimatedList } from '../../components/Animate';
-import GroupCard from '../../components/Group/GroupCard';
-import GroupManageDialog from '../../components/Group/GroupManageDialog';
-import GroupDeleteDialog from '../../components/Group/GroupDeleteDialog';
-import { Avatar, Name } from '../../components/Avatar';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import { formatProfileLabel } from '../../utils/userUtils';
+import type { NavigationItem } from '../../../types/navigation';
+import type { Session } from '../../../types/session';
+import type { ThesisGroup, ThesisGroupFormData } from '../../../types/group';
+import type { UserProfile } from '../../../types/profile';
+import type { GroupFormErrorKey } from '../../../components/Group/GroupManageDialog';
+import { AnimatedPage, AnimatedList } from '../../../components/Animate';
+import GroupCard from '../../../components/Group/GroupCard';
+import GroupManageDialog from '../../../components/Group/GroupManageDialog';
+import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
+import { Avatar, Name } from '../../../components/Avatar';
+import ProfileCard from '../../../components/Profile/ProfileCard';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
 import {
-    createGroup, deleteGroup, getGroupsByCourse, getGroupById, inviteUserToGroup, removeInviteFromGroup, requestToJoinGroup,
-    acceptInvite, submitGroupForReview, getGroupsByLeader, getGroupsByMember, acceptJoinRequest, rejectJoinRequest, getUsersByFilter,
-} from '../../utils/firebase/firestore';
-import { getUserById } from '../../utils/firebase/firestore/user';
+    acceptInvite,
+    acceptJoinRequest,
+    buildGroupProfileMap,
+    createGroup,
+    deleteGroup,
+    getGroupById,
+    getGroupsByCourse,
+    getGroupsByLeader,
+    getGroupsByMember,
+    getUserById,
+    getUsersByFilter,
+    inviteUserToGroup,
+    rejectJoinRequest,
+    removeInviteFromGroup,
+    requestToJoinGroup,
+    submitGroupForReview,
+} from '../../../utils/groupUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -51,6 +59,7 @@ type GroupWithInvites = ThesisGroup & {
  */
 export default function StudentGroupPage() {
     const session = useSession<Session>();
+    const navigate = useNavigate();
     const userUid = session?.user?.uid;
     const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
 
@@ -108,31 +117,6 @@ export default function StudentGroupPage() {
 
     const { showNotification } = useSnackbar();
     const isInviteLocked = (status?: ThesisGroup['status']) => status === 'review' || status === 'active';
-    const buildGroupProfileMap = React.useCallback(async (groupData: ThesisGroup) => {
-        const ids = new Set<string>();
-        ids.add(groupData.members.leader);
-        groupData.members.members.forEach((uid) => ids.add(uid));
-        if (groupData.members.adviser) {
-            ids.add(groupData.members.adviser);
-        }
-        if (groupData.members.editor) {
-            ids.add(groupData.members.editor);
-        }
-        (groupData.members.panels ?? []).forEach((uid) => ids.add(uid));
-
-        const profileMap = new Map<string, UserProfile>();
-        await Promise.all(
-            Array.from(ids).map(async (uid) => {
-                const profile = await getUserById(uid);
-                if (profile) {
-                    profileMap.set(uid, profile);
-                }
-            })
-        );
-
-        return profileMap;
-    }, []);
-
     // Load user profile
     React.useEffect(() => {
         if (!userUid) {
@@ -271,7 +255,7 @@ export default function StudentGroupPage() {
         return () => {
             cancelled = true;
         };
-    }, [userUid, userProfile?.course, buildGroupProfileMap]);
+    }, [userUid, userProfile?.course]);
 
     const handleOpenCreateDialog = React.useCallback(() => {
         if (!userUid || !userProfile) return;
@@ -372,10 +356,10 @@ export default function StudentGroupPage() {
             return userProfile;
         }
 
-        return studentOptions.find((student) => student.uid === uid)
-            ?? myGroupProfiles.get(uid)
+        return myGroupProfiles.get(uid)
+            ?? studentOptions.find((student) => student.uid === uid)
             ?? usersByUid.get(uid);
-    }, [studentOptions, userProfile, myGroupProfiles, usersByUid]);
+    }, [myGroupProfiles, studentOptions, userProfile, usersByUid]);
 
     const formatParticipantLabel = React.useCallback((uid: string | null | undefined): string => {
         if (!uid) {
@@ -402,9 +386,27 @@ export default function StudentGroupPage() {
         return uid;
     }, [resolveProfileByUid]);
 
-    const formatParticipantOptionLabel = React.useCallback((profile: UserProfile): string => (
-        formatParticipantLabel(profile.uid)
-    ), [formatParticipantLabel]);
+    const formatParticipantOptionLabel = React.useCallback((profileRecord: UserProfile): string => {
+        const first = profileRecord.name?.first?.trim();
+        const last = profileRecord.name?.last?.trim();
+        const fullName = [first, last].filter(Boolean).join(' ');
+        if (fullName) {
+            return `${fullName} (${profileRecord.uid})`;
+        }
+        return profileRecord.email ? `${profileRecord.email} (${profileRecord.uid})` : profileRecord.uid;
+    }, []);
+
+    const handleOpenProfilePage = React.useCallback((uid: string) => {
+        if (!uid) {
+            return;
+        }
+
+        const cachedProfile = resolveProfileByUid(uid);
+        navigate(`/group/profile/${uid}`, {
+            state: cachedProfile ? { profile: cachedProfile } : undefined,
+        });
+    }, [navigate, resolveProfileByUid]);
+
 
     const handleSaveGroup = React.useCallback(async () => {
         if (!userUid || !userProfile) return;
@@ -464,7 +466,7 @@ export default function StudentGroupPage() {
         } finally {
             setSaving(false);
         }
-    }, [userUid, userProfile, formData, showNotification, buildGroupProfileMap]);
+    }, [userUid, userProfile, formData, showNotification]);
 
     const handleCloseCreateDialog = React.useCallback(() => {
         setCreateDialogOpen(false);
@@ -715,32 +717,47 @@ export default function StudentGroupPage() {
             const renderPersonCard = (uid: string, roleLabel: string) => {
                 if (!uid) return null;
                 const profile = myGroupProfiles.get(uid);
-                const displayName = profile ? formatProfileLabel(profile) : uid;
-                const secondaryText = profile?.email ?? roleLabel;
+
+                if (!profile) {
+                    const displayName = formatParticipantLabel(uid);
+                    return (
+                        <Paper
+                            key={`${roleLabel}-${uid}`}
+                            variant="outlined"
+                            sx={{
+                                p: 2,
+                                borderRadius: 2,
+                                bgcolor: 'background.default',
+                                borderColor: 'divider',
+                                width: '100%',
+                            }}
+                        >
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <Avatar uid={uid} size={48} tooltip="full" editable={false} />
+                                <Box>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                        {displayName}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {roleLabel}
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        </Paper>
+                    );
+                }
 
                 return (
-                    <Paper
+                    <ProfileCard
                         key={`${roleLabel}-${uid}`}
+                        profile={profile}
+                        chips={[roleLabel]}
+                        showEmail
+                        showSkills={false}
+                        onClick={() => handleOpenProfilePage(uid)}
+                        elevation={0}
                         variant="outlined"
-                        sx={{
-                            p: 2,
-                            borderRadius: 2,
-                            bgcolor: 'background.default',
-                            borderColor: 'divider',
-                        }}
-                    >
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <Avatar uid={uid} size={48} tooltip="full" />
-                            <Box>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                    {displayName}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {secondaryText}
-                                </Typography>
-                            </Box>
-                        </Stack>
-                    </Paper>
+                    />
                 );
             };
 
@@ -856,6 +873,8 @@ export default function StudentGroupPage() {
                                                     tooltip="email"
                                                     size="small"
                                                     chipProps={{ variant: 'outlined', size: 'small' }}
+                                                    editable={false}
+                                                    onClick={() => handleOpenProfilePage(uid)}
                                                 />
                                                 <IconButton
                                                     size="small"
@@ -1186,6 +1205,7 @@ export default function StudentGroupPage() {
                 onCancel={() => setDeleteDialogOpen(false)}
                 onConfirm={handleDeleteGroup}
             />
+
         </AnimatedPage>
     );
 }

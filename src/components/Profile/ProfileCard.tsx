@@ -46,13 +46,21 @@ export interface ProfileCardProps {
     stats?: ProfileCardStat[];
 
     /** Number to show in upper right corner (e.g., rank) */
-    cornerNumber?: number;
+    cornerText?: string | number;
 
     /** Whether to show email address */
     showEmail?: boolean;
 
+    /** Whether to show the department line under the name */
+    showDepartment?: boolean;
+    /** Whether to show the role (separate section) */
+    showRole?: boolean;
+
     /** Social links to display */
     socialLinks?: SocialLink[];
+
+    /** Small chips to show above the role divider (e.g. dept, short tags) */
+    chips?: (string | React.ReactNode)[];
 
     /** Whether to show the skills section */
     showSkills?: boolean;
@@ -96,21 +104,17 @@ function getSocialIcon(type: SocialLink['type']): React.ReactNode {
  * with configurable sections and data
  */
 export default function ProfileCard({
-    profile,
-    roleLabel,
-    skills = [],
-    stats = [],
-    cornerNumber,
+    profile, roleLabel, actionButton, cornerText, onClick,
+    skills = [], stats = [], socialLinks = [], chips = [],
     showEmail = false,
-    socialLinks = [],
-    showSkills = true,
+    showSkills = false,
+    showDepartment = false,
+    showRole = true,
     showDivider = true,
-    onClick,
-    actionButton,
     elevation = 0,
     variant = 'outlined',
 }: ProfileCardProps) {
-    const hasContent = stats.length > 0 || showEmail || socialLinks.length > 0;
+    const hasContent = stats.length > 0 || socialLinks.length > 0;
 
     const formattedName = React.useMemo(() => {
         const parts: string[] = [];
@@ -132,33 +136,58 @@ export default function ProfileCard({
         <CardContent>
             {/* Header with avatar and name */}
             <Stack direction="row" spacing={2} alignItems="center">
-                <Avatar uid={profile.uid} size={48} tooltip="full" sx={{ flexShrink: 0 }} />
+                <Avatar uid={profile.uid} size={48} tooltip="full" sx={{ flexShrink: 0 }} editable={false} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="h6" component="div" noWrap>
                         {formattedName}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                        {roleLabel && `${roleLabel} · `}
-                        {profile.department ?? 'Department TBD'}
-                    </Typography>
+                    {showEmail && profile.email && (
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                mt: 0.25,
+                            }}
+                        >
+                            {profile.email}
+                        </Typography>
+                    )}
+                    {showDepartment && (
+                        <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.25 }}>
+                            {profile.department ?? 'Department TBD'}
+                        </Typography>
+                    )}
                 </Box>
             </Stack>
 
-            {/* Email section */}
-            {showEmail && profile.email && (
+            {/* Top chips (compact info) */}
+            {chips && chips.length > 0 && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                    {chips.map((c, idx) => (
+                        typeof c === 'string' ? (
+                            <Chip key={`${c}-${idx}`} label={c} size="small" variant="outlined" />
+                        ) : (
+                            <Box key={`node-${idx}`}>{c}</Box>
+                        )
+                    ))}
+                </Stack>
+            )}
+
+            {/* Role section */}
+            {showRole && roleLabel && (
                 <Box sx={{ mt: 1.5 }}>
-                    <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                        }}
-                    >
-                        <EmailIcon fontSize="small" />
-                        {profile.email}
-                    </Typography>
+                    <Divider sx={{ mb: 1.5 }} />
+                    <Stack spacing={0.5}>
+                        <Typography variant="caption" color="text.secondary">
+                            Role
+                        </Typography>
+                        <Typography variant="subtitle1" fontWeight={600}>
+                            {roleLabel}
+                        </Typography>
+                    </Stack>
                 </Box>
             )}
 
@@ -250,12 +279,12 @@ export default function ProfileCard({
             sx={{ height: '100%', position: 'relative' }}
         >
             {/* Corner number */}
-            {cornerNumber !== undefined && (
+            {cornerText !== undefined && (
                 <Box
                     sx={{
                         position: 'absolute',
-                        top: 12,
-                        right: 12,
+                        top: 8,
+                        right: 16,
                         zIndex: 1,
                     }}
                 >
@@ -266,7 +295,7 @@ export default function ProfileCard({
                             fontWeight: 500,
                         }}
                     >
-                        {cornerNumber}
+                        {cornerText}
                     </Typography>
                 </Box>
             )}

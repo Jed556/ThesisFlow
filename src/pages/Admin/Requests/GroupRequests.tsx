@@ -276,6 +276,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                         label={`${leaderProfile.name.first} ${leaderProfile.name.last}`}
                         size="small"
                         chipProps={{ variant: 'outlined', size: 'small', color: 'primary' }}
+                        editable={false}
                     />
                 ) : (
                     <Chip label={group.members.leader} size="small" variant="outlined" color="primary" />
@@ -303,6 +304,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                                         }
                                         size="small"
                                         chipProps={{ variant: 'outlined', size: 'small' }}
+                                        editable={false}
                                     />
                                 );
                             })}

@@ -7,15 +7,15 @@ import {
     CheckCircle as ApproveIcon, Cancel as RejectIcon, Group as GroupIcon,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
-import type { NavigationItem } from '../../types/navigation';
-import type { Session } from '../../types/session';
-import type { ThesisGroup } from '../../types/group';
-import type { UserProfile } from '../../types/profile';
-import { AnimatedList, AnimatedPage } from '../../components/Animate';
-import { Avatar, Name } from '../../components/Avatar';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import { getUserById } from '../../utils/firebase/firestore/user';
-import { getGroupsByCourse, approveGroup, rejectGroup } from '../../utils/firebase/firestore/groups';
+import type { NavigationItem } from '../../../types/navigation';
+import type { Session } from '../../../types/session';
+import type { ThesisGroup } from '../../../types/group';
+import type { UserProfile } from '../../../types/profile';
+import { AnimatedList, AnimatedPage } from '../../../components/Animate';
+import { Avatar, Name } from '../../../components/Avatar';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
+import { getUserById } from '../../../utils/firebase/firestore/user';
+import { getGroupsByCourse, approveGroup, rejectGroup } from '../../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -382,6 +382,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                         label={`${leaderProfile.name.first} ${leaderProfile.name.last}`}
                         size="small"
                         chipProps={{ variant: 'outlined', size: 'small', color: 'primary' }}
+                        editable={false}
                     />
                 ) : (
                     <Chip label={group.members.leader} size="small" variant="outlined" color="primary" />
@@ -405,6 +406,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                                         label={profile ? `${profile.name.first} ${profile.name.last}` : uid}
                                         size="small"
                                         chipProps={{ variant: 'outlined', size: 'small' }}
+                                        editable={false}
                                     />
                                 );
                             })}

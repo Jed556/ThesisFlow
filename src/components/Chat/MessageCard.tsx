@@ -282,6 +282,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                                     email={message.senderId}
                                     initials={[Name.FIRST]}
                                     size="small"
+                                    editable={false}
                                     sx={{
                                         width: 28,
                                         height: 28,
@@ -347,6 +348,7 @@ const MessageCard: React.FC<MessageCardProps> = ({
                                 <Avatar
                                     email={message.senderId}
                                     size="small"
+                                    editable={false}
                                     sx={{
                                         width: 28,
                                         height: 28,

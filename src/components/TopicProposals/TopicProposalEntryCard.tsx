@@ -64,6 +64,7 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                         label={formatUserName(author, entry.proposedBy)}
                         tooltip="email"
                         mode="chip"
+                        editable={false}
                         chipProps={{ size: 'small', color: 'default' }}
                     />
                     <Typography variant="caption" color="text.secondary">

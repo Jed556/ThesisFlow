@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Container, Typography, Paper, CardMedia, Skeleton, Stack, TextField, Button, IconButton,
-    Divider, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip,
+    Box, Container, Typography, Paper, Skeleton, Stack, TextField, Button, IconButton,
+    Divider, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip
 } from '@mui/material';
 import {
-    Settings, PhotoCamera, Edit, Save, Cancel, Lock, Visibility, VisibilityOff, Palette, CheckCircle,
+    Settings, Edit, Save, Cancel, Lock, Visibility, VisibilityOff, Palette, CheckCircle,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/user';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { uploadBanner, deleteFileFromStorage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
+import { uploadBanner, deleteFileFromStorage, revokeImagePreview } from '../utils/firebase/storage';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../utils/avatarUtils';
 import { firebaseAuth } from '../utils/firebase/firebaseConfig';
 import { ColorPickerDialog } from '../components/ColorPicker';
 import { AnimatedPage } from '../components/Animate';
 import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
 import { getError } from '../../utils/errorUtils';
-import Avatar from '../components/Avatar';
+import { ProfileHeader } from '../components/Profile';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile } from '../types/profile';
 import type { Session } from '../types/session';
@@ -69,7 +69,6 @@ export default function SettingsPage() {
 
     // Image upload state
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-    const [bannerPreview, setBannerPreview] = useState<string | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [uploadingBanner, setUploadingBanner] = useState(false);
 
@@ -102,17 +101,14 @@ export default function SettingsPage() {
             if (userProfile) {
                 setProfile(userProfile);
                 const themeColor = userProfile.preferences?.themeColor || '#2196F3';
-                // Populate the form with the profile (make nested objects optional)
                 setFormData({
                     ...userProfile,
-                    // keep preferences present and ensure only needed properties are included
                     preferences: {
                         ...(userProfile.preferences ?? {}),
                         themeColor,
                     },
                 });
 
-                // Check if theme should be updated
                 if (currentThemeColor !== themeColor && currentThemeColor) {
                     updateThemeFromSeedColor(themeColor);
                 }
@@ -131,7 +127,9 @@ export default function SettingsPage() {
         setFormData(prev => ({ ...prev, [field]: event.target.value }));
     };
 
-    const handleSwitchChange = (field: keyof NonNullable<UserProfile['preferences']>) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSwitchChange = (
+        field: keyof NonNullable<UserProfile['preferences']>
+    ) => (event: React.ChangeEvent<HTMLInputElement>) => {
         setFormData(prev => ({
             ...prev,
             preferences: {
@@ -195,7 +193,6 @@ export default function SettingsPage() {
     const handleAvatarChange = async (file: File) => {
         if (!session?.user?.uid || !profile) return;
 
-        // Validate file
         const validation = validateAvatarFile(file);
         if (!validation.valid) {
             showNotification(validation.error!, 'error');
@@ -205,16 +202,13 @@ export default function SettingsPage() {
         try {
             setUploadingAvatar(true);
 
-            // Create preview
             const preview = await createAvatarPreview(file);
             setAvatarPreview(preview);
 
-            // Delete old avatar if exists
             if (profile.avatar) {
                 await deleteFileFromStorage(profile.avatar).catch(console.error);
             }
 
-            // Upload and update profile
             await uploadAvatar(file, session.user.uid, profile);
             await loadProfile();
 
@@ -232,26 +226,18 @@ export default function SettingsPage() {
         }
     };
 
-    const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file || !session?.user?.email || !session?.user?.uid) return;
+    const handleBannerChange = async (file: File) => {
+        if (!session?.user?.email || !session?.user?.uid) return;
 
         try {
             setUploadingBanner(true);
 
-            // Create preview
-            const preview = createImagePreview(file);
-            setBannerPreview(preview);
-
-            // Upload to Firebase Storage
             const downloadURL = await uploadBanner(file, session.user.email);
 
-            // Delete old banner if exists
             if (profile?.banner) {
                 await deleteFileFromStorage(profile.banner).catch(console.error);
             }
 
-            // Update profile
             await setUserProfile(session.user.uid, { banner: downloadURL });
             await loadProfile();
 
@@ -262,10 +248,6 @@ export default function SettingsPage() {
             showNotification(message, 'error');
         } finally {
             setUploadingBanner(false);
-            if (bannerPreview) {
-                revokeImagePreview(bannerPreview);
-                setBannerPreview(null);
-            }
         }
     };
 
@@ -363,6 +345,8 @@ export default function SettingsPage() {
 
     const isProfileLoading = loading || !profile;
 
+    const isActiveThemeColor = currentThemeColor && currentThemeColor === (formData.preferences?.themeColor ?? '');
+
     return (
         <AnimatedPage variant="fade">
             <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -384,103 +368,20 @@ export default function SettingsPage() {
                             />
                         ) : (
                             <>
-                                <CardMedia
-                                    component={profile?.banner ? 'img' : 'div'}
-                                    image={profile?.banner || undefined}
-                                    sx={{
-                                        width: '100%',
-                                        aspectRatio: '3/1',
-                                        minHeight: '200px',
-                                        bgcolor: profile?.preferences?.themeColor || 'primary.main',
-                                        objectFit: 'cover',
-                                    }}
-                                />
-                                <input
-                                    accept="image/*"
-                                    style={{ display: 'none' }}
-                                    id="banner-upload"
-                                    type="file"
-                                    onChange={handleBannerUpload}
-                                    disabled={uploadingBanner}
-                                />
-                                <label htmlFor="banner-upload">
-                                    <IconButton
-                                        component="span"
-                                        disabled={uploadingBanner}
-                                        sx={{
-                                            position: 'absolute',
-                                            top: 16,
-                                            right: 16,
-                                            bgcolor: 'background.paper',
-                                            '&:hover': { bgcolor: 'background.default' },
-                                        }}
-                                    >
-                                        <PhotoCamera />
-                                    </IconButton>
-                                </label>
-                            </>
-                        )}
-
-                        {/* Avatar - Overlapping */}
-                        <Box
-                            sx={{
-                                position: 'absolute',
-                                left: { xs: '50%', sm: 32 },
-                                bottom: { xs: -70, sm: -60 },
-                                transform: { xs: 'translateX(-50%)', sm: 'none' },
-                                zIndex: 2,
-                            }}
-                        >
-                            {session?.user?.uid && (
-                                <Avatar
-                                    uid={session.user.uid}
-                                    size={160}
-                                    loading={isProfileLoading}
-                                    editable={true}
-                                    uploading={uploadingAvatar}
+                                <ProfileHeader
+                                    profile={profile!}
+                                    bannerEditable
+                                    onBannerChange={handleBannerChange}
+                                    bannerUploading={uploadingBanner}
+                                    avatarEditable
                                     onAvatarChange={handleAvatarChange}
-                                    sx={{
-                                        bgcolor: 'primary.main',
-                                        border: '5px solid',
-                                        borderColor: 'background.paper',
-                                    }}
+                                    avatarUploading={uploadingAvatar}
+                                    showMeta={true}
                                 />
-                            )}
-                        </Box>
-                    </Box>
-
-                    {/* Profile Info */}
-                    <Box
-                        sx={{
-                            px: 3,
-                            pt: { xs: 10, sm: 8 },
-                            pb: 3,
-                            pl: { xs: 3, sm: '220px' },
-                        }}
-                    >
-                        {isProfileLoading ? (
-                            <>
-                                <Skeleton variant="text" width="30%" height={36} />
-                                <Skeleton variant="text" width="50%" height={24} sx={{ mt: 1 }} />
-                            </>
-                        ) : (
-                            <>
-                                <Typography variant="h4" fontWeight={700}>
-                                    {[formData.name?.prefix, formData.name?.first, formData.name?.middle, formData.name?.last, formData.name?.suffix]
-                                        .filter(Boolean)
-                                        .join(' ')}
-                                </Typography>
-                                <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    {profile?.email} • {profile?.role}
-                                </Typography>
-                                {formData.department && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        {formData.department}
-                                    </Typography>
-                                )}
                             </>
                         )}
                     </Box>
+
                 </Paper>
 
                 {/* Account Details */}
@@ -609,7 +510,7 @@ export default function SettingsPage() {
                                 <Typography variant="subtitle2">
                                     Theme Color
                                 </Typography>
-                                {currentThemeColor && currentThemeColor === (formData.preferences?.themeColor ?? '') && (
+                                {isActiveThemeColor && (
                                     <Chip
                                         icon={<CheckCircle />}
                                         label="Active"
@@ -630,7 +531,7 @@ export default function SettingsPage() {
                                         height: 56,
                                         bgcolor: formData.preferences?.themeColor ?? 'primary.main',
                                         border: '3px solid',
-                                        borderColor: currentThemeColor === (formData.preferences?.themeColor ?? '') ? 'primary.main' : 'divider',
+                                        borderColor: isActiveThemeColor ? 'primary.main' : 'divider',
                                         borderRadius: 2,
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
@@ -647,7 +548,7 @@ export default function SettingsPage() {
                                         {(formData.preferences?.themeColor ?? '').toUpperCase()}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        {currentThemeColor === (formData.preferences?.themeColor ?? '')
+                                        {isActiveThemeColor
                                             ? 'Currently applied to your interface'
                                             : 'Click the color box to change'}
                                     </Typography>
@@ -671,14 +572,14 @@ export default function SettingsPage() {
                                     disabled={!editing && !session?.user?.email}
                                 />
                             }
-                            label={
+                            label={(
                                 <Box>
                                     <Typography variant="body2">Reduce Animations</Typography>
                                     <Typography variant="caption" color="text.secondary">
                                         Disable animations for better performance or accessibility
                                     </Typography>
                                 </Box>
-                            }
+                            )}
                         />
                     </Stack>
                 </Paper>

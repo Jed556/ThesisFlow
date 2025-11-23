@@ -1236,6 +1236,7 @@ export default function CalendarPage() {
                                                                 uid={option.uid}
                                                                 initials={[Name.FIRST, Name.LAST]}
                                                                 size="small"
+                                                                editable={false}
                                                             />
                                                             <Box sx={{ flex: 1, minWidth: 0 }}>
                                                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>

@@ -74,6 +74,7 @@ export default function AvatarGroup({
                             sx={{
                                 ...(participant.status === 'declined' && { opacity: 0.5 })
                             }}
+                            editable={false}
                         />
                     </Tooltip>
                 );

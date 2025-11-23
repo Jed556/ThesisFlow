@@ -15,7 +15,7 @@ import { getUserById } from './firebase/firestore';
  * @param forceRefresh - Whether to force refresh the ID token to get latest claims
  * @returns Promise resolving to the user's role
  */
-export async function getUserRole( forceRefresh: boolean = true): Promise<UserRole> {
+export async function getUserRole(forceRefresh: boolean = true): Promise<UserRole> {
     const user = firebaseAuth.currentUser;
 
     if (!user) {
@@ -114,7 +114,7 @@ export async function isUserInRole(uid: string, role: UserRole): Promise<boolean
 async function getThesisByUserUid(uid: string): Promise<ThesisData | null> {
     try {
         const thesesRef = collection(firebaseFirestore, 'theses');
-        
+
         // Query for theses where user is leader
         const leaderQuery = query(thesesRef, where('leader', '==', uid));
         const leaderSnap = await getDocs(leaderQuery);
@@ -155,14 +155,14 @@ async function getThesisByUserUid(uid: string): Promise<ThesisData | null> {
  */
 export async function getThesisRole(uid: string): Promise<ThesisRole> {
     const thesis = await getThesisByUserUid(uid);
-    
+
     if (!thesis) return 'unknown';
-    
+
     if (uid === thesis.leader) return 'leader';
     if (thesis.members.includes(uid)) return 'member';
     if (uid === thesis.adviser) return 'adviser';
     if (uid === thesis.editor) return 'editor';
-    
+
     return 'unknown';
 }
 

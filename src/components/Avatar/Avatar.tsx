@@ -292,6 +292,11 @@ export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 
         <MuiAvatar
             src={resolvedProfile?.avatar}
             sx={{
+                // default background / text color for initials when no avatar is set
+                bgcolor: resolvedProfile?.avatar ? undefined : 'primary.main',
+                color: resolvedProfile?.avatar ? undefined : 'primary.contrastText',
+                // default border so the outline matches theme; callers can override via sx
+                border: '2px solid background.paper',
                 ...avatarSize,
                 cursor: onClick ? 'pointer' : 'default',
                 ...sx

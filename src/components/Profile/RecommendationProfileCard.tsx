@@ -16,13 +16,15 @@ export interface RecommendationProfileCardProps {
  * Compact mentor card tailored for the recommendations grid.
  */
 export default function RecommendationProfileCard({
-    card,
-    roleLabel,
-    onSelect,
+    card, roleLabel, onSelect,
     showRoleLabel = false,
     disabled = false,
 }: RecommendationProfileCardProps) {
     const stats = React.useMemo<ProfileCardStat[]>(() => {
+        const filledSlots = card.capacity > 0
+            ? `${card.activeCount}/${card.capacity}`
+            : `${card.activeCount}/0`;
+
         const baseStats: ProfileCardStat[] = [
             {
                 label: 'Active Teams',
@@ -30,7 +32,7 @@ export default function RecommendationProfileCard({
             },
             {
                 label: 'Slots',
-                value: card.capacity > 0 ? `${card.openSlots}/${card.capacity}` : '0/0',
+                value: filledSlots,
             },
         ];
 
@@ -42,7 +44,7 @@ export default function RecommendationProfileCard({
         }
 
         return baseStats;
-    }, [card.activeCount, card.capacity, card.compatibility, card.openSlots, roleLabel]);
+    }, [card.activeCount, card.capacity, card.compatibility, roleLabel]);
 
     const handleClick = React.useCallback(() => {
         if (!onSelect) return;
@@ -68,9 +70,12 @@ export default function RecommendationProfileCard({
             <ProfileCard
                 profile={card.profile}
                 roleLabel={showRoleLabel ? roleLabel : undefined}
+                showEmail={true}
+                showRole={showRoleLabel}
+                showDepartment={false}
                 skills={card.profile.skills ?? []}
                 stats={stats}
-                cornerNumber={card.rank}
+                cornerText={card.rank}
                 showDivider
                 showSkills={hasSkills}
                 onClick={onSelect && !disabled ? handleClick : undefined}

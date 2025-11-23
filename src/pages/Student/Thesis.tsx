@@ -646,6 +646,7 @@ export default function ThesisPage() {
                                 label={`${formatUserName(member.name)} (${member.thesisRole})`}
                                 size="small"
                                 chipProps={{ variant: 'outlined', size: 'small' }}
+                                editable={false}
                             />
                         ))}
                         {teamMembers.length === 0 && (

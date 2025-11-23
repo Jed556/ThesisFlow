@@ -66,8 +66,7 @@ interface SortButtonProps {
  * @param variant - Button variant
  */
 export default function SortButton({
-    sortOrder,
-    onToggle,
+    sortOrder, onToggle,
     showIcon = true,
     ascText = 'Ascending',
     descText = 'Descending',

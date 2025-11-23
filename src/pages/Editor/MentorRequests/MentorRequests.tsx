@@ -1,7 +1,7 @@
 import * as React from 'react';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
-import type { NavigationItem } from '../../types/navigation';
-import MentorRequestsPage from '../../components/MentorRequests/MentorRequestsPage';
+import type { NavigationItem } from '../../../types/navigation';
+import MentorRequestsPage from '../../../components/MentorRequests/MentorRequestsPage';
 
 export const metadata: NavigationItem = {
     group: 'mentors',

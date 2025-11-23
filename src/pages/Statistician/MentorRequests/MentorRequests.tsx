@@ -1,7 +1,7 @@
 import * as React from 'react';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
-import type { NavigationItem } from '../../types/navigation';
-import MentorRequestsPage from '../../components/MentorRequests/MentorRequestsPage';
+import type { NavigationItem } from '../../../types/navigation';
+import MentorRequestsPage from '../../../components/MentorRequests/MentorRequestsPage';
 
 export const metadata: NavigationItem = {
     group: 'statistician',

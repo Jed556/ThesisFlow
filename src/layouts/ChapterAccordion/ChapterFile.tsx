@@ -312,6 +312,7 @@ export default function ChapterFile({ chapterId, onVersionSelect, selectedVersio
                                             uid={file.author}
                                             initials={[Name.FIRST]}
                                             size="small"
+                                            editable={false}
                                         />
                                         <Typography variant="body2" color="text.secondary">
                                             Submitted by <strong>{file.displayName}</strong> on {formattedUploadDate}

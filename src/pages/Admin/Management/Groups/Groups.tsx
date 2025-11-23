@@ -8,13 +8,13 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useSession } from '@toolpad/core';
-import { AnimatedPage } from '../../../components/Animate';
-import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
-import { useSnackbar } from '../../../contexts/SnackbarContext';
-import type { NavigationItem } from '../../../types/navigation';
-import type { ThesisGroup, ThesisGroupFormData } from '../../../types/group';
-import type { Session } from '../../../types/session';
-import type { UserProfile } from '../../../types/profile';
+import { AnimatedPage } from '../../../../components/Animate';
+import UnauthorizedNotice from '../../../../layouts/UnauthorizedNotice';
+import { useSnackbar } from '../../../../contexts/SnackbarContext';
+import type { NavigationItem } from '../../../../types/navigation';
+import type { ThesisGroup, ThesisGroupFormData } from '../../../../types/group';
+import type { Session } from '../../../../types/session';
+import type { UserProfile } from '../../../../types/profile';
 import {
     getAllUsers,
     getAllGroups,
@@ -22,11 +22,11 @@ import {
     updateGroup,
     setGroup,
     getUsersByFilter,
-} from '../../../utils/firebase/firestore';
-import { importGroupsFromCsv, exportGroupsToCsv } from '../../../utils/csv/group';
-import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
-import GroupCard from '../../../components/Group/GroupCard';
-import GroupManageDialog, { type GroupFormErrorKey } from '../../../components/Group/GroupManageDialog';
+} from '../../../../utils/firebase/firestore';
+import { importGroupsFromCsv, exportGroupsToCsv } from '../../../../utils/csv/group';
+import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../../hooks/useBackgroundJobs';
+import GroupCard from '../../../../components/Group/GroupCard';
+import GroupManageDialog, { type GroupFormErrorKey } from '../../../../components/Group/GroupManageDialog';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -415,7 +415,7 @@ export default function AdminGroupManagementPage() {
     }, [selectedDepartment, selectedCourse]);
 
     const handleViewGroup = React.useCallback((group: ThesisGroup) => {
-        navigate(`/group/${group.id}`);
+        navigate(`/group-management/${group.id}`);
     }, [navigate]);
 
     const handleCloseManageDialog = React.useCallback(() => {

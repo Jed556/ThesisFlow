@@ -6,7 +6,6 @@ import {
     Card,
     CardActions,
     CardContent,
-    Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -18,12 +17,6 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import {
-    CheckCircle as ApproveIcon,
-    Close as RejectIcon,
-    Group as GroupIcon,
-    OpenInNew as OpenInNewIcon,
-} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
 import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
@@ -31,7 +24,7 @@ import type { ThesisGroup } from '../../types/group';
 import type { ThesisData } from '../../types/thesis';
 import type { Session } from '../../types/session';
 import type { UserProfile, UserRole } from '../../types/profile';
-import { AnimatedList, AnimatedPage } from '../Animate';
+import { AnimatedPage } from '../Animate';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import {
@@ -44,7 +37,7 @@ import {
 } from '../../utils/firebase/firestore/mentorRequests';
 import { listenThesesForMentor } from '../../utils/firebase/firestore/thesis';
 import { getUsersByIds, onUserProfile, setUserProfile } from '../../utils/firebase/firestore/user';
-import { formatDateShort } from '../../utils/dateUtils';
+import MentorRequestCard from './MentorRequestCard';
 import { filterActiveMentorTheses } from '../../utils/mentorProfileUtils';
 
 interface MentorRequestViewModel {
@@ -69,17 +62,6 @@ function resolveGroupMentor(group: ThesisGroup | null, role: MentorRequestRole):
 function formatMinimumCapacityMessage(currentCount: number): string {
     return `You currently mentor ${currentCount} group${currentCount === 1 ? '' : 's'}. Slots cannot go below that.`;
 }
-
-interface StatusDisplayConfig {
-    label: string;
-    color: 'success' | 'warning' | 'error' | 'default';
-}
-
-const STATUS_CONFIG: Record<MentorRequest['status'], StatusDisplayConfig> = {
-    pending: { label: 'Pending', color: 'warning' },
-    approved: { label: 'Approved', color: 'success' },
-    rejected: { label: 'Rejected', color: 'error' },
-};
 
 export interface MentorRequestsPageProps {
     role: MentorRequestRole;
@@ -397,6 +379,10 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
         setDialogOpen(true);
     }, []);
 
+    const handleOpenGroupView = React.useCallback((targetGroupId: string) => {
+        navigate(`/mentor/groups/${targetGroupId}`);
+    }, [navigate]);
+
     const handleCloseDialog = React.useCallback(() => {
         if (submitting) {
             return;
@@ -547,11 +533,18 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                             ) : (
                                 <>
                                     <Typography variant="subtitle2" color="text.secondary">
-                                        Slots
+                                        Accepted groups
                                     </Typography>
                                     <Stack spacing={0.5}>
                                         <Typography variant="h5">
                                             {assignmentsLoading ? '…' : slotsSummary}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {normalizedCapacity === 0
+                                                ? 'Not accepting requests'
+                                                : openSlots > 0
+                                                    ? `${openSlots} slot${openSlots === 1 ? '' : 's'} open`
+                                                    : 'No open slots'}
                                         </Typography>
                                     </Stack>
                                 </>
@@ -597,96 +590,26 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                     </Typography>
                 </Paper>
             ) : (
-                <AnimatedList variant="slideUp" staggerDelay={50}>
-                    {viewModels.map(({ request, group, requester }) => {
-                        const statusMeta = STATUS_CONFIG[request.status];
-                        const requestedDate = formatDateShort(request.createdAt);
-                        const respondedDate = request.respondedAt ? formatDateShort(request.respondedAt) : null;
-                        const leaderName = requester
-                            ? `${requester.name.first} ${requester.name.last}`
-                            : request.requestedBy;
-                        const groupName = group?.name ?? 'Unknown group';
-
-                        return (
-                            <Card key={request.id} variant="outlined" sx={{ mb: 2 }}>
-                                <CardContent>
-                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-                                        <Box>
-                                            <Typography variant="overline" color="text.secondary">
-                                                Group
-                                            </Typography>
-                                            <Stack direction="row" spacing={1} alignItems="center">
-                                                <GroupIcon fontSize="small" />
-                                                <Typography variant="h6">{groupName}</Typography>
-                                            </Stack>
-                                            {group?.course && (
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Course: {group.course}
-                                                </Typography>
-                                            )}
-                                            {group?.department && (
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Department: {group.department}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                        <Chip label={statusMeta.label} color={statusMeta.color} size="small" />
-                                    </Stack>
-
-                                    <Stack spacing={0.5} sx={{ mt: 2 }}>
-                                        <Typography variant="body2">
-                                            Requested by <strong>{leaderName}</strong> on {requestedDate}
-                                        </Typography>
-                                        {request.message && (
-                                            <Typography variant="body2" color="text.secondary">
-                                                “{request.message}”
-                                            </Typography>
-                                        )}
-                                        {respondedDate && (
-                                            <Typography variant="body2" color="text.secondary">
-                                                Responded on {respondedDate}
-                                            </Typography>
-                                        )}
-                                        {request.responseNote && (
-                                            <Typography variant="body2" color="text.secondary">
-                                                Note: {request.responseNote}
-                                            </Typography>
-                                        )}
-                                    </Stack>
-                                </CardContent>
-                                <CardActions sx={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                                    <Button
-                                        startIcon={<OpenInNewIcon />}
-                                        onClick={() => navigate(`/group/${request.groupId}`)}
-                                        disabled={!group}
-                                    >
-                                        View Group
-                                    </Button>
-                                    {request.status === 'pending' && (
-                                        <Stack direction="row" spacing={1}>
-                                            <Button
-                                                startIcon={<ApproveIcon />}
-                                                color="success"
-                                                variant="contained"
-                                                onClick={() => handleOpenDialog('approve', request)}
-                                            >
-                                                Approve
-                                            </Button>
-                                            <Button
-                                                startIcon={<RejectIcon />}
-                                                color="error"
-                                                variant="outlined"
-                                                onClick={() => handleOpenDialog('reject', request)}
-                                            >
-                                                Reject
-                                            </Button>
-                                        </Stack>
-                                    )}
-                                </CardActions>
-                            </Card>
-                        );
-                    })}
-                </AnimatedList>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+                        gap: 2,
+                    }}
+                >
+                    {viewModels.map(({ request, group, requester }) => (
+                        <Box key={request.id} sx={{ display: 'flex' }}>
+                            <MentorRequestCard
+                                request={request}
+                                group={group}
+                                requester={requester}
+                                onApprove={(pendingRequest) => handleOpenDialog('approve', pendingRequest)}
+                                onReject={(pendingRequest) => handleOpenDialog('reject', pendingRequest)}
+                                onOpenGroup={handleOpenGroupView}
+                            />
+                        </Box>
+                    ))}
+                </Box>
             )}
 
             <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

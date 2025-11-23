@@ -7,12 +7,12 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
-import ProfileView from '../../ProfileView';
+import ProfileView from '../../../components/Profile/ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
 import { onUserProfile, getUsersByIds } from '../../../utils/firebase/firestore/user';
 import { listenThesesForMentor } from '../../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, listenGroupsByMentorRole } from '../../../utils/firebase/firestore/groups';
-import { createMentorRequest } from '../../../utils/firebase/firestore/mentorRequests';
+import { createMentorRequest, listenMentorRequestsByGroup } from '../../../utils/firebase/firestore/mentorRequests';
 import { filterActiveMentorTheses, deriveMentorThesisHistory } from '../../../utils/mentorProfileUtils';
 import { evaluateMentorCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
@@ -21,6 +21,9 @@ import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile, HistoricalThesisEntry, UserRole } from '../../../types/profile';
 import type { ThesisGroup } from '../../../types/group';
 import type { Session } from '../../../types/session';
+import type { MentorRequest } from '../../../types/mentorRequest';
+
+type MentorRole = 'adviser' | 'editor' | 'statistician';
 
 export const metadata: NavigationItem = {
     title: 'Mentor Profile',
@@ -28,19 +31,16 @@ export const metadata: NavigationItem = {
     hidden: true,
 };
 
-type MentorRole = 'adviser' | 'editor' | 'statistician';
-
 function isMentorRole(role: UserRole | undefined): role is MentorRole {
     return role === 'adviser' || role === 'editor' || role === 'statistician';
 }
 
-export default function MentorProfilePage() {
+export default function MentorProfileViewPage() {
     const navigate = useNavigate();
     const { uid = '' } = useParams<{ uid: string }>();
     const session = useSession<Session>();
     const viewerUid = session?.user?.uid ?? null;
     const viewerRole = session?.user?.role;
-    const viewerEmail = session?.user?.email ?? undefined;
     const { showNotification } = useSnackbar();
 
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
@@ -51,13 +51,13 @@ export default function MentorProfilePage() {
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
     const [groupsLoading, setGroupsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
-    const [viewerProfile, setViewerProfile] = React.useState<UserProfile | null>(null);
     const [ownedGroups, setOwnedGroups] = React.useState<ThesisGroup[]>([]);
     const [ownedGroupsLoading, setOwnedGroupsLoading] = React.useState(false);
     const [requestDialogOpen, setRequestDialogOpen] = React.useState(false);
     const [selectedGroupId, setSelectedGroupId] = React.useState('');
     const [requestMessage, setRequestMessage] = React.useState('');
     const [requestSubmitting, setRequestSubmitting] = React.useState(false);
+    const [groupRequests, setGroupRequests] = React.useState<Map<string, MentorRequest[]>>(new Map());
 
     React.useEffect(() => {
         if (!uid) {
@@ -86,21 +86,6 @@ export default function MentorProfilePage() {
             unsubscribeProfile();
         };
     }, [uid]);
-
-    React.useEffect(() => {
-        if (!viewerUid) {
-            setViewerProfile(null);
-            return () => { /* no-op */ };
-        }
-
-        const unsubscribe = onUserProfile(viewerUid, (viewerData) => {
-            setViewerProfile(viewerData);
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [viewerUid]);
 
     const mentorRole = React.useMemo<MentorRole | null>(() => (
         isMentorRole(profile?.role) ? profile.role : null
@@ -168,8 +153,9 @@ export default function MentorProfilePage() {
         setOwnedGroupsLoading(true);
         void getGroupsByLeader(viewerUid)
             .then((records) => {
-                if (cancelled) return;
-                setOwnedGroups(records);
+                if (!cancelled) {
+                    setOwnedGroups(records);
+                }
             })
             .catch((err) => {
                 if (!cancelled) {
@@ -221,7 +207,6 @@ export default function MentorProfilePage() {
         };
     }, [groups]);
 
-
     const activeAssignments = React.useMemo<ThesisData[]>(
         () => filterActiveMentorTheses(assignments),
         [assignments]
@@ -268,11 +253,7 @@ export default function MentorProfilePage() {
     }, [groups]);
 
     const loading = profileLoading || assignmentsLoading;
-
-    const skills = React.useMemo(
-        () => profile?.skills ?? [],
-        [profile?.skills]
-    );
+    const skills = React.useMemo(() => profile?.skills ?? [], [profile?.skills]);
 
     const roleLabel = mentorRole === 'adviser'
         ? 'Adviser'
@@ -287,20 +268,67 @@ export default function MentorProfilePage() {
         [ownedGroups, viewerUid]
     );
 
+    React.useEffect(() => {
+        setGroupRequests(new Map());
+        if (requestableGroups.length === 0) {
+            return () => { /* no-op */ };
+        }
+
+        const unsubscribes = requestableGroups.map((group) =>
+            listenMentorRequestsByGroup(group.id, {
+                onData: (requests) => {
+                    setGroupRequests((previous) => {
+                        const next = new Map(previous);
+                        next.set(group.id, requests);
+                        return next;
+                    });
+                },
+                onError: (listenerError) => {
+                    console.error(`Failed to load mentor requests for group ${group.id}:`, listenerError);
+                },
+            })
+        );
+
+        return () => {
+            unsubscribes.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [requestableGroups]);
+
+    const hasPendingRequest = React.useMemo(() => {
+        if (!profile) {
+            return false;
+        }
+        for (const group of requestableGroups) {
+            const requests = groupRequests.get(group.id) ?? [];
+            if (requests.some((request) => request.status === 'pending' && request.mentorUid === profile.uid)) {
+                return true;
+            }
+        }
+        return false;
+    }, [groupRequests, profile, requestableGroups]);
+
     const slotsFull = capacity <= 0 || (capacity > 0 && openSlots <= 0);
     const canShowRequestButton = viewerRole === 'student' && Boolean(mentorRole);
 
     let requestDisabledReason: string | undefined;
-    if (slotsFull) {
+    if (hasPendingRequest) {
+        requestDisabledReason = 'You already have a pending request for this mentor.';
+    } else if (slotsFull) {
         requestDisabledReason = 'This mentor is not accepting requests right now.';
     } else if (requestableGroups.length === 0) {
         requestDisabledReason = 'Create and lead a thesis group before sending requests.';
     }
 
-    const requestButtonDisabled = Boolean(slotsFull || requestableGroups.length === 0 || requestSubmitting);
-    const requestButtonLabel = slotsFull ? 'Not accepting requests' : `Request as ${roleLabel}`;
-    const canSubmitMentorRequest = Boolean(selectedGroupId && requestableGroups.length > 0 && !requestSubmitting);
-    const dialogDisabled = requestableGroups.length === 0 || ownedGroupsLoading;
+    const requestButtonDisabled = Boolean(slotsFull || requestableGroups.length === 0 || requestSubmitting || hasPendingRequest);
+    const requestButtonLabel = hasPendingRequest
+        ? 'Request pending'
+        : slotsFull
+            ? 'Not accepting requests'
+            : `Request as ${roleLabel}`;
+    const canSubmitMentorRequest = Boolean(
+        selectedGroupId && requestableGroups.length > 0 && !requestSubmitting && !hasPendingRequest
+    );
+    const dialogDisabled = requestableGroups.length === 0 || ownedGroupsLoading || hasPendingRequest;
 
     React.useEffect(() => {
         if (!requestDialogOpen) {
@@ -318,7 +346,7 @@ export default function MentorProfilePage() {
         }
     }, [requestDialogOpen, requestableGroups, selectedGroupId]);
 
-    let bannerRequestButton: React.ReactNode;
+    let requestButton: React.ReactNode;
 
     const summaryCard = profile ? (
         <Card variant="outlined">
@@ -377,6 +405,11 @@ export default function MentorProfilePage() {
     ) : null;
 
     const handleOpenRequestDialog = React.useCallback(() => {
+        if (hasPendingRequest) {
+            showNotification('A request for this mentor is already pending.', 'info');
+            return;
+        }
+
         if (requestableGroups.length === 0) {
             showNotification('Create a thesis group first to send mentor requests.', 'info');
             return;
@@ -391,7 +424,7 @@ export default function MentorProfilePage() {
         });
         setRequestMessage('');
         setRequestDialogOpen(true);
-    }, [requestableGroups, showNotification]);
+    }, [hasPendingRequest, requestableGroups, showNotification]);
 
     const handleCloseRequestDialog = React.useCallback(() => {
         setRequestDialogOpen(false);
@@ -427,10 +460,10 @@ export default function MentorProfilePage() {
         } finally {
             setRequestSubmitting(false);
         }
-    }, [mentorRole, profile, requestMessage, requestableGroups, selectedGroupId, showNotification, viewerEmail, viewerProfile, viewerUid]);
+    }, [mentorRole, profile, requestMessage, requestableGroups, selectedGroupId, showNotification, viewerUid]);
 
     if (canShowRequestButton) {
-        bannerRequestButton = (
+        requestButton = (
             <Tooltip
                 title={requestDisabledReason}
                 disableHoverListener={!requestDisabledReason}
@@ -455,7 +488,6 @@ export default function MentorProfilePage() {
         navigate(-1);
     }, [navigate]);
 
-    // Loading state
     if (loading) {
         return (
             <AnimatedPage variant="fade">
@@ -467,7 +499,6 @@ export default function MentorProfilePage() {
         );
     }
 
-    // Error or not found state
     if (error || !profile || !mentorRole) {
         return (
             <AnimatedPage variant="fade">
@@ -496,7 +527,7 @@ export default function MentorProfilePage() {
                     onClick: handleBack,
                 }}
                 floatingBackButton
-                bannerActionSlot={bannerRequestButton}
+                headerActions={requestButton}
                 additionalSections={(
                     <Stack spacing={3}>
                         {summaryCard}

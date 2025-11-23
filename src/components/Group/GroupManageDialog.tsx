@@ -43,30 +43,10 @@ interface GroupManageDialogProps {
  * All stateful logic is orchestrated by the parent page component.
  */
 export default function GroupManageDialog({
-    open,
-    editMode,
     isAdmin = true,
-    activeStep,
-    steps,
-    formData,
-    formErrors,
-    students,
-    advisers,
-    editors,
-    departmentOptions,
-    memberChipData,
-    reviewCourse,
-    saving,
-    studentLoading,
-    onClose,
-    onFieldChange,
-    onLeaderChange,
-    onMembersChange,
-    onNext,
-    onBack,
-    onSubmit,
-    formatUserLabel,
-    formatMemberOptionLabel,
+    open, editMode, activeStep, steps, formData, formErrors, students, advisers, editors, departmentOptions, memberChipData,
+    reviewCourse, saving, studentLoading, onClose, onFieldChange, onLeaderChange, onMembersChange, onNext, onBack, onSubmit,
+    formatUserLabel, formatMemberOptionLabel,
 }: GroupManageDialogProps) {
     // Local state for Step 0 to prevent expensive parent state updates on every keystroke
     const [localFormDetails, setLocalFormDetails] = React.useState({
