@@ -235,6 +235,10 @@ export default function MentorProfileViewPage() {
 
     const capacity = profile?.capacity ?? 0;
     const openSlots = capacity > 0 ? Math.max(capacity - activeAssignments.length, 0) : 0;
+    const normalizedCapacity = Math.max(capacity, activeAssignments.length);
+    const openSlotsDisplay = normalizedCapacity > 0
+        ? `${openSlots}/${normalizedCapacity}`
+        : `${openSlots}/0`;
     const compatibility = profile && mentorRole
         ? evaluateMentorCompatibility(profile, roleStats, mentorRole)
         : null;
@@ -262,11 +266,23 @@ export default function MentorProfileViewPage() {
             : mentorRole === 'statistician'
                 ? 'Statistician'
                 : 'Mentor';
+    const roleLabelLower = roleLabel.toLowerCase();
+    const roleArticle = /^[aeiou]/i.test(roleLabelLower) ? 'an' : 'a';
 
-    const requestableGroups = React.useMemo(
+    const leaderGroups = React.useMemo(
         () => ownedGroups.filter((group) => group.members.leader === viewerUid),
         [ownedGroups, viewerUid]
     );
+
+    const requestableGroups = React.useMemo(() => {
+        if (!mentorRole) {
+            return [];
+        }
+        return leaderGroups.filter((group) => !group.members[mentorRole]);
+    }, [leaderGroups, mentorRole]);
+    const ownsAnyLeaderGroup = leaderGroups.length > 0;
+    const noGroupMessage = 'Create and lead a thesis group before sending requests.';
+    const allRolesFilledMessage = `All of your groups already have ${roleArticle} ${roleLabelLower} assigned.`;
 
     React.useEffect(() => {
         setGroupRequests(new Map());
@@ -307,7 +323,7 @@ export default function MentorProfileViewPage() {
         return false;
     }, [groupRequests, profile, requestableGroups]);
 
-    const slotsFull = capacity <= 0 || (capacity > 0 && openSlots <= 0);
+    const slotsFull = capacity <= 0 || openSlots <= 0;
     const canShowRequestButton = viewerRole === 'student' && Boolean(mentorRole);
 
     let requestDisabledReason: string | undefined;
@@ -315,8 +331,10 @@ export default function MentorProfileViewPage() {
         requestDisabledReason = 'You already have a pending request for this mentor.';
     } else if (slotsFull) {
         requestDisabledReason = 'This mentor is not accepting requests right now.';
+    } else if (!ownsAnyLeaderGroup) {
+        requestDisabledReason = noGroupMessage;
     } else if (requestableGroups.length === 0) {
-        requestDisabledReason = 'Create and lead a thesis group before sending requests.';
+        requestDisabledReason = allRolesFilledMessage;
     }
 
     const requestButtonDisabled = Boolean(slotsFull || requestableGroups.length === 0 || requestSubmitting || hasPendingRequest);
@@ -356,7 +374,7 @@ export default function MentorProfileViewPage() {
                     {[
                         { label: 'Active Teams', value: activeAssignments.length },
                         { label: 'Total Assignments', value: assignments.length },
-                        { label: 'Open Slots', value: capacity > 0 ? `${openSlots}/${capacity}` : `${openSlots}/0` },
+                        { label: 'Open Slots', value: openSlotsDisplay },
                         { label: 'Compatibility', value: compatibility != null ? `${compatibility}%` : '—' },
                     ].map((stat) => (
                         <Stack key={stat.label} spacing={0.5} minWidth={140}>
@@ -554,7 +572,7 @@ export default function MentorProfileViewPage() {
                         </Stack>
                     ) : requestableGroups.length === 0 ? (
                         <Alert severity="info">
-                            Create and lead a thesis group first before sending mentor requests.
+                            {ownsAnyLeaderGroup ? allRolesFilledMessage : noGroupMessage}
                         </Alert>
                     ) : (
                         <FormControl component="fieldset" sx={{ width: '100%', mb: 2 }}>

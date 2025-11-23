@@ -22,7 +22,7 @@ import { normalizeDateInput } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router';
 import type { WorkflowStep } from '../../types/workflow';
 import {
-    WORKFLOW_STATE_META, resolveStepState, applyPrerequisiteLocks, getStepMeta, getActiveStepIndex, formatPrerequisiteMessage,
+    resolveStepState, applyPrerequisiteLocks, getStepMeta, getActiveStepIndex, formatPrerequisiteMessage,
 } from '../../utils/workflowUtils';
 
 export const metadata: NavigationItem = {
@@ -562,10 +562,16 @@ export default function ThesisPage() {
 
                     <Stepper orientation="vertical" activeStep={activeStepIndex} sx={{ mt: 3 }}>
                         {workflowSteps.map((step) => {
-                            const chipMeta = WORKFLOW_STATE_META[step.state];
                             const stepMeta = getStepMeta(step);
                             const isExpanded = expandedSteps.has(step.id);
                             const isLocked = step.state === 'locked';
+                            const isStepCompleted = step.state === 'completed';
+                            const iconColor = isStepCompleted ? 'success.main' : undefined;
+                            const stepTitleColor = isStepCompleted
+                                ? 'success.main'
+                                : stepMeta.accessible
+                                    ? 'text.primary'
+                                    : 'text.secondary';
 
                             return (
                                 <Step
@@ -576,14 +582,20 @@ export default function ThesisPage() {
                                 >
                                     <StepLabel
                                         icon={step.icon}
-                                        optional={<Chip size="small" label={chipMeta.label} color={chipMeta.color} />}
+                                        slotProps={{
+                                            stepIcon: {
+                                                sx: { color: iconColor },
+                                            },
+                                        }}
                                         onClick={() => handleStepToggle(step.id, stepMeta.expandable)}
                                         sx={{
                                             cursor: stepMeta.expandable ? 'pointer' : 'default',
                                             opacity: stepMeta.accessible ? 1 : 0.5,
                                         }}
                                     >
-                                        {step.title}
+                                        <Typography variant="body1" color={stepTitleColor}>
+                                            {step.title}
+                                        </Typography>
                                     </StepLabel>
                                     <StepContent>
                                         {isLocked ? (
@@ -693,10 +705,16 @@ export default function ThesisPage() {
 
                 <Stepper orientation="vertical" activeStep={activeStepIndex} sx={{ mt: 2 }}>
                     {workflowSteps.map((step) => {
-                        const chipMeta = WORKFLOW_STATE_META[step.state];
                         const stepMeta = getStepMeta(step);
                         const isExpanded = expandedSteps.has(step.id);
                         const isLocked = step.state === 'locked';
+                        const isStepCompleted = step.state === 'completed';
+                        const iconColor = isStepCompleted ? 'success.main' : undefined;
+                        const stepTitleColor = isStepCompleted
+                            ? 'success.main'
+                            : stepMeta.accessible
+                                ? 'text.primary'
+                                : 'text.secondary';
 
                         return (
                             <Step
@@ -707,14 +725,20 @@ export default function ThesisPage() {
                             >
                                 <StepLabel
                                     icon={step.icon}
-                                    optional={<Chip size="small" label={chipMeta.label} color={chipMeta.color} />}
+                                    slotProps={{
+                                        stepIcon: {
+                                            sx: { color: iconColor },
+                                        },
+                                    }}
                                     onClick={() => handleStepToggle(step.id, stepMeta.expandable)}
                                     sx={{
                                         cursor: stepMeta.expandable ? 'pointer' : 'default',
                                         opacity: stepMeta.accessible ? 1 : 0.5,
                                     }}
                                 >
-                                    {step.title}
+                                    <Typography variant="body1" color={stepTitleColor} >
+                                        {step.title}
+                                    </Typography>
                                 </StepLabel>
                                 <StepContent>
                                     {isLocked ? (

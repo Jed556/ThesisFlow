@@ -154,6 +154,8 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     const permittedRoles = allowedRoles ?? [role];
     const { showNotification } = useSnackbar();
     const navigate = useNavigate();
+    const roleLabelLower = roleLabel.toLowerCase();
+    const roleArticle = /^[aeiou]/i.test(roleLabelLower) ? 'an' : 'a';
 
     const [requests, setRequests] = React.useState<MentorRequest[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -380,7 +382,9 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     }, []);
 
     const handleOpenGroupView = React.useCallback((targetGroupId: string) => {
-        navigate(`/mentor/groups/${targetGroupId}`);
+        if (role === 'adviser') navigate(`/adviser-requests/${targetGroupId}`);
+        if (role === 'editor') navigate(`/editor-requests/${targetGroupId}`);
+        if (role === 'statistician') navigate(`/statistician-requests/${targetGroupId}`);
     }, [navigate]);
 
     const handleCloseDialog = React.useCallback(() => {
@@ -597,18 +601,33 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                         gap: 2,
                     }}
                 >
-                    {viewModels.map(({ request, group, requester }) => (
-                        <Box key={request.id} sx={{ display: 'flex' }}>
-                            <MentorRequestCard
-                                request={request}
-                                group={group}
-                                requester={requester}
-                                onApprove={(pendingRequest) => handleOpenDialog('approve', pendingRequest)}
-                                onReject={(pendingRequest) => handleOpenDialog('reject', pendingRequest)}
-                                onOpenGroup={handleOpenGroupView}
-                            />
-                        </Box>
-                    ))}
+                    {viewModels.map(({ request, group, requester }) => {
+                        const assignedMentorUid = resolveGroupMentor(group, role);
+                        const isAssigned = Boolean(assignedMentorUid);
+                        const alreadyMentoredByViewer = Boolean(mentorUid && assignedMentorUid === mentorUid);
+                        const disableApprove = isAssigned;
+                        let approveDisabledReason: string | undefined;
+                        if (isAssigned) {
+                            approveDisabledReason = alreadyMentoredByViewer
+                                ? 'You already mentor this group.'
+                                : `This group already has ${roleArticle} ${roleLabelLower} assigned.`;
+                        }
+
+                        return (
+                            <Box key={request.id} sx={{ display: 'flex' }}>
+                                <MentorRequestCard
+                                    request={request}
+                                    group={group}
+                                    requester={requester}
+                                    onApprove={(pendingRequest) => handleOpenDialog('approve', pendingRequest)}
+                                    onReject={(pendingRequest) => handleOpenDialog('reject', pendingRequest)}
+                                    onOpenGroup={handleOpenGroupView}
+                                    disableApprove={disableApprove}
+                                    approveDisabledReason={approveDisabledReason}
+                                />
+                            </Box>
+                        );
+                    })}
                 </Box>
             )}
 

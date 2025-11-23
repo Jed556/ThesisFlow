@@ -56,7 +56,6 @@ export default function ProfileHeader({
     profile,
     banner,
     accentColor,
-
     bannerEditable = false,
     onBannerChange,
     bannerUploading = false,

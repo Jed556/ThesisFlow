@@ -5,9 +5,11 @@ import {
 } from '@mui/material';
 import { formatDateShort } from '../../utils/dateUtils';
 import type { ThesisGroup } from '../../types/group';
+import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import { getGroupById } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
+import { getThesisById } from '../../utils/firebase/firestore/thesis';
 import Avatar from '../Avatar';
 import { GROUP_STATUS_COLORS, formatGroupStatus } from './constants';
 
@@ -19,6 +21,7 @@ interface GroupViewProps {
 
 interface GroupState {
     group: ThesisGroup | null;
+    thesis: ThesisData | null;
     profiles: Map<string, UserProfile>;
     loading: boolean;
     error: string | null;
@@ -131,22 +134,35 @@ function InfoList({ title, entries }: { title: string; entries: { label: string;
 
 async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Omit<GroupState, 'loading'>> {
     if (!groupId) {
-        return { group: null, profiles: new Map(), error: 'Missing group ID.' };
+        return { group: null, thesis: null, profiles: new Map(), error: 'Missing group ID.' };
     }
     const group = await getGroupById(groupId);
     if (!group) {
-        return { group: null, profiles: new Map(), error: 'Group not found.' };
+        return { group: null, thesis: null, profiles: new Map(), error: 'Group not found.' };
     }
     if (signal.aborted) {
-        return { group: null, profiles: new Map(), error: null };
+        return { group: null, thesis: null, profiles: new Map(), error: null };
     }
     const profileIds = collectGroupUids(group);
-    const profiles = profileIds.length > 0 ? await getUsersByIds(profileIds) : [];
+    const [profiles, thesisRecord] = await Promise.all([
+        profileIds.length > 0
+            ? getUsersByIds(profileIds)
+            : Promise.resolve<UserProfile[]>([]),
+        group.thesisId
+            ? getThesisById(group.thesisId)
+                .then((result) => (result ? { ...result, id: result.id ?? group.thesisId } : null))
+                .catch((error) => {
+                    console.error(`Failed to load thesis ${group.thesisId} for group ${group.id}:`, error);
+                    return null;
+                })
+            : Promise.resolve(null),
+    ]);
     if (signal.aborted) {
-        return { group: null, profiles: new Map(), error: null };
+        return { group: null, thesis: null, profiles: new Map(), error: null };
     }
     return {
         group,
+        thesis: thesisRecord,
         profiles: new Map(profiles.map((profile) => [profile.uid, profile])),
         error: null,
     };
@@ -155,6 +171,7 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
 export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
     const [state, setState] = React.useState<GroupState>(() => ({
         group: null,
+        thesis: null,
         profiles: new Map(),
         loading: true,
         error: null,
@@ -175,7 +192,7 @@ export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
                     return;
                 }
                 console.error('Failed to load group details:', error);
-                setState({ group: null, profiles: new Map(), loading: false, error: 'Unable to load group details.' });
+                setState({ group: null, thesis: null, profiles: new Map(), loading: false, error: 'Unable to load group details.' });
             });
         return () => abort.abort();
     }, [groupId]);
@@ -196,7 +213,10 @@ export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
         return <Alert severity="info">Group not found.</Alert>;
     }
 
-    const { group, profiles } = state;
+    const { group, thesis, profiles } = state;
+    const thesisTitle = thesis?.title ?? group.thesisTitle ?? '—';
+    const thesisIdDisplay = group.thesisId ?? thesis?.id ?? '—';
+    const thesisStatus = thesis?.overallStatus ?? '—';
     const statusColor = STATUS_COLOR_MAP[group.status] ?? 'default';
     const metadataItems = [
         { label: 'Group ID', value: group.id },
@@ -208,7 +228,9 @@ export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
     ];
 
     const thesisItems = [
-        { label: 'Thesis Title', value: group.thesisTitle || '—' },
+        { label: 'Thesis ID', value: thesisIdDisplay },
+        { label: 'Thesis Title', value: thesisTitle },
+        { label: 'Thesis Status', value: thesisStatus },
         { label: 'Description', value: group.description || 'No description provided.' },
     ];
 

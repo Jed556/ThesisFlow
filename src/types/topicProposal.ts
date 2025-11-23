@@ -1,9 +1,4 @@
 /**
- * Maximum number of topic proposals allowed per submission cycle.
- */
-export const MAX_TOPIC_PROPOSALS = 3;
-
-/**
  * Possible workflow states for an individual topic proposal entry.
  */
 export const TOPIC_PROPOSAL_ENTRY_STATUSES = [

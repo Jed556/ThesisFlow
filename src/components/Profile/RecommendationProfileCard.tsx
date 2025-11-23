@@ -21,8 +21,9 @@ export default function RecommendationProfileCard({
     disabled = false,
 }: RecommendationProfileCardProps) {
     const stats = React.useMemo<ProfileCardStat[]>(() => {
-        const filledSlots = card.capacity > 0
-            ? `${card.activeCount}/${card.capacity}`
+        const normalizedCapacity = Math.max(card.capacity, card.activeCount);
+        const filledSlots = normalizedCapacity > 0
+            ? `${card.activeCount}/${normalizedCapacity}`
             : `${card.activeCount}/0`;
 
         const baseStats: ProfileCardStat[] = [

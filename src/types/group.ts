@@ -9,6 +9,7 @@ export interface ThesisGroup {
     createdAt: string;
     updatedAt: string;
     status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
+    thesisId?: string;
     thesisTitle?: string;
     department?: string;
     course?: string;
@@ -43,6 +44,7 @@ export interface ThesisGroupFormData {
     members: string[];
     adviser?: string;
     editor?: string;
+    thesisId?: string;
     status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
     thesisTitle?: string;
     department?: string;

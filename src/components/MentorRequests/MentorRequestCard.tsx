@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Card, CardActionArea, CardActions, CardContent, Chip, Stack, Typography, Button, Box } from '@mui/material';
+import { Card, CardActionArea, CardActions, CardContent, Chip, Stack, Typography, Button, Box, Tooltip } from '@mui/material';
 import { Group as GroupIcon, CheckCircle as ApproveIcon, Close as RejectIcon } from '@mui/icons-material';
 import type { MentorRequest } from '../../types/mentorRequest';
 import type { ThesisGroup } from '../../types/group';
@@ -13,6 +13,8 @@ interface MentorRequestCardProps {
     onApprove?: (request: MentorRequest) => void;
     onReject?: (request: MentorRequest) => void;
     onOpenGroup?: (groupId: string) => void;
+    disableApprove?: boolean;
+    approveDisabledReason?: string;
 }
 
 interface StatusDisplayConfig {
@@ -39,7 +41,10 @@ function resolveLeaderName(requester: UserProfile | null): string {
     return full || fallback;
 }
 
-export function MentorRequestCard({ request, group, requester, onApprove, onReject, onOpenGroup, }: MentorRequestCardProps) {
+export function MentorRequestCard({
+    request, group, requester, onApprove, onReject, onOpenGroup, approveDisabledReason,
+    disableApprove = false,
+}: MentorRequestCardProps) {
     const statusMeta = STATUS_CONFIG[request.status];
     const leaderName = resolveLeaderName(requester);
     const requestedDate = formatDateShort(request.createdAt);
@@ -128,14 +133,23 @@ export function MentorRequestCard({ request, group, requester, onApprove, onReje
             {request.status === 'pending' && (
                 <CardActions sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                     <Stack direction="row" spacing={1}>
-                        <Button
-                            startIcon={<ApproveIcon />}
-                            color="success"
-                            variant="contained"
-                            onClick={handleApprove}
+                        <Tooltip
+                            title={approveDisabledReason ?? ''}
+                            placement="top"
+                            disableHoverListener={!approveDisabledReason}
                         >
-                            Approve
-                        </Button>
+                            <span>
+                                <Button
+                                    startIcon={<ApproveIcon />}
+                                    color="success"
+                                    variant="contained"
+                                    onClick={handleApprove}
+                                    disabled={disableApprove}
+                                >
+                                    Approve
+                                </Button>
+                            </span>
+                        </Tooltip>
                         <Button
                             startIcon={<RejectIcon />}
                             color="error"

@@ -21,7 +21,7 @@ import {
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import { areAllProposalsRejected, canEditProposalSet, pickActiveProposalSet } from '../../utils/topicProposalUtils';
-import { MAX_TOPIC_PROPOSALS } from '../../types/topicProposal';
+import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -425,9 +425,6 @@ export default function StudentTopicProposalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Topic proposals
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Draft up to {MAX_TOPIC_PROPOSALS} topics, collaborate with your group, and submit them for
                         moderator and head review.

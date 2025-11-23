@@ -1,30 +1,15 @@
 import {
-    collection,
-    doc,
-    getDoc,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    setDoc,
-    updateDoc,
-    where,
-    type DocumentData,
-    type DocumentSnapshot,
-    type QueryDocumentSnapshot,
+    collection, doc, getDoc, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
+    type DocumentData, type DocumentSnapshot, type QueryDocumentSnapshot
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
 import { updateGroup } from './groups';
 import type {
-    TopicProposalEntry,
-    TopicProposalEntryStatus,
-    TopicProposalReviewEvent,
-    TopicProposalReviewerDecision,
-    TopicProposalSet,
-    TopicProposalSetRecord,
+    TopicProposalEntry, TopicProposalEntryStatus, TopicProposalReviewEvent,
+    TopicProposalReviewerDecision, TopicProposalSet, TopicProposalSetRecord
 } from '../../../types/topicProposal';
-import { MAX_TOPIC_PROPOSALS } from '../../../types/topicProposal';
+import { MAX_TOPIC_PROPOSALS } from '../../../config/proposals';
 
 const COLLECTION_NAME = 'topicProposals';
 

@@ -1,6 +1,7 @@
 import type { ThesisData } from '../types/thesis';
 import type { UserProfile } from '../types/profile';
 import { normalizeDateInput } from './dateUtils';
+import { isCompletedThesisStatus } from './mentorProfileUtils';
 
 export interface ThesisRoleStats {
     adviserCount: number;
@@ -27,6 +28,9 @@ export function aggregateThesisStats(theses: (ThesisData & { id: string })[]): M
     const stats = new Map<string, ThesisRoleStats>();
 
     theses.forEach((thesis) => {
+        if (isCompletedThesisStatus(thesis.overallStatus)) {
+            return;
+        }
         const ensureRecord = (uid: string): ThesisRoleStats => {
             if (!stats.has(uid)) {
                 stats.set(uid, { adviserCount: 0, editorCount: 0, statisticianCount: 0 });

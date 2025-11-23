@@ -250,7 +250,7 @@ export default function AdviserEditorRecommendationsPage() {
     }, [navigate]);
 
     const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => {
-        const slotsFull = model.capacity > 0 && model.openSlots === 0;
+        const slotsFull = model.capacity <= 0 || model.openSlots === 0;
         return (
             <MentorRecommendationCard
                 card={model}
