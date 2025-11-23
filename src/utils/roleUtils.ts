@@ -6,8 +6,8 @@
 import type { ThesisRole, ThesisData } from '../types/thesis';
 import type { UserRole } from '../types/profile';
 import { firebaseAuth, firebaseFirestore } from './firebase/firebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { getUserById, getUserByEmail } from './firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { getUserById } from './firebase/firestore';
 
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
@@ -35,9 +35,14 @@ export async function getUserRole(forceRefresh: boolean = true): Promise<UserRol
         // Fallback to Firestore if no claim exists
         const userEmail = user.email;
         if (userEmail) {
-            const profile = await getUserByEmail(userEmail);
-            if (profile?.role) {
-                return profile.role;
+            const userDocRef = doc(firebaseFirestore, 'users', encodeURIComponent(userEmail));
+            const docSnap = await getDoc(userDocRef);
+
+            if (docSnap.exists()) {
+                const userData = docSnap.data();
+                if (userData.role) {
+                    return userData.role as UserRole;
+                }
             }
         }
 
