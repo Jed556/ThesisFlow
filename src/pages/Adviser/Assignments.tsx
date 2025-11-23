@@ -10,10 +10,10 @@ import { AnimatedPage } from '../../components/Animate';
 import { listenReviewerAssignmentsForUser } from '../../utils/firebase/firestore/thesis';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
+    group: 'thesis',
     index: 4,
-    title: 'Adviser Assignments',
-    segment: 'adviser/assignments',
+    title: 'Assignments',
+    segment: 'adviser-assignments',
     icon: <FactCheckIcon />,
     roles: ['adviser'],
 };

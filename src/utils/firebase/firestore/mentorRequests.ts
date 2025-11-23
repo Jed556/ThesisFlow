@@ -1,5 +1,5 @@
 import {
-    addDoc, collection, doc, getDocs, onSnapshot, orderBy, query,
+    addDoc, collection, doc, getDocs, onSnapshot, query,
     updateDoc, where, type DocumentData, type QueryDocumentSnapshot
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
@@ -51,13 +51,14 @@ export function listenMentorRequestsByMentor(
         requestsRef,
         where('mentorUid', '==', mentorUid),
         where('role', '==', role),
-        orderBy('createdAt', 'desc'),
     );
 
     return onSnapshot(
         requestsQuery,
         (snapshot) => {
-            const requests = snapshot.docs.map((docSnap) => mapMentorRequest(docSnap as QueryDocumentSnapshot<DocumentData>));
+            const requests = snapshot.docs
+                .map((docSnap) => mapMentorRequest(docSnap as QueryDocumentSnapshot<DocumentData>))
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
             options.onData(requests);
         },
         (error) => {
@@ -86,13 +87,14 @@ export function listenMentorRequestsByGroup(
     const requestsQuery = query(
         requestsRef,
         where('groupId', '==', groupId),
-        orderBy('createdAt', 'desc'),
     );
 
     return onSnapshot(
         requestsQuery,
         (snapshot) => {
-            const requests = snapshot.docs.map((docSnap) => mapMentorRequest(docSnap as QueryDocumentSnapshot<DocumentData>));
+            const requests = snapshot.docs
+                .map((docSnap) => mapMentorRequest(docSnap as QueryDocumentSnapshot<DocumentData>))
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
             options.onData(requests);
         },
         (error) => {

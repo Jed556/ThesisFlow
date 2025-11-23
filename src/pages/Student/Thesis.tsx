@@ -12,10 +12,12 @@ import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
+import type { ThesisGroup } from '../../types/group';
 import { AnimatedList, AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
 import { getThesisTeamMembers } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
+import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { normalizeDateInput } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router';
 import type { WorkflowStep } from '../../types/workflow';
@@ -50,15 +52,61 @@ function getStatusColor(status: ThesisChapter['status']): 'success' | 'warning' 
     return 'default';
 }
 
-function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMember[]): WorkflowStep[] {
+function buildThesisWorkflowSteps(
+    record: ThesisRecord | null,
+    members: TeamMember[],
+    group: ThesisGroup | null
+): WorkflowStep[] {
     if (!record) {
+        // Determine group state for better messaging
+        const groupStatus = group?.status;
+        const isDraft = groupStatus === 'draft';
+        const isInReview = groupStatus === 'review';
+        const isActive = groupStatus === 'active';
+        const isRejected = groupStatus === 'rejected';
+
+        let groupDescription = 'Form your research group with team members and submit for moderator approval.';
+        let groupState: WorkflowStep['state'] = group ? 'in-progress' : 'available';
+        const adviserAssigned = Boolean(group?.members?.adviser);
+        const editorAssigned = Boolean(group?.members?.editor);
+        const advisersComplete = adviserAssigned && editorAssigned;
+
+        if (isActive) {
+            groupDescription = 'Group has been approved and is active.';
+            groupState = 'completed';
+        } else if (isInReview) {
+            groupDescription = 'Group is awaiting approval from the Research Moderator.';
+            groupState = 'in-progress';
+        } else if (isRejected) {
+            groupDescription = group?.rejectionReason
+                ? `Group was rejected: ${group.rejectionReason}`
+                : 'Group was rejected. Please review and resubmit.';
+            groupState = 'available';
+        } else if (isDraft) {
+            groupDescription = 'Group created. Review your members and submit the group request when ready.';
+            groupState = 'in-progress';
+        }
+
+        const adviserDescription = advisersComplete
+            ? 'Adviser and Editor assigned.'
+            : adviserAssigned
+                ? 'Adviser assigned. Waiting for Editor.'
+                : editorAssigned
+                    ? 'Editor assigned. Waiting for Adviser.'
+                    : 'Select and request approval from your thesis adviser and research editor.';
+        const adviserState: WorkflowStep['state'] = advisersComplete
+            ? 'completed'
+            : adviserAssigned || editorAssigned
+                ? 'in-progress'
+                : 'available';
+
         const baseSteps: WorkflowStep[] = [
             {
                 id: 'create-group',
                 title: 'Create Research Group',
-                description: 'Form your research group with team members and submit for moderator approval.',
+                description: groupDescription,
                 completedMessage: 'Your research group has been created and approved.',
-                state: 'in-progress',
+                state: groupState,
                 actionLabel: 'Go to My Group',
                 actionPath: '/group',
                 icon: <GroupsIcon />,
@@ -66,11 +114,11 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
             {
                 id: 'request-advisers',
                 title: 'Request Adviser & Editor',
-                description: 'Select and request approval from your thesis adviser and research editor.',
+                description: adviserDescription,
                 completedMessage: 'Adviser and Editor have been assigned to your group.',
-                state: 'available',
-                actionLabel: 'Manage Group',
-                actionPath: '/group',
+                state: adviserState,
+                actionLabel: advisersComplete ? undefined : 'Browse Mentors',
+                actionPath: '/recommendation',
                 icon: <PersonAddIcon />,
                 prerequisites: [
                     { stepId: 'create-group', type: 'prerequisite' },
@@ -87,7 +135,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
                 icon: <TopicIcon />,
                 prerequisites: [
                     { stepId: 'create-group', type: 'prerequisite' },
-                    { stepId: 'request-advisers', type: 'corequisite' },
+                    { stepId: 'request-advisers', type: 'prerequisite' },
                 ],
             },
             {
@@ -122,8 +170,16 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
 
     const chapters = record.chapters ?? [];
     const totalMembers = members.length;
-    const hasGroup = Boolean(record.groupId) || totalMembers > 0;
-    const groupApproved = totalMembers > 1;
+    const hasGroup = Boolean(record.groupId) || totalMembers > 0 || Boolean(group);
+
+    // Determine group approval state with detailed status
+    const groupStatus = group?.status;
+    const isDraft = groupStatus === 'draft';
+    const isInReview = groupStatus === 'review';
+    const isActive = groupStatus === 'active';
+    const isRejected = groupStatus === 'rejected';
+    const groupApproved = isActive || (totalMembers > 1 && groupStatus !== 'draft');
+
     const adviserAssigned = Boolean(record.adviser);
     const editorAssigned = Boolean(record.editor);
     const advisersComplete = adviserAssigned && editorAssigned;
@@ -133,15 +189,29 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
     const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
     const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
 
+    // Build group description based on current status
+    let groupDescription: string;
+    if (groupApproved) {
+        groupDescription = `Group approved with ${totalMembers} members.`;
+    } else if (isInReview) {
+        groupDescription = 'Group is awaiting approval from the Research Moderator.';
+    } else if (isRejected) {
+        groupDescription = group?.rejectionReason
+            ? `Group was rejected: ${group.rejectionReason}. Please update and resubmit.`
+            : 'Group was rejected. Please review and resubmit.';
+    } else if (isDraft) {
+        groupDescription = 'Group created. Review your members and submit the group request when ready.';
+    } else if (hasGroup) {
+        groupDescription = 'Awaiting Research Moderator approval.';
+    } else {
+        groupDescription = 'Form your research group with team members and submit for moderator approval.';
+    }
+
     const baseSteps: WorkflowStep[] = [
         {
             id: 'create-group',
             title: 'Create Research Group',
-            description: groupApproved
-                ? `Group created with ${totalMembers} members.`
-                : hasGroup
-                    ? 'Awaiting Research Moderator approval.'
-                    : 'Form your research group with team members and submit for moderator approval.',
+            description: groupDescription,
             completedMessage: `Your research group has been created and approved with ${totalMembers} members.`,
             state: resolveStepState({ completed: groupApproved, started: hasGroup }),
             actionLabel: 'Go to My Group',
@@ -160,8 +230,8 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
                         : 'Select and request approval from your thesis adviser and research editor.',
             completedMessage: 'Adviser and Editor have been assigned to your group.',
             state: resolveStepState({ completed: advisersComplete, started: adviserAssigned || editorAssigned }),
-            actionLabel: 'Manage Group',
-            actionPath: '/group',
+            actionLabel: advisersComplete ? undefined : 'Browse Mentors',
+            actionPath: '/recommendation',
             icon: <PersonAddIcon />,
             prerequisites: [
                 { stepId: 'create-group', type: 'prerequisite' },
@@ -182,7 +252,7 @@ function buildThesisWorkflowSteps(record: ThesisRecord | null, members: TeamMemb
             icon: <TopicIcon />,
             prerequisites: [
                 { stepId: 'create-group', type: 'prerequisite' },
-                { stepId: 'request-advisers', type: 'corequisite' },
+                { stepId: 'request-advisers', type: 'prerequisite' },
             ],
         },
         {
@@ -250,6 +320,7 @@ export default function ThesisPage() {
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [userTheses, setUserTheses] = React.useState<ThesisRecord[]>([]);
     const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>([]);
+    const [group, setGroup] = React.useState<ThesisGroup | null>(null);
     const [progress, setProgress] = React.useState<number>(0);
     const [loading, setLoading] = React.useState<boolean>(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -336,10 +407,62 @@ export default function ThesisPage() {
         };
     }, [thesis]);
 
+    // Load group data
+    React.useEffect(() => {
+        if (!userUid) {
+            setGroup(null);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadGroup = async () => {
+            try {
+                const [leaderGroups, memberGroups] = await Promise.all([
+                    getGroupsByLeader(userUid),
+                    getGroupsByMember(userUid),
+                ]);
+
+                if (cancelled) return;
+
+                const combined = [...leaderGroups, ...memberGroups];
+                const unique = Array.from(
+                    new Map(combined.map((item) => [item.id, item])).values()
+                );
+
+                // Prioritize active groups, then review, then draft
+                const priority = ['active', 'review', 'draft'];
+                const sorted = unique.sort((a, b) => {
+                    const aScore = priority.indexOf(a.status);
+                    const bScore = priority.indexOf(b.status);
+                    if (aScore === -1 && bScore === -1) {
+                        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                    }
+                    if (aScore === -1) return 1;
+                    if (bScore === -1) return -1;
+                    return aScore - bScore;
+                });
+
+                setGroup(sorted[0] || null);
+            } catch (error) {
+                console.error('Failed to load group data:', error);
+                if (!cancelled) {
+                    setGroup(null);
+                }
+            }
+        };
+
+        void loadGroup();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [userUid]);
+
     // Compute workflow steps before any conditional returns (hooks must be called unconditionally)
     const workflowSteps = React.useMemo(
-        () => buildThesisWorkflowSteps(thesis, teamMembers),
-        [thesis, teamMembers]
+        () => buildThesisWorkflowSteps(thesis, teamMembers, group),
+        [thesis, teamMembers, group]
     );
     const activeStepIndex = React.useMemo(() => getActiveStepIndex(workflowSteps), [workflowSteps]);
 
@@ -472,7 +595,7 @@ export default function ThesisPage() {
                                                 <Typography variant="body2" sx={{ mb: 2 }}>
                                                     {stepMeta.displayMessage}
                                                 </Typography>
-                                                {stepMeta.showActionButton && step.actionPath && (
+                                                {stepMeta.showActionButton && step.actionPath && step.actionLabel && (
                                                     <Button
                                                         variant="contained"
                                                         size="small"
@@ -602,7 +725,7 @@ export default function ThesisPage() {
                                             <Typography variant="body2" sx={{ mb: 2 }}>
                                                 {stepMeta.displayMessage}
                                             </Typography>
-                                            {stepMeta.showActionButton && step.actionPath && (
+                                            {stepMeta.showActionButton && step.actionPath && step.actionLabel && (
                                                 <Button
                                                     variant="contained"
                                                     size="small"

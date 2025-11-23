@@ -25,10 +25,10 @@ import {
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
+    group: 'thesis',
     index: 3,
-    title: 'Adviser Thesis Overview',
-    segment: 'adviser/thesis-overview',
+    title: 'Thesis Overview',
+    segment: 'adviser-thesis-overview',
     icon: <SchoolIcon />,
     roles: ['adviser'],
 };

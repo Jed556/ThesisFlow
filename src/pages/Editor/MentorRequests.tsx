@@ -4,10 +4,10 @@ import type { NavigationItem } from '../../types/navigation';
 import MentorRequestsPage from '../../components/MentorRequests/MentorRequestsPage';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
+    group: 'mentors',
     index: 2,
     title: 'Mentor Requests',
-    segment: 'editor/requests',
+    segment: 'editor-requests',
     icon: <ManageAccountsIcon />,
     roles: ['editor'],
 };

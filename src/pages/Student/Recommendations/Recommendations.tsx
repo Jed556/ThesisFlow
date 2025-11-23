@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
-    Avatar as MuiAvatar, Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle,
-    Grid, Alert, IconButton, List, ListItem, ListItemAvatar, ListItemText, Skeleton, Stack, Tab,
+    Avatar as MuiAvatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle,
+    Grid, Alert, IconButton, List, ListItem, ListItemAvatar, ListItemText, Skeleton, Tab,
     Tabs, Typography
 } from '@mui/material';
 import {
@@ -18,16 +18,15 @@ import { MentorRecommendationCard } from '../../../components/Profile';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { listenTheses, listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
-import { listenTopicProposalSetsByGroup } from '../../../utils/firebase/firestore/topicProposals';
+import { getGroupById } from '../../../utils/firebase/firestore/groups';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { ThesisData } from '../../../types/thesis';
 import type { Session } from '../../../types/session';
-import { hasApprovedProposal, pickActiveProposalSet } from '../../../utils/topicProposalUtils';
-import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
+import type { ThesisGroup } from '../../../types/group';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
+    group: 'mentors',
     index: 0,
     title: 'Recommendations',
     segment: 'recommendation',
@@ -42,10 +41,6 @@ export default function AdviserEditorRecommendationsPage() {
     const session = useSession<Session>();
     const studentUid = session?.user?.uid ?? null;
     const navigate = useNavigate();
-    const [studentGroupId, setStudentGroupId] = React.useState<string | null>(null);
-    const [topicApproved, setTopicApproved] = React.useState(false);
-    const [topicGateResolved, setTopicGateResolved] = React.useState(false);
-    const [topicGateError, setTopicGateError] = React.useState<string | null>(null);
     const [activeTab, setActiveTab] = React.useState(0);
     const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
     const [adviserProfiles, setAdviserProfiles] = React.useState<UserProfile[]>([]);
@@ -54,36 +49,34 @@ export default function AdviserEditorRecommendationsPage() {
     const [statisticianProfiles, setStatisticianProfiles] = React.useState<UserProfile[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
-
-    const topicCheckLoading = !topicGateResolved;
+    const [studentGroupId, setStudentGroupId] = React.useState<string | null>(null);
+    const [studentGroup, setStudentGroup] = React.useState<ThesisGroup | null>(null);
+    const [groupError, setGroupError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        setTopicGateError(null);
         if (!studentUid) {
             setStudentGroupId(null);
-            setTopicApproved(false);
-            setTopicGateResolved(true);
+            setStudentGroup(null);
+            setGroupError(null);
             return () => { /* no-op */ };
         }
 
-        setTopicGateResolved(false);
         const unsubscribe = listenThesesForParticipant(studentUid, {
             onData: (records) => {
+                if (records.length === 0) {
+                    setStudentGroupId(null);
+                    return;
+                }
                 const prioritized = [...records].sort((a, b) => (
                     new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
                 ));
-                const primary = prioritized.find((record) => record.leader === studentUid) ?? prioritized[0] ?? null;
-                const groupId = primary?.groupId ?? null;
-                setStudentGroupId(groupId);
-                if (!groupId) {
-                    setTopicApproved(false);
-                    setTopicGateResolved(true);
-                }
+                const primary = prioritized.find((record) => record.leader === studentUid) ?? prioritized[0];
+                setStudentGroupId(primary?.groupId ?? null);
             },
-            onError: (err) => {
-                console.error('Failed to resolve thesis membership for recommendations:', err);
-                setTopicGateError('Unable to verify your thesis status right now.');
-                setTopicGateResolved(true);
+            onError: (listenerError) => {
+                console.error('Failed to resolve student group for recommendations:', listenerError);
+                setStudentGroupId(null);
+                setGroupError('Unable to determine your thesis group right now.');
             },
         });
 
@@ -94,33 +87,40 @@ export default function AdviserEditorRecommendationsPage() {
 
     React.useEffect(() => {
         if (!studentGroupId) {
+            setStudentGroup(null);
+            setGroupError(null);
             return () => { /* no-op */ };
         }
 
-        setTopicGateResolved(false);
-        const unsubscribe = listenTopicProposalSetsByGroup(studentGroupId, {
-            onData: (records) => {
-                const activeSet = pickActiveProposalSet(records);
-                const approved = Boolean(activeSet && (hasApprovedProposal(activeSet) || activeSet.lockedEntryId));
-                setTopicApproved(approved);
-                setTopicGateResolved(true);
-                setTopicGateError(null);
-            },
-            onError: (err) => {
-                console.error('Failed to verify topic proposal approval:', err);
-                setTopicGateError('Unable to verify your topic approval right now.');
-                setTopicGateResolved(true);
-            },
-        });
+        let cancelled = false;
+        setGroupError(null);
+        void getGroupById(studentGroupId)
+            .then((groupRecord) => {
+                if (!cancelled) {
+                    setStudentGroup(groupRecord ?? null);
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    console.error('Failed to load student group detail:', err);
+                    setStudentGroup(null);
+                    setGroupError('Unable to load your thesis group details.');
+                }
+            });
 
         return () => {
-            unsubscribe();
+            cancelled = true;
         };
     }, [studentGroupId]);
 
     React.useEffect(() => {
-        if (!topicApproved) {
+        if (!studentUid) {
+            setAdviserProfiles([]);
+            setEditorProfiles([]);
+            setStatisticianProfiles([]);
+            setTheses([]);
             setLoading(false);
+            setError(null);
             return () => { /* no-op */ };
         }
 
@@ -217,12 +217,20 @@ export default function AdviserEditorRecommendationsPage() {
             unsubscribeTheses();
             unsubscribeStatisticians();
         };
-    }, [topicApproved]);
+    }, [studentUid]);
 
     const thesisStats = React.useMemo(() => aggregateThesisStats(theses), [theses]);
+    const filteredAdviserProfiles = React.useMemo(() => {
+        const department = studentGroup?.department?.trim();
+        if (!department) {
+            return adviserProfiles;
+        }
+        return adviserProfiles.filter((profile) => profile.department?.trim().toLowerCase() === department.toLowerCase());
+    }, [adviserProfiles, studentGroup?.department]);
+
     const adviserCards = React.useMemo(
-        () => computeMentorCards(adviserProfiles, 'adviser', thesisStats),
-        [adviserProfiles, thesisStats]
+        () => computeMentorCards(filteredAdviserProfiles, 'adviser', thesisStats),
+        [filteredAdviserProfiles, thesisStats]
     );
     const editorCards = React.useMemo(
         () => computeMentorCards(editorProfiles, 'editor', thesisStats),
@@ -253,14 +261,27 @@ export default function AdviserEditorRecommendationsPage() {
         );
     }, [handleOpenProfile]);
 
-    const showLoading = topicCheckLoading || (topicApproved && loading);
+    const showLoading = loading;
 
-    if (topicGateError) {
+    if (!session?.user && session?.loading) {
         return (
             <AnimatedPage variant="fade">
-                <Alert severity="error" sx={{ maxWidth: 520 }}>
-                    {topicGateError}
-                </Alert>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <Skeleton variant="text" width={220} height={42} />
+                    <Grid container spacing={2}>
+                        {Array.from({ length: 6 }).map((_, idx) => (
+                            <Grid key={idx} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                <Card variant="outlined" sx={{ height: '100%' }}>
+                                    <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <Skeleton variant="circular" width={48} height={48} />
+                                        <Skeleton variant="text" width="70%" />
+                                        <Skeleton variant="rectangular" width="100%" height={80} />
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
             </AnimatedPage>
         );
     }
@@ -288,20 +309,12 @@ export default function AdviserEditorRecommendationsPage() {
         );
     }
 
-    if (topicGateResolved && !topicApproved) {
-        // const primaryActionPath = studentGroupId ? '/topic-proposals' : '/group';
-        // const primaryActionLabel = studentGroupId ? 'Review Topic Proposals' : 'Create My Group';
-        const description = studentGroupId
-            ? 'Mentor recommendations unlock once your topic proposal receives head approval.'
-            : 'Create a thesis group and submit topic proposals to unlock mentor recommendations.';
-
+    if (!studentUid) {
         return (
             <AnimatedPage variant="fade">
-                <UnauthorizedNotice
-                    variant='box'
-                    title='Mentor Recommendations Locked'
-                    description={description}
-                />
+                <Alert severity="info" sx={{ maxWidth: 520 }}>
+                    Sign in to view adviser and editor recommendations.
+                </Alert>
             </AnimatedPage>
         );
     }
@@ -315,6 +328,8 @@ export default function AdviserEditorRecommendationsPage() {
             </AnimatedPage>
         );
     }
+
+    const departmentHint = studentGroup?.department ? `Department focus: ${studentGroup.department}` : null;
 
     return (
         <AnimatedPage variant="fade">
@@ -336,6 +351,16 @@ export default function AdviserEditorRecommendationsPage() {
                     <InfoOutlinedIcon />
                 </IconButton>
             </Box>
+            {departmentHint && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    {departmentHint}
+                </Alert>
+            )}
+            {groupError && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    {groupError}
+                </Alert>
+            )}
 
             {/* Advisers Tab */}
             {activeTab === 0 && (
@@ -350,7 +375,9 @@ export default function AdviserEditorRecommendationsPage() {
                             <Card variant="outlined">
                                 <CardContent>
                                     <Typography variant="body2" color="text.secondary">
-                                        No advisers found. Update the directory to see recommendations.
+                                        {studentGroup?.department
+                                            ? 'No advisers in your department are available right now.'
+                                            : 'No advisers found. Update the directory to see recommendations.'}
                                     </Typography>
                                 </CardContent>
                             </Card>

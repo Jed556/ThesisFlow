@@ -18,10 +18,10 @@ import { getReviewerAssignmentsForUser } from '../../utils/firebase/firestore/th
 import type { ReviewerAssignment } from '../../types/reviewer';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
+    group: 'thesis',
     index: 1,
-    title: 'Editor Assignments',
-    segment: 'editor/assignments',
+    title: 'Assignments',
+    segment: 'editor-assignments',
     icon: <AssignmentTurnedInIcon />,
     roles: ['editor'],
 };

@@ -375,6 +375,17 @@ export default function StudentTopicProposalsPage() {
         );
     }
 
+    if (groupLoading) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Stack spacing={2}>
+                    <Skeleton variant="text" height={48} width="60%" />
+                    <Skeleton variant="rectangular" height={160} />
+                </Stack>
+            </AnimatedPage>
+        );
+    }
+
     if (!group) {
         return (
             <AnimatedPage variant="fade">
@@ -387,13 +398,17 @@ export default function StudentTopicProposalsPage() {
         );
     }
 
-    if (groupLoading) {
+    const adviserAssigned = Boolean(group.members.adviser);
+    const editorAssigned = Boolean(group.members.editor);
+
+    if (!adviserAssigned || !editorAssigned) {
         return (
-            <AnimatedPage variant="slideUp">
-                <Stack spacing={2}>
-                    <Skeleton variant="text" height={48} width="60%" />
-                    <Skeleton variant="rectangular" height={160} />
-                </Stack>
+            <AnimatedPage variant="fade">
+                <UnauthorizedNotice
+                    variant='box'
+                    title="Complete adviser & editor selection"
+                    description="Assign both a thesis adviser and research editor before submitting topic proposals."
+                />
             </AnimatedPage>
         );
     }

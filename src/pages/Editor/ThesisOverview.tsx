@@ -21,10 +21,10 @@ import { getDisplayName } from '../../utils/userUtils';
 import { getThesisRole } from '../../utils/roleUtils';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
+    group: 'thesis',
     index: 0,
-    title: 'Editor Thesis Overview',
-    segment: 'editor/thesis-overview',
+    title: 'Thesis Overview',
+    segment: 'editor-thesis-overview',
     icon: <VisibilityIcon />,
     roles: ['editor'],
 };

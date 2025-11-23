@@ -7,7 +7,7 @@ import { buildNavigation } from './utils/navBuilder';
 import { getUserRole } from './utils/roleUtils';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { navigationGroups } from './config/groups';
+import { navigationGroups } from './config/navigationGroups';
 import { Outlet } from 'react-router';
 import { SnackbarProvider, SnackbarContainer, useSnackbar } from './components/Snackbar';
 import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';

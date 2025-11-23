@@ -287,18 +287,18 @@ export default function MentorProfilePage() {
         [ownedGroups, viewerUid]
     );
 
-    const slotsFull = capacity > 0 && openSlots <= 0;
+    const slotsFull = capacity <= 0 || (capacity > 0 && openSlots <= 0);
     const canShowRequestButton = viewerRole === 'student' && Boolean(mentorRole);
 
     let requestDisabledReason: string | undefined;
     if (slotsFull) {
-        requestDisabledReason = 'This mentor has no available slots right now.';
+        requestDisabledReason = 'This mentor is not accepting requests right now.';
     } else if (requestableGroups.length === 0) {
         requestDisabledReason = 'Create and lead a thesis group before sending requests.';
     }
 
     const requestButtonDisabled = Boolean(slotsFull || requestableGroups.length === 0 || requestSubmitting);
-    const requestButtonLabel = slotsFull ? 'Slots Full' : `Request as ${roleLabel}`;
+    const requestButtonLabel = slotsFull ? 'Not accepting requests' : `Request as ${roleLabel}`;
     const canSubmitMentorRequest = Boolean(selectedGroupId && requestableGroups.length > 0 && !requestSubmitting);
     const dialogDisabled = requestableGroups.length === 0 || ownedGroupsLoading;
 
