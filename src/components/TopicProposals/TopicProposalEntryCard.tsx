@@ -13,22 +13,6 @@ export interface TopicProposalEntryCardProps {
     highlight?: boolean;
 }
 
-function formatUserName(profile?: UserProfile | null, fallback?: string): string {
-    if (!profile) {
-        return fallback ?? 'Unknown member';
-    }
-
-    const segments = [profile.name?.prefix, profile.name?.first, profile.name?.middle, profile.name?.last, profile.name?.suffix]
-        .filter((segment): segment is string => Boolean(segment && segment.trim()))
-        .map((segment) => segment.trim());
-
-    if (segments.length === 0) {
-        return profile.email;
-    }
-
-    return segments.join(' ');
-}
-
 /**
  * Generic card for rendering topic proposal entries with reusable status, author, and action slots.
  */
@@ -57,19 +41,18 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                     <Chip label={statusChip.label} color={statusChip.color} size="small" />
                 </Box>
 
-                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+                <Stack direction="row" spacing={.5} alignItems="center" sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Proposed by
+                    </Typography>
                     <Avatar
                         uid={author?.uid ?? entry.proposedBy}
                         initials={[Name.FIRST, Name.LAST]}
-                        label={formatUserName(author, entry.proposedBy)}
                         tooltip="email"
                         mode="chip"
                         editable={false}
                         chipProps={{ size: 'small', color: 'default' }}
                     />
-                    <Typography variant="caption" color="text.secondary">
-                        Proposed by {formatUserName(author, entry.proposedBy)}
-                    </Typography>
                 </Stack>
 
                 {entry.problemStatement && (

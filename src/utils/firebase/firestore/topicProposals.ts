@@ -6,7 +6,7 @@ import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
 import { getGroupById, updateGroup } from './groups';
 import { getChapterConfigByCourse } from './chapter';
-import { createThesisForGroup } from './thesis';
+import { setThesis } from './thesis';
 import { buildDefaultThesisChapters, templatesToThesisChapters } from '../../thesisChapterTemplates';
 import type {
     TopicProposalEntry, TopicProposalEntryStatus, TopicProposalReviewEvent,
@@ -235,8 +235,6 @@ function mapTopicProposalDocument(snapshot: TopicProposalSnapshot): TopicProposa
         awaitingHead: Boolean(data.awaitingHead),
         submittedBy: typeof data.submittedBy === 'string' ? data.submittedBy : undefined,
         submittedAt: data.submittedAt ? normalizeTimestamp(data.submittedAt, true) : undefined,
-        approvedEntryId: typeof data.approvedEntryId === 'string' ? data.approvedEntryId : undefined,
-        lockedEntryId: typeof data.lockedEntryId === 'string' ? data.lockedEntryId : undefined,
         usedBy: typeof data.usedBy === 'string' ? data.usedBy : undefined,
         usedAsThesisAt: data.usedAsThesisAt ? normalizeTimestamp(data.usedAsThesisAt, true) : undefined,
         reviewHistory: mapReviewHistory(data.reviewHistory),
@@ -494,7 +492,6 @@ export async function recordHeadDecision(payload: ProposalDecisionPayload): Prom
         awaitingHead: meta.awaitingHead,
         awaitingModerator: meta.awaitingModerator,
         status: nextStatus,
-        approvedEntryId: approved ? proposalId : record.approvedEntryId,
         updatedAt: serverTimestamp(),
         reviewHistory: [...record.reviewHistory, buildReviewEvent(payload, 'head')],
     });
@@ -575,10 +572,6 @@ export async function markProposalAsThesis(payload: UseTopicPayload): Promise<vo
         throw new Error('Topic proposal set not found.');
     }
 
-    if (record.lockedEntryId) {
-        throw new Error('An approved topic has already been selected for this proposal set.');
-    }
-
     const entry = record.entries.find((item) => item.id === proposalId);
     if (!entry || entry.status !== 'head_approved') {
         throw new Error('Only head-approved proposals can be used as the thesis topic.');
@@ -591,18 +584,19 @@ export async function markProposalAsThesis(payload: UseTopicPayload): Promise<vo
     if (!group.members?.leader) {
         throw new Error('Thesis group is missing a leader.');
     }
-    if (group.thesisId) {
-        throw new Error('A thesis has already been created for this group.');
-    }
+    // Handled in src\pages\Student\TopicProposals.tsx ensureGroupThesisReference (keep this comment in case)
+    // if (group.thesisId) {
+    //     throw new Error('A thesis has already been created for this group.');
+    // }
 
     const chapters = await buildInitialChaptersForGroup(group);
     const thesisPayload = buildThesisPayload(group, entry.title, chapters);
-    const thesisId = await createThesisForGroup(group.id, thesisPayload);
+    const thesisId = entry.id;
+    await setThesis(thesisId, thesisPayload);
 
     const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
     await Promise.all([
         updateDoc(ref, {
-            lockedEntryId: proposalId,
             usedBy: requestedBy,
             usedAsThesisAt: serverTimestamp(),
         }),

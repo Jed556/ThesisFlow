@@ -18,10 +18,11 @@ import {
     createTopicProposalSet, listenTopicProposalSetsByGroup, markProposalAsThesis,
     submitTopicProposalSet, updateTopicProposalDraftEntries,
 } from '../../utils/firebase/firestore/topicProposals';
-import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
+import { getGroupsByLeader, getGroupsByMember, updateGroup } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import { areAllProposalsRejected, canEditProposalSet, pickActiveProposalSet } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
+import { getThesisById } from '../../utils/firebase/firestore/thesis';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -66,11 +67,58 @@ function buildEmptyFormValues(): TopicProposalFormValues {
     };
 }
 
-function createEntryId(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractTopicSequence(groupId: string, entryId: string): number | null {
+    const pattern = new RegExp(`^${escapeRegExp(groupId)}-T(\\d+)$`);
+    const match = entryId.match(pattern);
+    if (!match || match.length < 2) {
+        return null;
     }
-    return Math.random().toString(36).slice(2);
+    const sequence = Number(match[1]);
+    return Number.isNaN(sequence) ? null : sequence;
+}
+
+function buildTopicEntryId(groupId: string, sequence: number): string {
+    return `${groupId}-T${sequence}`;
+}
+
+function computeNextTopicSequence(groupId: string | undefined, sets: TopicProposalSetRecord[]): number {
+    if (!groupId) {
+        return 1;
+    }
+
+    let maxSequence = 0;
+    sets.forEach((set) => {
+        set.entries.forEach((entry) => {
+            const sequence = extractTopicSequence(groupId, entry.id);
+            if (sequence && sequence > maxSequence) {
+                maxSequence = sequence;
+            }
+        });
+    });
+
+    return maxSequence + 1;
+}
+
+async function ensureGroupThesisReference(group: ThesisGroup): Promise<ThesisGroup> {
+    if (!group.thesisId) {
+        return group;
+    }
+
+    try {
+        const thesis = await getThesisById(group.thesisId);
+        if (thesis) {
+            return group;
+        }
+        await updateGroup(group.id, { thesisId: undefined, thesisTitle: undefined });
+        return { ...group, thesisId: undefined, thesisTitle: undefined };
+    } catch (error) {
+        console.error('Failed to verify thesis reference for group:', error);
+        return group;
+    }
 }
 
 /**
@@ -84,11 +132,13 @@ export default function StudentTopicProposalsPage() {
     const [group, setGroup] = React.useState<ThesisGroup | null>(null);
     const [groupError, setGroupError] = React.useState<string | null>(null);
     const [groupLoading, setGroupLoading] = React.useState(true);
+    const [groupReloadToken, setGroupReloadToken] = React.useState(0);
     const [memberProfiles, setMemberProfiles] = React.useState<Map<string, UserProfile>>(new Map());
 
     const [proposalSets, setProposalSets] = React.useState<TopicProposalSetRecord[]>([]);
     const [proposalError, setProposalError] = React.useState<string | null>(null);
     const [proposalLoading, setProposalLoading] = React.useState(false);
+    const [nextTopicSequence, setNextTopicSequence] = React.useState(1);
 
     const [formOpen, setFormOpen] = React.useState(false);
     const [formMode, setFormMode] = React.useState<'create' | 'edit'>('create');
@@ -124,7 +174,12 @@ export default function StudentTopicProposalsPage() {
                 }
                 const combined = [...leaderGroups, ...memberGroups];
                 const unique = Array.from(new Map(combined.map((item) => [item.id, item])).values());
-                setGroup(pickPrimaryGroup(unique));
+                const primary = pickPrimaryGroup(unique);
+                const safeGroup = primary ? await ensureGroupThesisReference(primary) : null;
+                if (cancelled) {
+                    return;
+                }
+                setGroup(safeGroup);
             } catch (error) {
                 console.error('Failed to load student groups:', error);
                 if (!cancelled) {
@@ -142,7 +197,7 @@ export default function StudentTopicProposalsPage() {
         return () => {
             cancelled = true;
         };
-    }, [userUid]);
+    }, [userUid, groupReloadToken]);
 
     React.useEffect(() => {
         if (!group?.id) {
@@ -201,6 +256,14 @@ export default function StudentTopicProposalsPage() {
         };
     }, [group?.id]);
 
+    React.useEffect(() => {
+        if (!group?.id) {
+            setNextTopicSequence(1);
+            return;
+        }
+        setNextTopicSequence(computeNextTopicSequence(group.id, proposalSets));
+    }, [group?.id, proposalSets]);
+
     const activeSet = React.useMemo(() => pickActiveProposalSet(proposalSets), [proposalSets]);
     const isLeader = group?.members.leader === userUid;
     const editable = canEditProposalSet(activeSet) && isLeader;
@@ -215,6 +278,47 @@ export default function StudentTopicProposalsPage() {
         () => proposalSets.filter((set) => set.id !== activeSet?.id),
         [proposalSets, activeSet?.id]
     );
+
+    const groupThesisId = group?.thesisId ?? undefined;
+    const activeThesisEntryId = React.useMemo(() => {
+        if (!groupThesisId || !activeSet) return undefined;
+        return activeSet.entries.some((entry) => entry.id === groupThesisId) ? groupThesisId : undefined;
+    }, [activeSet, groupThesisId]);
+
+    /* Compute a derived set-level status from individual entries so UI doesn't rely on the
+       historical `status` field. This makes 'approved' checks canonical from entry statuses. */
+    function computeSetMeta(set?: TopicProposalSetRecord | null) {
+        if (!set) return { awaitingModerator: false, awaitingHead: false, hasApproved: false, allRejected: false };
+        const awaitingModerator = set.entries.some((e) => e.status === 'submitted');
+        const awaitingHead = set.entries.some((e) => e.status === 'head_review');
+        const hasApproved = set.entries.some((e) => e.status === 'head_approved');
+        const allRejected = set.entries.length > 0 && set.entries.every((entry) =>
+            entry.status === 'moderator_rejected' || entry.status === 'head_rejected'
+        );
+        return { awaitingModerator, awaitingHead, hasApproved, allRejected };
+    }
+
+    const activeSetMeta = computeSetMeta(activeSet);
+
+    const activeSetStatusLabel = activeSetMeta.hasApproved
+        ? 'Topic approved'
+        : activeSetMeta.allRejected
+            ? 'All topics rejected'
+            : (activeSetMeta.awaitingModerator || activeSetMeta.awaitingHead)
+                ? 'Under review'
+                : 'Draft in progress';
+
+    const activeSetChipLabel = activeSetMeta.hasApproved
+        ? 'approved'
+        : activeSetMeta.allRejected
+            ? 'rejected'
+            : (activeSetMeta.awaitingModerator || activeSetMeta.awaitingHead)
+                ? 'under review'
+                : 'draft';
+
+    let activeSetChipColor: 'success' | 'error' | 'default' = 'default';
+    if (activeSetMeta.hasApproved) activeSetChipColor = 'success';
+    else if (activeSetMeta.allRejected) activeSetChipColor = 'error';
 
     const handleOpenForm = (entry?: TopicProposalEntry) => {
         if (!activeSet) {
@@ -242,10 +346,18 @@ export default function StudentTopicProposalsPage() {
         if (!activeSet || !userUid) {
             return;
         }
+        if (!group?.id) {
+            showNotification('Unable to save draft without a thesis group.', 'error');
+            return;
+        }
         setFormSaving(true);
+        const isNewEntry = !editingEntryId;
+        const entryId = editingEntryId ?? buildTopicEntryId(group.id, nextTopicSequence);
+        if (isNewEntry) {
+            setNextTopicSequence((prev) => prev + 1);
+        }
         try {
             const now = new Date().toISOString();
-            const entryId = editingEntryId ?? createEntryId();
             const nextEntries = editingEntryId
                 ? activeSet.entries.map((entry) =>
                     entry.id === entryId
@@ -281,6 +393,9 @@ export default function StudentTopicProposalsPage() {
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to save draft';
             showNotification(message, 'error');
+            if (isNewEntry) {
+                setNextTopicSequence((prev) => Math.max(prev - 1, 1));
+            }
         } finally {
             setFormSaving(false);
         }
@@ -348,6 +463,7 @@ export default function StudentTopicProposalsPage() {
                 requestedBy: userUid,
             });
             showNotification('Thesis created from your selected topic. Chapters are now unlocked.', 'success');
+            setGroupReloadToken((token) => token + 1);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to mark topic as thesis';
             showNotification(message, 'error');
@@ -392,7 +508,10 @@ export default function StudentTopicProposalsPage() {
                 <UnauthorizedNotice
                     variant='box'
                     title="Topic proposals locked"
-                    description="Create or join a thesis group first. Topic proposals are only available to active groups that have been submitted to the Research Moderator."
+                    description={
+                        'Create or join a thesis group first. Topic proposals are only available to active groups ' +
+                        'that have been submitted to the Research Moderator.'
+                    }
                 />
             </AnimatedPage>
         );
@@ -482,24 +601,17 @@ export default function StudentTopicProposalsPage() {
                                 <Box>
                                     <Typography variant="h6">Cycle #{activeSet.cycle}</Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                        {activeSet.status === 'draft' && 'Draft in progress'}
-                                        {activeSet.status === 'under_review' && 'Under review'}
-                                        {activeSet.status === 'approved' && 'Topic approved'}
-                                        {activeSet.status === 'rejected' && 'All topics rejected'}
+                                        {activeSetStatusLabel}
                                     </Typography>
                                 </Box>
                                 <Stack direction="row" spacing={1}>
                                     <Chip
-                                        label={activeSet.status.replace('_', ' ')}
-                                        color={activeSet.status === 'approved'
-                                            ? 'success'
-                                            : activeSet.status === 'rejected'
-                                                ? 'error'
-                                                : 'default'}
+                                        label={activeSetChipLabel}
+                                        color={activeSetChipColor}
                                     />
                                     {activeSet.awaitingModerator && <Chip label="For Moderator" color="info" />}
                                     {activeSet.awaitingHead && <Chip label="For Head" color="warning" />}
-                                    {activeSet.lockedEntryId && <Chip label="In Use" color="success" variant="outlined" />}
+                                    {activeThesisEntryId && <Chip label="In Use" color="success" variant="outlined" />}
                                 </Stack>
                             </Stack>
 
@@ -530,6 +642,8 @@ export default function StudentTopicProposalsPage() {
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
                         {activeSet.entries.map((entry) => {
                             const author = memberProfiles.get(entry.proposedBy);
+                            const isEntryInUse = activeThesisEntryId === entry.id;
+                            const lockedByAnotherEntry = Boolean(activeThesisEntryId && !isEntryInUse);
                             const entryActions: React.ReactNode[] = [];
                             if (editable) {
                                 entryActions.push(
@@ -549,10 +663,10 @@ export default function StudentTopicProposalsPage() {
                                         variant="contained"
                                         color="success"
                                         size="small"
-                                        disabled={Boolean(activeSet.lockedEntryId) && activeSet.lockedEntryId !== entry.id}
+                                        disabled={lockedByAnotherEntry || isEntryInUse || useTopicLoading}
                                         onClick={() => setUseTopicDialog(entry)}
                                     >
-                                        {activeSet.lockedEntryId === entry.id ? 'In use' : 'Use this topic'}
+                                        {isEntryInUse ? 'In use' : 'Use this topic'}
                                     </Button>
                                 );
                             }
@@ -592,25 +706,46 @@ export default function StudentTopicProposalsPage() {
                 {historySets.length > 0 && (
                     <Stack spacing={2}>
                         <Typography variant="h6">Previous submission cycles</Typography>
-                        {historySets.map((set) => (
-                            <Card key={set.id} variant="outlined">
-                                <CardContent>
-                                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
-                                        <Box>
-                                            <Typography variant="subtitle1">Cycle #{set.cycle}</Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {set.entries.length} topic(s) • {set.status.replace('_', ' ')}
-                                            </Typography>
-                                        </Box>
-                                        <Stack direction="row" spacing={1}>
-                                            <Chip label={set.status.replace('_', ' ')} size="small" />
-                                            {set.awaitingModerator && <Chip label="Moderator" color="info" size="small" />}
-                                            {set.awaitingHead && <Chip label="Head" color="warning" size="small" />}
+                        {historySets.map((set) => {
+                            const meta = computeSetMeta(set);
+                            const statusLabel = meta.hasApproved
+                                ? 'Topic approved'
+                                : meta.allRejected
+                                    ? 'All topics rejected'
+                                    : (meta.awaitingModerator || meta.awaitingHead)
+                                        ? 'Under review'
+                                        : 'Draft in progress';
+                            const chipLabel = meta.hasApproved
+                                ? 'approved'
+                                : meta.allRejected
+                                    ? 'rejected'
+                                    : (meta.awaitingModerator || meta.awaitingHead)
+                                        ? 'under review'
+                                        : 'draft';
+                            let chipColor: 'success' | 'error' | 'default' = 'default';
+                            if (meta.hasApproved) chipColor = 'success';
+                            else if (meta.allRejected) chipColor = 'error';
+
+                            return (
+                                <Card key={set.id} variant="outlined">
+                                    <CardContent>
+                                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
+                                            <Box>
+                                                <Typography variant="subtitle1">Cycle #{set.cycle}</Typography>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    {set.entries.length} topic(s) • {statusLabel}
+                                                </Typography>
+                                            </Box>
+                                            <Stack direction="row" spacing={1}>
+                                                <Chip label={chipLabel} size="small" color={chipColor} />
+                                                {set.awaitingModerator && <Chip label="Moderator" color="info" size="small" />}
+                                                {set.awaitingHead && <Chip label="Head" color="warning" size="small" />}
+                                            </Stack>
                                         </Stack>
-                                    </Stack>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
                     </Stack>
                 )}
             </Stack>

@@ -184,7 +184,7 @@ function buildThesisWorkflowSteps(
     const editorAssigned = Boolean(record.editor);
     const advisersComplete = adviserAssigned && editorAssigned;
     const hasTopicProposals = Boolean(record.title);
-    const topicApproved = (record.overallStatus ?? '').toLowerCase().includes('approved');
+    const topicApproved = Boolean(record.id) || (record.overallStatus ?? '').toLowerCase().includes('approved');
     const chaptersSubmitted = chapters.some((chapter) => chapter.status !== 'not_submitted');
     const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
     const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
@@ -246,7 +246,7 @@ function buildThesisWorkflowSteps(
                     ? 'Proposals submitted. Awaiting approval.'
                     : 'Upload up to 3 thesis title proposals for review and approval.',
             completedMessage: `Your topic proposal "${record.title}" has been approved.`,
-            state: resolveStepState({ completed: topicApproved, started: hasTopicProposals }),
+            state: resolveStepState({ completed: topicApproved, started: hasTopicProposals || topicApproved }),
             actionLabel: 'View Proposals',
             actionPath: '/topic-proposals',
             icon: <TopicIcon />,

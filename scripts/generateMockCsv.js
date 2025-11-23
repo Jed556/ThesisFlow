@@ -941,10 +941,7 @@ const generateTopicProposals = (groups, usersByRole) => {
             setStatus = 'rejected';
         }
 
-        const lockedEntryId = approvedEntry?.id
-            || entries.find(entry => entry.status === 'head_review')?.id
-            || entries.find(entry => entry.status === 'submitted')?.id
-            || '';
+        // previously set lockedEntryId from entries — removed when flattening header columns
 
         return [
             `TPS${pad(idx + 1)}`,
@@ -958,8 +955,7 @@ const generateTopicProposals = (groups, usersByRole) => {
             awaitingHead ? 'true' : 'false',
             nonDraft?.proposedBy || '',
             nonDraft?.createdAt || '',
-            approvedEntry?.id || '',
-            lockedEntryId,
+            // approvedEntryId and lockedEntryId removed — we no longer include those columns
             approvedEntry ? leader : '',
             approvedEntry ? buildIso(baseDate, idx + 20, 12, 30) : '',
             JSON.stringify(entries),
@@ -1199,7 +1195,7 @@ const main = async () => {
     const topicProposals = generateTopicProposals(groups, usersByRole);
     writeCsv('topicProposals.mock.csv', [
         'id', 'groupId', 'createdBy', 'createdAt', 'updatedAt', 'status', 'cycle', 'awaitingModerator', 'awaitingHead',
-        'submittedBy', 'submittedAt', 'approvedEntryId', 'lockedEntryId', 'usedBy', 'usedAsThesisAt', 'entries', 'reviewHistory',
+        'submittedBy', 'submittedAt', 'usedBy', 'usedAsThesisAt', 'entries', 'reviewHistory',
     ], topicProposals);
 
     // Generate theses

@@ -176,8 +176,6 @@ export function importTopicProposalsFromCsv(csvText: string): { parsed: TopicPro
         const awaitingHead = parseBoolean(getCell(row, 'awaitingHead'));
         const submittedBy = getCell(row, 'submittedBy') || getCell(row, 'submitted_by') || undefined;
         const submittedAt = getCell(row, 'submittedAt') || getCell(row, 'submitted_at') || undefined;
-        const approvedEntryId = getCell(row, 'approvedEntryId') || getCell(row, 'approved_entry_id') || undefined;
-        const lockedEntryId = getCell(row, 'lockedEntryId') || getCell(row, 'locked_entry_id') || undefined;
         const usedBy = getCell(row, 'usedBy') || getCell(row, 'used_by') || undefined;
         const usedAsThesisAt = getCell(row, 'usedAsThesisAt') || getCell(row, 'used_as_thesis_at') || undefined;
 
@@ -199,8 +197,6 @@ export function importTopicProposalsFromCsv(csvText: string): { parsed: TopicPro
             awaitingHead,
             submittedBy,
             submittedAt,
-            approvedEntryId,
-            lockedEntryId,
             usedBy,
             usedAsThesisAt,
             reviewHistory,
@@ -228,8 +224,6 @@ export function exportTopicProposalsToCsv(records: TopicProposalSetRecord[]): st
         'awaitingHead',
         'submittedBy',
         'submittedAt',
-        'approvedEntryId',
-        'lockedEntryId',
         'usedBy',
         'usedAsThesisAt',
         'entries',
@@ -248,8 +242,7 @@ export function exportTopicProposalsToCsv(records: TopicProposalSetRecord[]): st
         record.awaitingHead ? 'true' : 'false',
         record.submittedBy ?? '',
         record.submittedAt ?? '',
-        record.approvedEntryId ?? '',
-        record.lockedEntryId ?? '',
+        // approvedEntryId removed: rely on per-entry status instead
         record.usedBy ?? '',
         record.usedAsThesisAt ?? '',
         JSON.stringify(record.entries ?? []),

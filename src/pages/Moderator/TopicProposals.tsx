@@ -3,12 +3,13 @@ import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogTitle, Skeleton, Stack, TextField, Tooltip, Typography
 } from '@mui/material';
+import type { ButtonProps } from '@mui/material';
 import HowToVoteIcon from '@mui/icons-material/HowToVote';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/topicProposal';
+import type { TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord } from '../../types/topicProposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard } from '../../components/TopicProposals';
@@ -25,6 +26,29 @@ function splitSectionList(value?: string | null): string[] {
         .split(/[;|\u007C]/)
         .map((section) => section.trim())
         .filter(Boolean);
+}
+
+interface StatusActionButtonConfig {
+    label: string;
+    color?: ButtonProps['color'];
+    variant?: ButtonProps['variant'];
+}
+
+function getModeratorStatusButtonConfig(status: TopicProposalEntryStatus): StatusActionButtonConfig | null {
+    switch (status) {
+        case 'head_review':
+            return { label: 'Approved - awaiting head', color: 'success', variant: 'outlined' };
+        case 'head_approved':
+            return { label: 'Head approved', color: 'success', variant: 'contained' };
+        case 'head_rejected':
+            return { label: 'Head rejected', color: 'error', variant: 'contained' };
+        case 'moderator_rejected':
+            return { label: 'Rejected', color: 'error', variant: 'outlined' };
+        case 'draft':
+            return { label: 'Draft in progress', color: 'inherit', variant: 'outlined' };
+        default:
+            return null;
+    }
 }
 
 export const metadata: NavigationItem = {
@@ -354,8 +378,8 @@ export default function ModeratorTopicProposalsPage() {
                                 {record && entries.length > 0 && (
                                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
                                         {entries.map((entry) => {
-                                            const isActionable = entry.status === 'submitted';
-                                            const actions = isActionable
+                                            const statusButton = getModeratorStatusButtonConfig(entry.status);
+                                            const actions = entry.status === 'submitted'
                                                 ? [
                                                     <Button
                                                         key="approve"
@@ -376,19 +400,31 @@ export default function ModeratorTopicProposalsPage() {
                                                         Reject
                                                     </Button>,
                                                 ]
-                                                : [
-                                                    <Tooltip
-                                                        key="view-only"
-                                                        title="Only submitted proposals can be reviewed"
-                                                        placement="top"
-                                                    >
-                                                        <span>
-                                                            <Button size="small" disabled>
-                                                                Await submission
-                                                            </Button>
-                                                        </span>
-                                                    </Tooltip>,
-                                                ];
+                                                : statusButton
+                                                    ? [
+                                                        <Button
+                                                            key="status"
+                                                            size="small"
+                                                            color={statusButton.color ?? 'inherit'}
+                                                            variant={statusButton.variant ?? 'outlined'}
+                                                            disabled
+                                                        >
+                                                            {statusButton.label}
+                                                        </Button>,
+                                                    ]
+                                                    : [
+                                                        <Tooltip
+                                                            key="view-only"
+                                                            title="Only submitted proposals can be reviewed"
+                                                            placement="top"
+                                                        >
+                                                            <span>
+                                                                <Button size="small" disabled>
+                                                                    Await submission
+                                                                </Button>
+                                                            </span>
+                                                        </Tooltip>,
+                                                    ];
 
                                             return (
                                                 <Box key={entry.id} sx={{ flex: '1 1 320px', minWidth: 280 }}>

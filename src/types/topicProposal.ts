@@ -31,7 +31,7 @@ export interface TopicProposalEntry {
     problemStatement?: string;
     expectedOutcome?: string;
     keywords?: string[];
-    proposedBy: string;
+    proposedBy: string; // Firebase UID of the student who proposed this topic
     createdAt: string;
     updatedAt: string;
     status: TopicProposalEntryStatus;
@@ -78,8 +78,6 @@ export interface TopicProposalSet {
     awaitingHead: boolean;
     submittedBy?: string;
     submittedAt?: string;
-    approvedEntryId?: string;
-    lockedEntryId?: string;
     usedBy?: string;
     usedAsThesisAt?: string;
     reviewHistory: TopicProposalReviewEvent[];
