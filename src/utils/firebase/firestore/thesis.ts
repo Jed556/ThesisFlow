@@ -68,6 +68,39 @@ export async function setThesis(id: string | null, data: ThesisData): Promise<st
 }
 
 /**
+ * Generate a thesis document ID for the provided group using the pattern {groupId}-T{n}.
+ * This queries existing theses for the group and picks the next available number.
+ */
+export async function generateNextThesisIdForGroup(groupId: string): Promise<string> {
+    if (!groupId) throw new Error('groupId is required');
+    const q = query(collection(firebaseFirestore, THESES_COLLECTION), where('groupId', '==', groupId));
+    const snapshot = await getDocs(q);
+
+    const pattern = new RegExp(`^${groupId.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}-T(\\d+)$`);
+
+    let maxN = 0;
+    snapshot.docs.forEach((docSnap) => {
+        const id = docSnap.id;
+        const m = id.match(pattern);
+        if (m && m[1]) {
+            const n = Number(m[1]);
+            if (!Number.isNaN(n) && n > maxN) maxN = n;
+        }
+    });
+
+    return `${groupId}-T${maxN + 1}`;
+}
+
+/**
+ * Create a new thesis document using the group-based ID format and return the assigned id.
+ */
+export async function createThesisForGroup(groupId: string, data: ThesisData): Promise<string> {
+    const nextId = await generateNextThesisIdForGroup(groupId);
+    await setThesis(nextId, data);
+    return nextId;
+}
+
+/**
  * Delete a thesis by id
  * @param id - Thesis document ID
  */

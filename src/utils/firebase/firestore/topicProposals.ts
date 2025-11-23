@@ -4,11 +4,16 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
-import { updateGroup } from './groups';
+import { getGroupById, updateGroup } from './groups';
+import { getChapterConfigByCourse } from './chapter';
+import { createThesisForGroup } from './thesis';
+import { buildDefaultThesisChapters, templatesToThesisChapters } from '../../thesisChapterTemplates';
 import type {
     TopicProposalEntry, TopicProposalEntryStatus, TopicProposalReviewEvent,
     TopicProposalReviewerDecision, TopicProposalSet, TopicProposalSetRecord
 } from '../../../types/topicProposal';
+import type { ThesisGroup } from '../../../types/group';
+import type { ThesisChapter, ThesisData } from '../../../types/thesis';
 import { MAX_TOPIC_PROPOSALS } from '../../../config/proposals';
 
 const COLLECTION_NAME = 'topicProposals';
@@ -46,6 +51,41 @@ export interface UseTopicPayload {
     proposalId: string;
     groupId: string;
     requestedBy: string;
+}
+
+async function buildInitialChaptersForGroup(group: ThesisGroup): Promise<ThesisChapter[]> {
+    if (group.department && group.course) {
+        try {
+            const config = await getChapterConfigByCourse(group.department, group.course);
+            if (config?.chapters?.length) {
+                return templatesToThesisChapters(config.chapters);
+            }
+        } catch (error) {
+            console.error(`Failed to load chapter config for ${group.department}/${group.course}:`, error);
+        }
+    }
+    return buildDefaultThesisChapters();
+}
+
+function buildThesisPayload(group: ThesisGroup, title: string, chapters: ThesisChapter[]): ThesisData {
+    const uniqueMembers = Array.from(new Set(
+        (group.members.members ?? []).filter((uid): uid is string => Boolean(uid))
+    ));
+    const now = new Date().toISOString();
+
+    return {
+        title,
+        groupId: group.id,
+        leader: group.members.leader,
+        members: uniqueMembers,
+        adviser: group.members.adviser,
+        editor: group.members.editor,
+        statistician: group.members.statistician,
+        submissionDate: now,
+        lastUpdated: now,
+        overallStatus: 'not_submitted',
+        chapters,
+    } satisfies ThesisData;
 }
 
 
@@ -544,6 +584,21 @@ export async function markProposalAsThesis(payload: UseTopicPayload): Promise<vo
         throw new Error('Only head-approved proposals can be used as the thesis topic.');
     }
 
+    const group = await getGroupById(groupId);
+    if (!group) {
+        throw new Error('Thesis group not found.');
+    }
+    if (!group.members?.leader) {
+        throw new Error('Thesis group is missing a leader.');
+    }
+    if (group.thesisId) {
+        throw new Error('A thesis has already been created for this group.');
+    }
+
+    const chapters = await buildInitialChaptersForGroup(group);
+    const thesisPayload = buildThesisPayload(group, entry.title, chapters);
+    const thesisId = await createThesisForGroup(group.id, thesisPayload);
+
     const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
     await Promise.all([
         updateDoc(ref, {
@@ -551,6 +606,6 @@ export async function markProposalAsThesis(payload: UseTopicPayload): Promise<vo
             usedBy: requestedBy,
             usedAsThesisAt: serverTimestamp(),
         }),
-        updateGroup(groupId, { thesisTitle: entry.title }),
+        updateGroup(groupId, { thesisTitle: entry.title, thesisId }),
     ]);
 }

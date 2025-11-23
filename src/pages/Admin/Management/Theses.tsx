@@ -21,7 +21,7 @@ import type { UserProfile } from '../../../types/profile';
 import type { ThesisGroup, ThesisGroupMembers } from '../../../types/group';
 import {
     bulkDeleteTheses, deleteThesis, getAllTheses, listenTheses,
-    setThesis, computeThesisProgressRatio, type ThesisRecord,
+    setThesis, createThesisForGroup, computeThesisProgressRatio, type ThesisRecord,
 } from '../../../utils/firebase/firestore/thesis';
 import { getAllGroups, getGroupById, updateGroup } from '../../../utils/firebase/firestore/groups';
 import { getUserById, getUsersByIds, listenUsersByFilter } from '../../../utils/firebase/firestore/user';
@@ -659,7 +659,7 @@ export default function AdminThesisManagementPage() {
                             chapters: thesis.chapters ?? [],
                         };
 
-                        await setThesis(null, thesisPayload as ThesisData);
+                        await createThesisForGroup(thesis.groupId, thesisPayload as ThesisData);
 
                         await updateGroup(thesis.groupId, {
                             members: {
@@ -777,7 +777,7 @@ export default function AdminThesisManagementPage() {
             if (editMode && selectedThesis) {
                 await setThesis(selectedThesis.id, thesisPayload as ThesisData);
             } else {
-                await setThesis(null, thesisPayload as ThesisData);
+                await createThesisForGroup(formState.groupId, thesisPayload as ThesisData);
             }
 
             const panels = targetGroup?.members.panels;

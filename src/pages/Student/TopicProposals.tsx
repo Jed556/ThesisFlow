@@ -347,7 +347,7 @@ export default function StudentTopicProposalsPage() {
                 groupId: group.id,
                 requestedBy: userUid,
             });
-            showNotification('Topic ready to be used as thesis title', 'success');
+            showNotification('Thesis created from your selected topic. Chapters are now unlocked.', 'success');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to mark topic as thesis';
             showNotification(message, 'error');
