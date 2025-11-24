@@ -194,6 +194,10 @@ function normalizeGroupMembers(raw: unknown): ThesisGroup['members'] {
         normalised.editor = rawMembers.editor;
     }
 
+    if (typeof rawMembers.statistician === 'string' && rawMembers.statistician) {
+        normalised.statistician = rawMembers.statistician;
+    }
+
     const panels = Array.isArray(rawMembers.panels)
         ? rawMembers.panels.filter((value): value is string => typeof value === 'string')
         : [];
@@ -238,6 +242,10 @@ function sanitizeMembersForWrite(
 
     if (members.editor !== undefined) {
         sanitized.editor = members.editor ?? null;
+    }
+
+    if (members.statistician !== undefined) {
+        sanitized.statistician = members.statistician ?? null;
     }
 
     if (members.panels !== undefined) {

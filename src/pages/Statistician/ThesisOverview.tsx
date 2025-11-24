@@ -8,7 +8,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import SchoolIcon from '@mui/icons-material/School';
+import ScienceIcon from '@mui/icons-material/Science';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -29,16 +29,16 @@ import { getDisplayName } from '../../utils/userUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
-    index: 3,
+    index: 1,
     title: 'Thesis Overview',
-    segment: 'adviser-thesis-overview',
-    icon: <SchoolIcon />,
-    roles: ['adviser'],
+    segment: 'statistician-thesis-overview',
+    icon: <ScienceIcon />,
+    roles: ['statistician'],
 };
 
-export default function AdviserThesisOverviewPage() {
+export default function StatisticianThesisOverviewPage() {
     const session = useSession<Session>();
-    const adviserUid = session?.user?.uid ?? '';
+    const statisticianUid = session?.user?.uid ?? '';
 
     const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
@@ -84,7 +84,7 @@ export default function AdviserThesisOverviewPage() {
         let cancelled = false;
 
         const loadAssignments = async () => {
-            if (!adviserUid) {
+            if (!statisticianUid) {
                 setAssignments([]);
                 setAssignmentsLoading(false);
                 return;
@@ -92,12 +92,12 @@ export default function AdviserThesisOverviewPage() {
             setAssignmentsLoading(true);
             setError(null);
             try {
-                const rows = await getReviewerAssignmentsForUser('adviser', adviserUid);
+                const rows = await getReviewerAssignmentsForUser('statistician', statisticianUid);
                 if (!cancelled) {
                     setAssignments(rows);
                 }
             } catch (err) {
-                console.error('Failed to load adviser assignments:', err);
+                console.error('Failed to load statistician assignments:', err);
                 if (!cancelled) {
                     setAssignments([]);
                     setError('Unable to load your assigned theses right now.');
@@ -113,7 +113,7 @@ export default function AdviserThesisOverviewPage() {
         return () => {
             cancelled = true;
         };
-    }, [adviserUid]);
+    }, [statisticianUid]);
 
     React.useEffect(() => {
         if (assignments.length && !selectedThesisId) {
@@ -184,11 +184,11 @@ export default function AdviserThesisOverviewPage() {
         register(thesis.adviser, 'Adviser');
         register(thesis.editor, 'Editor');
         register(thesis.statistician, 'Statistician');
-        if (adviserUid && !map[adviserUid]) {
-            register(adviserUid, 'You');
+        if (statisticianUid && !map[statisticianUid]) {
+            register(statisticianUid, 'You');
         }
         return map;
-    }, [thesis, resolveDisplayName, adviserUid]);
+    }, [thesis, resolveDisplayName, statisticianUid]);
 
     const filters: WorkspaceFilterConfig[] | undefined = React.useMemo(() => {
         if (!assignments.length) {
@@ -220,14 +220,14 @@ export default function AdviserThesisOverviewPage() {
         content: string;
         files: File[];
     }) => {
-        if (!adviserUid || !selectedThesisId) {
-            throw new Error('Missing adviser context.');
+        if (!statisticianUid || !selectedThesisId) {
+            throw new Error('Missing statistician context.');
         }
 
         let attachments: FileAttachment[] = [];
         if (files.length) {
             attachments = await uploadConversationAttachments(files, {
-                userUid: adviserUid,
+                userUid: statisticianUid,
                 thesisId: selectedThesisId,
                 chapterId,
             });
@@ -237,7 +237,7 @@ export default function AdviserThesisOverviewPage() {
             thesisId: selectedThesisId,
             chapterId,
             comment: {
-                author: adviserUid,
+                author: statisticianUid,
                 comment: content,
                 attachments,
                 version: typeof versionIndex === 'number' ? versionIndex : undefined,
@@ -257,7 +257,7 @@ export default function AdviserThesisOverviewPage() {
                 ),
             };
         });
-    }, [adviserUid, selectedThesisId]);
+    }, [statisticianUid, selectedThesisId]);
 
     const isLoading = assignmentsLoading || thesisLoading;
     const noAssignments = !assignmentsLoading && assignments.length === 0;
@@ -266,10 +266,10 @@ export default function AdviserThesisOverviewPage() {
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
                 <Typography variant="h4" gutterBottom>
-                    Advisee workspace
+                    Statistical workspace
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
-                    Monitor thesis activity, select a group, and leave feedback for each chapter version.
+                    Review quantitative notes, select a group, and annotate each submission version.
                 </Typography>
             </Box>
 
@@ -283,13 +283,13 @@ export default function AdviserThesisOverviewPage() {
                 <Card>
                     <CardContent>
                         <Typography variant="body2" color="text.secondary">
-                            No advisee selected. Assign yourself to a thesis to view its workspace.
+                            No statistician assignments found. Once assigned to a thesis, it will appear here.
                         </Typography>
                     </CardContent>
                 </Card>
             ) : isLoading && !thesis ? (
                 <Stack spacing={2}>
-                    <Skeleton variant="text" width="40%" height={32} />
+                    <Skeleton variant="text" width="50%" height={32} />
                     <Skeleton variant="rounded" height={420} />
                 </Stack>
             ) : (
@@ -297,7 +297,7 @@ export default function AdviserThesisOverviewPage() {
                     thesisId={selectedThesisId}
                     thesis={thesis}
                     participants={participants}
-                    currentUserId={adviserUid}
+                    currentUserId={statisticianUid}
                     filters={filters}
                     isLoading={isLoading}
                     allowCommenting

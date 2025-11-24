@@ -1,5 +1,6 @@
 export * from './calendars';
 export * from './chapter';
+export * from './chapterSubmissions';
 export * from './events';
 export * from './file';
 export * from './firestore';

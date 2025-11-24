@@ -1,24 +1,31 @@
 import * as React from 'react';
 import {
-    Box, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem, ListItemText, Skeleton, Stack, Typography
+    Alert,
+    Box,
+    Card,
+    CardContent,
+    Skeleton,
+    Stack,
+    Typography,
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import ForumIcon from '@mui/icons-material/Forum';
-import AssessmentIcon from '@mui/icons-material/Assessment';
 import { useSession } from '@toolpad/core';
-import { where } from 'firebase/firestore';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
+import type { ReviewerAssignment } from '../../types/reviewer';
 import type { ThesisData } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
-import type { ChatMessage } from '../../types/chat';
+import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
-import ChatBox from '../../components/Chat/ChatBox';
-import { listenTheses } from '../../utils/firebase/firestore/thesis';
-import { getFilesByThesis } from '../../utils/firebase/firestore/file';
+import { ThesisWorkspace } from '../../components/ThesisWorkspace';
+import type { WorkspaceFilterConfig } from '../../components/ThesisWorkspace';
+import {
+    getReviewerAssignmentsForUser,
+    getThesisById,
+} from '../../utils/firebase/firestore/thesis';
+import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
+import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
-import { getThesisRole } from '../../utils/roleUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -29,146 +36,231 @@ export const metadata: NavigationItem = {
     roles: ['editor'],
 };
 
-/**
- * Compute completion percentage for the supplied thesis.
- */
-function calculateThesisProgress(thesis: ThesisData): number {
-    const { chapters } = thesis;
-    if (chapters.length === 0) return 0;
-    const approved = chapters.filter((chapter) => chapter.status === 'approved').length;
-    return Math.round((approved / chapters.length) * 100);
-}
-
-const DEFAULT_EMPTY_MESSAGE = 'No theses assigned to you yet.';
-
 export default function EditorThesisOverviewPage() {
     const session = useSession<Session>();
-    const editorUid = session?.user?.uid ?? undefined;
+    const editorUid = session?.user?.uid ?? '';
 
-    // State for thesis data
-    const [activeThesis, setActiveThesis] = React.useState<(ThesisData & { id: string }) | null>(null);
-    const [recentFiles, setRecentFiles] = React.useState<FileAttachment[]>([]);
-    const [displayNames, setDisplayNames] = React.useState<Map<string, string>>(new Map());
-    const [roleTexts, setRoleTexts] = React.useState<Map<string, string>>(new Map());
-    const [loading, setLoading] = React.useState(true);
+    const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
+    const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
+    const [selectedThesisId, setSelectedThesisId] = React.useState<string>('');
+    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesisLoading, setThesisLoading] = React.useState(false);
+    const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
     const [error, setError] = React.useState<string | null>(null);
 
-    // Fetch theses assigned to this editor
-    React.useEffect(() => {
-        if (!editorUid) {
-            setLoading(false);
-            setActiveThesis(null);
-            setError(null);
-            return () => { /* no-op */ };
+    const resolveDisplayName = React.useCallback((uid?: string | null) => {
+        if (!uid) {
+            return 'Unknown user';
         }
+        return displayNames[uid] ?? uid;
+    }, [displayNames]);
 
-        setLoading(true);
-        setError(null);
-
-        const unsubscribe = listenTheses([
-            where('editor', '==', editorUid),
-        ], {
-            onData: (records) => {
-                setLoading(false);
-                setError(null);
-                if (records.length === 0) {
-                    setActiveThesis(null);
-                    return;
-                }
-
-                setActiveThesis((prev) => {
-                    if (prev) {
-                        const updated = records.find((record) => record.id === prev.id);
-                        if (updated) {
-                            return updated;
-                        }
-                    }
-                    return records[0];
-                });
-            },
-            onError: (listenerError) => {
-                console.error('Error listening to editor theses:', listenerError);
-                setError('Unable to load assigned theses right now. Please try again later.');
-                setLoading(false);
-            },
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [editorUid]);
-
-    // Fetch files and user data for active thesis
-    React.useEffect(() => {
-        if (!activeThesis) {
-            setRecentFiles([]);
-            setDisplayNames(new Map());
-            setRoleTexts(new Map());
+    const hydrateDisplayNames = React.useCallback(async (uids: (string | undefined | null)[]) => {
+        const unique = Array.from(new Set(
+            uids.filter((uid): uid is string => Boolean(uid && !displayNames[uid]))
+        ));
+        if (!unique.length) {
             return;
         }
-
-        const fetchThesisData = async () => {
+        const results = await Promise.all(unique.map(async (uid) => {
             try {
-                // Fetch recent files for this thesis
-                const files = await getFilesByThesis(activeThesis!.id);
-                setRecentFiles(files.slice(0, 5)); // Get 5 most recent
+                const name = await getDisplayName(uid);
+                return [uid, name] as const;
+            } catch (err) {
+                console.error('Failed to resolve display name:', err);
+                return [uid, uid] as const;
+            }
+        }));
+        setDisplayNames((prev) => {
+            const next = { ...prev };
+            results.forEach(([uid, name]) => {
+                next[uid] = name;
+            });
+            return next;
+        });
+    }, [displayNames]);
 
-                // Fetch display names and roles for all participants
-                const names = new Map<string, string>();
-                const roles = new Map<string, string>();
-                const uids = [
-                    activeThesis!.leader,
-                    ...(activeThesis!.members ?? []),
-                    activeThesis!.adviser,
-                    activeThesis!.editor
-                ].filter((x): x is string => Boolean(x));
+    React.useEffect(() => {
+        let cancelled = false;
 
-                await Promise.all(
-                    uids.map(async (uid) => {
-                        const [displayName, role] = await Promise.all([
-                            getDisplayName(uid),
-                            getThesisRole(uid)
-                        ]);
-                        names.set(uid, displayName);
-
-                        // Map role to display text
-                        const roleDisplayText = role === 'leader' ? 'Leader' :
-                            role === 'member' ? 'Member' :
-                                role === 'adviser' ? 'Adviser' :
-                                    role === 'editor' ? 'Editor' : 'Unknown';
-                        roles.set(uid, roleDisplayText);
-                    })
-                );
-
-                setDisplayNames(names);
-                setRoleTexts(roles);
-            } catch (error) {
-                console.error('Error fetching thesis data:', error);
+        const loadAssignments = async () => {
+            if (!editorUid) {
+                setAssignments([]);
+                setAssignmentsLoading(false);
+                return;
+            }
+            setAssignmentsLoading(true);
+            setError(null);
+            try {
+                const rows = await getReviewerAssignmentsForUser('editor', editorUid);
+                if (!cancelled) {
+                    setAssignments(rows);
+                }
+            } catch (err) {
+                console.error('Failed to load editor assignments:', err);
+                if (!cancelled) {
+                    setAssignments([]);
+                    setError('Unable to load your assigned theses right now.');
+                }
+            } finally {
+                if (!cancelled) {
+                    setAssignmentsLoading(false);
+                }
             }
         };
 
-        fetchThesisData();
-    }, [activeThesis]);
+        void loadAssignments();
+        return () => {
+            cancelled = true;
+        };
+    }, [editorUid]);
 
-    const progress = React.useMemo(() =>
-        (activeThesis ? calculateThesisProgress(activeThesis) : 0),
-        [activeThesis]
-    );
+    React.useEffect(() => {
+        if (assignments.length && !selectedThesisId) {
+            setSelectedThesisId(assignments[0].thesisId);
+        } else if (!assignments.length) {
+            setSelectedThesisId('');
+        }
+    }, [assignments, selectedThesisId]);
 
-    // Helper to get cached display name
-    const getCachedDisplayName = (uid: string | undefined): string => {
-        if (!uid) return 'Unknown user';
-        return displayNames.get(uid) || uid;
-    };
+    React.useEffect(() => {
+        let cancelled = false;
 
-    // Helper to get cached role text
-    const getCachedRoleText = (uid: string | undefined): string => {
-        if (!uid) return 'Unknown';
-        return roleTexts.get(uid) || 'Unknown';
-    };
+        const loadThesis = async () => {
+            if (!selectedThesisId) {
+                setThesis(null);
+                return;
+            }
+            setThesisLoading(true);
+            setError(null);
+            try {
+                const data = await getThesisById(selectedThesisId);
+                if (!cancelled) {
+                    setThesis(data);
+                    await hydrateDisplayNames([
+                        data?.leader,
+                        ...(data?.members ?? []),
+                        data?.adviser,
+                        data?.editor,
+                        data?.statistician,
+                    ]);
+                }
+            } catch (err) {
+                console.error('Failed to load thesis data:', err);
+                if (!cancelled) {
+                    setError('Failed to load thesis details. Please try again later.');
+                    setThesis(null);
+                }
+            } finally {
+                if (!cancelled) {
+                    setThesisLoading(false);
+                }
+            }
+        };
 
-    // Placeholder chat messages (this would come from Firestore in a real implementation)
-    const chatMessages: ChatMessage[] = [];
+        void loadThesis();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedThesisId, hydrateDisplayNames]);
+
+    const participants = React.useMemo(() => {
+        if (!thesis) {
+            return undefined;
+        }
+        const map: Record<string, ConversationParticipant> = {};
+        const register = (uid?: string | null, roleLabel?: string) => {
+            if (!uid) {
+                return;
+            }
+            map[uid] = {
+                uid,
+                displayName: resolveDisplayName(uid),
+                roleLabel,
+            };
+        };
+        register(thesis.leader, 'Leader');
+        thesis.members?.forEach((uid) => register(uid, 'Member'));
+        register(thesis.adviser, 'Adviser');
+        register(thesis.editor, 'Editor');
+        register(thesis.statistician, 'Statistician');
+        if (editorUid && !map[editorUid]) {
+            register(editorUid, 'You');
+        }
+        return map;
+    }, [thesis, resolveDisplayName, editorUid]);
+
+    const filters: WorkspaceFilterConfig[] | undefined = React.useMemo(() => {
+        if (!assignments.length) {
+            return undefined;
+        }
+        return [
+            {
+                id: 'group',
+                label: 'Group',
+                value: selectedThesisId,
+                options: assignments.map((assignment) => ({
+                    value: assignment.thesisId,
+                    label: assignment.thesisTitle || assignment.thesisId,
+                    description: assignment.stage,
+                })),
+                onChange: (value) => setSelectedThesisId(value),
+            },
+        ];
+    }, [assignments, selectedThesisId]);
+
+    const handleCreateComment = React.useCallback(async ({
+        chapterId,
+        versionIndex,
+        content,
+        files,
+    }: {
+        chapterId: number;
+        versionIndex: number | null;
+        content: string;
+        files: File[];
+    }) => {
+        if (!editorUid || !selectedThesisId) {
+            throw new Error('Missing editor context.');
+        }
+
+        let attachments: FileAttachment[] = [];
+        if (files.length) {
+            attachments = await uploadConversationAttachments(files, {
+                userUid: editorUid,
+                thesisId: selectedThesisId,
+                chapterId,
+            });
+        }
+
+        const savedComment = await appendChapterComment({
+            thesisId: selectedThesisId,
+            chapterId,
+            comment: {
+                author: editorUid,
+                comment: content,
+                attachments,
+                version: typeof versionIndex === 'number' ? versionIndex : undefined,
+            },
+        });
+
+        setThesis((prev) => {
+            if (!prev) {
+                return prev;
+            }
+            return {
+                ...prev,
+                chapters: prev.chapters.map((chapter) =>
+                    chapter.id === chapterId
+                        ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
+                        : chapter
+                ),
+            };
+        });
+    }, [editorUid, selectedThesisId]);
+
+    const isLoading = assignmentsLoading || thesisLoading;
+    const noAssignments = !assignmentsLoading && assignments.length === 0;
 
     return (
         <AnimatedPage variant="slideUp">
@@ -177,161 +269,43 @@ export default function EditorThesisOverviewPage() {
                     Editorial workspace
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
-                    Monitor thesis activity, exchange feedback, and reference the latest file submissions.
+                    Monitor thesis activity, select a group, and leave chapter-specific feedback.
                 </Typography>
             </Box>
 
-            {loading ? (
+            {error && (
+                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+                    {error}
+                </Alert>
+            )}
+
+            {noAssignments ? (
                 <Card>
                     <CardContent>
-                        <Skeleton variant="text" width="60%" height={40} />
-                        <Skeleton variant="text" width="40%" height={24} sx={{ mt: 1 }} />
-                        <Skeleton variant="rectangular" height={200} sx={{ mt: 3 }} />
-                    </CardContent>
-                </Card>
-            ) : error ? (
-                <Card>
-                    <CardContent>
-                        <Typography variant="body1" color="error">
-                            {error}
+                        <Typography variant="body2" color="text.secondary">
+                            No editorial assignments found. Once assigned to a thesis, it will appear here.
                         </Typography>
                     </CardContent>
                 </Card>
-            ) : !activeThesis ? (
-                <Card>
-                    <CardContent>
-                        <Typography variant="body1" color="text.secondary">
-                            {DEFAULT_EMPTY_MESSAGE}
-                        </Typography>
-                    </CardContent>
-                </Card>
+            ) : isLoading && !thesis ? (
+                <Stack spacing={2}>
+                    <Skeleton variant="text" width="50%" height={32} />
+                    <Skeleton variant="rounded" height={420} />
+                </Stack>
             ) : (
-                <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, lg: 5 }}>
-                        <Stack spacing={3}>
-                            <Card>
-                                <CardContent>
-                                    <Stack direction="row" spacing={2} alignItems="center">
-                                        <AssessmentIcon color="primary" />
-                                        <Box>
-                                            <Typography variant="h6">{activeThesis!.title}</Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Stage: {activeThesis!.overallStatus}
-                                            </Typography>
-                                        </Box>
-                                    </Stack>
-                                    <Box sx={{ mt: 2 }}>
-                                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                                            <Typography variant="body2" color="text.secondary">Overall progress</Typography>
-                                            <Typography variant="subtitle2">{progress}%</Typography>
-                                        </Stack>
-                                        <LinearProgress value={progress} variant="determinate" sx={{ borderRadius: 1, height: 8 }} />
-                                    </Box>
-                                    <Stack spacing={1.5} sx={{ mt: 2 }}>
-                                        <Typography variant="subtitle2">Students</Typography>
-                                        <Chip label={`${getCachedDisplayName(activeThesis!.leader)} (Leader)`}
-                                            size="small" color="primary" variant="outlined" />
-                                        {(activeThesis!.members ?? []).length === 0 && (
-                                            <Typography variant="body2" color="text.secondary">
-                                                No additional team members registered.
-                                            </Typography>
-                                        )}
-                                        {(activeThesis!.members ?? []).map((memberUid: string) => (
-                                            <Chip key={memberUid} label={`${getCachedDisplayName(memberUid)} (Member)`}
-                                                size="small" variant="outlined" />
-                                        ))}
-                                        <Divider sx={{ my: 1 }} />
-                                        <Stack direction="row" spacing={1}>
-                                            <Chip label={`Adviser: ${getCachedDisplayName(activeThesis.adviser)}`}
-                                                size="small" color="default" />
-                                            <Chip label={`Editor: ${getCachedDisplayName(activeThesis.editor)}`}
-                                                size="small" color="info" />
-                                        </Stack>
-                                    </Stack>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent>
-                                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-                                        <UploadFileIcon color="primary" />
-                                        <Typography variant="h6">Recent files</Typography>
-                                    </Stack>
-                                    {recentFiles.length === 0 ? (
-                                        <Typography variant="body2" color="text.secondary">
-                                            No files have been exchanged in this workspace yet.
-                                        </Typography>
-                                    ) : (
-                                        <List dense>
-                                            {recentFiles.map((file) => (
-                                                <ListItem key={file.url} disablePadding>
-                                                    <ListItemText
-                                                        primary={file.name}
-                                                        secondary={`${file.type.toUpperCase()} • Uploaded ${file.uploadDate}`}
-                                                    />
-                                                </ListItem>
-                                            ))}
-                                        </List>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent>
-                                    <Typography variant="h6" gutterBottom>
-                                        Focus chapters
-                                    </Typography>
-                                    <Stack spacing={1}>
-                                        {activeThesis!.chapters.filter(ch => ch.status !== 'approved').length === 0 ? (
-                                            <Typography variant="body2" color="text.secondary">
-                                                All chapters are currently approved.
-                                            </Typography>
-                                        ) : (
-                                            activeThesis!.chapters
-                                                .filter(ch => ch.status !== 'approved')
-                                                .map((chapter) => (
-                                                    <Chip
-                                                        key={chapter.id}
-                                                        label={`${chapter.title} – ${chapter.status.replace('_', ' ')}`}
-                                                        color={chapter.status === 'revision_required' ?
-                                                            'warning' : chapter.status === 'under_review' ? 'info' : 'default'}
-                                                        variant="outlined"
-                                                    />
-                                                ))
-                                        )}
-                                    </Stack>
-                                </CardContent>
-                            </Card>
-                        </Stack>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, lg: 7 }}>
-                        <Card sx={{ height: '100%' }}>
-                            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-                                    <ForumIcon color="primary" />
-                                    <Typography variant="h6">Thesis conversation</Typography>
-                                </Stack>
-                                <Box sx={{ flexGrow: 1 }}>
-                                    {chatMessages.length === 0 ? (
-                                        <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                                            No conversation history yet. Start a discussion with the thesis team.
-                                        </Typography>
-                                    ) : (
-                                        <ChatBox
-                                            currentUserId={editorUid ?? ''}
-                                            messages={chatMessages}
-                                            height={360}
-                                            showInput={false}
-                                            getDisplayName={getCachedDisplayName}
-                                            getRoleDisplayText={(id) => getCachedRoleText(id)}
-                                        />
-                                    )}
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                </Grid>
+                <ThesisWorkspace
+                    thesisId={selectedThesisId}
+                    thesis={thesis}
+                    participants={participants}
+                    currentUserId={editorUid}
+                    filters={filters}
+                    isLoading={isLoading}
+                    allowCommenting
+                    emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
+                    onCreateComment={({ chapterId, versionIndex, content, files }) =>
+                        handleCreateComment({ chapterId, versionIndex, content, files })
+                    }
+                />
             )}
         </AnimatedPage>
     );

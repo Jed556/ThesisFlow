@@ -1,13 +1,25 @@
+import type { FileAttachment } from './file';
 
 /**
  * Thesis-specific role types - Based on thesis data context
  */
-export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'unknown';
+export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'statistician' | 'unknown';
 
 /**
  * Thesis role display title
  */
-export type ThesisRoleDisplay = 'Student (Leader)' | 'Student (Member)' | 'Adviser' | 'Editor' | 'Unknown';
+export type ThesisRoleDisplay =
+    | 'Student (Leader)'
+    | 'Student (Member)'
+    | 'Adviser'
+    | 'Editor'
+    | 'Statistician'
+    | 'Unknown';
+
+/**
+ * Supported thesis progress stages
+ */
+export type ThesisStage = 'Pre-Proposal' | 'Post-Proposal' | 'Pre-Defense' | 'Post-Defense';
 
 /**
  * Thesis comment/feedback
@@ -17,7 +29,7 @@ export interface ThesisComment {
     author: string; // Firebase UID of author
     date: string;
     comment: string;
-    attachments: string[]; // Array of file hashes referencing mockFileRegistry
+    attachments?: Array<string | FileAttachment>; // Supports legacy hashes and rich metadata
     version?: number; // Version index based on submission hash position in submissions array
 }
 
@@ -32,6 +44,7 @@ export interface ThesisChapter {
     lastModified: string | null;
     submissions: string[]; // Array of file hashes for submitted documents
     comments: ThesisComment[];
+    stage?: ThesisStage;
 }
 
 /**

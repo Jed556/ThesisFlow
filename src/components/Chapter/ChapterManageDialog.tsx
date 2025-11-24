@@ -1,23 +1,11 @@
 import * as React from 'react';
 import {
-    Autocomplete,
-    Box,
-    Button,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    Stack,
-    TextField,
-    Typography,
-    Paper,
+    Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
+    IconButton, Stack, TextField, Typography, Paper,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    ArrowUpward as ArrowUpwardIcon,
-    ArrowDownward as ArrowDownwardIcon,
-    Delete as DeleteIcon,
+    Add as AddIcon, ArrowUpward as ArrowUpwardIcon,
+    ArrowDownward as ArrowDownwardIcon, Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { ChapterConfigFormData, ChapterFormErrorKey, ChapterTemplate } from '../../types/chapter';
 import { GrowTransition } from '../Animate';
@@ -243,7 +231,9 @@ export default function ChapterManageDialog({
                                         <TextField
                                             label="Description"
                                             value={chapter.description || ''}
-                                            onChange={(event) => handleChapterFieldChange(index, { description: event.target.value })}
+                                            onChange={(event) =>
+                                                handleChapterFieldChange(index, { description: event.target.value })
+                                            }
                                             fullWidth
                                             multiline
                                             minRows={2}

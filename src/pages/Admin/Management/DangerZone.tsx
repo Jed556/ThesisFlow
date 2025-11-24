@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, Button, Card, CardActions, CardContent, Grid, Stack, Typography } from '@mui/material';
+import { Box, Button, Card, CardActions, CardContent, Grid, Typography } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { AnimatedPage } from '../../../components/Animate';
 import type { NavigationItem } from '../../../types/navigation';
@@ -190,18 +190,12 @@ export default function DangerZonePage() {
 
     return (
         <AnimatedPage variant="fade">
-            <Box sx={{ py: 6 }}>
-                <Stack direction="row" alignItems="center" spacing={2} mb={4}>
-                    <WarningAmberIcon color="warning" sx={{ fontSize: 32 }} />
-                    <Box>
-                        <Typography variant="h4" fontWeight={600} color="warning.main">
-                            Danger Zone
-                        </Typography>
-                        <Typography color="text.secondary">
-                            These destructive actions permanently remove data. Use only in development or with extreme caution.
-                        </Typography>
-                    </Box>
-                </Stack>
+            <Box >
+                <Box mb={4}>
+                    <Typography color="text.secondary">
+                        These destructive actions permanently remove data. Use only in development or with extreme caution.
+                    </Typography>
+                </Box>
 
                 <Grid container spacing={3}>
                     {wipeActions.map(action => (

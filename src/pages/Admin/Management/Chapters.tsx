@@ -27,7 +27,6 @@ import { useSnackbar } from '../../../contexts/SnackbarContext';
 import {
     deleteChapterConfig,
     getAllChapterConfigs,
-    getChapterConfigByCourse,
     getChapterConfigsByDepartment,
     getAllUsers,
     setChapterConfig,
@@ -75,7 +74,6 @@ export default function AdminChapterManagementPage() {
     const [deleting, setDeleting] = React.useState(false);
 
     const [selectedDepartment, setSelectedDepartment] = React.useState('');
-    const [selectedCourse, setSelectedCourse] = React.useState('');
 
     const [formData, setFormData] = React.useState<ChapterConfigFormData>({ ...emptyFormData });
     const [formErrors, setFormErrors] = React.useState<Partial<Record<ChapterFormErrorKey, string>>>({});
@@ -83,7 +81,7 @@ export default function AdminChapterManagementPage() {
     const [selectedConfig, setSelectedConfig] = React.useState<ThesisChapterConfig | null>(null);
     const pendingEditRef = React.useRef<ChapterConfigIdentifier | null>(null);
 
-    const filtersApplied = Boolean(selectedDepartment || selectedCourse);
+    const filtersApplied = Boolean(selectedDepartment);
 
     const departmentOptions = React.useMemo(() => {
         const unique = new Set<string>();
@@ -113,10 +111,7 @@ export default function AdminChapterManagementPage() {
         [users]
     );
 
-    const filterCourseOptions = React.useMemo(
-        () => getCoursesForDepartment(selectedDepartment),
-        [getCoursesForDepartment, selectedDepartment]
-    );
+    // No top-level course filter needed — each course has a single template.
 
     const dialogCourseOptions = React.useMemo(
         () => getCoursesForDepartment(formData.department),
@@ -143,10 +138,7 @@ export default function AdminChapterManagementPage() {
         setLoading(true);
         try {
             let data: ThesisChapterConfig[] = [];
-            if (selectedDepartment && selectedCourse) {
-                const config = await getChapterConfigByCourse(selectedDepartment, selectedCourse);
-                data = config ? [config] : [];
-            } else if (selectedDepartment) {
+            if (selectedDepartment) {
                 data = await getChapterConfigsByDepartment(selectedDepartment);
             } else {
                 data = await getAllChapterConfigs();
@@ -158,7 +150,7 @@ export default function AdminChapterManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [filtersApplied, selectedCourse, selectedDepartment, showNotification]);
+    }, [filtersApplied, selectedDepartment, showNotification]);
 
     React.useEffect(() => {
         void loadUsers();
@@ -176,7 +168,6 @@ export default function AdminChapterManagementPage() {
 
         if (state.filters) {
             setSelectedDepartment(state.filters.department);
-            setSelectedCourse(state.filters.course);
         }
 
         if (state.editChapter) {
@@ -192,11 +183,10 @@ export default function AdminChapterManagementPage() {
         setFormData({
             ...emptyFormData,
             department: selectedDepartment,
-            course: selectedCourse,
         });
         setFormErrors({});
         setManageDialogOpen(true);
-    }, [selectedCourse, selectedDepartment]);
+    }, [selectedDepartment]);
 
     const handleCloseManageDialog = React.useCallback(() => {
         setManageDialogOpen(false);
@@ -345,7 +335,7 @@ export default function AdminChapterManagementPage() {
 
     return (
         <AnimatedPage variant="fade">
-            <Box sx={{ py: 4, px: 3 }}>
+            <Box>
                 <Stack
                     direction={{ xs: 'column', md: 'row' }}
                     spacing={2}
@@ -354,14 +344,22 @@ export default function AdminChapterManagementPage() {
                     sx={{ mb: 4 }}
                 >
                     <Box>
-                        <Typography variant="h4" gutterBottom>
-                            Chapter Requirements
-                        </Typography>
                         <Typography color="text.secondary">
                             Define the thesis chapters each course must submit.
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Autocomplete
+                            options={departmentOptions}
+                            value={selectedDepartment}
+                            onChange={(_, newValue) => setSelectedDepartment(newValue || '')}
+                            renderInput={(params) => (
+                                <TextField {...params} label="Filter by Department" placeholder="Select department" />
+                            )}
+                            sx={{ minWidth: 250 }}
+                            size="small"
+                        />
+
                         <Button startIcon={<RefreshIcon />} variant="outlined" onClick={loadConfigs}>
                             Refresh
                         </Button>
@@ -371,43 +369,7 @@ export default function AdminChapterManagementPage() {
                     </Stack>
                 </Stack>
 
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
-                    <Autocomplete
-                        options={departmentOptions}
-                        value={selectedDepartment}
-                        onChange={(_, newValue) => {
-                            setSelectedDepartment(newValue || '');
-                            setSelectedCourse('');
-                        }}
-                        renderInput={(params) => (
-                            <TextField {...params} label="Filter by Department" placeholder="Select department" />
-                        )}
-                        sx={{ minWidth: 250 }}
-                        size="small"
-                    />
-                    <Autocomplete
-                        options={filterCourseOptions}
-                        value={selectedCourse}
-                        onChange={(_, newValue) => setSelectedCourse(newValue || '')}
-                        renderInput={(params) => (
-                            <TextField {...params} label="Filter by Course" placeholder="Select course" />
-                        )}
-                        sx={{ minWidth: 250 }}
-                        size="small"
-                        disabled={!selectedDepartment}
-                    />
-                    {(selectedDepartment || selectedCourse) && (
-                        <Button
-                            variant="text"
-                            onClick={() => {
-                                setSelectedDepartment('');
-                                setSelectedCourse('');
-                            }}
-                        >
-                            Clear Filters
-                        </Button>
-                    )}
-                </Stack>
+                {/* filters moved to the top controls */}
 
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>

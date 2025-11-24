@@ -874,7 +874,7 @@ export default function AdminGroupManagementPage() {
 
     return (
         <AnimatedPage variant="fade">
-            <Box sx={{ width: '100%', py: 3 }}>
+            <Box sx={{ width: '100%'}}>
                 <Stack spacing={3}>
                     <Stack
                         direction={{ xs: 'column', lg: 'row' }}

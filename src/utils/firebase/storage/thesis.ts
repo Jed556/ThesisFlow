@@ -210,10 +210,13 @@ export async function uploadThesisFile(
 
         // Create file attachment object
         const fileAttachment: FileAttachment = {
+            id: fileHash,
+            thesisId,
             name: file.name,
             type: extension,
             size: `${file.size}`, // Convert to string
             url: downloadURL,
+            mimeType: file.type,
             author: userUid,
             uploadDate: new Date().toISOString(),
             category: category === 'revision' ? 'submission' : category as 'submission' | 'attachment',
