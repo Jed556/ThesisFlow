@@ -3,9 +3,9 @@ import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogTitle, Skeleton, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
-import GavelIcon from '@mui/icons-material/Gavel';
-import { useSession } from '@toolpad/core';
+import { HistoryEdu as HistoryEduIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
+import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
 import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/topicProposal';
@@ -20,9 +20,9 @@ import { getUserById } from '../../utils/firebase/firestore/user';
 export const metadata: NavigationItem = {
     group: 'management',
     index: 1,
-    title: 'Head Topic Proposals',
+    title: 'Topic Proposals',
     segment: 'head-topic-proposals',
-    icon: <GavelIcon />,
+    icon: <HistoryEduIcon />,
     roles: ['head'],
 };
 
@@ -261,9 +261,6 @@ export default function HeadTopicProposalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Head topic proposals
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Review every group in your departments. Finalize only the topics that were approved by moderators.
                     </Typography>
@@ -330,7 +327,7 @@ export default function HeadTopicProposalsPage() {
                                         </Typography>
                                     </Box>
                                     <Stack direction="row" spacing={1}>
-                                        <Chip label={`Set #${record?.cycle ?? 1}`} size="small" />
+                                        <Chip label={`Set #${record?.set ?? 1}`} size="small" />
                                         {awaitingHead && <Chip label="Head queue" color="warning" size="small" />}
                                         {!awaitingHead && awaitingModerator && (
                                             <Chip label="Moderator queue" color="info" size="small" />

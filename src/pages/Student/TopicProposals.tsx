@@ -3,7 +3,7 @@ import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogContentText, DialogTitle, Skeleton, Stack, Typography
 } from '@mui/material';
-import TopicIcon from '@mui/icons-material/Topic';
+import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -20,7 +20,12 @@ import {
 } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByLeader, getGroupsByMember, updateGroup } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
-import { areAllProposalsRejected, canEditProposalSet, pickActiveProposalSet } from '../../utils/topicProposalUtils';
+import {
+    areAllProposalsRejected,
+    canEditProposalSet,
+    getProposalSetMeta,
+    pickActiveProposalSet,
+} from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
 import { getThesisById } from '../../utils/firebase/firestore/thesis';
 
@@ -29,7 +34,7 @@ export const metadata: NavigationItem = {
     index: 2,
     title: 'Topic Proposals',
     segment: 'topic-proposals',
-    icon: <TopicIcon />,
+    icon: <HistoryEduIcon />,
     roles: ['student'],
 };
 
@@ -285,20 +290,7 @@ export default function StudentTopicProposalsPage() {
         return activeSet.entries.some((entry) => entry.id === groupThesisId) ? groupThesisId : undefined;
     }, [activeSet, groupThesisId]);
 
-    /* Compute a derived set-level status from individual entries so UI doesn't rely on the
-       historical `status` field. This makes 'approved' checks canonical from entry statuses. */
-    function computeSetMeta(set?: TopicProposalSetRecord | null) {
-        if (!set) return { awaitingModerator: false, awaitingHead: false, hasApproved: false, allRejected: false };
-        const awaitingModerator = set.entries.some((e) => e.status === 'submitted');
-        const awaitingHead = set.entries.some((e) => e.status === 'head_review');
-        const hasApproved = set.entries.some((e) => e.status === 'head_approved');
-        const allRejected = set.entries.length > 0 && set.entries.every((entry) =>
-            entry.status === 'moderator_rejected' || entry.status === 'head_rejected'
-        );
-        return { awaitingModerator, awaitingHead, hasApproved, allRejected };
-    }
-
-    const activeSetMeta = computeSetMeta(activeSet);
+    const activeSetMeta = getProposalSetMeta(activeSet);
 
     const activeSetStatusLabel = activeSetMeta.hasApproved
         ? 'Topic approved'
@@ -439,8 +431,8 @@ export default function StudentTopicProposalsPage() {
         }
         setCreateSetLoading(true);
         try {
-            const nextCycle = proposalSets.reduce((acc, set) => Math.max(acc, set.cycle), 0) + 1;
-            await createTopicProposalSet({ groupId: group.id, createdBy: userUid, cycle: nextCycle });
+            const nextSetNumber = proposalSets.reduce((acc, set) => Math.max(acc, set.set), 0) + 1;
+            await createTopicProposalSet({ groupId: group.id, createdBy: userUid, set: nextSetNumber });
             showNotification('New topic proposal cycle started', 'success');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to start proposal cycle';
@@ -598,7 +590,7 @@ export default function StudentTopicProposalsPage() {
                                 alignItems={{ xs: 'flex-start', sm: 'center' }}
                             >
                                 <Box>
-                                    <Typography variant="h6">Cycle #{activeSet.cycle}</Typography>
+                                    <Typography variant="h6">Cycle #{activeSet.set}</Typography>
                                     <Typography variant="body2" color="text.secondary">
                                         {activeSetStatusLabel}
                                     </Typography>
@@ -730,7 +722,7 @@ export default function StudentTopicProposalsPage() {
                                     <CardContent>
                                         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
                                             <Box>
-                                                <Typography variant="subtitle1">Cycle #{set.cycle}</Typography>
+                                                <Typography variant="subtitle1">Cycle #{set.set}</Typography>
                                                 <Typography variant="body2" color="text.secondary">
                                                     {set.entries.length} topic(s) • {statusLabel}
                                                 </Typography>

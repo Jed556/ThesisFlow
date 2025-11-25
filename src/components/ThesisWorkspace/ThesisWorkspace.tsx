@@ -1,10 +1,8 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogContentText,
-    DialogTitle, Divider, Grid, IconButton, LinearProgress, List, ListItem, ListItemText, MenuItem,
-    Skeleton, Stack, Tab, Tabs, TextField, Typography,
+    DialogTitle, Divider, Grid, MenuItem, Skeleton, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
-import { Groups as GroupsIcon } from '@mui/icons-material';
 import type {
     WorkspaceFilterConfig, WorkspaceCommentPayload, WorkspaceEditPayload,
     WorkspaceUploadPayload, ChapterVersionMap, WorkspaceChapterDecisionPayload, WorkspaceChapterDecision,
@@ -19,14 +17,6 @@ import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getAssignedMentorRoles, resolveChapterMentorApprovals } from '../../utils/mentorUtils';
 import { extractSubmissionId, normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import ChapterRail, { buildVersionOptions, formatChapterLabel } from './ChapterRail';
-
-const computeProgress = (chapters: ThesisChapter[] = []): number => {
-    if (!chapters.length) {
-        return 0;
-    }
-    const approved = chapters.filter((chapter) => chapter.status === 'approved').length;
-    return Math.round((approved / chapters.length) * 100);
-};
 
 const STAGE_METADATA: { value: ThesisStage; label: string; helper?: string }[] = [
     { value: 'Pre-Proposal', label: 'Pre-Proposal' },
@@ -126,7 +116,7 @@ export default function ThesisWorkspace({
     thesisId, thesis, participants, currentUserId, mentorRole, filters, isLoading,
     allowCommenting = true,
     emptyStateMessage = 'Select a group to inspect its thesis.',
-    conversationHeight = 640, onCreateComment, onEditComment, onUploadChapter, onChapterDecision
+    conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision
 }: ThesisWorkspaceProps) {
     const [activeChapterId, setActiveChapterId] = React.useState<number | null>(null);
     const [activeVersionIndex, setActiveVersionIndex] = React.useState<number | null>(null);
@@ -573,6 +563,7 @@ export default function ThesisWorkspace({
         }
     }, [pendingDecision, onChapterDecision, thesisId, mentorRole, activeChapter?.id, activeVersionIndex]);
 
+    const panelHeight = conversationHeight ?? '100%';
     const uploadErrorBanner = uploadError ? (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUploadError(null)}>
             {uploadError}
@@ -586,14 +577,14 @@ export default function ThesisWorkspace({
                 {uploadErrorBanner}
                 <Grid container spacing={3}>
                     <Grid size={{ xs: 12, md: 5 }}>
-                        <Stack spacing={2}>
+                        <Stack spacing={2} sx={{ height: panelHeight }}>
                             {Array.from({ length: 3 }).map((_, index) => (
                                 <Skeleton key={index} variant="rounded" height={140} />
                             ))}
                         </Stack>
                     </Grid>
                     <Grid size={{ xs: 12, md: 7 }}>
-                        <Skeleton variant="rounded" height={conversationHeight} />
+                        <Skeleton variant="rounded" height={panelHeight} />
                     </Grid>
                 </Grid>
             </Box>
@@ -616,7 +607,6 @@ export default function ThesisWorkspace({
         );
     }
 
-    const progress = computeProgress(normalizedChapters);
     const pendingChapter = pendingDecision
         ? normalizedChapters.find((chapter) => chapter.id === pendingDecision.chapterId)
         : undefined;
@@ -682,42 +672,17 @@ export default function ThesisWorkspace({
                         sx={{ mt: 2 }}
                     />
                 ) : (
-                    <Grid container spacing={3}>
-                        <Grid size={{ xs: 12, md: 5 }}>
-                            <Stack spacing={3}>
-                                <Card>
-                                    <CardContent>
-                                        <Stack direction="row" spacing={2} alignItems="center">
-                                            <IconButton color="primary" size="large">
-                                                <GroupsIcon />
-                                            </IconButton>
-                                            <Box>
-                                                <Typography variant="h6">{thesis.title}</Typography>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {thesis.overallStatus || 'In progress'}
-                                                </Typography>
-                                                {thesis.groupId && (
-                                                    <Chip label={thesis.groupId} size="small" sx={{ mt: 1 }} />
-                                                )}
-                                            </Box>
-                                        </Stack>
-                                        <Box sx={{ mt: 3 }}>
-                                            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                                                <Typography variant="body2" color="text.secondary">Overall progress</Typography>
-                                                <Typography variant="subtitle2">{progress}%</Typography>
-                                            </Stack>
-                                            <LinearProgress
-                                                variant="determinate"
-                                                value={progress}
-                                                sx={{ borderRadius: 5, height: 8 }}
-                                            />
-                                        </Box>
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardContent>
-                                        <Typography variant="subtitle2" sx={{ mb: 2 }}>Chapters</Typography>
+                    <Grid container spacing={3} sx={{ alignItems: 'stretch' }}>
+                        <Grid size={{ xs: 12, md: 5 }} sx={{ display: 'flex' }}>
+                            <Card sx={{ width: '100%', height: panelHeight, display: 'flex', flexDirection: 'column' }}>
+                                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                                    <Box sx={{ mb: 2 }}>
+                                        <Typography variant="h6">Chapters</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Review submissions and apply decisions for this stage.
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ flexGrow: 1, minHeight: 0, overflowY: 'auto', pr: 1 }}>
                                         <ChapterRail
                                             chapters={stageChapters}
                                             selectedChapterId={activeChapterId}
@@ -744,55 +709,14 @@ export default function ThesisWorkspace({
                                                 processingChapterId: reviewActionsProcessingChapterId,
                                             } : undefined}
                                         />
-                                    </CardContent>
-                                </Card>
-
-                                {/* <Card>
-                            <CardContent>
-                                <Typography variant="subtitle2" sx={{ mb: 2 }}>Versions</Typography>
-                                {activeChapter ? (
-                                    <VersionRail
-                                        versions={versionOptions}
-                                        selectedVersionIndex={activeVersionIndex}
-                                        onSelect={handleVersionSelect}
-                                        loading={isFetchingChapterFiles}
-                                        error={chapterFilesError}
-                                        enableUploads={enableUploads}
-                                        participants={participants}
-                                    />
-                                ) : (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Select a chapter to view uploaded versions.
-                                    </Typography>
-                                )}
-                            </CardContent>
-                        </Card> */}
-
-                                {participants && Object.keys(participants).length > 0 && (
-                                    <Card>
-                                        <CardContent>
-                                            <Typography variant="subtitle2" sx={{ mb: 2 }}>
-                                                Team roster
-                                            </Typography>
-                                            <List dense>
-                                                {Object.values(participants).map((participant) => (
-                                                    <ListItem key={participant.uid} disableGutters>
-                                                        <ListItemText
-                                                            primary={participant.displayName}
-                                                            secondary={participant.roleLabel}
-                                                        />
-                                                    </ListItem>
-                                                ))}
-                                            </List>
-                                        </CardContent>
-                                    </Card>
-                                )}
-                            </Stack>
+                                    </Box>
+                                </CardContent>
+                            </Card>
                         </Grid>
 
-                        <Grid size={{ xs: 12, md: 7 }}>
-                            <Card sx={{ height: '100%' }}>
-                                <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <Grid size={{ xs: 12, md: 7 }} sx={{ display: 'flex' }}>
+                            <Card sx={{ width: '100%', height: panelHeight, display: 'flex', flexDirection: 'column' }}>
+                                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
                                     <Box sx={{ mb: 1 }}>
                                         <Typography variant="h6">Conversation</Typography>
                                         <Typography variant="subtitle2" color="text.secondary">
@@ -800,23 +724,25 @@ export default function ThesisWorkspace({
                                         </Typography>
                                     </Box>
                                     <Divider sx={{ mb: 2 }} />
-                                    <ConversationPanel
-                                        messages={chapterMessages}
-                                        currentUserId={currentUserId}
-                                        participants={participants}
-                                        height={conversationHeight}
-                                        emptyStateMessage={conversationEmptyState}
-                                        composerPlaceholder={composerPlaceholder}
-                                        disableComposer={composerDisabled}
-                                        allowAttachments
-                                        onSendMessage={handleCreateMessage}
-                                        onEditMessage={onEditComment ? handleEditMessage : undefined}
-                                        composerMetadata={{
-                                            chapterId: activeChapter?.id,
-                                            versionIndex: activeVersionIndex ?? undefined,
-                                            thesisId,
-                                        }}
-                                    />
+                                    <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+                                        <ConversationPanel
+                                            messages={chapterMessages}
+                                            currentUserId={currentUserId}
+                                            participants={participants}
+                                            height="100%"
+                                            emptyStateMessage={conversationEmptyState}
+                                            composerPlaceholder={composerPlaceholder}
+                                            disableComposer={composerDisabled}
+                                            allowAttachments
+                                            onSendMessage={handleCreateMessage}
+                                            onEditMessage={onEditComment ? handleEditMessage : undefined}
+                                            composerMetadata={{
+                                                chapterId: activeChapter?.id,
+                                                versionIndex: activeVersionIndex ?? undefined,
+                                                thesisId,
+                                            }}
+                                        />
+                                    </Box>
                                 </CardContent>
                             </Card>
                         </Grid>

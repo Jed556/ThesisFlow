@@ -16,22 +16,22 @@ import {
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
-import { AnimatedPage } from '../../../components/Animate';
-import { ChapterCard, ChapterDeleteDialog, ChapterManageDialog } from '../../../components/Chapter';
-import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
-import type { NavigationItem } from '../../../types/navigation';
-import type { Session } from '../../../types/session';
-import type { ThesisChapterConfig, ChapterConfigFormData, ChapterFormErrorKey, ChapterConfigIdentifier } from '../../../types/chapter';
-import type { UserProfile } from '../../../types/profile';
-import { useSnackbar } from '../../../contexts/SnackbarContext';
+import { AnimatedPage } from '../../../../components/Animate';
+import { ChapterCard, ChapterDeleteDialog, ChapterManageDialog } from '../../../../components/Chapter';
+import UnauthorizedNotice from '../../../../layouts/UnauthorizedNotice';
+import type { NavigationItem } from '../../../../types/navigation';
+import type { Session } from '../../../../types/session';
+import type { ThesisChapterConfig, ChapterConfigFormData, ChapterFormErrorKey, ChapterConfigIdentifier } from '../../../../types/chapter';
+import type { UserProfile } from '../../../../types/profile';
+import { useSnackbar } from '../../../../contexts/SnackbarContext';
 import {
     deleteChapterConfig,
     getAllChapterConfigs,
     getChapterConfigsByDepartment,
     getAllUsers,
     setChapterConfig,
-} from '../../../utils/firebase/firestore';
-import { normalizeChapterOrder } from '../../../utils/chapterUtils';
+} from '../../../../utils/firebase/firestore';
+import { normalizeChapterOrder } from '../../../../utils/chapterUtils';
 
 const emptyFormData: ChapterConfigFormData = {
     department: '',
@@ -270,7 +270,7 @@ export default function AdminChapterManagementPage() {
 
     const handleViewConfig = React.useCallback((config: ThesisChapterConfig) => {
         const path = encodeChapterPath(config.department, config.course);
-        navigate(`/chapter/${path}`);
+        navigate(`/chapter-management/${path}`);
     }, [navigate]);
 
     const handleEditConfig = React.useCallback((config: ThesisChapterConfig) => {

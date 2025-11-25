@@ -4,9 +4,9 @@
 
 import type {
     TopicProposalEntry, TopicProposalEntryStatus, TopicProposalReviewEvent,
-    TopicProposalReviewerDecision, TopicProposalSetRecord, TopicProposalSetStatus
+    TopicProposalReviewerDecision, TopicProposalSetRecord
 } from '../../types/topicProposal';
-import { TOPIC_PROPOSAL_ENTRY_STATUSES, TOPIC_PROPOSAL_SET_STATUSES } from '../../types/topicProposal';
+import { TOPIC_PROPOSAL_ENTRY_STATUSES } from '../../types/topicProposal';
 import { parseCsvText, normalizeHeader, mapHeaderIndexes, parseBoolean, generateCsvText } from './parser';
 
 const nowIso = () => new Date().toISOString();
@@ -16,13 +16,6 @@ const coerceEntryStatus = (value?: string): TopicProposalEntryStatus => {
     const normalized = value.trim().toLowerCase();
     const match = TOPIC_PROPOSAL_ENTRY_STATUSES.find(status => status === normalized);
     return (match ?? 'draft') as TopicProposalEntryStatus;
-};
-
-const coerceSetStatus = (value?: string): TopicProposalSetStatus => {
-    if (!value) return 'draft';
-    const normalized = value.trim().toLowerCase();
-    const match = TOPIC_PROPOSAL_SET_STATUSES.find(status => status === normalized);
-    return (match ?? 'draft') as TopicProposalSetStatus;
 };
 
 const parseNumberField = (value?: string, fallback = 1): number => {
@@ -170,8 +163,8 @@ export function importTopicProposalsFromCsv(csvText: string): { parsed: TopicPro
         const createdBy = getCell(row, 'createdBy') || getCell(row, 'created_by');
         const createdAt = getCell(row, 'createdAt') || getCell(row, 'created_at') || nowIso();
         const updatedAt = getCell(row, 'updatedAt') || getCell(row, 'updated_at') || createdAt;
-        const status = coerceSetStatus(getCell(row, 'status'));
-        const cycle = parseNumberField(getCell(row, 'cycle'), 1);
+        const setValueRaw = getCell(row, 'set') || getCell(row, 'cycle'); // legacy CSVs used "cycle"
+        const setNumber = parseNumberField(setValueRaw, 1);
         const awaitingModerator = parseBoolean(getCell(row, 'awaitingModerator'));
         const awaitingHead = parseBoolean(getCell(row, 'awaitingHead'));
         const submittedBy = getCell(row, 'submittedBy') || getCell(row, 'submitted_by') || undefined;
@@ -190,8 +183,7 @@ export function importTopicProposalsFromCsv(csvText: string): { parsed: TopicPro
             createdBy,
             createdAt,
             updatedAt,
-            status,
-            cycle,
+            set: setNumber,
             entries,
             awaitingModerator,
             awaitingHead,
@@ -218,8 +210,7 @@ export function exportTopicProposalsToCsv(records: TopicProposalSetRecord[]): st
         'createdBy',
         'createdAt',
         'updatedAt',
-        'status',
-        'cycle',
+        'set',
         'awaitingModerator',
         'awaitingHead',
         'submittedBy',
@@ -236,8 +227,7 @@ export function exportTopicProposalsToCsv(records: TopicProposalSetRecord[]): st
         record.createdBy,
         record.createdAt,
         record.updatedAt,
-        record.status,
-        record.cycle.toString(),
+        record.set.toString(),
         record.awaitingModerator ? 'true' : 'false',
         record.awaitingHead ? 'true' : 'false',
         record.submittedBy ?? '',

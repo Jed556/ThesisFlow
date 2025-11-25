@@ -12,6 +12,16 @@ export interface ProposalStatusChipConfig {
     color: ProposalStatusChipColor;
 }
 
+export type TopicProposalSetWorkflowState = 'draft' | 'under_review' | 'approved' | 'rejected';
+
+export interface TopicProposalSetMeta {
+    awaitingModerator: boolean;
+    awaitingHead: boolean;
+    hasApproved: boolean;
+    allRejected: boolean;
+    workflowState: TopicProposalSetWorkflowState;
+}
+
 /**
  * Returns a human-friendly label for a topic proposal entry status.
  */
@@ -59,7 +69,11 @@ export function getStatusChipConfig(status: TopicProposalEntryStatus): ProposalS
  * Determines if the current topic proposal set is still editable by students.
  */
 export function canEditProposalSet(set: TopicProposalSet | null | undefined): boolean {
-    return Boolean(set && set.status === 'draft');
+    if (!set) {
+        return false;
+    }
+
+    return set.entries.every((entry) => entry.status === 'draft');
 }
 
 /**
@@ -74,7 +88,7 @@ export function pickActiveProposalSet(sets: TopicProposalSetRecord[]): TopicProp
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-    return sorted.find((set) => set.status !== 'archived') ?? sorted[0];
+    return sorted.find((set) => !isProposalSetArchived(set)) ?? sorted[0];
 }
 
 /**
@@ -98,4 +112,49 @@ export function areAllProposalsRejected(entries: TopicProposalEntry[]): boolean 
     return entries.every((entry) =>
         entry.status === 'moderator_rejected' || entry.status === 'head_rejected'
     );
+}
+
+/**
+ * Aggregates entry-level statuses into a lightweight set meta summary.
+ */
+export function summarizeProposalEntries(entries: TopicProposalEntry[]): TopicProposalSetMeta {
+    const awaitingModerator = entries.some((entry) => entry.status === 'submitted');
+    const awaitingHead = entries.some((entry) => entry.status === 'head_review');
+    const hasApproved = entries.some((entry) => entry.status === 'head_approved');
+    const allRejected = areAllProposalsRejected(entries);
+
+    let workflowState: TopicProposalSetWorkflowState = 'draft';
+    if (hasApproved) {
+        workflowState = 'approved';
+    } else if (allRejected) {
+        workflowState = 'rejected';
+    } else if (awaitingModerator || awaitingHead) {
+        workflowState = 'under_review';
+    }
+
+    return {
+        awaitingModerator,
+        awaitingHead,
+        hasApproved,
+        allRejected,
+        workflowState,
+    } satisfies TopicProposalSetMeta;
+}
+
+/**
+ * Safely summarizes a full topic proposal set record.
+ */
+export function getProposalSetMeta(set: TopicProposalSet | null | undefined): TopicProposalSetMeta {
+    return summarizeProposalEntries(set?.entries ?? []);
+}
+
+/**
+ * Treats topic proposal sets that have already seeded a thesis as archived.
+ */
+export function isProposalSetArchived(set: TopicProposalSet | null | undefined): boolean {
+    if (!set) {
+        return false;
+    }
+
+    return Boolean(set.usedAsThesisAt || set.usedBy);
 }

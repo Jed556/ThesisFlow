@@ -28,7 +28,10 @@ const statusMeta: Record<string, { label: string; chipColor: 'default' | 'succes
     not_submitted: { label: 'Not submitted', chipColor: 'default' },
 };
 
-export const formatChapterLabel = (chapter: ThesisChapter) => `Chapter ${chapter.id}`;
+export const formatChapterLabel = (chapter: ThesisChapter) => {
+    const title = chapter.title?.trim();
+    return title ? `Chapter ${chapter.id}: ${title}` : `Chapter ${chapter.id}`;
+};
 
 const formatDateTimeLabel = (value?: string) => {
     if (!value) {
@@ -230,8 +233,8 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                             borderWidth: isActive ? 2 : 1,
                             borderColor: isActive ? 'primary.main' : 'divider',
                             cursor: 'pointer',
-                            transition: 'border-color 120ms ease, transform 120ms ease',
-                            '&:hover': { borderColor: 'primary.main', transform: 'translateY(-2px)' },
+                            transition: 'border-color 120ms ease',
+                            '&:hover': { borderColor: 'primary.main' },
                         }}
                         onClick={() => onSelectChapter(chapter.id)}
                     >

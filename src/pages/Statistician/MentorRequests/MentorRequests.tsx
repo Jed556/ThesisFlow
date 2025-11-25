@@ -1,5 +1,5 @@
 import * as React from 'react';
-import QueryStatsIcon from '@mui/icons-material/QueryStats';
+import { AssignmentInd as AssignmentIndIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../../types/navigation';
 import MentorRequestsPage from '../../../components/MentorRequests/MentorRequestsPage';
 
@@ -8,7 +8,7 @@ export const metadata: NavigationItem = {
     index: 0,
     title: 'Mentor Requests',
     segment: 'statistician/requests',
-    icon: <QueryStatsIcon />,
+    icon: <AssignmentIndIcon />,
     roles: ['statistician'],
 };
 

@@ -40,18 +40,6 @@ export interface TopicProposalEntry {
 }
 
 /**
- * High-level workflow states for a set of topic proposals belonging to a group.
- */
-export const TOPIC_PROPOSAL_SET_STATUSES = [
-    'draft',
-    'under_review',
-    'approved',
-    'rejected',
-    'archived',
-] as const;
-export type TopicProposalSetStatus = typeof TOPIC_PROPOSAL_SET_STATUSES[number];
-
-/**
  * Historical review events for auditing the topic proposal lifecycle.
  */
 export interface TopicProposalReviewEvent {
@@ -71,8 +59,7 @@ export interface TopicProposalSet {
     createdBy: string;
     createdAt: string;
     updatedAt: string;
-    status: TopicProposalSetStatus;
-    cycle: number;
+    set: number;
     entries: TopicProposalEntry[];
     awaitingModerator: boolean;
     awaitingHead: boolean;

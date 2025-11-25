@@ -1,5 +1,5 @@
 import * as React from 'react';
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import { AssignmentInd as AssignmentIndIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../../types/navigation';
 import MentorRequestsPage from '../../../components/MentorRequests/MentorRequestsPage';
 
@@ -8,7 +8,7 @@ export const metadata: NavigationItem = {
     index: 2,
     title: 'Mentor Requests',
     segment: 'editor-requests',
-    icon: <ManageAccountsIcon />,
+    icon: <AssignmentIndIcon />,
     roles: ['editor'],
 };
 

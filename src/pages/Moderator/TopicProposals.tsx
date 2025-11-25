@@ -4,7 +4,7 @@ import {
     DialogContent, DialogTitle, Skeleton, Stack, TextField, Tooltip, Typography
 } from '@mui/material';
 import type { ButtonProps } from '@mui/material';
-import HowToVoteIcon from '@mui/icons-material/HowToVote';
+import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -54,9 +54,9 @@ function getModeratorStatusButtonConfig(status: TopicProposalEntryStatus): Statu
 export const metadata: NavigationItem = {
     group: 'management',
     index: 0,
-    title: 'Moderator Topic Proposals',
+    title: 'Topic Proposals',
     segment: 'mod-topic-proposals',
-    icon: <HowToVoteIcon />,
+    icon: <HistoryEduIcon />,
     roles: ['moderator'],
 };
 
@@ -286,9 +286,6 @@ export default function ModeratorTopicProposalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Moderator topic proposals
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Monitor every group in the sections you moderate. You can view drafts at any time,
                         but only proposals that were formally submitted can be approved or rejected.
@@ -358,7 +355,7 @@ export default function ModeratorTopicProposalsPage() {
                                         </Typography>
                                     </Box>
                                     <Stack direction="row" spacing={1}>
-                                        <Chip label={`Cycle #${record?.cycle ?? 1}`} size="small" />
+                                        <Chip label={`Cycle #${record?.set ?? 1}`} size="small" />
                                         {awaitingHead && <Chip label="Head queue" size="small" color="warning" />}
                                     </Stack>
                                 </Stack>

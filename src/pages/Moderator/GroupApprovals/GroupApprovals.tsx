@@ -20,7 +20,7 @@ import { getGroupsByCourse, approveGroup, rejectGroup } from '../../../utils/fir
 export const metadata: NavigationItem = {
     group: 'management',
     index: 1,
-    title: 'Moderator Group Approvals',
+    title: 'Group Approvals',
     segment: 'mod-group-approvals',
     icon: <GroupIcon />,
     roles: ['moderator'],

@@ -21,17 +21,17 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
-import { AnimatedPage } from '../components/Animate';
-import { ChapterDeleteDialog } from '../components/Chapter';
-import type { NavigationItem } from '../types/navigation';
-import type { Session } from '../types/session';
-import type { ThesisChapterConfig, ChapterConfigIdentifier } from '../types/chapter';
-import { getChapterConfigByCourse, deleteChapterConfig } from '../utils/firebase/firestore';
-import { useSnackbar } from '../contexts/SnackbarContext';
+import { AnimatedPage } from '../../../../components/Animate';
+import { ChapterDeleteDialog } from '../../../../components/Chapter';
+import type { NavigationItem } from '../../../../types/navigation';
+import type { Session } from '../../../../types/session';
+import type { ThesisChapterConfig, ChapterConfigIdentifier } from '../../../../types/chapter';
+import { getChapterConfigByCourse, deleteChapterConfig } from '../../../../utils/firebase/firestore';
+import { useSnackbar } from '../../../../contexts/SnackbarContext';
 
 export const metadata: NavigationItem = {
     title: 'Chapter Details',
-    segment: 'chapter/:department/:course',
+    segment: 'chapter-management/:department/:course',
     hidden: true,
 };
 

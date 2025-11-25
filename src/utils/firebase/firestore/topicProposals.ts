@@ -10,11 +10,12 @@ import { setThesis } from './thesis';
 import { buildDefaultThesisChapters, templatesToThesisChapters } from '../../thesisChapterTemplates';
 import type {
     TopicProposalEntry, TopicProposalEntryStatus, TopicProposalReviewEvent,
-    TopicProposalReviewerDecision, TopicProposalSet, TopicProposalSetRecord
+    TopicProposalReviewerDecision, TopicProposalSetRecord
 } from '../../../types/topicProposal';
 import type { ThesisGroup } from '../../../types/group';
 import type { ThesisChapter, ThesisData } from '../../../types/thesis';
 import { MAX_TOPIC_PROPOSALS } from '../../../config/proposals';
+import { canEditProposalSet, summarizeProposalEntries } from '../../topicProposalUtils';
 
 const COLLECTION_NAME = 'topicProposals';
 
@@ -30,7 +31,7 @@ export interface TopicProposalListenerOptions {
 export interface CreateTopicProposalSetPayload {
     groupId: string;
     createdBy: string;
-    cycle?: number;
+    set?: number;
 }
 
 export interface SubmitTopicProposalPayload {
@@ -228,8 +229,11 @@ function mapTopicProposalDocument(snapshot: TopicProposalSnapshot): TopicProposa
         createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
         createdAt: normalizeTimestamp(data.createdAt, true),
         updatedAt: normalizeTimestamp(data.updatedAt, true),
-        status: (typeof data.status === 'string' ? data.status : 'draft') as TopicProposalSet['status'],
-        cycle: typeof data.cycle === 'number' ? data.cycle : 1,
+        set: typeof data.set === 'number'
+            ? data.set
+            : typeof data.cycle === 'number'
+                ? data.cycle
+                : 1,
         entries: entriesRaw.map((entry) => mapEntry(entry)),
         awaitingModerator: Boolean(data.awaitingModerator),
         awaitingHead: Boolean(data.awaitingHead),
@@ -258,7 +262,7 @@ export async function getTopicProposalSetById(setId: string): Promise<TopicPropo
  * Uses groupId as the document ID to ensure one active set per group.
  */
 export async function createTopicProposalSet(payload: CreateTopicProposalSetPayload): Promise<string> {
-    const { groupId, createdBy, cycle = 1 } = payload;
+    const { groupId, createdBy, set: setNumber = 1 } = payload;
     if (!groupId) {
         throw new Error('Group ID is required to create a topic proposal set.');
     }
@@ -267,8 +271,10 @@ export async function createTopicProposalSet(payload: CreateTopicProposalSetPayl
     const existingSnapshot = await getDoc(ref);
 
     if (existingSnapshot.exists()) {
-        const existingData = existingSnapshot.data();
-        if (existingData?.status === 'draft' || existingData?.awaitingModerator || existingData?.awaitingHead) {
+        const existingRecord = mapTopicProposalDocument(existingSnapshot);
+        const existingMeta = summarizeProposalEntries(existingRecord.entries);
+        const activeWorkflow = existingMeta.workflowState === 'draft' || existingMeta.workflowState === 'under_review';
+        if (activeWorkflow || existingRecord.awaitingModerator || existingRecord.awaitingHead) {
             throw new Error('An active topic proposal set already exists for this group.');
         }
     }
@@ -278,8 +284,7 @@ export async function createTopicProposalSet(payload: CreateTopicProposalSetPayl
         createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        status: 'draft',
-        cycle,
+        set: setNumber,
         entries: [],
         awaitingModerator: false,
         awaitingHead: false,
@@ -300,7 +305,7 @@ export async function updateTopicProposalDraftEntries(setId: string, entries: To
         throw new Error('Topic proposal set not found.');
     }
 
-    if (record.status !== 'draft') {
+    if (!canEditProposalSet(record)) {
         throw new Error('Only draft topic proposal sets can be edited.');
     }
 
@@ -337,7 +342,7 @@ export async function submitTopicProposalSet(payload: SubmitTopicProposalPayload
         throw new Error('Topic proposal set not found.');
     }
 
-    if (record.status !== 'draft') {
+    if (!canEditProposalSet(record)) {
         throw new Error('Only draft topic proposal sets can be submitted.');
     }
 
@@ -352,41 +357,17 @@ export async function submitTopicProposalSet(payload: SubmitTopicProposalPayload
         updatedAt: now,
     } satisfies TopicProposalEntry));
 
+    const meta = summarizeProposalEntries(updatedEntries);
     const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
     const cleaned = updatedEntries.map((e) => stripUndefined(e));
     await updateDoc(ref, {
         entries: cleaned,
-        awaitingModerator: true,
-        awaitingHead: false,
-        status: 'under_review',
+        awaitingModerator: meta.awaitingModerator,
+        awaitingHead: meta.awaitingHead,
         submittedBy,
         submittedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     });
-}
-
-function evaluateEntries(entries: TopicProposalEntry[]) {
-    const awaitingModerator = entries.some((entry) => entry.status === 'submitted');
-    const awaitingHead = entries.some((entry) => entry.status === 'head_review');
-    const hasApproved = entries.some((entry) => entry.status === 'head_approved');
-    const allRejected = entries.length > 0 && entries.every((entry) =>
-        entry.status === 'moderator_rejected' || entry.status === 'head_rejected'
-    );
-
-    return { awaitingModerator, awaitingHead, hasApproved, allRejected };
-}
-
-function deriveStatus(current: TopicProposalSet['status'], meta: ReturnType<typeof evaluateEntries>): TopicProposalSet['status'] {
-    if (meta.hasApproved) {
-        return 'approved';
-    }
-    if (meta.allRejected && !meta.awaitingModerator && !meta.awaitingHead) {
-        return 'rejected';
-    }
-    if (current === 'draft') {
-        return meta.awaitingModerator || meta.awaitingHead ? 'under_review' : 'draft';
-    }
-    return meta.awaitingModerator || meta.awaitingHead ? 'under_review' : current;
 }
 
 function buildReviewEvent(payload: ProposalDecisionPayload, stage: TopicProposalReviewEvent['stage']): TopicProposalReviewEvent {
@@ -434,14 +415,13 @@ export async function recordModeratorDecision(payload: ProposalDecisionPayload):
         },
     } satisfies TopicProposalEntry;
 
+    const meta = summarizeProposalEntries(nextEntries);
     const sanitizedEntries = nextEntries.map((e) => stripUndefined(e));
-    const meta = evaluateEntries(sanitizedEntries as unknown as TopicProposalEntry[]);
     const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
     await updateDoc(ref, {
         entries: sanitizedEntries,
         awaitingModerator: meta.awaitingModerator,
         awaitingHead: meta.awaitingHead,
-        status: deriveStatus(record.status, meta),
         updatedAt: serverTimestamp(),
         reviewHistory: [...record.reviewHistory, buildReviewEvent(payload, 'moderator')],
     });
@@ -482,16 +462,14 @@ export async function recordHeadDecision(payload: ProposalDecisionPayload): Prom
         },
     } satisfies TopicProposalEntry;
 
+    const meta = summarizeProposalEntries(nextEntries);
     const sanitizedEntries = nextEntries.map((e) => stripUndefined(e));
-    const meta = evaluateEntries(sanitizedEntries as unknown as TopicProposalEntry[]);
-    const nextStatus = deriveStatus(record.status, meta);
     const ref = doc(firebaseFirestore, COLLECTION_NAME, setId);
 
     await updateDoc(ref, {
         entries: sanitizedEntries,
         awaitingHead: meta.awaitingHead,
         awaitingModerator: meta.awaitingModerator,
-        status: nextStatus,
         updatedAt: serverTimestamp(),
         reviewHistory: [...record.reviewHistory, buildReviewEvent(payload, 'head')],
     });

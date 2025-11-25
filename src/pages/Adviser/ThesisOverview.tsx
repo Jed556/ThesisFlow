@@ -1,12 +1,6 @@
 import * as React from 'react';
 import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
+    Alert, Box, Card, CardContent, Skeleton, Stack, Typography,
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import { useSession } from '@toolpad/core';
@@ -307,9 +301,6 @@ export default function AdviserThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    Advisee workspace
-                </Typography>
                 <Typography variant="body1" color="text.secondary">
                     Monitor thesis activity, select a group, and leave feedback for each chapter version.
                 </Typography>

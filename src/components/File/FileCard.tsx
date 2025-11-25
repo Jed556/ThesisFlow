@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {
     Avatar, Box, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography,
+    type ChipProps,
 } from '@mui/material';
 import {
     Delete as DeleteIcon, Download as DownloadIcon,
@@ -16,6 +17,9 @@ export interface FileCardProps {
     sizeLabel?: string;
     metaLabel?: string;
     versionLabel?: string;
+    statusChipLabel?: string;
+    statusChipColor?: ChipProps['color'];
+    statusChipVariant?: ChipProps['variant'];
     selected?: boolean;
     disabled?: boolean;
     icon?: React.ReactNode;
@@ -50,6 +54,9 @@ export default function FileCard({
     sizeLabel,
     metaLabel,
     versionLabel,
+    statusChipLabel,
+    statusChipColor,
+    statusChipVariant,
     selected,
     disabled,
     icon,
@@ -107,6 +114,17 @@ export default function FileCard({
     const downloadDisabled = disabled || (!onDownload && !file?.url);
     const deleteDisabled = disabled || !onDelete;
 
+    const statusChip = statusChipLabel ? (
+        <Chip
+            size="small"
+            label={statusChipLabel}
+            color={statusChipColor ?? 'default'}
+            variant={statusChipVariant ?? 'outlined'}
+        />
+    ) : null;
+
+    const hasInlineChips = Boolean(statusChip) || Boolean(versionLabel);
+
     return (
         <Card
             variant="outlined"
@@ -129,7 +147,7 @@ export default function FileCard({
                     <Avatar
                         variant="rounded"
                         sx={{
-                            bgcolor: isPdfFile(file) ? 'error.light' : 'action.hover',
+                            bgcolor: 'transparent',
                             color: isPdfFile(file) ? 'error.main' : 'text.secondary',
                             width: 40,
                             height: 40,
@@ -138,7 +156,22 @@ export default function FileCard({
                         {iconNode}
                     </Avatar>
                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography variant="subtitle2" noWrap>{effectiveTitle}</Typography>
+                        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                            <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0 }}>{effectiveTitle}</Typography>
+                            {hasInlineChips && (
+                                <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                                    {statusChip}
+                                    {versionLabel && (
+                                        <Chip
+                                            size="small"
+                                            color={selected ? 'primary' : 'default'}
+                                            label={versionLabel}
+                                            sx={{ fontWeight: 600 }}
+                                        />
+                                    )}
+                                </Stack>
+                            )}
+                        </Stack>
                         {sizeLabel && (
                             <Typography variant="body2" color="text.secondary" noWrap>
                                 {sizeLabel}
@@ -151,14 +184,6 @@ export default function FileCard({
                         )}
                     </Box>
                     <Stack direction="row" spacing={0.5} alignItems="center">
-                        {versionLabel && (
-                            <Chip
-                                size="small"
-                                color={selected ? 'primary' : 'default'}
-                                label={versionLabel}
-                                sx={{ fontWeight: 600 }}
-                            />
-                        )}
                         {showDownloadButton && (
                             <Tooltip title={downloadDisabled ? 'Download not available' : 'Download file'}>
                                 <span>

@@ -303,9 +303,6 @@ export default function EditorThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    Editorial workspace
-                </Typography>
                 <Typography variant="body1" color="text.secondary">
                     Monitor thesis activity, select a group, and leave chapter-specific feedback.
                 </Typography>

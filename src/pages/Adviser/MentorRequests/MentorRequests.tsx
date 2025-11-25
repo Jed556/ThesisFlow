@@ -1,5 +1,5 @@
 import * as React from 'react';
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import { AssignmentInd as AssignmentIndIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../../types/navigation';
 import MentorRequestsPage from '../../../components/MentorRequests/MentorRequestsPage';
 
