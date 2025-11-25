@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "3.13.0",
+    "version": "3.14.4",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -17,7 +17,7 @@
         "@mui/x-data-grid": "^8.19.0",
         "@mui/x-date-pickers": "^8.19.0",
         "@toolpad/core": "^0.16.0",
-        "@vercel/node": "^5.5.9",
+        "@vercel/node": "^5.5.10",
         "@vercel/speed-insights": "^1.2.0",
         "date-fns": "^4.1.0",
         "firebase": "^12.6.0",
@@ -30,7 +30,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^9.39.1",
-        "@types/react": "^19.2.6",
+        "@types/react": "^19.2.7",
         "@types/react-dom": "^19.2.3",
         "@typescript-eslint/eslint-plugin": "^8.46.3",
         "@typescript-eslint/parser": "^8.46.3",

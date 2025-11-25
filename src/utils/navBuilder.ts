@@ -402,6 +402,7 @@ export async function buildRoutes(): Promise<RouteObject[]> {
         const route: RouteObject = {
             path: resolveSegment(page.metadata),
             Component: page.default,
+            handle: { metadata: page.metadata },
         };
 
         // Handle nested routes if children exist
@@ -416,6 +417,7 @@ export async function buildRoutes(): Promise<RouteObject[]> {
                     childRoutes.push({
                         path: resolveSegment(childPage.metadata),
                         Component: childPage.default,
+                        handle: { metadata: childPage.metadata },
                     });
                 }
             });
@@ -443,6 +445,7 @@ export async function buildRoutes(): Promise<RouteObject[]> {
             path: `/${resolveSegment(page.metadata)}`,
             Component: page.default,
             errorElement: React.createElement(ErrorBoundary),
+            handle: { metadata: page.metadata },
         });
     });
 

@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
-import { Navigate, useNavigate } from 'react-router';
+import { Navigate, useNavigate, useLocation } from 'react-router';
 import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
@@ -226,6 +226,40 @@ export default function SignIn() {
     const authentication = React.useContext(AuthenticationContext) as ExtendedAuthentication | null;
     const { showNotification } = useSnackbar();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const sanitizeCallbackUrl = React.useCallback((value?: string | null) => {
+        if (!value) return null;
+
+        let decoded = value;
+        try {
+            decoded = decodeURIComponent(value);
+        } catch {
+            decoded = value;
+        }
+
+        if (decoded.startsWith('/')) {
+            return decoded;
+        }
+
+        if (typeof window !== 'undefined') {
+            try {
+                const parsed = new URL(decoded, window.location.origin);
+                if (parsed.origin === window.location.origin) {
+                    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+                }
+            } catch (error) {
+                console.warn('Invalid callbackUrl provided:', error);
+            }
+        }
+
+        return null;
+    }, []);
+
+    const callbackUrlFromSearch = React.useMemo(() => {
+        const params = new URLSearchParams(location.search);
+        return sanitizeCallbackUrl(params.get('callbackUrl'));
+    }, [location.search, sanitizeCallbackUrl]);
 
     // Form state for controlled components
     const [emailValue, setEmailValue] = React.useState('');
@@ -356,8 +390,8 @@ export default function SignIn() {
                                     },
                                 };
                                 authentication?.setSession?.(userSession);
-                                navigate(callbackUrl || '/', { replace: true });
-                                showNotification(`Welcome back, ${profile.name.first}!`, 'success', 4000);
+                                const targetUrl = sanitizeCallbackUrl(callbackUrl) ?? callbackUrlFromSearch ?? '/';
+                                navigate(targetUrl, { replace: true });
                                 return {};
                             }
                             return { error: result?.error || 'Failed to sign in' };

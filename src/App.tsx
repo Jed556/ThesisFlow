@@ -50,18 +50,32 @@ function AppContent() {
     );
 
     React.useEffect(() => {
+        let active = true;
+
         async function initializeNavigation() {
+            const userRole = sessionData?.user?.role;
+
+            if (!userRole) {
+                setNavigation([]);
+                return;
+            }
+
             try {
-                const userRole = sessionData?.user?.role;
                 const nav = await buildNavigation(navigationGroups, userRole);
+                if (!active) return;
                 setNavigation(nav);
             } catch (error) {
                 console.error('Failed to build navigation:', error);
+                if (!active) return;
                 setNavigation([]);
             }
         }
 
         initializeNavigation();
+
+        return () => {
+            active = false;
+        };
     }, [sessionData?.user?.role]);
 
     React.useEffect(() => {
