@@ -1,5 +1,6 @@
 import {
-    collection, doc, getDocs, getDoc, query, where, orderBy, serverTimestamp, writeBatch, onSnapshot
+    collection, doc, getDocs, getDoc, query, where, orderBy, serverTimestamp, writeBatch, onSnapshot,
+    updateDoc, limit
 } from 'firebase/firestore';
 import type {
     DocumentData, DocumentReference, DocumentSnapshot, QueryDocumentSnapshot,
@@ -7,6 +8,7 @@ import type {
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
 import type { ThesisGroup } from '../../../types/group';
+import { THESES_COLLECTION } from './constants';
 
 const COLLECTION_NAME = 'groupIndex';
 const GROUP_HIERARCHY_ROOT = 'groups';
@@ -27,6 +29,32 @@ interface ResolvedGroupRefs {
     snapshot: DocumentSnapshot<DocumentData>;
     meta: GroupMeta;
     dataWithoutMeta: Record<string, unknown>;
+}
+
+async function syncThesisMentorAssignment(
+    groupId: string,
+    role: 'adviser' | 'editor' | 'statistician',
+    mentorUid: string
+): Promise<void> {
+    try {
+        const thesisQuery = query(
+            collection(firebaseFirestore, THESES_COLLECTION),
+            where('groupId', '==', groupId),
+            limit(1)
+        );
+        const snapshot = await getDocs(thesisQuery);
+        if (snapshot.empty) {
+            return;
+        }
+        const thesisDoc = snapshot.docs[0];
+        const thesisRef = doc(firebaseFirestore, THESES_COLLECTION, thesisDoc.id);
+        await updateDoc(thesisRef, {
+            [role]: mentorUid,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error(`Failed to sync thesis mentor assignment for group ${groupId}`, error);
+    }
 }
 
 const INTERNAL_FIELD_NAMES = [GROUP_META_FIELD];
@@ -93,6 +121,28 @@ function extractSnapshotDataAndMeta(snapshot: DocumentSnapshot<DocumentData>): {
 export interface GroupListenerOptions {
     onData: (groups: ThesisGroup[]) => void;
     onError?: (error: Error) => void;
+}
+
+/**
+ * Listen to every thesis group document for global workload calculations.
+ * Primarily used by recommendation views that need mentor availability context.
+ */
+export function listenAllGroups(options: GroupListenerOptions): () => void {
+    const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+    return onSnapshot(
+        groupsRef,
+        (snapshot) => {
+            const groups = snapshot.docs.map((docSnap) => mapGroupDocument(docSnap));
+            options.onData(groups);
+        },
+        (error) => {
+            if (options.onError) {
+                options.onError(error as Error);
+            } else {
+                console.error('Group listener error:', error);
+            }
+        }
+    );
 }
 
 function getCanonicalGroupRef(groupId: string, meta: GroupMeta): DocumentReference<DocumentData> {
@@ -411,6 +461,8 @@ export async function assignMentorToGroup(
     await commitGroupUpdate(refs, {
         [fieldPath]: mentorUid,
     });
+
+    await syncThesisMentorAssignment(groupId, role, mentorUid);
 }
 
 /**

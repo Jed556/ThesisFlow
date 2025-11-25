@@ -18,7 +18,7 @@ import type { ThesisData } from '../../types/thesis';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import type { WorkspaceFilterConfig } from '../../components/ThesisWorkspace';
+import type { WorkspaceFilterConfig } from '../../types/workspace';
 import {
     getThesisByGroupId,
 } from '../../utils/firebase/firestore/thesis';

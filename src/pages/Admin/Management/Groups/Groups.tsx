@@ -867,7 +867,7 @@ export default function AdminGroupManagementPage() {
     if (!canManage) {
         return (
             <AnimatedPage variant="fade">
-                <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." />
+                <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." variant='box'/>
             </AnimatedPage>
         );
     }

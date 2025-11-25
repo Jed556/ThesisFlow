@@ -1,24 +1,21 @@
 import * as React from 'react';
 import {
-    Avatar as MuiAvatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle,
-    Grid, Alert, IconButton, List, ListItem, ListItemAvatar, ListItemText, Skeleton, Tab,
-    Tabs, Typography
+    Avatar as MuiAvatar, Box, Card, CardContent, Dialog, DialogContent, DialogTitle, Grid,
+    Alert, IconButton, List, ListItem, ListItemAvatar, ListItemText, Skeleton, Tab, Tabs, Typography
 } from '@mui/material';
 import {
-    PeopleAlt as PeopleAltIcon,
-    School as SchoolIcon,
-    EditNote as EditNoteIcon,
-    StarRate as StarRateIcon,
-    InfoOutlined as InfoOutlinedIcon
+    PeopleAlt as PeopleAltIcon, School as SchoolIcon, EditNote as EditNoteIcon,
+    StarRate as StarRateIcon, InfoOutlined as InfoOutlinedIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
 import { useSession } from '@toolpad/core';
 import { MentorRecommendationCard } from '../../../components/Profile';
+import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { listenTheses, listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
-import { getGroupById } from '../../../utils/firebase/firestore/groups';
+import { getGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { ThesisData } from '../../../types/thesis';
@@ -52,11 +49,14 @@ export default function AdviserEditorRecommendationsPage() {
     const [studentGroupId, setStudentGroupId] = React.useState<string | null>(null);
     const [studentGroup, setStudentGroup] = React.useState<ThesisGroup | null>(null);
     const [groupError, setGroupError] = React.useState<string | null>(null);
+    const [allGroups, setAllGroups] = React.useState<ThesisGroup[]>([]);
+    const [studentThesis, setStudentThesis] = React.useState<(ThesisData & { id: string }) | null>(null);
 
     React.useEffect(() => {
         if (!studentUid) {
             setStudentGroupId(null);
             setStudentGroup(null);
+            setStudentThesis(null);
             setGroupError(null);
             return () => { /* no-op */ };
         }
@@ -65,6 +65,7 @@ export default function AdviserEditorRecommendationsPage() {
             onData: (records) => {
                 if (records.length === 0) {
                     setStudentGroupId(null);
+                    setStudentThesis(null);
                     return;
                 }
                 const prioritized = [...records].sort((a, b) => (
@@ -72,10 +73,12 @@ export default function AdviserEditorRecommendationsPage() {
                 ));
                 const primary = prioritized.find((record) => record.leader === studentUid) ?? prioritized[0];
                 setStudentGroupId(primary?.groupId ?? null);
+                setStudentThesis(primary ?? null);
             },
             onError: (listenerError) => {
                 console.error('Failed to resolve student group for recommendations:', listenerError);
                 setStudentGroupId(null);
+                setStudentThesis(null);
                 setGroupError('Unable to determine your thesis group right now.');
             },
         });
@@ -114,11 +117,52 @@ export default function AdviserEditorRecommendationsPage() {
     }, [studentGroupId]);
 
     React.useEffect(() => {
+        if (!studentUid || studentGroupId) {
+            return () => { /* no-op */ };
+        }
+
+        let cancelled = false;
+        void (async () => {
+            try {
+                const [leaderGroups, memberGroups] = await Promise.all([
+                    getGroupsByLeader(studentUid),
+                    getGroupsByMember(studentUid),
+                ]);
+
+                if (cancelled) {
+                    return;
+                }
+
+                const combined = [...leaderGroups, ...memberGroups];
+                if (combined.length === 0) {
+                    return;
+                }
+
+                combined.sort((a, b) => (
+                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                ));
+                const primaryGroup = combined.find((groupRecord) => groupRecord.status !== 'archived') ?? combined[0];
+                setStudentGroup((previous) => previous ?? primaryGroup);
+                setStudentGroupId((previous) => previous ?? primaryGroup.id);
+            } catch (fallbackError) {
+                if (!cancelled) {
+                    console.error('Failed to resolve thesis group fallback for recommendations:', fallbackError);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [studentUid, studentGroupId]);
+
+    React.useEffect(() => {
         if (!studentUid) {
             setAdviserProfiles([]);
             setEditorProfiles([]);
             setStatisticianProfiles([]);
             setTheses([]);
+            setStudentThesis(null);
             setLoading(false);
             setError(null);
             return () => { /* no-op */ };
@@ -219,7 +263,25 @@ export default function AdviserEditorRecommendationsPage() {
         };
     }, [studentUid]);
 
-    const thesisStats = React.useMemo(() => aggregateThesisStats(theses), [theses]);
+    React.useEffect(() => {
+        const unsubscribe = listenAllGroups({
+            onData: (groups) => {
+                setAllGroups(groups);
+            },
+            onError: (err) => {
+                console.error('Failed to load groups for mentor workloads:', err);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, []);
+
+    const thesisStats = React.useMemo(
+        () => aggregateThesisStats(theses, allGroups),
+        [theses, allGroups]
+    );
     const filteredAdviserProfiles = React.useMemo(() => {
         const department = studentGroup?.department?.trim();
         if (!department) {
@@ -241,6 +303,20 @@ export default function AdviserEditorRecommendationsPage() {
         [statisticianProfiles, thesisStats]
     );
 
+    const topicApproved = React.useMemo(() => {
+        if (!studentThesis || !studentThesis.title) {
+            return false;
+        }
+        const normalized = (studentThesis.overallStatus ?? '').toLowerCase();
+        return normalized.includes('approved') || normalized.includes('accepted') || normalized.includes('granted');
+    }, [studentThesis]);
+
+    const hasGroupRecord = Boolean(studentGroupId || studentGroup);
+    const editorTabLocked = !hasGroupRecord;
+    const adviserTabLocked = !topicApproved;
+    const adviserAssigned = Boolean(studentThesis?.adviser ?? studentGroup?.members?.adviser);
+    const statisticianTabLocked = !adviserAssigned;
+
     const handleTabChange = React.useCallback((_event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
     }, []);
@@ -250,7 +326,7 @@ export default function AdviserEditorRecommendationsPage() {
     }, [navigate]);
 
     const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => {
-        const slotsFull = model.capacity <= 0 || model.openSlots === 0;
+        const slotsFull = model.capacity > 0 && model.openSlots === 0;
         return (
             <MentorRecommendationCard
                 card={model}
@@ -364,70 +440,100 @@ export default function AdviserEditorRecommendationsPage() {
 
             {/* Advisers Tab */}
             {activeTab === 0 && (
-                <Grid container spacing={2}>
-                    {adviserCards.map((card) => (
-                        <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
-                            {renderMentorCard(card, 'Adviser')}
-                        </Grid>
-                    ))}
-                    {adviserCards.length === 0 && (
-                        <Grid size={{ xs: 12 }}>
-                            <Card variant="outlined">
-                                <CardContent>
-                                    <Typography variant="body2" color="text.secondary">
-                                        {studentGroup?.department
-                                            ? 'No advisers in your department are available right now.'
-                                            : 'No advisers found. Update the directory to see recommendations.'}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    )}
-                </Grid>
+                adviserTabLocked ? (
+                    <UnauthorizedNotice
+                        variant="box"
+                        icon={SchoolIcon}
+                        title="Topic approval required"
+                        description="Wait for your thesis proposal to be approved before requesting a research adviser."
+                        sx={{ minHeight: 'auto', py: 6 }}
+                    />
+                ) : (
+                    <Grid container spacing={2}>
+                        {adviserCards.map((card) => (
+                            <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                {renderMentorCard(card, 'Adviser')}
+                            </Grid>
+                        ))}
+                        {adviserCards.length === 0 && (
+                            <Grid size={{ xs: 12 }}>
+                                <Card variant="outlined">
+                                    <CardContent>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {studentGroup?.department
+                                                ? 'No advisers in your department are available right now.'
+                                                : 'No advisers found. Update the directory to see recommendations.'}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        )}
+                    </Grid>
+                )
             )}
 
             {/* Editors Tab */}
             {activeTab === 1 && (
-                <Grid container spacing={2}>
-                    {editorCards.map((card) => (
-                        <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
-                            {renderMentorCard(card, 'Editor')}
-                        </Grid>
-                    ))}
-                    {editorCards.length === 0 && (
-                        <Grid size={{ xs: 12 }}>
-                            <Card variant="outlined">
-                                <CardContent>
-                                    <Typography variant="body2" color="text.secondary">
-                                        No editors found. Update the directory to see recommendations.
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    )}
-                </Grid>
+                editorTabLocked ? (
+                    <UnauthorizedNotice
+                        variant="box"
+                        icon={EditNoteIcon}
+                        title="Create your research group first"
+                        description="Set up your thesis group to browse and request a research editor."
+                        sx={{ minHeight: 'auto', py: 6 }}
+                    />
+                ) : (
+                    <Grid container spacing={2}>
+                        {editorCards.map((card) => (
+                            <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                {renderMentorCard(card, 'Editor')}
+                            </Grid>
+                        ))}
+                        {editorCards.length === 0 && (
+                            <Grid size={{ xs: 12 }}>
+                                <Card variant="outlined">
+                                    <CardContent>
+                                        <Typography variant="body2" color="text.secondary">
+                                            No editors found. Update the directory to see recommendations.
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        )}
+                    </Grid>
+                )
             )}
 
             {/* Statisticians Tab */}
             {activeTab === 2 && (
-                <Grid container spacing={2}>
-                    {statisticianCards.map((card) => (
-                        <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
-                            {renderMentorCard(card, 'Statistician')}
-                        </Grid>
-                    ))}
-                    {statisticianCards.length === 0 && (
-                        <Grid size={{ xs: 12 }}>
-                            <Card variant="outlined">
-                                <CardContent>
-                                    <Typography variant="body2" color="text.secondary">
-                                        No statisticians found. Update the directory to see recommendations.
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    )}
-                </Grid>
+                statisticianTabLocked ? (
+                    <UnauthorizedNotice
+                        variant="box"
+                        icon={StarRateIcon}
+                        title="Confirm your adviser first"
+                        description="Assign a research adviser so we can coordinate statistician availability for your team."
+                        sx={{ minHeight: 'auto', py: 6 }}
+                    />
+                ) : (
+                    <Grid container spacing={2}>
+                        {statisticianCards.map((card) => (
+                            <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                {renderMentorCard(card, 'Statistician')}
+                            </Grid>
+                        ))}
+                        {statisticianCards.length === 0 && (
+                            <Grid size={{ xs: 12 }}>
+                                <Card variant="outlined">
+                                    <CardContent>
+                                        <Typography variant="body2" color="text.secondary">
+                                            No statisticians found. Update the directory to see recommendations.
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        )}
+                    </Grid>
+                )
             )}
 
             <Dialog

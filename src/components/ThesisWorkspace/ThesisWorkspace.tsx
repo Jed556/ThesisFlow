@@ -1,49 +1,24 @@
 import * as React from 'react';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    CircularProgress,
-    Divider,
-    IconButton,
-    LinearProgress,
-    List,
-    ListItem,
-    ListItemText,
-    MenuItem,
-    Skeleton,
-    Stack,
-    TextField,
-    Typography,
-    Grid,
-    Tooltip,
+    Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogContentText,
+    DialogTitle, Divider, Grid, IconButton, LinearProgress, List, ListItem, ListItemText, MenuItem,
+    Skeleton, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
-import {
-    Upload as UploadIcon,
-    ArrowOutward as ArrowOutwardIcon,
-    Groups as GroupsIcon,
-} from '@mui/icons-material';
-import type { ThesisWorkspaceProps, WorkspaceCommentPayload } from './types';
-import type { ThesisChapter } from '../../types/thesis';
+import { Groups as GroupsIcon } from '@mui/icons-material';
+import type {
+    WorkspaceFilterConfig, WorkspaceCommentPayload, WorkspaceEditPayload,
+    WorkspaceUploadPayload, ChapterVersionMap, WorkspaceChapterDecisionPayload, WorkspaceChapterDecision,
+} from '../../types/workspace';
+import type { MentorRole, ThesisChapter, ThesisData, ThesisStage } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
-import { ConversationPanel } from '../Conversation';
-import type { ConversationParticipant } from '../Conversation';
+import { ConversationPanel, type ConversationParticipant } from '../Conversation';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
-import { formatFileSize, getChapterSubmissions } from '../../utils/fileUtils';
+import { getChapterSubmissions } from '../../utils/fileUtils';
 import { getFilesByIds } from '../../utils/firebase/firestore/file';
-import { FileCard } from '../File';
-
-const statusMeta: Record<string, { label: string; chipColor: 'default' | 'success' | 'warning' | 'error' | 'info' }> = {
-    approved: { label: 'Approved', chipColor: 'success' },
-    under_review: { label: 'Under review', chipColor: 'info' },
-    revision_required: { label: 'Needs revision', chipColor: 'warning' },
-    not_submitted: { label: 'Not submitted', chipColor: 'default' },
-};
-
-const formatChapterLabel = (chapter: ThesisChapter) => `Chapter ${chapter.id}`;
+import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
+import { getAssignedMentorRoles, resolveChapterMentorApprovals } from '../../utils/mentorUtils';
+import { extractSubmissionId, normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
+import ChapterRail, { buildVersionOptions, formatChapterLabel } from './ChapterRail';
 
 const computeProgress = (chapters: ThesisChapter[] = []): number => {
     if (!chapters.length) {
@@ -53,107 +28,35 @@ const computeProgress = (chapters: ThesisChapter[] = []): number => {
     return Math.round((approved / chapters.length) * 100);
 };
 
-interface VersionOption {
-    id: string;
-    label: string;
-    versionIndex: number;
-    file?: FileAttachment;
+const STAGE_METADATA: { value: ThesisStage; label: string; helper?: string }[] = [
+    { value: 'Pre-Proposal', label: 'Pre-Proposal' },
+    { value: 'Post-Proposal', label: 'Post-Proposal' },
+    { value: 'Pre-Defense', label: 'Pre Defense' },
+    { value: 'Post-Defense', label: 'Post Defense' },
+];
+
+const resolveChapterStage = (chapter: ThesisChapter): ThesisStage => chapter.stage ?? 'Pre-Proposal';
+
+interface ThesisWorkspaceProps {
+    thesisId?: string;
+    thesis?: ThesisData | null;
+    participants?: Record<string, ConversationParticipant>;
+    currentUserId?: string;
+    mentorRole?: MentorRole;
+    filters?: WorkspaceFilterConfig[];
+    isLoading?: boolean;
+    allowCommenting?: boolean;
+    emptyStateMessage?: string;
+    conversationHeight?: number | string;
+    onCreateComment?: (payload: WorkspaceCommentPayload) => Promise<void> | void;
+    onEditComment?: (payload: WorkspaceEditPayload) => Promise<void> | void;
+    onUploadChapter?: (payload: WorkspaceUploadPayload) => Promise<void> | void;
+    onChapterDecision?: (payload: WorkspaceChapterDecisionPayload) => Promise<void> | void;
 }
-
-type ChapterVersionMap = Record<number, VersionOption[]>;
-
-const buildVersionOptions = (chapter?: ThesisChapter, files?: FileAttachment[]): VersionOption[] => {
-    if (!chapter) {
-        return [];
-    }
-
-    const submissions = chapter.submissions ?? [];
-    const fileMap = new Map((files ?? []).map((file) => [file.id ?? '', file]));
-
-    if (submissions.length > 0) {
-        return submissions.map((submissionId, index) => {
-            const file = submissionId ? fileMap.get(submissionId) : undefined;
-            return {
-                id: submissionId || file?.id || `version-${index + 1}`,
-                label: file?.name ?? `Version ${index + 1}`,
-                versionIndex: index,
-                file,
-            } satisfies VersionOption;
-        });
-    }
-
-    if (files && files.length > 0) {
-        return files.map((file, index) => ({
-            id: file.id ?? `version-${index + 1}`,
-            label: file.name ?? `Version ${index + 1}`,
-            versionIndex: index,
-            file,
-        } satisfies VersionOption));
-    }
-
-    return [];
-};
-
-const formatDateTimeLabel = (value?: string) => {
-    if (!value) {
-        return undefined;
-    }
-    const candidate = new Date(value);
-    if (Number.isNaN(candidate.getTime())) {
-        return value;
-    }
-    const datePart = candidate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    const timePart = candidate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    return `${datePart} at ${timePart}`;
-};
-
-const buildFileSizeLabel = (file?: FileAttachment) => {
-    if (!file?.size) {
-        return undefined;
-    }
-    const numericSize = Number(file.size);
-    if (!Number.isNaN(numericSize) && Number.isFinite(numericSize) && numericSize > 0) {
-        return formatFileSize(numericSize);
-    }
-    return file.size;
-};
-
-const resolveParticipantName = (
-    uid: string | undefined,
-    participants?: Record<string, ConversationParticipant>
-) => {
-    if (!uid) {
-        return undefined;
-    }
-    return participants?.[uid]?.displayName
-        ?? participants?.[uid]?.roleLabel
-        ?? uid;
-};
-
-const buildSubmissionMeta = (
-    file?: FileAttachment,
-    participants?: Record<string, ConversationParticipant>
-) => {
-    if (!file) {
-        return undefined;
-    }
-    const submittedBy = resolveParticipantName(file.author, participants);
-    const submittedOn = formatDateTimeLabel(file.uploadDate);
-    if (submittedBy && submittedOn) {
-        return `Submitted by ${submittedBy} on ${submittedOn}`;
-    }
-    if (submittedBy) {
-        return `Submitted by ${submittedBy}`;
-    }
-    if (submittedOn) {
-        return `Submitted on ${submittedOn}`;
-    }
-    return undefined;
-};
 
 const fetchChapterFiles = async (thesisId: string, chapter: ThesisChapter): Promise<FileAttachment[]> => {
     const submissionIds = (chapter.submissions ?? [])
-        .map((id) => (typeof id === 'string' ? id.trim() : ''))
+        .map((submission) => extractSubmissionId(submission))
         .filter((id): id is string => id.length > 0);
 
     if (submissionIds.length > 0) {
@@ -176,7 +79,7 @@ const fetchChapterFiles = async (thesisId: string, chapter: ThesisChapter): Prom
     return getChapterSubmissions(chapter.id, thesisId);
 };
 
-const WorkspaceFilters = ({ filters }: Pick<ThesisWorkspaceProps, 'filters'>) => {
+const WorkspaceFilters = ({ filters }: { filters?: WorkspaceFilterConfig[]; }) => {
     if (!filters || filters.length === 0) {
         return null;
     }
@@ -219,221 +122,11 @@ const WorkspaceFilters = ({ filters }: Pick<ThesisWorkspaceProps, 'filters'>) =>
     );
 };
 
-const ChapterRail = ({
-    chapters,
-    selectedChapterId,
-    selectedVersionIndex,
-    onSelectChapter,
-    onSelectVersion,
-    onUploadChapter,
-    uploadingChapterId,
-    enableUploads,
-    versionOptionsByChapter,
-    participants,
-}: {
-    chapters: ThesisChapter[];
-    selectedChapterId: number | null;
-    selectedVersionIndex: number | null;
-    onSelectChapter: (chapterId: number) => void;
-    onSelectVersion: (versionIndex: number) => void;
-    onUploadChapter?: (chapterId: number, file: File) => void;
-    uploadingChapterId?: number | null;
-    enableUploads?: boolean;
-    versionOptionsByChapter: ChapterVersionMap;
-    participants?: Record<string, ConversationParticipant>;
-}) => {
-    const handleUploadChange = React.useCallback((chapterId: number, event: React.ChangeEvent<HTMLInputElement>) => {
-        event.stopPropagation();
-        const file = event.target.files?.[0];
-        if (!file) {
-            return;
-        }
-        onUploadChapter?.(chapterId, file);
-        event.target.value = '';
-    }, [onUploadChapter]);
-
-    return (
-        <Stack spacing={1.5}>
-            {chapters.map((chapter) => {
-                const isActive = chapter.id === selectedChapterId;
-                const meta = statusMeta[chapter.status] ?? statusMeta.not_submitted;
-                const versions = versionOptionsByChapter[chapter.id] ?? buildVersionOptions(chapter);
-                const isUploading = uploadingChapterId === chapter.id;
-
-                return (
-                    <Card
-                        key={chapter.id}
-                        variant={isActive ? 'outlined' : 'elevation'}
-                        sx={{
-                            borderWidth: isActive ? 2 : 1,
-                            borderColor: isActive ? 'primary.main' : 'divider',
-                            cursor: 'pointer',
-                            transition: 'border-color 120ms ease, transform 120ms ease',
-                            '&:hover': { borderColor: 'primary.main', transform: 'translateY(-2px)' },
-                        }}
-                        onClick={() => onSelectChapter(chapter.id)}
-                    >
-                        <CardContent>
-                            <Stack direction="row" spacing={2} alignItems="center">
-                                <Box sx={{ flexGrow: 1 }}>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                        {formatChapterLabel(chapter)}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        {chapter.stage ?? meta.label}
-                                    </Typography>
-                                </Box>
-                                <Stack spacing={1} alignItems="flex-end">
-                                    <Chip label={meta.label} color={meta.chipColor} size="small" variant="outlined" />
-                                    <Tooltip title="Open chapter details">
-                                        <span>
-                                            <IconButton size="small" aria-label="Open chapter details">
-                                                <ArrowOutwardIcon fontSize="small" />
-                                            </IconButton>
-                                        </span>
-                                    </Tooltip>
-                                </Stack>
-                            </Stack>
-
-                            {isActive && (
-                                <Stack spacing={1.25} sx={{ mt: 2 }}>
-                                    {versions.length === 0 && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            {enableUploads
-                                                ? 'No versions yet. Upload a file to start the conversation.'
-                                                : 'No versions have been uploaded for this chapter.'}
-                                        </Typography>
-                                    )}
-                                    {versions.map((version) => {
-                                        const isVersionActive = version.versionIndex === selectedVersionIndex;
-                                        return (
-                                            <FileCard
-                                                key={version.id}
-                                                file={version.file}
-                                                title={version.label}
-                                                sizeLabel={buildFileSizeLabel(version.file)}
-                                                metaLabel={buildSubmissionMeta(version.file, participants)}
-                                                versionLabel={`v${version.versionIndex + 1}`}
-                                                selected={isVersionActive}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    onSelectVersion(version.versionIndex);
-                                                }}
-                                                showDeleteButton={false}
-                                            />
-                                        );
-                                    })}
-
-                                    {enableUploads && onUploadChapter && (
-                                        <Button
-                                            variant="outlined"
-                                            size="small"
-                                            startIcon={isUploading ? <CircularProgress size={16} /> : <UploadIcon fontSize="small" />}
-                                            disabled={isUploading}
-                                            component="label"
-                                            onClick={(event) => event.stopPropagation()}
-                                        >
-                                            {isUploading ? 'Uploading…' : 'Upload version'}
-                                            <input
-                                                type="file"
-                                                hidden
-                                                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                                onChange={(event) => handleUploadChange(chapter.id, event)}
-                                            />
-                                        </Button>
-                                    )}
-                                </Stack>
-                            )}
-                        </CardContent>
-                    </Card>
-                );
-            })}
-        </Stack>
-    );
-};
-
-const VersionRail = ({
-    versions,
-    selectedVersionIndex,
-    onSelect,
-    loading,
-    error,
-    enableUploads,
-    participants,
-}: {
-    versions: VersionOption[];
-    selectedVersionIndex: number | null;
-    onSelect: (version: number) => void;
-    loading?: boolean;
-    error?: string | null;
-    enableUploads?: boolean;
-    participants?: Record<string, ConversationParticipant>;
-}) => {
-    if (loading) {
-        return (
-            <Stack spacing={1}>
-                {Array.from({ length: 2 }).map((_, index) => (
-                    <Skeleton key={index} variant="rounded" height={96} />
-                ))}
-            </Stack>
-        );
-    }
-
-    if (error) {
-        return (
-            <Alert severity="error">{error}</Alert>
-        );
-    }
-
-    if (versions.length === 0) {
-        return (
-            <Card variant="outlined">
-                <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                        {enableUploads
-                            ? 'No uploads yet. Submit a document to start tracking versions.'
-                            : 'No uploaded versions yet.'}
-                    </Typography>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    return (
-        <Stack spacing={1}>
-            {versions.map((version) => {
-                const isActive = version.versionIndex === selectedVersionIndex;
-                return (
-                    <FileCard
-                        key={version.id}
-                        file={version.file}
-                        title={version.label}
-                        sizeLabel={buildFileSizeLabel(version.file)}
-                        metaLabel={buildSubmissionMeta(version.file, participants)}
-                        versionLabel={`v${version.versionIndex + 1}`}
-                        selected={isActive}
-                        onClick={() => onSelect(version.versionIndex)}
-                        showDeleteButton={false}
-                    />
-                );
-            })}
-        </Stack>
-    );
-};
-
 export default function ThesisWorkspace({
-    thesisId,
-    thesis,
-    participants,
-    currentUserId,
-    filters,
-    isLoading,
+    thesisId, thesis, participants, currentUserId, mentorRole, filters, isLoading,
     allowCommenting = true,
     emptyStateMessage = 'Select a group to inspect its thesis.',
-    conversationHeight = 640,
-    onCreateComment,
-    onEditComment,
-    onUploadChapter,
+    conversationHeight = 640, onCreateComment, onEditComment, onUploadChapter, onChapterDecision
 }: ThesisWorkspaceProps) {
     const [activeChapterId, setActiveChapterId] = React.useState<number | null>(null);
     const [activeVersionIndex, setActiveVersionIndex] = React.useState<number | null>(null);
@@ -442,6 +135,86 @@ export default function ThesisWorkspace({
     const [chapterFiles, setChapterFiles] = React.useState<Record<number, FileAttachment[]>>({});
     const [isFetchingChapterFiles, setIsFetchingChapterFiles] = React.useState(false);
     const [chapterFilesError, setChapterFilesError] = React.useState<string | null>(null);
+    const [pendingDecision, setPendingDecision] = React.useState<{
+        chapterId: number;
+        decision: WorkspaceChapterDecision;
+    } | null>(null);
+    const [decisionError, setDecisionError] = React.useState<string | null>(null);
+    const [isSubmittingDecision, setIsSubmittingDecision] = React.useState(false);
+    const [activeStage, setActiveStage] = React.useState<ThesisStage>(STAGE_METADATA[0].value);
+
+    React.useEffect(() => {
+        setChapterFiles({});
+        setChapterFilesError(null);
+        setIsFetchingChapterFiles(false);
+    }, [thesisId]);
+
+    const normalizedChapters = React.useMemo(() => {
+        if (!thesis?.chapters) {
+            return [] as ThesisChapter[];
+        }
+        return thesis.chapters.map((chapter) => ({
+            ...chapter,
+            submissions: normalizeChapterSubmissions(chapter.submissions),
+            mentorApprovals: resolveChapterMentorApprovals(chapter, thesis),
+        } satisfies ThesisChapter));
+    }, [thesis]);
+
+    const stageCompletionMap = React.useMemo(() => {
+        return STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stage) => {
+            const stageChapters = normalizedChapters.filter((chapter) => resolveChapterStage(chapter) === stage.value);
+            acc[stage.value] = stageChapters.length > 0
+                && stageChapters.every((chapter) => chapter.status === 'approved');
+            return acc;
+        }, {} as Record<ThesisStage, boolean>);
+    }, [normalizedChapters]);
+
+    const stageLockMap = React.useMemo(() => STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stage, index) => {
+        if (index === 0) {
+            acc[stage.value] = false;
+        } else {
+            const previousStage = STAGE_METADATA[index - 1].value;
+            acc[stage.value] = !(stageCompletionMap[previousStage] ?? false);
+        }
+        return acc;
+    }, {} as Record<ThesisStage, boolean>), [stageCompletionMap]);
+
+    const stageChapters = React.useMemo(
+        () => normalizedChapters.filter((chapter) => resolveChapterStage(chapter) === activeStage),
+        [normalizedChapters, activeStage],
+    );
+
+    const mentorRoles = React.useMemo(() => getAssignedMentorRoles(thesis), [
+        thesis?.adviser,
+        thesis?.editor,
+        thesis?.statistician,
+    ]);
+
+    const isStageLocked = stageLockMap[activeStage] ?? false;
+    const previousStageMeta = React.useMemo(() => {
+        const currentIndex = STAGE_METADATA.findIndex((stage) => stage.value === activeStage);
+        if (currentIndex <= 0) {
+            return null;
+        }
+        return STAGE_METADATA[currentIndex - 1];
+    }, [activeStage]);
+    const activeStageMeta = React.useMemo(
+        () => STAGE_METADATA.find((stage) => stage.value === activeStage) ?? STAGE_METADATA[0],
+        [activeStage],
+    );
+    const stageLockedDescription = React.useMemo(() => {
+        if (!isStageLocked) {
+            return undefined;
+        }
+        if (previousStageMeta) {
+            return `Complete all ${previousStageMeta.label} chapters to unlock ${activeStageMeta.label}.`;
+        }
+        return 'This stage will unlock once prerequisites are satisfied.';
+    }, [isStageLocked, previousStageMeta, activeStageMeta]);
+
+    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStage) => {
+        setActiveStage(nextStage);
+    }, []);
 
     const handleChapterSelect = React.useCallback((chapterId: number) => {
         setActiveChapterId(chapterId);
@@ -482,32 +255,33 @@ export default function ThesisWorkspace({
     }, [onUploadChapter, thesisId]);
 
     React.useEffect(() => {
-        if (!thesis?.chapters?.length) {
+        if (isStageLocked || stageChapters.length === 0) {
             setActiveChapterId(null);
             setActiveVersionIndex(null);
             return;
         }
 
         setActiveChapterId((previous) => {
-            const firstChapterId = thesis.chapters[0].id;
-            if (previous === null) {
-                setActiveVersionIndex(null);
-                return firstChapterId;
+            const stillExists = typeof previous === 'number'
+                ? stageChapters.some((chapter) => chapter.id === previous)
+                : false;
+            if (stillExists) {
+                return previous;
             }
-            const stillExists = thesis.chapters.some((chapter) => chapter.id === previous);
-            if (!stillExists) {
+            const firstChapterId = stageChapters[0]?.id ?? null;
+            if (firstChapterId !== previous) {
                 setActiveVersionIndex(null);
-                return firstChapterId;
             }
-            return previous;
+            return firstChapterId;
         });
-    }, [thesis?.chapters]);
+    }, [isStageLocked, stageChapters]);
 
-    const activeChapter = React.useMemo(() => thesis?.chapters?.find((chapter) => chapter.id === activeChapterId), [
-        thesis?.chapters,
+    const activeChapter = React.useMemo(() => normalizedChapters.find((chapter) => chapter.id === activeChapterId), [
+        normalizedChapters,
         activeChapterId,
     ]);
     const activeChapterFiles = activeChapter ? chapterFiles[activeChapter.id] : undefined;
+    const isConversationReadOnly = activeChapter?.status === 'approved';
 
     React.useEffect(() => {
         if (!thesisId || !activeChapter) {
@@ -574,13 +348,14 @@ export default function ThesisWorkspace({
 
     const versionOptionsByChapter = React.useMemo<ChapterVersionMap>(() => {
         const map: ChapterVersionMap = {};
-        thesis?.chapters?.forEach((chapter) => {
+        normalizedChapters.forEach((chapter) => {
             map[chapter.id] = buildVersionOptions(chapter, chapterFiles[chapter.id]);
         });
         return map;
-    }, [thesis?.chapters, chapterFiles]);
+    }, [normalizedChapters, chapterFiles]);
 
     const versionOptions = activeChapterId ? (versionOptionsByChapter[activeChapterId] ?? []) : [];
+    const loadingChapterId = isFetchingChapterFiles ? activeChapter?.id ?? null : null;
     const selectedVersionLabel = React.useMemo(() => {
         if (activeVersionIndex === null) {
             return null;
@@ -591,13 +366,43 @@ export default function ThesisWorkspace({
     const hasChapterSelection = Boolean(activeChapter);
     const hasVersionSelection = typeof activeVersionIndex === 'number';
     const hasAvailableVersions = versionOptions.length > 0;
-    const enableUploads = Boolean(onUploadChapter && thesisId);
+    const enableUploads = Boolean(onUploadChapter && thesisId && !isStageLocked);
+    const activeChapterUploadsLocked = Boolean(
+        activeChapter && (activeChapter.status === 'approved' || activeChapter.status === 'under_review')
+    );
+    const canUploadActiveChapter = Boolean(enableUploads && activeChapter && !activeChapterUploadsLocked);
+    const enableChapterDecisions = Boolean(onChapterDecision && thesisId && mentorRole);
     const composerDisabled = !hasChapterSelection
         || !hasVersionSelection
         || !hasAvailableVersions
         || !allowCommenting
         || !onCreateComment
-        || !thesisId;
+        || !thesisId
+        || isConversationReadOnly;
+
+    const chapterDecisionHelperText = React.useMemo(() => {
+        if (!enableChapterDecisions) {
+            return undefined;
+        }
+        if (!activeChapter) {
+            return 'Select a chapter to enable decisions.';
+        }
+        if (activeChapter.status === 'approved') {
+            return 'This chapter is already approved.';
+        }
+        if (!hasAvailableVersions) {
+            return 'Awaiting a submission before you can decide on this chapter.';
+        }
+        if (!hasVersionSelection) {
+            return 'Select a version to approve or request revisions.';
+        }
+        return undefined;
+    }, [enableChapterDecisions, activeChapter, hasAvailableVersions, hasVersionSelection]);
+
+    const reviewActionsDisabled = Boolean(chapterDecisionHelperText)
+        || Boolean(pendingDecision)
+        || isSubmittingDecision;
+    const reviewActionsProcessingChapterId = isSubmittingDecision ? pendingDecision?.chapterId ?? null : null;
 
     React.useEffect(() => {
         if (!hasAvailableVersions && activeVersionIndex !== null) {
@@ -615,38 +420,82 @@ export default function ThesisWorkspace({
         if (!hasVersionSelection || activeVersionIndex === null) {
             return `${formatChapterLabel(activeChapter)} · Select a version to continue`;
         }
+        if (isConversationReadOnly && selectedVersionLabel) {
+            return `${formatChapterLabel(activeChapter)} · ${selectedVersionLabel} · Approved (read-only)`;
+        }
         return `${formatChapterLabel(activeChapter)} · ${selectedVersionLabel}`;
-    }, [activeChapter, hasAvailableVersions, hasVersionSelection, selectedVersionLabel]);
+    }, [
+        activeChapter,
+        hasAvailableVersions,
+        hasVersionSelection,
+        selectedVersionLabel,
+        isConversationReadOnly,
+        activeVersionIndex,
+    ]);
 
     const conversationEmptyState = React.useMemo(() => {
         if (!activeChapter) {
             return 'Select a chapter to view its conversation.';
         }
         if (!hasAvailableVersions) {
-            return enableUploads
-                ? 'Upload a version of this chapter to start a discussion.'
-                : 'Waiting for a submission to unlock this conversation.';
+            if (canUploadActiveChapter) {
+                return 'Upload a version of this chapter to start a discussion.';
+            }
+            if (activeChapterUploadsLocked) {
+                return activeChapter?.status === 'approved'
+                    ? 'This chapter is approved. Uploads are disabled unless your adviser reopens it.'
+                    : 'A submission is currently under review. Wait for feedback before uploading another version.';
+            }
+            return 'Waiting for a submission to unlock this conversation.';
         }
         if (!hasVersionSelection) {
             return 'Choose a specific version to review its discussion.';
         }
+        if (isConversationReadOnly) {
+            return 'This chapter was approved. Conversation is locked for further replies.';
+        }
         return 'No discussion yet for this version.';
-    }, [activeChapter, hasAvailableVersions, hasVersionSelection, enableUploads]);
+    }, [
+        activeChapter,
+        hasAvailableVersions,
+        hasVersionSelection,
+        canUploadActiveChapter,
+        activeChapterUploadsLocked,
+        isConversationReadOnly,
+    ]);
 
     const composerPlaceholder = React.useMemo(() => {
         if (!activeChapter) {
             return 'Select a chapter to start a conversation.';
         }
         if (!hasAvailableVersions) {
-            return enableUploads
-                ? 'Upload a chapter version to start a conversation.'
-                : 'Waiting for a submission to start a conversation.';
+            if (canUploadActiveChapter) {
+                return 'Upload a chapter version to start a conversation.';
+            }
+            if (activeChapterUploadsLocked) {
+                return activeChapter?.status === 'approved'
+                    ? `${formatChapterLabel(activeChapter)} is approved. Uploads are disabled until it is reopened.`
+                    : 'Uploads are disabled while this chapter is under review.';
+            }
+            return 'Waiting for a submission to start a conversation.';
         }
         if (!hasVersionSelection || activeVersionIndex === null) {
             return 'Select a version to start a conversation.';
         }
+        if (isConversationReadOnly && selectedVersionLabel) {
+            return `${formatChapterLabel(activeChapter)} · ${selectedVersionLabel} is approved. Conversation is read-only.`;
+        }
         return `Discuss ${formatChapterLabel(activeChapter)} · ${selectedVersionLabel}…`;
-    }, [activeChapter, hasAvailableVersions, hasVersionSelection, selectedVersionLabel, activeVersionIndex, enableUploads]);
+    }, [
+        activeChapter,
+        hasAvailableVersions,
+        hasVersionSelection,
+        selectedVersionLabel,
+        activeVersionIndex,
+        canUploadActiveChapter,
+        activeChapterUploadsLocked,
+        isConversationReadOnly,
+    ]);
 
     const handleCreateMessage = React.useCallback(async (payload: { content: string; files: File[]; replyToId?: string; }) => {
         if (!allowCommenting || !onCreateComment || !thesisId || !activeChapter || activeVersionIndex === null) {
@@ -683,6 +532,47 @@ export default function ThesisWorkspace({
         });
     }, [onEditComment, thesisId, activeChapter, activeVersionIndex]);
 
+    const handleRequestDecision = React.useCallback((chapterId: number, decision: WorkspaceChapterDecision) => {
+        if (!enableChapterDecisions || !mentorRole || chapterDecisionHelperText || pendingDecision || isSubmittingDecision) {
+            return;
+        }
+        setPendingDecision({ chapterId, decision });
+        setDecisionError(null);
+    }, [enableChapterDecisions, mentorRole, chapterDecisionHelperText, pendingDecision, isSubmittingDecision]);
+
+    const handleCloseDecisionDialog = React.useCallback(() => {
+        if (isSubmittingDecision) {
+            return;
+        }
+        setPendingDecision(null);
+        setDecisionError(null);
+    }, [isSubmittingDecision]);
+
+    const handleConfirmDecision = React.useCallback(async () => {
+        if (!pendingDecision || !onChapterDecision || !thesisId || !mentorRole) {
+            return;
+        }
+
+        setIsSubmittingDecision(true);
+        setDecisionError(null);
+
+        try {
+            await onChapterDecision({
+                thesisId,
+                chapterId: pendingDecision.chapterId,
+                decision: pendingDecision.decision,
+                role: mentorRole,
+                versionIndex: pendingDecision.chapterId === activeChapter?.id ? activeVersionIndex : undefined,
+            });
+            setPendingDecision(null);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update chapter status.';
+            setDecisionError(message);
+        } finally {
+            setIsSubmittingDecision(false);
+        }
+    }, [pendingDecision, onChapterDecision, thesisId, mentorRole, activeChapter?.id, activeVersionIndex]);
+
     const uploadErrorBanner = uploadError ? (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUploadError(null)}>
             {uploadError}
@@ -710,7 +600,7 @@ export default function ThesisWorkspace({
         );
     }
 
-    if (!thesis || !thesis.chapters?.length) {
+    if (!thesis || normalizedChapters.length === 0) {
         return (
             <Box>
                 <WorkspaceFilters filters={filters} />
@@ -726,64 +616,138 @@ export default function ThesisWorkspace({
         );
     }
 
-    const progress = computeProgress(thesis.chapters);
+    const progress = computeProgress(normalizedChapters);
+    const pendingChapter = pendingDecision
+        ? normalizedChapters.find((chapter) => chapter.id === pendingDecision.chapterId)
+        : undefined;
+    const pendingDecisionVersionLabel = pendingDecision && pendingDecision.chapterId === activeChapter?.id
+        ? selectedVersionLabel
+        : undefined;
+    const decisionDialogTitle = pendingDecision?.decision === 'approved'
+        ? 'Approve chapter'
+        : 'Request revisions';
+    const pendingDecisionStatus = pendingDecision?.decision === 'approved' ? 'approved' : 'needing revision';
+    const decisionVersionSuffix = pendingDecisionVersionLabel ? ` for ${pendingDecisionVersionLabel}` : '';
+    const decisionDialogDescription = pendingDecision && pendingChapter
+        ? `${formatChapterLabel(pendingChapter)} will be marked as ${pendingDecisionStatus}${decisionVersionSuffix}.`
+        : 'Apply your decision to this chapter.';
+    const decisionConfirmLabel = pendingDecision?.decision === 'approved'
+        ? 'Approve chapter'
+        : 'Request revisions';
 
     return (
-        <Box>
-            <WorkspaceFilters filters={filters} />
-            {uploadErrorBanner}
-            <Grid container spacing={3}>
-                <Grid size={{ xs: 12, md: 5 }}>
-                    <Stack spacing={3}>
-                        <Card>
-                            <CardContent>
-                                <Stack direction="row" spacing={2} alignItems="center">
-                                    <IconButton color="primary" size="large">
-                                        <GroupsIcon />
-                                    </IconButton>
-                                    <Box>
-                                        <Typography variant="h6">{thesis.title}</Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {thesis.overallStatus || 'In progress'}
-                                        </Typography>
-                                        {thesis.groupId && (
-                                            <Chip label={thesis.groupId} size="small" sx={{ mt: 1 }} />
-                                        )}
-                                    </Box>
-                                </Stack>
-                                <Box sx={{ mt: 3 }}>
-                                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                                        <Typography variant="body2" color="text.secondary">Overall progress</Typography>
-                                        <Typography variant="subtitle2">{progress}%</Typography>
-                                    </Stack>
-                                    <LinearProgress
-                                        variant="determinate"
-                                        value={progress}
-                                        sx={{ borderRadius: 5, height: 8 }}
-                                    />
-                                </Box>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardContent>
-                                <Typography variant="subtitle2" sx={{ mb: 2 }}>Chapters</Typography>
-                                <ChapterRail
-                                    chapters={thesis.chapters}
-                                    selectedChapterId={activeChapterId}
-                                    selectedVersionIndex={activeVersionIndex}
-                                    onSelectChapter={handleChapterSelect}
-                                    onSelectVersion={handleVersionSelect}
-                                    onUploadChapter={handleChapterUpload}
-                                    uploadingChapterId={uploadingChapterId}
-                                    enableUploads={enableUploads}
-                                    versionOptionsByChapter={versionOptionsByChapter}
-                                    participants={participants}
+        <>
+            <Box>
+                <WorkspaceFilters filters={filters} />
+                {uploadErrorBanner}
+                <Card variant="outlined" sx={{ mb: 3 }}>
+                    <Tabs
+                        value={activeStage}
+                        onChange={handleStageChange}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                    >
+                        {STAGE_METADATA.map((stage) => {
+                            const stageLocked = stageLockMap[stage.value];
+                            const stageCompleted = stageCompletionMap[stage.value];
+                            const chipLabel = stageLocked ? 'Locked' : stageCompleted ? 'Completed' : 'In progress';
+                            const chipColor = stageLocked ? 'default' : stageCompleted ? 'success' : 'info';
+                            const chipVariant = stageLocked ? 'outlined' : 'filled';
+                            return (
+                                <Tab
+                                    key={stage.value}
+                                    value={stage.value}
+                                    label={(
+                                        <Stack spacing={0.5} alignItems="center">
+                                            <Typography variant="body2" fontWeight={600}>{stage.label}</Typography>
+                                            <Chip
+                                                label={chipLabel}
+                                                size="small"
+                                                color={chipColor}
+                                                variant={chipVariant}
+                                            />
+                                        </Stack>
+                                    )}
                                 />
-                            </CardContent>
-                        </Card>
+                            );
+                        })}
+                    </Tabs>
+                </Card>
 
-                        {/* <Card>
+                {isStageLocked ? (
+                    <UnauthorizedNotice
+                        title={`${activeStageMeta.label} locked`}
+                        description={stageLockedDescription}
+                        variant="box"
+                        sx={{ mt: 2 }}
+                    />
+                ) : (
+                    <Grid container spacing={3}>
+                        <Grid size={{ xs: 12, md: 5 }}>
+                            <Stack spacing={3}>
+                                <Card>
+                                    <CardContent>
+                                        <Stack direction="row" spacing={2} alignItems="center">
+                                            <IconButton color="primary" size="large">
+                                                <GroupsIcon />
+                                            </IconButton>
+                                            <Box>
+                                                <Typography variant="h6">{thesis.title}</Typography>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    {thesis.overallStatus || 'In progress'}
+                                                </Typography>
+                                                {thesis.groupId && (
+                                                    <Chip label={thesis.groupId} size="small" sx={{ mt: 1 }} />
+                                                )}
+                                            </Box>
+                                        </Stack>
+                                        <Box sx={{ mt: 3 }}>
+                                            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                                                <Typography variant="body2" color="text.secondary">Overall progress</Typography>
+                                                <Typography variant="subtitle2">{progress}%</Typography>
+                                            </Stack>
+                                            <LinearProgress
+                                                variant="determinate"
+                                                value={progress}
+                                                sx={{ borderRadius: 5, height: 8 }}
+                                            />
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardContent>
+                                        <Typography variant="subtitle2" sx={{ mb: 2 }}>Chapters</Typography>
+                                        <ChapterRail
+                                            chapters={stageChapters}
+                                            selectedChapterId={activeChapterId}
+                                            selectedVersionIndex={activeVersionIndex}
+                                            onSelectChapter={handleChapterSelect}
+                                            onSelectVersion={handleVersionSelect}
+                                            onUploadChapter={handleChapterUpload}
+                                            uploadingChapterId={uploadingChapterId}
+                                            enableUploads={enableUploads}
+                                            mentorRoles={mentorRoles}
+                                            currentMentorRole={mentorRole}
+                                            versionOptionsByChapter={versionOptionsByChapter}
+                                            loadingChapterId={loadingChapterId}
+                                            loadingMessage="Fetching submissions…"
+                                            participants={participants}
+                                            reviewActions={enableChapterDecisions ? {
+                                                onApprove: (chapterId) => handleRequestDecision(chapterId, 'approved'),
+                                                onRequestRevision: (chapterId) => handleRequestDecision(
+                                                    chapterId,
+                                                    'revision_required',
+                                                ),
+                                                disabled: reviewActionsDisabled,
+                                                helperText: chapterDecisionHelperText,
+                                                processingChapterId: reviewActionsProcessingChapterId,
+                                            } : undefined}
+                                        />
+                                    </CardContent>
+                                </Card>
+
+                                {/* <Card>
                             <CardContent>
                                 <Typography variant="subtitle2" sx={{ mb: 2 }}>Versions</Typography>
                                 {activeChapter ? (
@@ -804,55 +768,93 @@ export default function ThesisWorkspace({
                             </CardContent>
                         </Card> */}
 
-                        {participants && Object.keys(participants).length > 0 && (
-                            <Card>
-                                <CardContent>
-                                    <Typography variant="subtitle2" sx={{ mb: 2 }}>
-                                        Team roster
-                                    </Typography>
-                                    <List dense>
-                                        {Object.values(participants).map((participant) => (
-                                            <ListItem key={participant.uid} disableGutters>
-                                                <ListItemText
-                                                    primary={participant.displayName}
-                                                    secondary={participant.roleLabel}
-                                                />
-                                            </ListItem>
-                                        ))}
-                                    </List>
+                                {participants && Object.keys(participants).length > 0 && (
+                                    <Card>
+                                        <CardContent>
+                                            <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                                                Team roster
+                                            </Typography>
+                                            <List dense>
+                                                {Object.values(participants).map((participant) => (
+                                                    <ListItem key={participant.uid} disableGutters>
+                                                        <ListItemText
+                                                            primary={participant.displayName}
+                                                            secondary={participant.roleLabel}
+                                                        />
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </Stack>
+                        </Grid>
+
+                        <Grid size={{ xs: 12, md: 7 }}>
+                            <Card sx={{ height: '100%' }}>
+                                <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                    <Box sx={{ mb: 1 }}>
+                                        <Typography variant="h6">Conversation</Typography>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            {conversationHeaderStatus}
+                                        </Typography>
+                                    </Box>
+                                    <Divider sx={{ mb: 2 }} />
+                                    <ConversationPanel
+                                        messages={chapterMessages}
+                                        currentUserId={currentUserId}
+                                        participants={participants}
+                                        height={conversationHeight}
+                                        emptyStateMessage={conversationEmptyState}
+                                        composerPlaceholder={composerPlaceholder}
+                                        disableComposer={composerDisabled}
+                                        allowAttachments
+                                        onSendMessage={handleCreateMessage}
+                                        onEditMessage={onEditComment ? handleEditMessage : undefined}
+                                        composerMetadata={{
+                                            chapterId: activeChapter?.id,
+                                            versionIndex: activeVersionIndex ?? undefined,
+                                            thesisId,
+                                        }}
+                                    />
                                 </CardContent>
                             </Card>
-                        )}
-                    </Stack>
-                </Grid>
+                        </Grid>
+                    </Grid>
+                )}
+            </Box>
 
-                <Grid size={{ xs: 12, md: 7 }}>
-                    <Card sx={{ height: '100%' }}>
-                        <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                            <Box sx={{ mb: 1 }}>
-                                <Typography variant="h6">Conversation</Typography>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                    {conversationHeaderStatus}
-                                </Typography>
-                            </Box>
-                            <Divider sx={{ mb: 2 }} />
-                            <ConversationPanel
-                                messages={chapterMessages}
-                                currentUserId={currentUserId}
-                                participants={participants}
-                                height={conversationHeight}
-                                emptyStateMessage={conversationEmptyState}
-                                composerPlaceholder={composerPlaceholder}
-                                disableComposer={composerDisabled}
-                                allowAttachments
-                                onSendMessage={handleCreateMessage}
-                                onEditMessage={onEditComment ? handleEditMessage : undefined}
-                                composerMetadata={{ chapterId: activeChapter?.id, versionIndex: activeVersionIndex ?? undefined, thesisId }}
-                            />
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
-        </Box>
+            <Dialog
+                open={Boolean(pendingDecision)}
+                onClose={handleCloseDecisionDialog}
+                maxWidth="xs"
+                fullWidth
+            >
+                <DialogTitle>{decisionDialogTitle}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        {decisionDialogDescription}
+                    </DialogContentText>
+                    {decisionError && (
+                        <Alert severity="error" sx={{ mt: 2 }}>
+                            {decisionError}
+                        </Alert>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDecisionDialog} disabled={isSubmittingDecision}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color={pendingDecision?.decision === 'approved' ? 'success' : 'warning'}
+                        onClick={() => void handleConfirmDecision()}
+                        disabled={isSubmittingDecision}
+                    >
+                        {isSubmittingDecision ? 'Saving…' : decisionConfirmLabel}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </>
     );
 }

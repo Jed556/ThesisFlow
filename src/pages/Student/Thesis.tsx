@@ -69,7 +69,7 @@ function buildThesisWorkflowSteps(
         let groupState: WorkflowStep['state'] = group ? 'in-progress' : 'available';
         const adviserAssigned = Boolean(group?.members?.adviser);
         const editorAssigned = Boolean(group?.members?.editor);
-        const advisersComplete = adviserAssigned && editorAssigned;
+        const hasGroup = Boolean(group);
 
         if (isActive) {
             groupDescription = 'Group has been approved and is active.';
@@ -87,18 +87,17 @@ function buildThesisWorkflowSteps(
             groupState = 'in-progress';
         }
 
-        const adviserDescription = advisersComplete
-            ? 'Adviser and Editor assigned.'
-            : adviserAssigned
-                ? 'Adviser assigned. Waiting for Editor.'
-                : editorAssigned
-                    ? 'Editor assigned. Waiting for Adviser.'
-                    : 'Select and request approval from your thesis adviser and research editor.';
-        const adviserState: WorkflowStep['state'] = advisersComplete
-            ? 'completed'
-            : adviserAssigned || editorAssigned
-                ? 'in-progress'
-                : 'available';
+        const editorDescription = editorAssigned
+            ? 'Research editor assigned.'
+            : hasGroup
+                ? 'Select and request approval from your research editor.'
+                : 'Create your research group to unlock editor selection.';
+        const editorState: WorkflowStep['state'] = editorAssigned ? 'completed' : 'available';
+
+        const adviserDescription = adviserAssigned
+            ? 'Research adviser assigned.'
+            : 'Adviser selection unlocks after your topic proposal is approved.';
+        const adviserState: WorkflowStep['state'] = adviserAssigned ? 'completed' : 'available';
 
         const baseSteps: WorkflowStep[] = [
             {
@@ -112,16 +111,16 @@ function buildThesisWorkflowSteps(
                 icon: <GroupsIcon />,
             },
             {
-                id: 'request-advisers',
-                title: 'Request Adviser & Editor',
-                description: adviserDescription,
-                completedMessage: 'Adviser and Editor have been assigned to your group.',
-                state: adviserState,
-                actionLabel: advisersComplete ? undefined : 'Browse Mentors',
+                id: 'request-editor',
+                title: 'Select Research Editor',
+                description: editorDescription,
+                completedMessage: 'Research editor has been assigned to your group.',
+                state: editorState,
+                actionLabel: editorAssigned ? undefined : 'Browse Editors',
                 actionPath: '/recommendation',
                 icon: <PersonAddIcon />,
                 prerequisites: [
-                    { stepId: 'create-group', type: 'prerequisite' },
+                    { stepId: 'create-group', type: 'corequisite' },
                 ],
             },
             {
@@ -135,7 +134,20 @@ function buildThesisWorkflowSteps(
                 icon: <TopicIcon />,
                 prerequisites: [
                     { stepId: 'create-group', type: 'prerequisite' },
-                    { stepId: 'request-advisers', type: 'prerequisite' },
+                    { stepId: 'request-editor', type: 'prerequisite' },
+                ],
+            },
+            {
+                id: 'request-adviser',
+                title: 'Select Research Adviser',
+                description: adviserDescription,
+                completedMessage: 'Research adviser has been assigned to your group.',
+                state: adviserState,
+                actionLabel: adviserAssigned ? undefined : 'Browse Advisers',
+                actionPath: '/recommendation',
+                icon: <PersonAddIcon />,
+                prerequisites: [
+                    { stepId: 'submit-proposals', type: 'prerequisite' },
                 ],
             },
             {
@@ -145,11 +157,11 @@ function buildThesisWorkflowSteps(
                 completedMessage: 'All thesis chapters have been approved.',
                 state: 'available',
                 actionLabel: 'View Chapters',
-                actionPath: '/thesis-chapters',
+                actionPath: '/student-thesis-workspace',
                 icon: <ArticleIcon />,
                 prerequisites: [
                     { stepId: 'submit-proposals', type: 'prerequisite' },
-                    { stepId: 'request-advisers', type: 'prerequisite' },
+                    { stepId: 'request-adviser', type: 'prerequisite' },
                 ],
             },
             {
@@ -180,11 +192,13 @@ function buildThesisWorkflowSteps(
     const isRejected = groupStatus === 'rejected';
     const groupApproved = isActive || (totalMembers > 1 && groupStatus !== 'draft');
 
-    const adviserAssigned = Boolean(record.adviser);
-    const editorAssigned = Boolean(record.editor);
-    const advisersComplete = adviserAssigned && editorAssigned;
+    const adviserAssigned = Boolean(record.adviser ?? group?.members?.adviser);
+    const editorAssigned = Boolean(record.editor ?? group?.members?.editor);
     const hasTopicProposals = Boolean(record.title);
-    const topicApproved = Boolean(record.id) || (record.overallStatus ?? '').toLowerCase().includes('approved');
+    const normalizedOverallStatus = (record.overallStatus ?? '').toLowerCase();
+    const topicApproved = normalizedOverallStatus.includes('approved')
+        || normalizedOverallStatus.includes('accepted')
+        || normalizedOverallStatus.includes('granted');
     const chaptersSubmitted = chapters.some((chapter) => chapter.status !== 'not_submitted');
     const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
     const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
@@ -219,22 +233,20 @@ function buildThesisWorkflowSteps(
             icon: <GroupsIcon />,
         },
         {
-            id: 'request-advisers',
-            title: 'Request Adviser & Editor',
-            description: advisersComplete
-                ? 'Adviser and Editor assigned.'
-                : adviserAssigned
-                    ? 'Adviser assigned. Waiting for Editor.'
-                    : editorAssigned
-                        ? 'Editor assigned. Waiting for Adviser.'
-                        : 'Select and request approval from your thesis adviser and research editor.',
-            completedMessage: 'Adviser and Editor have been assigned to your group.',
-            state: resolveStepState({ completed: advisersComplete, started: adviserAssigned || editorAssigned }),
-            actionLabel: advisersComplete ? undefined : 'Browse Mentors',
+            id: 'request-editor',
+            title: 'Select Research Editor',
+            description: editorAssigned
+                ? 'Research editor assigned.'
+                : hasGroup
+                    ? 'Select and request approval from your research editor.'
+                    : 'Create and submit your research group to access editors.',
+            completedMessage: 'Research editor has been assigned to your group.',
+            state: editorAssigned ? 'completed' : 'available',
+            actionLabel: editorAssigned ? undefined : 'Browse Editors',
             actionPath: '/recommendation',
             icon: <PersonAddIcon />,
             prerequisites: [
-                { stepId: 'create-group', type: 'prerequisite' },
+                { stepId: 'create-group', type: 'corequisite' },
             ],
         },
         {
@@ -252,7 +264,26 @@ function buildThesisWorkflowSteps(
             icon: <TopicIcon />,
             prerequisites: [
                 { stepId: 'create-group', type: 'prerequisite' },
-                { stepId: 'request-advisers', type: 'prerequisite' },
+                { stepId: 'request-editor', type: 'prerequisite' },
+            ],
+        },
+        {
+            id: 'request-adviser',
+            title: 'Select Research Adviser',
+            description: adviserAssigned
+                ? 'Research adviser assigned.'
+                : topicApproved
+                    ? 'Choose your research adviser now that your topic is approved.'
+                    : hasTopicProposals
+                        ? 'Awaiting topic approval before adviser selection opens.'
+                        : 'Submit your topic proposals to unlock adviser selection.',
+            completedMessage: 'Research adviser has been assigned to your group.',
+            state: resolveStepState({ completed: adviserAssigned, started: topicApproved && !adviserAssigned }),
+            actionLabel: adviserAssigned ? undefined : 'Browse Advisers',
+            actionPath: '/recommendation',
+            icon: <PersonAddIcon />,
+            prerequisites: [
+                { stepId: 'submit-proposals', type: 'prerequisite' },
             ],
         },
         {
@@ -266,11 +297,11 @@ function buildThesisWorkflowSteps(
             completedMessage: `All ${chapters.length} thesis chapters have been approved.`,
             state: resolveStepState({ completed: allChaptersApproved, started: chaptersSubmitted }),
             actionLabel: 'View Chapters',
-            actionPath: '/thesis-chapters',
+            actionPath: '/student-thesis-workspace',
             icon: <ArticleIcon />,
             prerequisites: [
                 { stepId: 'submit-proposals', type: 'prerequisite' },
-                { stepId: 'request-advisers', type: 'prerequisite' },
+                { stepId: 'request-adviser', type: 'prerequisite' },
             ],
         },
         {

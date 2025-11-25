@@ -330,7 +330,7 @@ export default function AdminChapterManagementPage() {
     }, [handleCloseDeleteDialog, loadConfigs, selectedConfig, showNotification]);
 
     if (!canManage) {
-        return <UnauthorizedNotice title="Chapter Management" />;
+        return <UnauthorizedNotice title="Chapter Management" variant="box" />;
     }
 
     return (

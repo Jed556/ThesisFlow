@@ -13,7 +13,7 @@ import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisData } from '../../types/thesis';
 import type { ConversationParticipant } from '../../components/Conversation';
-import type { WorkspaceUploadPayload } from '../../components/ThesisWorkspace';
+import type { WorkspaceUploadPayload } from '../../types/workspace';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
@@ -145,7 +145,6 @@ export default function StudentThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Stack spacing={2} sx={{ mb: 3 }}>
-                <Typography variant="h4">My Thesis Workspace</Typography>
                 <Typography variant="body1" color="text.secondary">
                     Upload new chapter versions and review mentor feedback organized per submission.
                 </Typography>

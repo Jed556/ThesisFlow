@@ -2,6 +2,9 @@ import type { ThesisData } from '../types/thesis';
 import type { UserProfile } from '../types/profile';
 import { normalizeDateInput } from './dateUtils';
 import { isCompletedThesisStatus } from './mentorProfileUtils';
+import type { ThesisGroup } from '../types/group';
+
+type ThesisMentorRole = 'adviser' | 'editor' | 'statistician';
 
 export interface ThesisRoleStats {
     adviserCount: number;
@@ -24,44 +27,61 @@ export interface MentorCardData {
  * \@param theses List of theses to analyze
  * @return Map of user UIDs to their thesis role statistics
  */
-export function aggregateThesisStats(theses: (ThesisData & { id: string })[]): Map<string, ThesisRoleStats> {
+export function aggregateThesisStats(
+    theses: (ThesisData & { id: string })[],
+    groups: ThesisGroup[] = []
+): Map<string, ThesisRoleStats> {
     const stats = new Map<string, ThesisRoleStats>();
+    const countedAssignments = new Set<string>();
+
+    const ensureRecord = (uid: string): ThesisRoleStats => {
+        if (!stats.has(uid)) {
+            stats.set(uid, { adviserCount: 0, editorCount: 0, statisticianCount: 0 });
+        }
+        return stats.get(uid)!;
+    };
+
+    const registerAssignment = (
+        uid: string | null | undefined,
+        role: ThesisMentorRole,
+        referenceId: string | null | undefined
+    ) => {
+        if (!uid) {
+            return;
+        }
+        const dedupeKey = `${role}:${uid}:${referenceId ?? 'global'}`;
+        if (countedAssignments.has(dedupeKey)) {
+            return;
+        }
+        countedAssignments.add(dedupeKey);
+        const record = ensureRecord(uid);
+        if (role === 'adviser') {
+            record.adviserCount += 1;
+        } else if (role === 'editor') {
+            record.editorCount += 1;
+        } else {
+            record.statisticianCount += 1;
+        }
+    };
 
     theses.forEach((thesis) => {
         if (isCompletedThesisStatus(thesis.overallStatus)) {
             return;
         }
-        const ensureRecord = (uid: string): ThesisRoleStats => {
-            if (!stats.has(uid)) {
-                stats.set(uid, { adviserCount: 0, editorCount: 0, statisticianCount: 0 });
-            }
-            return stats.get(uid)!;
-        };
+        const reference = thesis.groupId ?? thesis.id;
+        registerAssignment(thesis.adviser, 'adviser', reference);
+        registerAssignment(thesis.editor, 'editor', reference);
+        registerAssignment(thesis.statistician, 'statistician', reference);
+    });
 
-        if (thesis.adviser) {
-            const record = ensureRecord(thesis.adviser);
-            stats.set(thesis.adviser, {
-                adviserCount: record.adviserCount + 1,
-                editorCount: record.editorCount,
-                statisticianCount: record.statisticianCount,
-            });
+    const activeGroupStatuses: ThesisGroup['status'][] = ['draft', 'review', 'active'];
+    groups.forEach((group) => {
+        if (!activeGroupStatuses.includes(group.status)) {
+            return;
         }
-        if (thesis.editor) {
-            const record = ensureRecord(thesis.editor);
-            stats.set(thesis.editor, {
-                adviserCount: record.adviserCount,
-                editorCount: record.editorCount + 1,
-                statisticianCount: record.statisticianCount,
-            });
-        }
-        if (thesis.statistician) {
-            const record = ensureRecord(thesis.statistician);
-            stats.set(thesis.statistician, {
-                adviserCount: record.adviserCount,
-                editorCount: record.editorCount,
-                statisticianCount: record.statisticianCount + 1,
-            });
-        }
+        registerAssignment(group.members.adviser, 'adviser', group.id);
+        registerAssignment(group.members.editor, 'editor', group.id);
+        registerAssignment(group.members.statistician, 'statistician', group.id);
     });
 
     return stats;

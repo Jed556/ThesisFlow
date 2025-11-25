@@ -330,7 +330,7 @@ export default function HeadTopicProposalsPage() {
                                         </Typography>
                                     </Box>
                                     <Stack direction="row" spacing={1}>
-                                        <Chip label={`Cycle #${record?.cycle ?? 1}`} size="small" />
+                                        <Chip label={`Set #${record?.cycle ?? 1}`} size="small" />
                                         {awaitingHead && <Chip label="Head queue" color="warning" size="small" />}
                                         {!awaitingHead && awaitingModerator && (
                                             <Chip label="Moderator queue" color="info" size="small" />

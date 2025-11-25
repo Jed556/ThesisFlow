@@ -4,6 +4,16 @@ import type { FileAttachment } from './file';
  * Thesis-specific role types - Based on thesis data context
  */
 export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'statistician' | 'unknown';
+export type MentorRole = Extract<ThesisRole, 'adviser' | 'editor' | 'statistician'>;
+export type MentorApprovalState = Partial<Record<MentorRole, boolean>>;
+export type ChapterSubmissionStatus = 'approved' | 'under_review' | 'revision_required';
+
+export interface ChapterSubmissionEntry {
+    id: string;
+    status: ChapterSubmissionStatus;
+    decidedAt?: string | null;
+    decidedBy?: MentorRole | 'system';
+}
 
 /**
  * Thesis role display title
@@ -29,7 +39,8 @@ export interface ThesisComment {
     author: string; // Firebase UID of author
     date: string;
     comment: string;
-    attachments?: Array<string | FileAttachment>; // Supports legacy hashes and rich metadata
+    isEdited?: boolean;
+    attachments?: (string | FileAttachment)[]; // Supports legacy hashes and rich metadata
     version?: number; // Version index based on submission hash position in submissions array
 }
 
@@ -42,9 +53,10 @@ export interface ThesisChapter {
     status: 'approved' | 'under_review' | 'revision_required' | 'not_submitted';
     submissionDate: string | null;
     lastModified: string | null;
-    submissions: string[]; // Array of file hashes for submitted documents
+    submissions: (string | ChapterSubmissionEntry)[];
     comments: ThesisComment[];
     stage?: ThesisStage;
+    mentorApprovals?: MentorApprovalState;
 }
 
 /**

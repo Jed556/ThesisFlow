@@ -1,5 +1,5 @@
-import type { ConversationParticipant } from '../Conversation';
-import type { ThesisData } from '../../types/thesis';
+import type { FileAttachment } from './file';
+import type { ChapterSubmissionStatus, MentorRole } from './thesis';
 
 export interface WorkspaceFilterOption {
     label: string;
@@ -39,17 +39,22 @@ export interface WorkspaceUploadPayload {
     file: File;
 }
 
-export interface ThesisWorkspaceProps {
-    thesisId?: string;
-    thesis?: ThesisData | null;
-    participants?: Record<string, ConversationParticipant>;
-    currentUserId?: string;
-    filters?: WorkspaceFilterConfig[];
-    isLoading?: boolean;
-    allowCommenting?: boolean;
-    emptyStateMessage?: string;
-    conversationHeight?: number | string;
-    onCreateComment?: (payload: WorkspaceCommentPayload) => Promise<void> | void;
-    onEditComment?: (payload: WorkspaceEditPayload) => Promise<void> | void;
-    onUploadChapter?: (payload: WorkspaceUploadPayload) => Promise<void> | void;
+export type WorkspaceChapterDecision = 'approved' | 'revision_required';
+
+export interface WorkspaceChapterDecisionPayload {
+    thesisId: string;
+    chapterId: number;
+    versionIndex?: number | null;
+    decision: WorkspaceChapterDecision;
+    role?: MentorRole;
 }
+
+export interface VersionOption {
+    id: string;
+    label: string;
+    versionIndex: number;
+    file?: FileAttachment;
+    status?: ChapterSubmissionStatus;
+}
+
+export type ChapterVersionMap = Record<number, VersionOption[]>;

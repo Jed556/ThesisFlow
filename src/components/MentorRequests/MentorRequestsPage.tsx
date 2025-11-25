@@ -452,6 +452,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     if (!viewerRole || !permittedRoles.includes(viewerRole)) {
         return (
             <UnauthorizedNotice
+                variant='box'
                 title="Mentor access only"
                 description={`This page is available to ${roleLabel.toLowerCase()}s.`}
             />

@@ -517,16 +517,15 @@ export default function StudentTopicProposalsPage() {
         );
     }
 
-    const adviserAssigned = Boolean(group.members.adviser);
     const editorAssigned = Boolean(group.members.editor);
 
-    if (!adviserAssigned || !editorAssigned) {
+    if (!editorAssigned) {
         return (
             <AnimatedPage variant="fade">
                 <UnauthorizedNotice
                     variant='box'
-                    title="Complete adviser & editor selection"
-                    description="Assign both a thesis adviser and research editor before submitting topic proposals."
+                    title="Assign a research editor first"
+                    description="Have your research editor approve the request to unlock topic proposal submissions."
                 />
             </AnimatedPage>
         );

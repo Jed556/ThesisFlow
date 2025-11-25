@@ -1,7 +1,6 @@
 import * as React from 'react';
 import {
     Box,
-    Button,
     Chip,
     IconButton,
     InputAdornment,
@@ -159,6 +158,7 @@ export default function MessageComposer({
             )}
 
             <OutlinedInput
+                fullWidth
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
                 onKeyDown={handleKeyDown}
@@ -173,6 +173,7 @@ export default function MessageComposer({
                         border: 'none',
                     },
                     bgcolor: 'background.paper',
+                    width: '100%',
                 }}
                 endAdornment={(
                     <InputAdornment position="end">
@@ -196,12 +197,12 @@ export default function MessageComposer({
                                 </span>
                             </Tooltip>
                         )}
-                        <Tooltip title="Send">
+                        <Tooltip title={editingMessage ? 'Save changes' : 'Send'}>
                             <span>
                                 <IconButton
                                     color="primary"
                                     disabled={disabled || isSending || !message.trim()}
-                                    aria-label="Send message"
+                                    aria-label={editingMessage ? 'Save changes' : 'Send message'}
                                     onClick={() => void handleSend()}
                                 >
                                     <SendIcon />
@@ -224,18 +225,6 @@ export default function MessageComposer({
                 </Stack>
             )}
 
-            {(previews.length > 0 || replyTo || editingMessage) && (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<SendIcon />}
-                        disabled={disabled || isSending || !message.trim()}
-                        onClick={() => void handleSend()}
-                    >
-                        {editingMessage ? 'Save changes' : 'Send'}
-                    </Button>
-                </Box>
-            )}
         </Paper>
     );
 }

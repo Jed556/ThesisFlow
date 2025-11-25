@@ -3,6 +3,8 @@ import { firebaseFirestore } from '../firebaseConfig';
 import { THESES_COLLECTION } from './constants';
 import { applyChapterUpdate } from './chapterMutations';
 import type { ThesisData } from '../../../types/thesis';
+import { createEmptyMentorApprovals } from '../../mentorUtils';
+import { appendSubmissionEntry } from '../../chapterSubmissionUtils';
 
 export interface AppendChapterSubmissionInput {
     thesisId: string;
@@ -39,14 +41,17 @@ export async function appendChapterSubmission({
     const timestamp = submittedAt ?? new Date().toISOString();
 
     const nextChapters = applyChapterUpdate(thesis, chapterId, (chapter) => {
-        const submissions = [...(chapter.submissions ?? [])];
-        submissions.push(submissionId);
+        const submissions = appendSubmissionEntry(chapter.submissions ?? [], {
+            id: submissionId,
+            status: 'under_review',
+        });
         return {
             ...chapter,
             submissions,
             submissionDate: timestamp,
             lastModified: timestamp,
             status: chapter.status === 'approved' ? 'revision_required' : 'under_review',
+            mentorApprovals: createEmptyMentorApprovals(thesis),
         };
     });
 

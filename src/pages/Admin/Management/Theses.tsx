@@ -955,7 +955,7 @@ export default function AdminThesisManagementPage() {
     if (userRole !== 'admin' && userRole !== 'developer') {
         return (
             <AnimatedPage variant="fade">
-                <UnauthorizedNotice description="You need to be an administrator or developer to manage theses." />
+                <UnauthorizedNotice description="You need to be an administrator or developer to manage theses." variant="box" />
             </AnimatedPage>
         );
     }

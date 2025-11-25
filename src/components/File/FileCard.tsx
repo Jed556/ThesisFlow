@@ -1,20 +1,10 @@
 import * as React from 'react';
 import {
-    Avatar,
-    Box,
-    Card,
-    CardContent,
-    Chip,
-    IconButton,
-    Stack,
-    Tooltip,
-    Typography,
+    Avatar, Box, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography,
 } from '@mui/material';
 import {
-    Delete as DeleteIcon,
-    Download as DownloadIcon,
-    InsertDriveFile as GenericFileIcon,
-    PictureAsPdf as PdfIcon,
+    Delete as DeleteIcon, Download as DownloadIcon,
+    InsertDriveFile as GenericFileIcon, PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import type { FileAttachment } from '../../types/file';
 
@@ -71,7 +61,11 @@ export default function FileCard({
 }: FileCardProps) {
     const interactive = Boolean(onClick) && !disabled;
     const effectiveTitle = title ?? file?.name ?? 'Untitled file';
-    const iconNode = icon ?? (isPdfFile(file) ? <PdfIcon fontSize="small" color="error" /> : <GenericFileIcon fontSize="small" color="action" />);
+    const iconNode = icon ?? (
+        isPdfFile(file)
+            ? <PdfIcon fontSize="small" color="error" />
+            : <GenericFileIcon fontSize="small" color="action" />
+    );
 
     const handleClick = React.useCallback((event: FileCardClickEvent) => {
         if (!interactive) {
@@ -158,7 +152,12 @@ export default function FileCard({
                     </Box>
                     <Stack direction="row" spacing={0.5} alignItems="center">
                         {versionLabel && (
-                            <Chip size="small" color={selected ? 'primary' : 'default'} label={versionLabel} sx={{ fontWeight: 600 }} />
+                            <Chip
+                                size="small"
+                                color={selected ? 'primary' : 'default'}
+                                label={versionLabel}
+                                sx={{ fontWeight: 600 }}
+                            />
                         )}
                         {showDownloadButton && (
                             <Tooltip title={downloadDisabled ? 'Download not available' : 'Download file'}>

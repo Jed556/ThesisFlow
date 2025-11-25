@@ -1,2 +1,3 @@
 export { default as ThesisWorkspace } from './ThesisWorkspace';
-export * from './types';
+export { default as ChapterRail, buildVersionOptions, formatChapterLabel } from './ChapterRail';
+export { default as VersionRail } from './VersionRail';

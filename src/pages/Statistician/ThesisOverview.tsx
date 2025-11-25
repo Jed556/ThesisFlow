@@ -18,12 +18,13 @@ import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import type { WorkspaceFilterConfig } from '../../components/ThesisWorkspace';
+import type { WorkspaceChapterDecisionPayload, WorkspaceFilterConfig } from '../../types/workspace';
 import {
     getReviewerAssignmentsForUser,
     getThesisById,
 } from '../../utils/firebase/firestore/thesis';
 import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
+import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDecisions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
 
@@ -259,6 +260,43 @@ export default function StatisticianThesisOverviewPage() {
         });
     }, [statisticianUid, selectedThesisId]);
 
+    const handleChapterDecision = React.useCallback(async ({ thesisId: targetThesisId, chapterId, decision }: WorkspaceChapterDecisionPayload) => {
+        if (!targetThesisId) {
+            throw new Error('Missing thesis context for decision.');
+        }
+
+        const result = await updateChapterDecision({
+            thesisId: targetThesisId,
+            chapterId,
+            decision,
+            role: 'statistician',
+        });
+
+        if (targetThesisId !== selectedThesisId) {
+            return;
+        }
+
+        setThesis((prev) => {
+            if (!prev) {
+                return prev;
+            }
+            return {
+                ...prev,
+                lastUpdated: result.decidedAt,
+                chapters: prev.chapters.map((chapter) =>
+                    chapter.id === chapterId
+                        ? {
+                            ...chapter,
+                            status: result.status,
+                            lastModified: result.decidedAt,
+                            mentorApprovals: result.mentorApprovals,
+                        }
+                        : chapter
+                ),
+            };
+        });
+    }, [selectedThesisId]);
+
     const isLoading = assignmentsLoading || thesisLoading;
     const noAssignments = !assignmentsLoading && assignments.length === 0;
 
@@ -305,6 +343,8 @@ export default function StatisticianThesisOverviewPage() {
                     onCreateComment={({ chapterId, versionIndex, content, files }) =>
                         handleCreateComment({ chapterId, versionIndex, content, files })
                     }
+                    mentorRole="statistician"
+                    onChapterDecision={handleChapterDecision}
                 />
             )}
         </AnimatedPage>
