@@ -5,6 +5,7 @@ import { getUserById } from './firebase/firestore/user';
 export {
     acceptInvite,
     acceptJoinRequest,
+    cancelJoinRequest,
     createGroup,
     deleteGroup,
     getGroupById,

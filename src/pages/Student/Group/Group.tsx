@@ -1,11 +1,10 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardActions, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogContentText,
-    DialogTitle, Divider, IconButton, List, ListItem, ListItemText, Paper, Skeleton, Stack, TextField, Typography,
+    Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText,
+    DialogTitle, List, ListItem, ListItemText, Paper, Skeleton, Stack, TextField, Typography,
 } from '@mui/material';
 import {
-    Add as AddIcon, Delete as DeleteIcon, Group as GroupIcon, PersonAdd as PersonAddIcon,
-    Search as SearchIcon, Send as SendIcon, Check as CheckIcon, Close as CloseIcon,
+    Group as GroupIcon, Check as CheckIcon, Close as CloseIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
@@ -18,26 +17,12 @@ import { AnimatedPage, AnimatedList } from '../../../components/Animate';
 import GroupCard from '../../../components/Group/GroupCard';
 import GroupManageDialog from '../../../components/Group/GroupManageDialog';
 import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
-import { Avatar, Name } from '../../../components/Avatar';
-import ProfileCard from '../../../components/Profile/ProfileCard';
+import StudentGroupCard from './StudentGroupCard';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import {
-    acceptInvite,
-    acceptJoinRequest,
-    buildGroupProfileMap,
-    createGroup,
-    deleteGroup,
-    getGroupById,
-    getGroupsByCourse,
-    getGroupsByLeader,
-    getGroupsByMember,
-    getUserById,
-    getUsersByFilter,
-    inviteUserToGroup,
-    rejectJoinRequest,
-    removeInviteFromGroup,
-    requestToJoinGroup,
-    submitGroupForReview,
+    acceptInvite, acceptJoinRequest, buildGroupProfileMap, createGroup, deleteGroup, getGroupById,
+    getGroupsByCourse, getGroupsByLeader, getGroupsByMember, getUserById, getUsersByFilter, inviteUserToGroup,
+    rejectJoinRequest, removeInviteFromGroup, submitGroupForReview,
 } from '../../../utils/groupUtils';
 
 export const metadata: NavigationItem = {
@@ -407,6 +392,13 @@ export default function StudentGroupPage() {
         });
     }, [navigate, resolveProfileByUid]);
 
+    const handleOpenGroupView = React.useCallback((targetGroupId: string) => {
+        if (!targetGroupId) {
+            return;
+        }
+        navigate(`/group/${targetGroupId}`);
+    }, [navigate]);
+
 
     const handleSaveGroup = React.useCallback(async () => {
         if (!userUid || !userProfile) return;
@@ -568,28 +560,6 @@ export default function StudentGroupPage() {
         }
     };
 
-    const handleRequestToJoin = async (groupId: string) => {
-        if (!userUid) return;
-
-        try {
-            await requestToJoinGroup(groupId, userUid);
-            setError(null);
-
-            // Reload available groups
-            if (userProfile?.course) {
-                const courseGroups = await getGroupsByCourse(userProfile.course);
-                const available = courseGroups.filter(g =>
-                    g.id !== myGroup?.id &&
-                    (g.status === 'draft' || g.status === 'review' || g.status === 'active')
-                );
-                setAvailableGroups(available.filter(g => !g.invites?.includes(userUid)));
-            }
-        } catch (err) {
-            console.error('Failed to request join:', err);
-            setError('Failed to send join request. You may have already requested.');
-        }
-    };
-
     const handleAcceptInvite = async (groupId: string) => {
         if (!userUid) return;
 
@@ -703,260 +673,6 @@ export default function StudentGroupPage() {
         );
     }
 
-    const renderPrimaryCard = () => {
-        if (loading) {
-            return (
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
-                    <Skeleton variant="rounded" height={120} />
-                </Paper>
-            );
-        }
-
-        if (myGroup) {
-            const renderPersonCard = (uid: string, roleLabel: string) => {
-                if (!uid) return null;
-                const profile = myGroupProfiles.get(uid);
-
-                if (!profile) {
-                    const displayName = formatParticipantLabel(uid);
-                    return (
-                        <Paper
-                            key={`${roleLabel}-${uid}`}
-                            variant="outlined"
-                            sx={{
-                                p: 2,
-                                borderRadius: 2,
-                                bgcolor: 'background.default',
-                                borderColor: 'divider',
-                                width: '100%',
-                            }}
-                        >
-                            <Stack direction="row" spacing={2} alignItems="center">
-                                <Avatar uid={uid} size={48} tooltip="full" editable={false} />
-                                <Box>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                        {displayName}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        {roleLabel}
-                                    </Typography>
-                                </Box>
-                            </Stack>
-                        </Paper>
-                    );
-                }
-
-                return (
-                    <ProfileCard
-                        key={`${roleLabel}-${uid}`}
-                        profile={profile}
-                        chips={[roleLabel]}
-                        showEmail
-                        showSkills={false}
-                        onClick={() => handleOpenProfilePage(uid)}
-                        elevation={0}
-                        variant="outlined"
-                    />
-                );
-            };
-
-            const renderRoleSection = (title: string, people: { uid: string; role: string }[]) => {
-                const cards = people
-                    .filter(({ uid }) => Boolean(uid))
-                    .map(({ uid, role }) => renderPersonCard(uid, role))
-                    .filter(Boolean) as React.ReactNode[];
-
-                if (cards.length === 0) {
-                    return null;
-                }
-
-                return (
-                    <Box sx={{ mb: 3 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                            {title}
-                        </Typography>
-                        <Box
-                            sx={{
-                                display: 'grid',
-                                gridTemplateColumns: {
-                                    xs: '1fr',
-                                    sm: 'repeat(2, minmax(0, 1fr))',
-                                    lg: 'repeat(3, minmax(0, 1fr))',
-                                },
-                                gap: 2,
-                            }}
-                        >
-                            {cards}
-                        </Box>
-                    </Box>
-                );
-            };
-
-            const researcherEntries = [
-                { uid: myGroup.members.leader, role: 'Lead Researcher' },
-                ...myGroup.members.members.map((uid) => ({ uid, role: 'Researcher' })),
-            ];
-            const adviserEntries = myGroup.members.adviser ? [{ uid: myGroup.members.adviser, role: 'Adviser' }] : [];
-            const editorEntries = myGroup.members.editor ? [{ uid: myGroup.members.editor, role: 'Editor' }] : [];
-            const panelEntries = (myGroup.members.panels ?? []).map((uid) => ({ uid, role: 'Panelist' }));
-
-            return (
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                        <Box>
-                            <Typography variant="overline" color="text.secondary">
-                                Thesis Group
-                            </Typography>
-                            <Typography variant="h5">{myGroup.name}</Typography>
-                        </Box>
-                        <Stack direction="row" spacing={1}>
-                            <Chip
-                                label={myGroup.status.toUpperCase()}
-                                color={
-                                    myGroup.status === 'active' ? 'success' :
-                                        myGroup.status === 'review' ? 'warning' :
-                                            myGroup.status === 'rejected' ? 'error' : 'default'
-                                }
-                                size="small"
-                            />
-                            {isLeader && <Chip label="LEADER" color="primary" size="small" />}
-                        </Stack>
-                    </Stack>
-
-                    {myGroup.description && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {myGroup.description}
-                        </Typography>
-                    )}
-
-                    {myGroup.status === 'rejected' && myGroup.rejectionReason && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            <strong>Rejection Reason:</strong> {myGroup.rejectionReason}
-                        </Alert>
-                    )}
-
-                    <Divider sx={{ my: 3 }} />
-
-                    {renderRoleSection('Researchers', researcherEntries)}
-                    {renderRoleSection('Adviser', adviserEntries)}
-                    {renderRoleSection('Editor', editorEntries)}
-                    {renderRoleSection('Panelists', panelEntries)}
-
-                    {isLeader && (
-                        <>
-                            {(myGroup.invites ?? []).length > 0 && (
-                                <>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                                        Pending Invites
-                                    </Typography>
-                                    <Stack spacing={1} sx={{ mb: 2 }}>
-                                        {myGroup.invites!.map((uid) => (
-                                            <Chip key={uid} label={uid} size="small" variant="outlined" />
-                                        ))}
-                                    </Stack>
-                                </>
-                            )}
-
-                            {(myGroup.requests ?? []).length > 0 && (
-                                <>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                                        Join Requests
-                                    </Typography>
-                                    <Stack spacing={1} sx={{ mb: 2 }}>
-                                        {myGroup.requests!.map((uid) => (
-                                            <Stack key={uid} direction="row" spacing={1} alignItems="center">
-                                                <Avatar
-                                                    uid={uid}
-                                                    initials={[Name.FIRST]}
-                                                    mode="chip"
-                                                    tooltip="email"
-                                                    size="small"
-                                                    chipProps={{ variant: 'outlined', size: 'small' }}
-                                                    editable={false}
-                                                    onClick={() => handleOpenProfilePage(uid)}
-                                                />
-                                                <IconButton
-                                                    size="small"
-                                                    color="success"
-                                                    onClick={() => handleAcceptJoinRequest(uid)}
-                                                >
-                                                    <CheckIcon fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    color="error"
-                                                    onClick={() => handleRejectJoinRequest(uid)}
-                                                >
-                                                    <CloseIcon fontSize="small" />
-                                                </IconButton>
-                                            </Stack>
-                                        ))}
-                                    </Stack>
-                                </>
-                            )}
-
-                            <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-                                <Button
-                                    startIcon={<PersonAddIcon />}
-                                    variant="outlined"
-                                    onClick={() => setInviteDialogOpen(true)}
-                                    disabled={isInviteLocked(myGroup.status)}
-                                >
-                                    Invite Member
-                                </Button>
-
-                                {myGroup.status === 'draft' && (
-                                    <>
-                                        <Button
-                                            startIcon={<SendIcon />}
-                                            variant="contained"
-                                            onClick={handleSubmitForReview}
-                                        >
-                                            Submit for Review
-                                        </Button>
-                                        <Button
-                                            startIcon={<DeleteIcon />}
-                                            variant="outlined"
-                                            color="error"
-                                            onClick={() => setDeleteDialogOpen(true)}
-                                        >
-                                            Delete Group
-                                        </Button>
-                                    </>
-                                )}
-                            </Stack>
-                        </>
-                    )}
-                </Paper>
-            );
-        }
-
-        return (
-            <Paper sx={{ p: 3, mb: 3 }}>
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                    You are not part of any group yet. Create a new group or join an existing one.
-                </Typography>
-                <Stack direction="row" spacing={2}>
-                    <Button
-                        startIcon={<AddIcon />}
-                        variant="contained"
-                        onClick={handleOpenCreateDialog}
-                    >
-                        Create Group
-                    </Button>
-                    <Button
-                        startIcon={<SearchIcon />}
-                        variant="outlined"
-                        onClick={() => setSearchDialogOpen(true)}
-                    >
-                        Search Group by ID
-                    </Button>
-                </Stack>
-            </Paper>
-        );
-    };
-
     return (
         <AnimatedPage variant="slideUp">
 
@@ -966,50 +682,73 @@ export default function StudentGroupPage() {
                 </Alert>
             )}
 
-            {renderPrimaryCard()}
+            <StudentGroupCard
+                loading={loading}
+                group={myGroup}
+                isLeader={isLeader}
+                profiles={myGroupProfiles}
+                formatLabel={formatParticipantLabel}
+                onOpenProfile={handleOpenProfilePage}
+                onOpenCreateDialog={handleOpenCreateDialog}
+                onOpenSearchDialog={() => setSearchDialogOpen(true)}
+                onOpenInviteDialog={() => setInviteDialogOpen(true)}
+                onSubmitForReview={handleSubmitForReview}
+                onDeleteGroup={() => setDeleteDialogOpen(true)}
+                onAcceptJoinRequest={handleAcceptJoinRequest}
+                onRejectJoinRequest={handleRejectJoinRequest}
+                inviteActionsDisabled={myGroup ? isInviteLocked(myGroup.status) : false}
+            />
 
             {/* My Invites */}
             {!loading && myInvites.length > 0 && (
-                <>
+                <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         Group Invites
                     </Typography>
-                    <AnimatedList variant="slideUp" staggerDelay={50}>
-                        {myInvites.map((group) => (
-                            <Card key={group.id} sx={{ mb: 2 }}>
-                                <CardContent>
-                                    <Typography variant="h6">{group.name}</Typography>
-                                    {group.description && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            {group.description}
-                                        </Typography>
-                                    )}
-                                    <Typography variant="caption" color="text.secondary">
-                                        ID: {group.id}
-                                    </Typography>
-                                </CardContent>
-                                <CardActions>
-                                    <Button
-                                        size="small"
-                                        color="success"
-                                        startIcon={<CheckIcon />}
-                                        onClick={() => handleAcceptInvite(group.id)}
-                                    >
-                                        Accept
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        color="error"
-                                        startIcon={<CloseIcon />}
-                                        onClick={() => handleDeclineInvite(group.id)}
-                                    >
-                                        Decline
-                                    </Button>
-                                </CardActions>
-                            </Card>
-                        ))}
-                    </AnimatedList>
-                </>
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: {
+                                xs: '1fr',
+                                sm: 'repeat(2, 1fr)',
+                                lg: 'repeat(3, 1fr)',
+                            },
+                            gap: 2,
+                        }}
+                    >
+                        <AnimatedList variant="slideUp" staggerDelay={50}>
+                            {myInvites.map((group) => (
+                                <Stack key={group.id} spacing={1.5}>
+                                    <GroupCard
+                                        group={group}
+                                        usersByUid={usersByUid}
+                                        onClick={() => handleOpenGroupView(group.id)}
+                                    />
+                                    <Stack direction="row" spacing={1}>
+                                        <Button
+                                            size="small"
+                                            color="success"
+                                            startIcon={<CheckIcon />}
+                                            onClick={() => handleAcceptInvite(group.id)}
+                                            fullWidth
+                                        >
+                                            Accept
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            color="error"
+                                            startIcon={<CloseIcon />}
+                                            onClick={() => handleDeclineInvite(group.id)}
+                                            fullWidth
+                                        >
+                                            Decline
+                                        </Button>
+                                    </Stack>
+                                </Stack>
+                            ))}
+                        </AnimatedList>
+                    </Box>
+                </Box>
             )}
 
             {/* Available Groups */}
@@ -1018,29 +757,29 @@ export default function StudentGroupPage() {
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         Groups in Your Department & Course
                     </Typography>
-                    <AnimatedList variant="slideUp" staggerDelay={50}>
-                        <Box
-                            sx={{
-                                display: 'grid',
-                                gridTemplateColumns: {
-                                    xs: '1fr',
-                                    sm: 'repeat(2, 1fr)',
-                                    lg: 'repeat(3, 1fr)',
-                                },
-                                gap: 2,
-                            }}
-                        >
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: {
+                                xs: '1fr',
+                                sm: 'repeat(2, 1fr)',
+                                lg: 'repeat(3, 1fr)',
+                            },
+                            gap: 2,
+                        }}
+                    >
+                        <AnimatedList variant="slideUp" staggerDelay={50}>
                             {availableGroups.map((group) => (
                                 <Box key={group.id}>
                                     <GroupCard
                                         group={group}
                                         usersByUid={usersByUid}
-                                        onClick={() => handleRequestToJoin(group.id)}
+                                        onClick={() => handleOpenGroupView(group.id)}
                                     />
                                 </Box>
                             ))}
-                        </Box>
-                    </AnimatedList>
+                        </AnimatedList>
+                    </Box>
                 </Box>
             )}
 
@@ -1187,12 +926,12 @@ export default function StudentGroupPage() {
                     {previewGroup && !myGroup && (
                         <Button
                             onClick={() => {
-                                handleRequestToJoin(previewGroup.id);
+                                handleOpenGroupView(previewGroup.id);
                                 setPreviewDialogOpen(false);
                             }}
                             variant="contained"
                         >
-                            Request to Join
+                            View Group
                         </Button>
                     )}
                 </DialogActions>

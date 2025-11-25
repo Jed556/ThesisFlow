@@ -13,10 +13,17 @@ import { getThesisById } from '../../utils/firebase/firestore/thesis';
 import Avatar from '../Avatar';
 import { GROUP_STATUS_COLORS, formatGroupStatus } from './constants';
 
+export interface GroupViewHeaderContext {
+    group: ThesisGroup | null;
+    loading: boolean;
+    error: string | null;
+}
+
 interface GroupViewProps {
     groupId: string;
-    headerActions?: React.ReactNode;
+    headerActions?: React.ReactNode | ((context: GroupViewHeaderContext) => React.ReactNode);
     hint?: string;
+    refreshToken?: number;
 }
 
 interface GroupState {
@@ -168,7 +175,7 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
     };
 }
 
-export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
+export function GroupView({ groupId, headerActions, hint, refreshToken }: GroupViewProps) {
     const [state, setState] = React.useState<GroupState>(() => ({
         group: null,
         thesis: null,
@@ -195,7 +202,7 @@ export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
                 setState({ group: null, thesis: null, profiles: new Map(), loading: false, error: 'Unable to load group details.' });
             });
         return () => abort.abort();
-    }, [groupId]);
+    }, [groupId, refreshToken]);
 
     if (!groupId) {
         return <Alert severity="warning">A group ID is required to load this page.</Alert>;
@@ -214,6 +221,9 @@ export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
     }
 
     const { group, thesis, profiles } = state;
+    const resolvedHeaderActions = typeof headerActions === 'function'
+        ? headerActions({ group, loading: state.loading, error: state.error })
+        : headerActions;
     const thesisTitle = thesis?.title ?? group.thesisTitle ?? '—';
     const thesisIdDisplay = group.thesisId ?? thesis?.id ?? '—';
     const thesisStatus = thesis?.overallStatus ?? '—';
@@ -284,9 +294,9 @@ export function GroupView({ groupId, headerActions, hint }: GroupViewProps) {
                             </Typography>
                         ) : null}
                     </Box>
-                    {headerActions ? (
+                    {resolvedHeaderActions ? (
                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {headerActions}
+                            {resolvedHeaderActions}
                         </Box>
                     ) : null}
                 </Stack>

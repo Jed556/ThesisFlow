@@ -857,6 +857,24 @@ export async function rejectJoinRequest(groupId: string, userUid: string): Promi
 }
 
 /**
+ * Allow a student to cancel their pending join request.
+ */
+export async function cancelJoinRequest(groupId: string, userUid: string): Promise<void> {
+    try {
+        const refs = await resolveGroupRefs(groupId);
+        const group = mapGroupDocument(refs.snapshot as GroupSnapshot);
+        const requests = (group.requests ?? []).filter(uid => uid !== userUid);
+
+        await commitGroupUpdate(refs, {
+            requests,
+        });
+    } catch (error) {
+        console.error('Error cancelling join request:', error);
+        throw error;
+    }
+}
+
+/**
  * Accept an invite and add the user to the group
  */
 export async function acceptInvite(groupId: string, userUid: string): Promise<void> {
