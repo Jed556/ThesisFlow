@@ -13,13 +13,56 @@ export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = [
     { value: 'Post-Defense', label: 'Post Defense' },
 ];
 
+export type StageSequenceTarget = 'chapters' | 'terminal';
+
+export interface StageSequenceStep {
+    stage: ThesisStage;
+    target: StageSequenceTarget;
+}
+
+export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = [
+    { stage: 'Pre-Proposal', target: 'chapters' },
+    { stage: 'Pre-Proposal', target: 'terminal' },
+    { stage: 'Post-Proposal', target: 'chapters' },
+    { stage: 'Post-Proposal', target: 'terminal' },
+    { stage: 'Pre-Defense', target: 'chapters' },
+    { stage: 'Pre-Defense', target: 'terminal' },
+    { stage: 'Post-Defense', target: 'chapters' },
+    { stage: 'Post-Defense', target: 'terminal' },
+] as const;
+
 const DEFAULT_STAGE: ThesisStage = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
+
+function normalizeChapterStages(stage?: ThesisStage | ThesisStage[] | null): ThesisStage[] {
+    const values = Array.isArray(stage)
+        ? stage
+        : stage
+            ? [stage]
+            : [];
+    const filtered = values.filter((value): value is ThesisStage => Boolean(value));
+    const unique = Array.from(new Set(filtered));
+    return unique.length > 0 ? unique : [DEFAULT_STAGE];
+}
+
+export function resolveChapterStages(chapter?: ThesisChapter | null): ThesisStage[] {
+    if (!chapter) {
+        return [DEFAULT_STAGE];
+    }
+    return normalizeChapterStages(chapter.stage);
+}
 
 /**
  * Returns the normalized stage assigned to a thesis chapter.
  */
 export function resolveChapterStage(chapter?: ThesisChapter | null): ThesisStage {
-    return chapter?.stage ?? DEFAULT_STAGE;
+    return resolveChapterStages(chapter)[0];
+}
+
+export function chapterHasStage(chapter: ThesisChapter | undefined, stage: ThesisStage): boolean {
+    if (!chapter) {
+        return false;
+    }
+    return resolveChapterStages(chapter).includes(stage);
 }
 
 export interface StageCompletionOptions {
@@ -63,6 +106,61 @@ export function buildSequentialStageLockMap(
     }, {} as Record<ThesisStage, boolean>);
 }
 
+export interface StageProgressSnapshot {
+    chapters?: Partial<Record<ThesisStage, boolean>>;
+    terminalRequirements?: Partial<Record<ThesisStage, boolean>>;
+}
+
+export interface StageInterleavedLockMap {
+    chapters: Record<ThesisStage, boolean>;
+    terminalRequirements: Record<ThesisStage, boolean>;
+}
+
+const describeTargetLabel: Record<StageSequenceTarget, string> = {
+    chapters: 'chapters',
+    terminal: 'terminal requirements',
+};
+
+export function describeStageSequenceStep(step: StageSequenceStep): string {
+    return `${step.stage} ${describeTargetLabel[step.target]}`;
+}
+
+export function getPreviousSequenceStep(
+    stage: ThesisStage,
+    target: StageSequenceTarget,
+): StageSequenceStep | null {
+    const index = THESIS_STAGE_UNLOCK_SEQUENCE.findIndex(
+        (entry) => entry.stage === stage && entry.target === target,
+    );
+    if (index <= 0) {
+        return null;
+    }
+    return THESIS_STAGE_UNLOCK_SEQUENCE[index - 1];
+}
+
+export function buildInterleavedStageLockMap(progress: StageProgressSnapshot): StageInterleavedLockMap {
+    const locks: StageInterleavedLockMap = {
+        chapters: {} as Record<ThesisStage, boolean>,
+        terminalRequirements: {} as Record<ThesisStage, boolean>,
+    };
+    let previousStepComplete = true;
+
+    THESIS_STAGE_UNLOCK_SEQUENCE.forEach((step) => {
+        const targetLockMap = step.target === 'chapters'
+            ? locks.chapters
+            : locks.terminalRequirements;
+        targetLockMap[step.stage] = !previousStepComplete;
+
+        const completionSource = step.target === 'chapters'
+            ? progress.chapters
+            : progress.terminalRequirements;
+        const stageComplete = Boolean(completionSource?.[step.stage]);
+        previousStepComplete = stageComplete;
+    });
+
+    return locks;
+}
+
 /**
  * Returns all chapters assigned to the provided stage value.
  */
@@ -73,5 +171,5 @@ export function filterChaptersByStage(
     if (!chapters || chapters.length === 0) {
         return [];
     }
-    return chapters.filter((chapter) => resolveChapterStage(chapter) === stage);
+    return chapters.filter((chapter) => chapterHasStage(chapter, stage));
 }

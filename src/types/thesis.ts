@@ -55,7 +55,7 @@ export interface ThesisChapter {
     lastModified: string | null;
     submissions: (string | ChapterSubmissionEntry)[];
     comments: ThesisComment[];
-    stage?: ThesisStage;
+    stage?: ThesisStage | ThesisStage[];
     mentorApprovals?: MentorApprovalState;
 }
 

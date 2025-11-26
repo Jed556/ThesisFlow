@@ -20,7 +20,10 @@ import ChapterRail, { buildVersionOptions, formatChapterLabel } from './ChapterR
 import {
     buildSequentialStageLockMap,
     buildStageCompletionMap,
-    resolveChapterStage,
+    buildInterleavedStageLockMap,
+    chapterHasStage,
+    describeStageSequenceStep,
+    getPreviousSequenceStep,
     THESIS_STAGE_METADATA,
 } from '../../utils/thesisStageUtils';
 
@@ -39,6 +42,8 @@ interface ThesisWorkspaceProps {
     onEditComment?: (payload: WorkspaceEditPayload) => Promise<void> | void;
     onUploadChapter?: (payload: WorkspaceUploadPayload) => Promise<void> | void;
     onChapterDecision?: (payload: WorkspaceChapterDecisionPayload) => Promise<void> | void;
+    terminalRequirementCompletionMap?: Partial<Record<ThesisStage, boolean>>;
+    enforceTerminalRequirementSequence?: boolean;
 }
 
 const fetchChapterFiles = async (thesisId: string, chapter: ThesisChapter): Promise<FileAttachment[]> => {
@@ -113,7 +118,9 @@ export default function ThesisWorkspace({
     thesisId, thesis, participants, currentUserId, mentorRole, filters, isLoading,
     allowCommenting = true,
     emptyStateMessage = 'Select a group to inspect its thesis.',
-    conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision
+    conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision,
+    terminalRequirementCompletionMap,
+    enforceTerminalRequirementSequence = false,
 }: ThesisWorkspaceProps) {
     const [activeChapterId, setActiveChapterId] = React.useState<number | null>(null);
     const [activeVersionIndex, setActiveVersionIndex] = React.useState<number | null>(null);
@@ -152,13 +159,19 @@ export default function ThesisWorkspace({
         [normalizedChapters],
     );
 
-    const stageLockMap = React.useMemo(
-        () => buildSequentialStageLockMap(stageCompletionMap),
-        [stageCompletionMap],
-    );
+    const stageLockMap = React.useMemo(() => {
+        if (!enforceTerminalRequirementSequence) {
+            return buildSequentialStageLockMap(stageCompletionMap);
+        }
+        const interleavedLocks = buildInterleavedStageLockMap({
+            chapters: stageCompletionMap,
+            terminalRequirements: terminalRequirementCompletionMap,
+        });
+        return interleavedLocks.chapters;
+    }, [enforceTerminalRequirementSequence, stageCompletionMap, terminalRequirementCompletionMap]);
 
     const stageChapters = React.useMemo(
-        () => normalizedChapters.filter((chapter) => resolveChapterStage(chapter) === activeStage),
+        () => normalizedChapters.filter((chapter) => chapterHasStage(chapter, activeStage)),
         [normalizedChapters, activeStage],
     );
 
@@ -184,11 +197,22 @@ export default function ThesisWorkspace({
         if (!isStageLocked) {
             return undefined;
         }
-        if (previousStageMeta) {
+        if (enforceTerminalRequirementSequence) {
+            const previousStep = getPreviousSequenceStep(activeStage, 'chapters');
+            if (previousStep) {
+                return `Complete ${describeStageSequenceStep(previousStep)} to unlock ${activeStageMeta.label} chapters.`;
+            }
+        } else if (previousStageMeta) {
             return `Complete all ${previousStageMeta.label} chapters to unlock ${activeStageMeta.label}.`;
         }
         return 'This stage will unlock once prerequisites are satisfied.';
-    }, [isStageLocked, previousStageMeta, activeStageMeta]);
+    }, [
+        isStageLocked,
+        enforceTerminalRequirementSequence,
+        activeStage,
+        activeStageMeta,
+        previousStageMeta,
+    ]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStage) => {
         setActiveStage(nextStage);

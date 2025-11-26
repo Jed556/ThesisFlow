@@ -1,35 +1,19 @@
 import * as React from 'react';
-import {
-    Autocomplete,
-    Box,
-    Button,
-    CircularProgress,
-    Stack,
-    TextField,
-    Typography,
-    Grid
-} from '@mui/material';
-import {
-    Add as AddIcon,
-    Refresh as RefreshIcon,
-} from '@mui/icons-material';
+import { Autocomplete, Box, Button, CircularProgress, Stack, TextField, Typography, Grid } from '@mui/material';
+import { Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
 import { AnimatedPage } from '../../../../components/Animate';
-import { ChapterCard, ChapterDeleteDialog, ChapterManageDialog } from '../../../../components/Chapter';
+import { ChapterCard, ChapterManageDialog } from '../../../../components/Chapter';
 import UnauthorizedNotice from '../../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../../types/navigation';
 import type { Session } from '../../../../types/session';
-import type { ThesisChapterConfig, ChapterConfigFormData, ChapterFormErrorKey, ChapterConfigIdentifier } from '../../../../types/chapter';
+import type { ThesisChapterConfig, ChapterConfigFormData, ChapterFormErrorKey } from '../../../../types/chapter';
 import type { UserProfile } from '../../../../types/profile';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
 import {
-    deleteChapterConfig,
-    getAllChapterConfigs,
-    getChapterConfigsByDepartment,
-    getAllUsers,
-    setChapterConfig,
+    getAllChapterConfigs, getChapterConfigsByDepartment, getAllUsers, setChapterConfig
 } from '../../../../utils/firebase/firestore';
 import { normalizeChapterOrder } from '../../../../utils/chapterUtils';
 
@@ -68,18 +52,13 @@ export default function AdminChapterManagementPage() {
     const [configs, setConfigs] = React.useState<ThesisChapterConfig[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
-    const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
-    const [editMode, setEditMode] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
-    const [deleting, setDeleting] = React.useState(false);
 
     const [selectedDepartment, setSelectedDepartment] = React.useState('');
 
     const [formData, setFormData] = React.useState<ChapterConfigFormData>({ ...emptyFormData });
     const [formErrors, setFormErrors] = React.useState<Partial<Record<ChapterFormErrorKey, string>>>({});
 
-    const [selectedConfig, setSelectedConfig] = React.useState<ThesisChapterConfig | null>(null);
-    const pendingEditRef = React.useRef<ChapterConfigIdentifier | null>(null);
 
     const filtersApplied = Boolean(selectedDepartment);
 
@@ -161,7 +140,7 @@ export default function AdminChapterManagementPage() {
     }, [loadConfigs]);
 
     React.useEffect(() => {
-        const state = location.state as { editChapter?: ChapterConfigIdentifier; filters?: ChapterConfigIdentifier } | null;
+        const state = location.state as { filters?: { department: string } } | null;
         if (!state) {
             return;
         }
@@ -170,16 +149,10 @@ export default function AdminChapterManagementPage() {
             setSelectedDepartment(state.filters.department);
         }
 
-        if (state.editChapter) {
-            pendingEditRef.current = state.editChapter;
-        }
-
         navigate(location.pathname, { replace: true, state: null });
     }, [location.pathname, location.state, navigate]);
 
     const handleOpenCreateDialog = React.useCallback(() => {
-        setEditMode(false);
-        setSelectedConfig(null);
         setFormData({
             ...emptyFormData,
             department: selectedDepartment,
@@ -190,8 +163,6 @@ export default function AdminChapterManagementPage() {
 
     const handleCloseManageDialog = React.useCallback(() => {
         setManageDialogOpen(false);
-        setEditMode(false);
-        setSelectedConfig(null);
         setFormData({ ...emptyFormData });
         setFormErrors({});
     }, []);
@@ -251,13 +222,7 @@ export default function AdminChapterManagementPage() {
                 chapters: trimmedData.chapters,
             });
 
-            if (editMode && selectedConfig &&
-                (trimmedData.department !== selectedConfig.department || trimmedData.course !== selectedConfig.course)
-            ) {
-                await deleteChapterConfig(selectedConfig.department, selectedConfig.course);
-            }
-
-            showNotification(editMode ? 'Chapter template updated.' : 'Chapter template created.', 'success');
+            showNotification('Chapter template created.', 'success');
             handleCloseManageDialog();
             void loadConfigs();
         } catch (error) {
@@ -266,68 +231,12 @@ export default function AdminChapterManagementPage() {
         } finally {
             setSaving(false);
         }
-    }, [editMode, formData, handleCloseManageDialog, loadConfigs, selectedConfig, showNotification, validateForm]);
+    }, [formData, handleCloseManageDialog, loadConfigs, showNotification, validateForm]);
 
     const handleViewConfig = React.useCallback((config: ThesisChapterConfig) => {
         const path = encodeChapterPath(config.department, config.course);
         navigate(`/chapter-management/${path}`);
     }, [navigate]);
-
-    const handleEditConfig = React.useCallback((config: ThesisChapterConfig) => {
-        setEditMode(true);
-        setSelectedConfig(config);
-        setFormData({
-            department: config.department,
-            course: config.course,
-            chapters: normalizeChapterOrder(config.chapters),
-        });
-        setFormErrors({});
-        setManageDialogOpen(true);
-    }, []);
-
-    React.useEffect(() => {
-        if (!pendingEditRef.current || configs.length === 0) {
-            return;
-        }
-
-        const { department, course } = pendingEditRef.current;
-        const match = configs.find(
-            (config) => config.department === department && config.course === course
-        );
-
-        if (match) {
-            handleEditConfig(match);
-            pendingEditRef.current = null;
-        }
-    }, [configs, handleEditConfig]);
-
-    const handleDeleteRequest = React.useCallback((config: ThesisChapterConfig) => {
-        setSelectedConfig(config);
-        setDeleteDialogOpen(true);
-    }, []);
-
-    const handleCloseDeleteDialog = React.useCallback(() => {
-        setDeleteDialogOpen(false);
-        setSelectedConfig(null);
-    }, []);
-
-    const handleConfirmDelete = React.useCallback(async () => {
-        if (!selectedConfig) {
-            return;
-        }
-        setDeleting(true);
-        try {
-            await deleteChapterConfig(selectedConfig.department, selectedConfig.course);
-            showNotification('Chapter template deleted.', 'success');
-            handleCloseDeleteDialog();
-            void loadConfigs();
-        } catch (error) {
-            console.error('Error deleting chapter template:', error);
-            showNotification('Failed to delete chapter template.', 'error');
-        } finally {
-            setDeleting(false);
-        }
-    }, [handleCloseDeleteDialog, loadConfigs, selectedConfig, showNotification]);
 
     if (!canManage) {
         return <UnauthorizedNotice title="Chapter Management" variant="box" />;
@@ -396,8 +305,6 @@ export default function AdminChapterManagementPage() {
                                 <ChapterCard
                                     config={config}
                                     onClick={handleViewConfig}
-                                    onEdit={handleEditConfig}
-                                    onDelete={handleDeleteRequest}
                                 />
                             </Grid>
                         ))}
@@ -406,7 +313,7 @@ export default function AdminChapterManagementPage() {
 
                 <ChapterManageDialog
                     open={manageDialogOpen}
-                    editMode={editMode}
+                    editMode={false}
                     formData={formData}
                     formErrors={formErrors}
                     departmentOptions={departmentOptions}
@@ -417,13 +324,6 @@ export default function AdminChapterManagementPage() {
                     onSubmit={handleSave}
                 />
 
-                <ChapterDeleteDialog
-                    open={deleteDialogOpen}
-                    config={selectedConfig}
-                    deleting={deleting}
-                    onClose={handleCloseDeleteDialog}
-                    onConfirm={handleConfirmDelete}
-                />
             </Box>
         </AnimatedPage>
     );

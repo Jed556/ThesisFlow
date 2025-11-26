@@ -30,6 +30,9 @@ import { uploadThesisFile, deleteThesisFile } from '../../utils/firebase/storage
 import {
     THESIS_STAGE_METADATA,
     buildStageCompletionMap,
+    buildInterleavedStageLockMap,
+    describeStageSequenceStep,
+    getPreviousSequenceStep,
 } from '../../utils/thesisStageUtils';
 import {
     fetchTerminalRequirementFiles,
@@ -291,13 +294,28 @@ export default function TerminalRequirementsPage() {
     const isConfigInitializing = configLoading && !requirementsConfig;
 
     const normalizedChapters = thesis?.chapters ?? [];
-    const stageUnlockMap = React.useMemo(
+    const chapterCompletionMap = React.useMemo(
         () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: false }),
         [normalizedChapters],
     );
 
+    const terminalRequirementCompletionMap = React.useMemo(() => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
+            const submission = submissionByStage[stageMeta.value];
+            acc[stageMeta.value] = submission?.status === 'approved';
+            return acc;
+        }, {} as Record<ThesisStage, boolean>);
+    }, [submissionByStage]);
+
+    const stageLockMaps = React.useMemo(() => buildInterleavedStageLockMap({
+        chapters: chapterCompletionMap,
+        terminalRequirements: terminalRequirementCompletionMap,
+    }), [chapterCompletionMap, terminalRequirementCompletionMap]);
+
+    const terminalStageLockMap = stageLockMaps.terminalRequirements;
+
     const stageRequirements = stageRequirementsByStage[activeStage] ?? [];
-    const activeStageUnlocked = stageUnlockMap[activeStage] ?? false;
+    const activeStageLocked = terminalStageLockMap[activeStage] ?? false;
     const activeStageMeta = React.useMemo(
         () => THESIS_STAGE_METADATA.find((stage) => stage.value === activeStage),
         [activeStage],
@@ -319,7 +337,7 @@ export default function TerminalRequirementsPage() {
     }, [thesis?.id]);
 
     React.useEffect(() => {
-        if (!thesis?.id || !activeStageUnlocked) {
+        if (!thesis?.id || activeStageLocked) {
             return;
         }
         stageRequirements.forEach((requirement) => {
@@ -328,7 +346,7 @@ export default function TerminalRequirementsPage() {
             }
             void loadRequirementFiles(requirement.id);
         });
-    }, [thesis?.id, activeStageUnlocked, stageRequirements, requirementFiles, loadRequirementFiles]);
+    }, [thesis?.id, activeStageLocked, stageRequirements, requirementFiles, loadRequirementFiles]);
 
     const handleUploadRequirement = React.useCallback(async (
         requirement: TerminalRequirementDefinition,
@@ -410,7 +428,7 @@ export default function TerminalRequirementsPage() {
     const stageStatusMetaMap = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, StageStatusMeta>>((acc, stageMeta) => {
             const stageValue = stageMeta.value;
-            const unlocked = stageUnlockMap[stageValue];
+            const unlocked = !(terminalStageLockMap[stageValue] ?? false);
             const submission = submissionByStage[stageValue];
             let label: string;
             let color: StageStatusMeta['color'];
@@ -449,11 +467,20 @@ export default function TerminalRequirementsPage() {
             acc[stageValue] = { label, color, variant };
             return acc;
         }, {} as Record<ThesisStage, StageStatusMeta>);
-    }, [stageUnlockMap, submissionByStage, stageRequirementsByStage, requirementFiles]);
+    }, [terminalStageLockMap, submissionByStage, stageRequirementsByStage, requirementFiles]);
+
+    const stageTitle = activeStageMeta?.label ?? activeStage;
+    const stageLockedDescription = React.useMemo(() => {
+        const previousStep = getPreviousSequenceStep(activeStage, 'terminal');
+        if (previousStep) {
+            return `Complete ${describeStageSequenceStep(previousStep)} to unlock ${stageTitle} requirements.`;
+        }
+        return 'Complete the required chapters to unlock this checklist.';
+    }, [activeStage, stageTitle]);
 
     const activeSubmission = submissionByStage[activeStage] ?? null;
     const stageLockedByWorkflow = Boolean(activeSubmission?.locked);
-    const allowFileActions = activeStageUnlocked && !stageLockedByWorkflow;
+    const allowFileActions = !activeStageLocked && !stageLockedByWorkflow;
     const readyForSubmission = stageRequirements.length > 0
         && stageRequirements.every((requirement) => (requirementFiles[requirement.id]?.length ?? 0) > 0);
     const submitButtonLabel = activeSubmission?.status === 'returned'
@@ -568,7 +595,7 @@ export default function TerminalRequirementsPage() {
                 allowScrollButtonsMobile
             >
                 {THESIS_STAGE_METADATA.map((stageMeta) => {
-                    const unlocked = stageUnlockMap[stageMeta.value];
+                    const unlocked = !(terminalStageLockMap[stageMeta.value] ?? false);
                     const statusMeta = stageStatusMetaMap[stageMeta.value] ?? {
                         label: unlocked ? 'Ready' : 'Locked',
                         color: unlocked ? 'default' : 'default',
@@ -643,9 +670,6 @@ export default function TerminalRequirementsPage() {
         );
     }
 
-    const stageTitle = activeStageMeta?.label ?? activeStage;
-    const stageLockedDescription = `Complete all ${stageTitle} chapters to unlock its requirements.`;
-
     return (
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
@@ -660,7 +684,7 @@ export default function TerminalRequirementsPage() {
 
                 {renderTabs()}
 
-                {!activeStageUnlocked ? (
+                {activeStageLocked ? (
                     <UnauthorizedNotice
                         title={`${stageTitle} requirements locked`}
                         description={stageLockedDescription}
