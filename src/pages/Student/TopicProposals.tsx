@@ -62,7 +62,7 @@ function pickPrimaryGroup(groups: ThesisGroup[]): ThesisGroup | null {
 function buildEmptyFormValues(): TopicProposalFormValues {
     return {
         title: '',
-        abstract: '',
+        description: '',
         problemStatement: '',
         expectedOutcome: '',
         keywords: [],
@@ -318,7 +318,7 @@ export default function StudentTopicProposalsPage() {
             setEditingEntryId(entry.id);
             setFormValues({
                 title: entry.title,
-                abstract: entry.abstract,
+                description: entry.description,
                 problemStatement: entry.problemStatement ?? '',
                 expectedOutcome: entry.expectedOutcome ?? '',
                 keywords: entry.keywords ?? [],
@@ -353,7 +353,7 @@ export default function StudentTopicProposalsPage() {
                         ? {
                             ...entry,
                             title: values.title,
-                            abstract: values.abstract,
+                            description: values.description,
                             problemStatement: values.problemStatement,
                             expectedOutcome: values.expectedOutcome,
                             keywords: values.keywords,
@@ -366,7 +366,7 @@ export default function StudentTopicProposalsPage() {
                     {
                         id: entryId,
                         title: values.title,
-                        abstract: values.abstract,
+                        description: values.description,
                         problemStatement: values.problemStatement,
                         expectedOutcome: values.expectedOutcome,
                         keywords: values.keywords,

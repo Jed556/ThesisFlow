@@ -27,7 +27,7 @@ export interface TopicProposalReviewerDecision {
 export interface TopicProposalEntry {
     id: string;
     title: string;
-    abstract: string;
+    description: string;
     problemStatement?: string;
     expectedOutcome?: string;
     keywords?: string[];

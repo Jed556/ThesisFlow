@@ -72,11 +72,16 @@ const normalizeEntries = (raw: unknown, fallbackAuthor: string): TopicProposalEn
         const createdAt = typeof e.createdAt === 'string' && e.createdAt ? e.createdAt : nowIso();
         const updatedAt = typeof e.updatedAt === 'string' && e.updatedAt ? e.updatedAt : createdAt;
         const proposedBy = typeof e.proposedBy === 'string' && e.proposedBy ? e.proposedBy : fallbackAuthor;
+        const description = typeof e.description === 'string' && e.description
+            ? e.description
+            : typeof e.abstract === 'string' && e.abstract
+                ? e.abstract
+                : '';
 
         entries.push({
             id: typeof e.id === 'string' && e.id ? e.id : `proposal_${index + 1}`,
             title: typeof e.title === 'string' && e.title ? e.title : 'Untitled Topic',
-            abstract: typeof e.abstract === 'string' ? e.abstract : '',
+            description,
             problemStatement: typeof e.problemStatement === 'string' ? e.problemStatement : undefined,
             expectedOutcome: typeof e.expectedOutcome === 'string' ? e.expectedOutcome : undefined,
             keywords: parseStringArray(e.keywords),

@@ -167,10 +167,15 @@ function mapDecision(raw: unknown): TopicProposalReviewerDecision | undefined {
 
 function mapEntry(raw: unknown): TopicProposalEntry {
     const entry = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
+    const description = typeof entry.description === 'string'
+        ? entry.description
+        : typeof entry.abstract === 'string'
+            ? entry.abstract
+            : '';
     return {
         id: typeof entry.id === 'string' ? entry.id : crypto.randomUUID(),
         title: typeof entry.title === 'string' ? entry.title : 'Untitled Topic',
-        abstract: typeof entry.abstract === 'string' ? entry.abstract : '',
+        description,
         problemStatement: typeof entry.problemStatement === 'string' ? entry.problemStatement : undefined,
         expectedOutcome: typeof entry.expectedOutcome === 'string' ? entry.expectedOutcome : undefined,
         keywords: normalizeKeywords(entry.keywords),
@@ -316,7 +321,7 @@ export async function updateTopicProposalDraftEntries(setId: string, entries: To
     const normalizedEntries = entries.map((entry) => ({
         ...entry,
         keywords: entry.keywords?.map((keyword) => keyword.trim()).filter(Boolean),
-        abstract: entry.abstract.trim(),
+        description: entry.description.trim(),
         problemStatement: entry.problemStatement?.trim() || undefined,
         expectedOutcome: entry.expectedOutcome?.trim() || undefined,
         updatedAt: entry.updatedAt || new Date().toISOString(),

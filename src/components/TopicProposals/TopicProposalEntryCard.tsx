@@ -34,9 +34,12 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                         <Typography variant="h6" gutterBottom>
                             {entry.title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {entry.abstract}
-                        </Typography>
+                        <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2">Brief Description</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {entry.description}
+                            </Typography>
+                        </Box>
                     </Box>
                     <Chip label={statusChip.label} color={statusChip.color} size="small" />
                 </Box>
