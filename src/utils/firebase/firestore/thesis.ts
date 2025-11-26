@@ -32,6 +32,73 @@ export async function getThesisById(id: string): Promise<ThesisData | null> {
 }
 
 /**
+ * Get the most recent thesis document associated with a group.
+ * When multiple thesis records exist, preference is given to the document
+ * whose ID has the highest sequential suffix (e.g., GROUP-T3 over GROUP-T2).
+ * @param groupId - Thesis group ID
+ */
+export async function getThesisByGroupId(groupId: string): Promise<ThesisData | null> {
+    if (!groupId) {
+        return null;
+    }
+
+    const groupQuery = query(
+        collection(firebaseFirestore, THESES_COLLECTION),
+        where('groupId', '==', groupId)
+    );
+    const snapshot = await getDocs(groupQuery);
+
+    if (snapshot.empty) {
+        return null;
+    }
+
+    const parseSequenceNumber = (docId: string): number => {
+        const match = docId.match(/-T(\d+)$/i);
+        if (!match) {
+            return 0;
+        }
+        const sequence = Number(match[1]);
+        return Number.isNaN(sequence) ? 0 : sequence;
+    };
+
+    const bestDoc = snapshot.docs.reduce((currentBest, candidate) => {
+        const currentSequence = parseSequenceNumber(currentBest.id);
+        const candidateSequence = parseSequenceNumber(candidate.id);
+
+        if (candidateSequence > currentSequence) {
+            return candidate;
+        }
+
+        if (candidateSequence < currentSequence) {
+            return currentBest;
+        }
+
+        const currentUpdated = Date.parse(((currentBest.data() as ThesisData).lastUpdated) ?? '');
+        const candidateUpdated = Date.parse(((candidate.data() as ThesisData).lastUpdated) ?? '');
+
+        if (Number.isNaN(currentUpdated) && Number.isNaN(candidateUpdated)) {
+            return currentBest;
+        }
+
+        if (Number.isNaN(currentUpdated)) {
+            return candidate;
+        }
+
+        if (Number.isNaN(candidateUpdated)) {
+            return currentBest;
+        }
+
+        return candidateUpdated > currentUpdated ? candidate : currentBest;
+    }, snapshot.docs[0]);
+
+    const thesis = bestDoc.data() as ThesisData;
+    return {
+        ...thesis,
+        id: bestDoc.id,
+    };
+}
+
+/**
  * Get all theses
  * @returns Array of ThesisData with their Firestore document IDs
  */
