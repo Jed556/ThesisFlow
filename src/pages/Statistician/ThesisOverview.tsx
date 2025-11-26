@@ -5,7 +5,7 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ReviewerAssignment } from '../../types/reviewer';
-import type { ThesisData } from '../../types/thesis';
+import type { ThesisData, ThesisStage } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
@@ -16,6 +16,9 @@ import { appendChapterComment } from '../../utils/firebase/firestore/conversatio
 import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDecisions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
+import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
+import { listenTerminalRequirementSubmission } from '../../utils/firebase/firestore/terminalRequirementSubmissions';
+import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -37,6 +40,9 @@ export default function StatisticianThesisOverviewPage() {
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
     const [error, setError] = React.useState<string | null>(null);
+    const [submissionByStage, setSubmissionByStage] = React.useState<
+        Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
+    >({});
 
     const resolveDisplayName = React.useCallback((uid?: string | null) => {
         if (!uid) {
@@ -119,6 +125,7 @@ export default function StatisticianThesisOverviewPage() {
         const loadThesis = async () => {
             if (!selectedThesisId) {
                 setThesis(null);
+                setSubmissionByStage({});
                 return;
             }
             setThesisLoading(true);
@@ -153,6 +160,39 @@ export default function StatisticianThesisOverviewPage() {
             cancelled = true;
         };
     }, [selectedThesisId, hydrateDisplayNames]);
+
+    React.useEffect(() => {
+        if (!thesis?.id) {
+            setSubmissionByStage({});
+            return;
+        }
+
+        const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => (
+            listenTerminalRequirementSubmission(thesis.id!, stageMeta.value, {
+                onData: (record) => {
+                    setSubmissionByStage((prev) => ({
+                        ...prev,
+                        [stageMeta.value]: record,
+                    }));
+                },
+                onError: (listenerError) => {
+                    console.error('Failed to listen for statistician terminal requirement submissions:', listenerError);
+                },
+            })
+        ));
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [thesis?.id]);
+
+    const terminalRequirementCompletionMap = React.useMemo(() => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
+            const record = submissionByStage[stageMeta.value];
+            acc[stageMeta.value] = record?.status === 'approved';
+            return acc;
+        }, {} as Record<ThesisStage, boolean>);
+    }, [submissionByStage]);
 
     const participants = React.useMemo(() => {
         if (!thesis) {
@@ -328,6 +368,8 @@ export default function StatisticianThesisOverviewPage() {
                     onCreateComment={handleCreateComment}
                     mentorRole="statistician"
                     onChapterDecision={handleChapterDecision}
+                    enforceTerminalRequirementSequence
+                    terminalRequirementCompletionMap={terminalRequirementCompletionMap}
                 />
             )}
         </AnimatedPage>

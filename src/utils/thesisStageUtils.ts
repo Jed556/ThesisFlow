@@ -162,6 +162,11 @@ export interface StageInterleavedLockMap {
     terminalRequirements: Record<ThesisStage, boolean>;
 }
 
+export interface StageGateOverrides {
+    chapters?: Partial<Record<ThesisStage, boolean>>;
+    terminalRequirements?: Partial<Record<ThesisStage, boolean>>;
+}
+
 const describeTargetLabel: Record<StageSequenceTarget, string> = {
     chapters: 'chapters',
     terminal: 'terminal requirements',
@@ -184,7 +189,10 @@ export function getPreviousSequenceStep(
     return THESIS_STAGE_UNLOCK_SEQUENCE[index - 1];
 }
 
-export function buildInterleavedStageLockMap(progress: StageProgressSnapshot): StageInterleavedLockMap {
+export function buildInterleavedStageLockMap(
+    progress: StageProgressSnapshot,
+    gates?: StageGateOverrides,
+): StageInterleavedLockMap {
     const locks: StageInterleavedLockMap = {
         chapters: {} as Record<ThesisStage, boolean>,
         terminalRequirements: {} as Record<ThesisStage, boolean>,
@@ -195,7 +203,11 @@ export function buildInterleavedStageLockMap(progress: StageProgressSnapshot): S
         const targetLockMap = step.target === 'chapters'
             ? locks.chapters
             : locks.terminalRequirements;
-        targetLockMap[step.stage] = !previousStepComplete;
+        const gateReady = step.target === 'chapters'
+            ? gates?.chapters?.[step.stage]
+            : gates?.terminalRequirements?.[step.stage];
+        const gateSatisfied = gateReady ?? true;
+        targetLockMap[step.stage] = !(previousStepComplete && gateSatisfied);
 
         const completionSource = step.target === 'chapters'
             ? progress.chapters

@@ -66,19 +66,44 @@ function mapEntry(docSnap: QueryDocumentSnapshot<DocumentData>): PanelCommentEnt
     };
 }
 
+type FirestoreReleaseState = {
+    sent?: boolean;
+    sentAt?: unknown;
+    sentBy?: string;
+};
+
+function readReleaseState(
+    data: PanelCommentReleaseSnapshot | undefined,
+    stage: PanelCommentStage,
+): FirestoreReleaseState | undefined {
+    if (data?.release?.[stage]) {
+        return data.release[stage];
+    }
+
+    const flattenedKey = `release.${stage}`;
+    const flattenedValue = (data as Record<string, unknown> | undefined)?.[flattenedKey];
+    if (flattenedValue && typeof flattenedValue === 'object') {
+        return flattenedValue as FirestoreReleaseState;
+    }
+
+    return undefined;
+}
+
 function mapRelease(data: PanelCommentReleaseSnapshot | undefined): PanelCommentReleaseMap {
     const base = createDefaultPanelCommentReleaseMap();
-    const release = data?.release ?? {};
+    const proposalState = readReleaseState(data, 'proposal');
+    const defenseState = readReleaseState(data, 'defense');
+
     return {
         proposal: {
-            sent: Boolean(release.proposal?.sent ?? base.proposal.sent),
-            sentAt: normalizeTimestamp(release.proposal?.sentAt) || undefined,
-            sentBy: release.proposal?.sentBy,
+            sent: Boolean(proposalState?.sent ?? base.proposal.sent),
+            sentAt: normalizeTimestamp(proposalState?.sentAt) || undefined,
+            sentBy: proposalState?.sentBy,
         },
         defense: {
-            sent: Boolean(release.defense?.sent ?? base.defense.sent),
-            sentAt: normalizeTimestamp(release.defense?.sentAt) || undefined,
-            sentBy: release.defense?.sentBy,
+            sent: Boolean(defenseState?.sent ?? base.defense.sent),
+            sentAt: normalizeTimestamp(defenseState?.sentAt) || undefined,
+            sentBy: defenseState?.sentBy,
         },
     };
 }
@@ -258,13 +283,15 @@ export async function setPanelCommentReleaseState(
     if (!groupId) {
         throw new Error('Group ID is required to update release state.');
     }
-    const releasePath = `release.${stage}`;
-    await setDoc(doc(firebaseFirestore, PANEL_COMMENTS_COLLECTION, groupId), {
+    const releaseDoc = doc(firebaseFirestore, PANEL_COMMENTS_COLLECTION, groupId);
+    await setDoc(releaseDoc, {
         groupId,
-        [releasePath]: {
-            sent,
-            sentBy: sent ? userUid ?? null : null,
-            sentAt: sent ? serverTimestamp() : null,
+        release: {
+            [stage]: {
+                sent,
+                sentBy: sent ? userUid ?? null : null,
+                sentAt: sent ? serverTimestamp() : null,
+            },
         },
         updatedAt: serverTimestamp(),
     }, { merge: true });

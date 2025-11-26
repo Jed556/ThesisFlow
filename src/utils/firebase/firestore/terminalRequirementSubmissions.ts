@@ -1,14 +1,8 @@
-import {
-    doc,
-    getDoc,
-    onSnapshot,
-    setDoc,
-    type DocumentSnapshot,
-} from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc, type DocumentSnapshot } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import { TERMINAL_REQUIREMENT_SUBMISSIONS_COLLECTION } from './constants';
-import type { ThesisStage } from '../../../types/thesis';
+import type { ThesisData, ThesisStage } from '../../../types/thesis';
 import type {
     TerminalRequirementApprovalRole,
     TerminalRequirementApprovalState,
@@ -19,6 +13,7 @@ import type {
 
 const APPROVAL_FLOW: TerminalRequirementApprovalRole[] = ['panel', 'adviser', 'editor', 'statistician'];
 const MAX_HISTORY_ENTRIES = 50;
+const THESES_COLLECTION = 'theses';
 
 const STAGE_SLUGS: Record<ThesisStage, string> = {
     'Pre-Proposal': 'pre-proposal',
@@ -275,6 +270,28 @@ export async function submitTerminalRequirementStage(
     const existing = mapSnapshotToSubmission(snapshot);
 
     const normalizedAssignments = sanitizeAssignments(assignments);
+
+    const needsAdviser = !normalizedAssignments.adviser || normalizedAssignments.adviser.length === 0;
+    const needsEditor = !normalizedAssignments.editor || normalizedAssignments.editor.length === 0;
+
+    if ((needsAdviser || needsEditor)) {
+        try {
+            const thesisRef = doc(firebaseFirestore, THESES_COLLECTION, thesisId);
+            const thesisSnapshot = await getDoc(thesisRef);
+            if (thesisSnapshot.exists()) {
+                const thesisData = thesisSnapshot.data() as ThesisData;
+                if (needsAdviser && thesisData.adviser) {
+                    normalizedAssignments.adviser = [thesisData.adviser];
+                }
+                if (needsEditor && thesisData.editor) {
+                    normalizedAssignments.editor = [thesisData.editor];
+                }
+            }
+        } catch (error) {
+            console.error('Failed to hydrate mentor assignments for terminal requirements:', error);
+        }
+    }
+
     const orderedRoles = APPROVAL_FLOW.filter((role) => Boolean(normalizedAssignments[role]));
     const now = new Date().toISOString();
 
@@ -289,7 +306,8 @@ export async function submitTerminalRequirementStage(
         status = 'approved';
         currentRole = null;
         completedAt = now;
-        history = trimHistory([...history, createHistoryEntry('approved', 'system', 'system', 'Auto-approved (no assigned reviewers).')]);
+        history = trimHistory([...history,
+        createHistoryEntry('approved', 'system', 'system', 'Auto-approved (no assigned reviewers).')]);
     }
 
     const basePayload = {
@@ -301,13 +319,16 @@ export async function submitTerminalRequirementStage(
         status,
         submittedAt: now,
         submittedBy,
-        locked: status !== 'returned',
+        // Submissions are locked for editing once submitted or approved; only a 'returned' status
+        // would unlock them. In this creation flow the status can only be 'in_review' or
+        // 'approved', so default to locked = true.
+        locked: true,
         approvals,
         assignedApprovers: normalizedAssignments,
         currentRole,
-        returnNote: null,
-        returnedAt: null,
-        returnedBy: null,
+        returnNote: undefined,
+        returnedAt: undefined,
+        returnedBy: undefined,
         resubmissionCount: existing ? (existing.resubmissionCount ?? 0) + 1 : 0,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,

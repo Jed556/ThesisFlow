@@ -26,6 +26,7 @@ import {
     describeStageSequenceStep,
     getPreviousSequenceStep,
     THESIS_STAGE_METADATA,
+    type StageGateOverrides,
 } from '../../utils/thesisStageUtils';
 
 interface ThesisWorkspaceProps {
@@ -45,6 +46,7 @@ interface ThesisWorkspaceProps {
     onChapterDecision?: (payload: WorkspaceChapterDecisionPayload) => Promise<void> | void;
     terminalRequirementCompletionMap?: Partial<Record<ThesisStage, boolean>>;
     enforceTerminalRequirementSequence?: boolean;
+    stageGateOverrides?: StageGateOverrides;
 }
 
 const fetchChapterFiles = async (thesisId: string, chapter: ThesisChapter): Promise<FileAttachment[]> => {
@@ -122,6 +124,7 @@ export default function ThesisWorkspace({
     conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision,
     terminalRequirementCompletionMap,
     enforceTerminalRequirementSequence = false,
+    stageGateOverrides,
 }: ThesisWorkspaceProps) {
     const [activeChapterId, setActiveChapterId] = React.useState<number | null>(null);
     const [activeVersionIndex, setActiveVersionIndex] = React.useState<number | null>(null);
@@ -167,9 +170,14 @@ export default function ThesisWorkspace({
         const interleavedLocks = buildInterleavedStageLockMap({
             chapters: stageCompletionMap,
             terminalRequirements: terminalRequirementCompletionMap,
-        });
+        }, stageGateOverrides);
         return interleavedLocks.chapters;
-    }, [enforceTerminalRequirementSequence, stageCompletionMap, terminalRequirementCompletionMap]);
+    }, [
+        enforceTerminalRequirementSequence,
+        stageCompletionMap,
+        terminalRequirementCompletionMap,
+        stageGateOverrides,
+    ]);
 
     const stageChapters = React.useMemo(
         () => normalizedChapters.filter((chapter) => chapterHasStage(chapter, activeStage)),
@@ -246,7 +254,10 @@ export default function ThesisWorkspace({
 
         void (async () => {
             try {
-                await onUploadChapter({ thesisId, chapterId, chapterStage, file });
+                await onUploadChapter({
+                    thesisId, chapterId, chapterStage, file,
+                    groupId: ''
+                });
                 setChapterFiles((current) => {
                     const next = { ...current };
                     delete next[chapterId];

@@ -14,10 +14,12 @@ import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesi
 import { appendChapterSubmission } from '../../utils/firebase/firestore/chapterSubmissions';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
 import { getThesisTeamMembers } from '../../utils/thesisUtils';
-import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
+import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
 import { listenTerminalRequirementSubmission } from '../../utils/firebase/firestore/terminalRequirementSubmissions';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
+import type { PanelCommentReleaseMap } from '../../types/panelComment';
+import { listenPanelCommentRelease } from '../../utils/firebase/firestore/panelComments';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -51,6 +53,7 @@ export default function StudentThesisOverviewPage() {
     const [terminalSubmissions, setTerminalSubmissions] = React.useState<
         Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
     >({});
+    const [panelRelease, setPanelRelease] = React.useState<PanelCommentReleaseMap | null>(null);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -84,6 +87,7 @@ export default function StudentThesisOverviewPage() {
         if (!thesis?.id) {
             setParticipants(undefined);
             setTerminalSubmissions({});
+            setPanelRelease(null);
             return;
         }
 
@@ -131,6 +135,24 @@ export default function StudentThesisOverviewPage() {
         };
     }, [thesis?.id]);
 
+    React.useEffect(() => {
+        if (!thesis?.groupId) {
+            setPanelRelease(null);
+            return;
+        }
+
+        const unsubscribe = listenPanelCommentRelease(thesis.groupId, {
+            onData: (release) => setPanelRelease(release),
+            onError: (listenerError) => {
+                console.error('Failed to listen for panel comment release states:', listenerError);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesis?.groupId]);
+
     const terminalRequirementCompletionMap = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
             const submission = terminalSubmissions[stageMeta.value];
@@ -167,6 +189,13 @@ export default function StudentThesisOverviewPage() {
             submittedAt: result.fileAttachment.uploadDate,
         });
     }, [userUid]);
+
+    const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({
+        chapters: {
+            'Post-Proposal': panelRelease?.proposal?.sent ?? false,
+            'Post-Defense': panelRelease?.defense?.sent ?? false,
+        },
+    }), [panelRelease?.proposal?.sent, panelRelease?.defense?.sent]);
 
     return (
         <AnimatedPage variant="slideUp">
@@ -213,6 +242,7 @@ export default function StudentThesisOverviewPage() {
                     onUploadChapter={handleUploadChapter}
                     enforceTerminalRequirementSequence
                     terminalRequirementCompletionMap={terminalRequirementCompletionMap}
+                    stageGateOverrides={stageGateOverrides}
                 />
             )}
         </AnimatedPage>
