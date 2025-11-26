@@ -1,13 +1,5 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
@@ -18,11 +10,8 @@ import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import type { WorkspaceChapterDecisionPayload, WorkspaceFilterConfig } from '../../types/workspace';
-import {
-    getReviewerAssignmentsForUser,
-    getThesisById,
-} from '../../utils/firebase/firestore/thesis';
+import type { WorkspaceChapterDecisionPayload, WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
+import { getReviewerAssignmentsForUser, getThesisById } from '../../utils/firebase/firestore/thesis';
 import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
 import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDecisions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
@@ -212,16 +201,12 @@ export default function StatisticianThesisOverviewPage() {
 
     const handleCreateComment = React.useCallback(async ({
         chapterId,
+        chapterStage,
         versionIndex,
         content,
         files,
-    }: {
-        chapterId: number;
-        versionIndex: number | null;
-        content: string;
-        files: File[];
-    }) => {
-        if (!statisticianUid || !selectedThesisId) {
+    }: WorkspaceCommentPayload) => {
+        if (!statisticianUid || !selectedThesisId || !thesis?.groupId) {
             throw new Error('Missing statistician context.');
         }
 
@@ -230,7 +215,9 @@ export default function StatisticianThesisOverviewPage() {
             attachments = await uploadConversationAttachments(files, {
                 userUid: statisticianUid,
                 thesisId: selectedThesisId,
+                groupId: thesis.groupId,
                 chapterId,
+                chapterStage,
             });
         }
 
@@ -258,9 +245,10 @@ export default function StatisticianThesisOverviewPage() {
                 ),
             };
         });
-    }, [statisticianUid, selectedThesisId]);
+    }, [statisticianUid, selectedThesisId, thesis?.groupId]);
 
-    const handleChapterDecision = React.useCallback(async ({ thesisId: targetThesisId, chapterId, decision }: WorkspaceChapterDecisionPayload) => {
+    const handleChapterDecision = React.useCallback(async ({ thesisId: targetThesisId, chapterId, decision }
+        : WorkspaceChapterDecisionPayload) => {
         if (!targetThesisId) {
             throw new Error('Missing thesis context for decision.');
         }
@@ -303,9 +291,6 @@ export default function StatisticianThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    Statistical workspace
-                </Typography>
                 <Typography variant="body1" color="text.secondary">
                     Review quantitative notes, select a group, and annotate each submission version.
                 </Typography>
@@ -340,9 +325,7 @@ export default function StatisticianThesisOverviewPage() {
                     isLoading={isLoading}
                     allowCommenting
                     emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
-                    onCreateComment={({ chapterId, versionIndex, content, files }) =>
-                        handleCreateComment({ chapterId, versionIndex, content, files })
-                    }
+                    onCreateComment={handleCreateComment}
                     mentorRole="statistician"
                     onChapterDecision={handleChapterDecision}
                 />

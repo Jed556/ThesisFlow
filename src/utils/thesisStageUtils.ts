@@ -13,6 +13,17 @@ export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = [
     { value: 'Post-Defense', label: 'Post Defense' },
 ];
 
+const STAGE_SEQUENCE_ORDER = THESIS_STAGE_METADATA.map((stage) => stage.value);
+
+const normalizeStageKey = (value: string): string => value
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+
+const STAGE_LOOKUP = STAGE_SEQUENCE_ORDER.reduce<Map<string, ThesisStage>>((acc, stage) => {
+    acc.set(normalizeStageKey(stage), stage);
+    return acc;
+}, new Map());
+
 export type StageSequenceTarget = 'chapters' | 'terminal';
 
 export interface StageSequenceStep {
@@ -33,15 +44,50 @@ export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = [
 
 const DEFAULT_STAGE: ThesisStage = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
 
+function canonicalizeStageValue(value?: ThesisStage | string | null): ThesisStage | null {
+    if (!value) {
+        return null;
+    }
+    const normalized = normalizeStageKey(value.toString());
+    return STAGE_LOOKUP.get(normalized) ?? null;
+}
+
 function normalizeChapterStages(stage?: ThesisStage | ThesisStage[] | null): ThesisStage[] {
     const values = Array.isArray(stage)
         ? stage
         : stage
             ? [stage]
             : [];
-    const filtered = values.filter((value): value is ThesisStage => Boolean(value));
-    const unique = Array.from(new Set(filtered));
-    return unique.length > 0 ? unique : [DEFAULT_STAGE];
+
+    const canonical = values
+        .map((value) => canonicalizeStageValue(value))
+        .filter((value): value is ThesisStage => Boolean(value));
+
+    const unique: ThesisStage[] = [];
+    canonical.forEach((value) => {
+        if (!unique.includes(value)) {
+            unique.push(value);
+        }
+    });
+
+    if (unique.length === 0) {
+        return [DEFAULT_STAGE];
+    }
+
+    return unique.sort((a, b) => {
+        const aIndex = STAGE_SEQUENCE_ORDER.indexOf(a);
+        const bIndex = STAGE_SEQUENCE_ORDER.indexOf(b);
+        if (aIndex === -1 && bIndex === -1) {
+            return 0;
+        }
+        if (aIndex === -1) {
+            return 1;
+        }
+        if (bIndex === -1) {
+            return -1;
+        }
+        return aIndex - bIndex;
+    });
 }
 
 export function resolveChapterStages(chapter?: ThesisChapter | null): ThesisStage[] {

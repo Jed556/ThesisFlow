@@ -352,7 +352,7 @@ export default function TerminalRequirementsPage() {
         requirement: TerminalRequirementDefinition,
         fileList: FileList,
     ) => {
-        if (!thesis?.id || !userUid) {
+        if (!thesis?.id || !thesis.groupId || !userUid) {
             showNotification('You must be signed in to upload requirements.', 'error');
             return;
         }
@@ -370,6 +370,7 @@ export default function TerminalRequirementsPage() {
                     file,
                     userUid,
                     thesisId: thesis.id,
+                    groupId: thesis.groupId,
                     category: 'attachment',
                     metadata: {
                         scope: 'terminal-requirements',
@@ -674,9 +675,6 @@ export default function TerminalRequirementsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Terminal Requirements
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Upload the signed forms and supporting documents needed for each stage after your chapters are approved.
                     </Typography>

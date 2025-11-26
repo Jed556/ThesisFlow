@@ -1,6 +1,16 @@
 import {
-    addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp,
-    setDoc, where, type DocumentData, type QueryDocumentSnapshot,
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    onSnapshot,
+    query,
+    serverTimestamp,
+    setDoc,
+    where,
+    type DocumentData,
+    type QueryConstraint,
+    type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
@@ -25,6 +35,7 @@ interface PanelCommentSnapshot {
     studentStatus?: string;
     studentUpdatedAt?: unknown;
     studentUpdatedBy?: string;
+    panelUid?: string;
 }
 
 interface PanelCommentReleaseSnapshot {
@@ -45,6 +56,7 @@ function mapEntry(docSnap: QueryDocumentSnapshot<DocumentData>): PanelCommentEnt
         reference: data.reference ?? undefined,
         createdBy: data.createdBy,
         createdAt: normalizeTimestamp(data.createdAt, true),
+        panelUid: data.panelUid ?? data.createdBy,
         updatedAt: normalizeTimestamp(data.updatedAt) || undefined,
         updatedBy: data.updatedBy,
         studentPage: data.studentPage,
@@ -91,16 +103,19 @@ export function listenPanelCommentEntries(
     groupId: string | null | undefined,
     stage: PanelCommentStage,
     options: PanelCommentListenerOptions,
+    panelUid?: string,
 ): () => void {
     if (!groupId) {
         options.onData([]);
         return () => { /* no-op */ };
     }
 
-    const entriesQuery = query(
-        getEntriesCollection(groupId),
-        where('stage', '==', stage),
-    );
+    const filters: QueryConstraint[] = [where('stage', '==', stage)];
+    if (panelUid) {
+        filters.push(where('panelUid', '==', panelUid));
+    }
+
+    const entriesQuery = query(getEntriesCollection(groupId), ...filters);
 
     return onSnapshot(entriesQuery, (snapshot) => {
         const entries = snapshot.docs
@@ -158,6 +173,7 @@ export async function addPanelCommentEntry(payload: PanelCommentEntryInput): Pro
         stage: payload.stage,
         comment: payload.comment,
         reference: payload.reference ?? null,
+        panelUid: payload.panelUid ?? payload.createdBy,
         createdBy: payload.createdBy,
         createdAt: serverTimestamp(),
     });

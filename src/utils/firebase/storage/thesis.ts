@@ -43,7 +43,9 @@ interface UploadThesisFileOptions {
     file: File;
     userUid: string;
     thesisId: string;
+    groupId: string;
     chapterId?: number;
+    chapterStage?: ThesisStage;
     commentId?: string;
     category?: 'submission' | 'attachment' | 'revision';
     metadata?: Record<string, string>;
@@ -117,24 +119,69 @@ export function validateMediaFile(file: File): { isValid: boolean; error?: strin
     return { isValid: true };
 }
 
+interface GenerateFilePathParams {
+    userUid: string;
+    thesisId: string;
+    groupId: string;
+    fileName: string;
+    chapterId?: number;
+    chapterStage?: ThesisStage;
+    commentId?: string;
+    category: string;
+    terminalStage?: ThesisStage;
+}
+
+function sanitizePathSegment(value: string | number | undefined | null, fallback: string = 'general'): string {
+    if (value === undefined || value === null) {
+        return fallback;
+    }
+    return value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-');
+}
+
 /**
- * Generates a unique file path for thesis uploads using UIDs
+ * Generates a unique file path for thesis uploads using UIDs with group/stage context.
  */
-function generateThesisFilePath(
-    userUid: string,
-    thesisId: string,
-    fileName: string,
-    chapterId?: number,
-    category: string = 'submission'
-): string {
+function generateThesisFilePath(params: GenerateFilePathParams): string {
+    const {
+        userUid,
+        thesisId,
+        groupId,
+        fileName,
+        chapterId,
+        chapterStage,
+        commentId,
+        category,
+        terminalStage,
+    } = params;
+
     const timestamp = Date.now();
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const sanitizedGroup = sanitizePathSegment(groupId, thesisId);
 
-    if (chapterId !== undefined) {
-        return `theses/${thesisId}/chapters/${chapterId}/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
+    if (terminalStage) {
+        const stageSegment = sanitizePathSegment(terminalStage);
+        return `theses/${sanitizedGroup}/terminal/${stageSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
     }
 
-    return `theses/${thesisId}/attachments/${userUid}_${timestamp}_${sanitizedFileName}`;
+    if (chapterId !== undefined) {
+        if (!chapterStage) {
+            throw new Error('chapterStage is required when uploading files for a chapter.');
+        }
+        const stageSegment = sanitizePathSegment(chapterStage);
+        const chapterSegment = sanitizePathSegment(chapterId, 'chapter');
+
+        if (commentId) {
+            return `theses/${sanitizedGroup}/chat/${stageSegment}/${chapterSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
+        }
+
+        return `theses/${sanitizedGroup}/chapters/${stageSegment}/${chapterSegment}/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
+    }
+
+    return `theses/${sanitizedGroup}/attachments/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
 }
 
 /**
@@ -156,7 +203,9 @@ export async function uploadThesisFile(
         file,
         userUid,
         thesisId,
+        groupId,
         chapterId,
+        chapterStage,
         commentId,
         category = 'submission',
         metadata = {},
@@ -178,13 +227,21 @@ export async function uploadThesisFile(
         }
 
         // Generate file path using UID
-        const filePath = generateThesisFilePath(
+        if (chapterId !== undefined && !chapterStage) {
+            throw new Error('chapterStage is required when uploading files tied to a chapter.');
+        }
+
+        const filePath = generateThesisFilePath({
             userUid,
             thesisId,
-            file.name,
+            groupId,
+            fileName: file.name,
             chapterId,
-            category
-        );
+            chapterStage,
+            commentId,
+            category,
+            terminalStage,
+        });
 
         // Create storage reference
         const fileRef = ref(firebaseStorage, filePath);
@@ -195,9 +252,11 @@ export async function uploadThesisFile(
             customMetadata: {
                 uploadedBy: userUid,
                 thesisId,
+                groupId,
                 category,
                 originalName: file.name,
                 ...(chapterId !== undefined && { chapterId: chapterId.toString() }),
+                ...(chapterStage && { chapterStage }),
                 ...(commentId && { commentId }),
                 ...(terminalStage && { terminalStage }),
                 ...(terminalRequirementId && { terminalRequirementId }),
@@ -219,6 +278,7 @@ export async function uploadThesisFile(
         const fileAttachment: FileAttachment = {
             id: fileHash,
             thesisId,
+            groupId,
             name: file.name,
             type: extension,
             size: `${file.size}`, // Convert to string
@@ -228,6 +288,7 @@ export async function uploadThesisFile(
             uploadDate: new Date().toISOString(),
             category: category === 'revision' ? 'submission' : category as 'submission' | 'attachment',
             ...(chapterId !== undefined && { chapterId }),
+            ...(chapterStage && { chapterStage }),
             ...(commentId && { commentId }),
             ...(terminalStage && { terminalStage }),
             ...(terminalRequirementId && { terminalRequirementId })
@@ -338,12 +399,15 @@ export async function listChapterFiles(
  */
 export async function listThesisFilesFromStorage(
     thesisId: string,
-    chapterId?: number
+    chapterId?: number,
+    groupId?: string,
+    chapterStage?: ThesisStage,
 ): Promise<string[]> {
     try {
+        const sanitizedGroup = sanitizePathSegment(groupId ?? thesisId, thesisId);
         const basePath = chapterId !== undefined
-            ? `theses/${thesisId}/chapters/${chapterId}`
-            : `theses/${thesisId}`;
+            ? `theses/${sanitizedGroup}/chapters/${sanitizePathSegment(chapterStage ?? 'stage')}/${sanitizePathSegment(chapterId, 'chapter')}`
+            : `theses/${sanitizedGroup}`;
 
         const listRef = ref(firebaseStorage, basePath);
         const result = await listAll(listRef);

@@ -139,7 +139,7 @@ export default function StudentThesisOverviewPage() {
         }, {} as Record<ThesisStage, boolean>);
     }, [terminalSubmissions]);
 
-    const handleUploadChapter = React.useCallback(async ({ thesisId, chapterId, file }: WorkspaceUploadPayload) => {
+    const handleUploadChapter = React.useCallback(async ({ thesisId, groupId, chapterId, chapterStage, file }: WorkspaceUploadPayload) => {
         if (!userUid) {
             throw new Error('You must be signed in to upload a chapter.');
         }
@@ -148,7 +148,9 @@ export default function StudentThesisOverviewPage() {
             file,
             userUid,
             thesisId,
+            groupId,
             chapterId,
+            chapterStage,
             category: 'submission',
             metadata: { scope: 'student-workspace' },
         });

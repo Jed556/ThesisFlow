@@ -17,9 +17,11 @@ import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesi
 import {
     listenPanelCommentEntries, listenPanelCommentRelease, updatePanelCommentStudentFields
 } from '../../utils/firebase/firestore/panelComments';
+import { getGroupById } from '../../utils/firebase/firestore/groups';
+import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
-    PANEL_COMMENT_STAGE_METADATA, canStudentAccessPanelStage, getPanelCommentStageLabel
+    PANEL_COMMENT_STAGE_METADATA, canStudentAccessPanelStage, formatPanelistDisplayName, getPanelCommentStageLabel
 } from '../../utils/panelCommentUtils';
 
 export const metadata: NavigationItem = {
@@ -32,6 +34,11 @@ export const metadata: NavigationItem = {
 };
 
 type ThesisRecord = ThesisData & { id: string };
+
+interface PanelistOption {
+    uid: string;
+    label: string;
+}
 
 type StageStatusChip = {
     label: string;
@@ -50,13 +57,13 @@ function resolveStageStatus(
     const stageComplete = completionMap[meta.unlockStage] ?? false;
     const released = releaseMap[stage]?.sent ?? false;
 
+    if (released) {
+        return { label: 'Released', color: 'success' };
+    }
     if (!stageComplete) {
         return { label: `Finish ${meta.unlockStage}`, color: 'warning' };
     }
-    if (!released) {
-        return { label: 'Waiting for release', color: 'info' };
-    }
-    return { label: 'Ready', color: 'success' };
+    return { label: 'Waiting for release', color: 'info' };
 }
 
 export default function StudentPanelCommentsPage() {
@@ -73,6 +80,10 @@ export default function StudentPanelCommentsPage() {
     const [entriesError, setEntriesError] = React.useState<string | null>(null);
     const [releaseMap, setReleaseMap] = React.useState<PanelCommentReleaseMap>(createDefaultPanelCommentReleaseMap());
     const [studentSavingIds, setStudentSavingIds] = React.useState<Set<string>>(new Set());
+    const [panelists, setPanelists] = React.useState<PanelistOption[]>([]);
+    const [panelistsLoading, setPanelistsLoading] = React.useState(false);
+    const [panelistsError, setPanelistsError] = React.useState<string | null>(null);
+    const [activePanelUid, setActivePanelUid] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -116,7 +127,7 @@ export default function StudentPanelCommentsPage() {
     }, [groupId]);
 
     React.useEffect(() => {
-        if (!groupId) {
+        if (!groupId || !activePanelUid) {
             setEntries([]);
             setEntriesLoading(false);
             return;
@@ -134,25 +145,101 @@ export default function StudentPanelCommentsPage() {
                 setEntriesLoading(false);
                 setEntriesError('Unable to load comments for this tab.');
             },
-        });
+        }, activePanelUid);
         return () => unsubscribe();
-    }, [groupId, activeStage]);
+    }, [groupId, activeStage, activePanelUid]);
+
+    React.useEffect(() => {
+        let isMounted = true;
+        async function loadPanelists() {
+            if (!groupId) {
+                if (isMounted) {
+                    setPanelists([]);
+                    setActivePanelUid(null);
+                    setPanelistsLoading(false);
+                    setPanelistsError(null);
+                }
+                return;
+            }
+
+            setPanelistsLoading(true);
+            setPanelistsError(null);
+
+            try {
+                const group = await getGroupById(groupId);
+                const panelUids = group?.members?.panels ?? [];
+
+                if (!isMounted) {
+                    return;
+                }
+
+                if (panelUids.length === 0) {
+                    setPanelists([]);
+                    setActivePanelUid(null);
+                    setPanelistsLoading(false);
+                    return;
+                }
+
+                const profiles = await getUsersByIds(panelUids);
+                if (!isMounted) {
+                    return;
+                }
+
+                const options = panelUids.map((uid) => {
+                    const profile = profiles.find((record) => record.uid === uid) ?? null;
+                    return {
+                        uid,
+                        label: formatPanelistDisplayName(profile),
+                    };
+                });
+
+                setPanelists(options);
+                setActivePanelUid((previous) => {
+                    if (previous && panelUids.includes(previous)) {
+                        return previous;
+                    }
+                    return options[0]?.uid ?? null;
+                });
+            } catch (error) {
+                console.error('Failed to load panel assignments for student panel comments:', error);
+                if (isMounted) {
+                    setPanelists([]);
+                    setActivePanelUid(null);
+                    setPanelistsError('Unable to load your panel assignments right now.');
+                }
+            } finally {
+                if (isMounted) {
+                    setPanelistsLoading(false);
+                }
+            }
+        }
+
+        void loadPanelists();
+        return () => {
+            isMounted = false;
+        };
+    }, [groupId]);
 
     const stageCompletionMap = React.useMemo(() => (
         buildStageCompletionMap(thesis?.chapters ?? [], { treatEmptyAsComplete: false })
     ), [thesis?.chapters]);
 
     const stageAccessible = canStudentAccessPanelStage(activeStage, stageCompletionMap, releaseMap);
+    const activePanelist = React.useMemo(
+        () => panelists.find((panel) => panel.uid === activePanelUid) ?? null,
+        [panelists, activePanelUid]
+    );
     const stageMeta = PANEL_COMMENT_STAGE_METADATA.find((item) => item.id === activeStage);
     const lockedDescription = React.useMemo(() => {
-        if (!stageMeta) {
-            return 'Stage metadata missing.';
-        }
-        const stageReady = stageCompletionMap[stageMeta.unlockStage] ?? false;
-        if (!stageReady) {
-            return `Complete every chapter tagged ${stageMeta.unlockStage} to unlock this tab.`;
-        }
-        if (!(releaseMap[activeStage]?.sent ?? false)) {
+        const releaseReady = releaseMap[activeStage]?.sent ?? false;
+        if (!releaseReady) {
+            if (!stageMeta) {
+                return 'Waiting for the admin to release the panel comments.';
+            }
+            const stageReady = stageCompletionMap[stageMeta.unlockStage] ?? false;
+            if (!stageReady) {
+                return `Complete every chapter tagged ${stageMeta.unlockStage} and wait for the admin to release the comments.`;
+            }
             return 'Waiting for the admin to release the panel comments for viewing.';
         }
         return 'Panel comments are not available yet.';
@@ -160,6 +247,10 @@ export default function StudentPanelCommentsPage() {
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
+    }, []);
+
+    const handlePanelChange = React.useCallback((_: React.SyntheticEvent, value: string) => {
+        setActivePanelUid(value);
     }, []);
 
     const handleStudentFieldChange = React.useCallback(async (
@@ -270,9 +361,6 @@ export default function StudentPanelCommentsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Panel Comments
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Track every remark from your proposal and defense hearings, then document the page and status once addressed.
                     </Typography>
@@ -280,12 +368,45 @@ export default function StudentPanelCommentsPage() {
 
                 {renderTabs()}
 
+                <Stack spacing={1.5}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                        Panel sheets
+                    </Typography>
+                    {panelistsLoading ? (
+                        <Skeleton variant="rectangular" height={48} />
+                    ) : panelistsError ? (
+                        <Alert severity="error">{panelistsError}</Alert>
+                    ) : panelists.length === 0 ? (
+                        <Alert severity="info">
+                            Panel assignments are still pending. Sheets will appear once a panel member is assigned.
+                        </Alert>
+                    ) : (
+                        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                            <Tabs
+                                value={activePanelUid ?? panelists[0]?.uid}
+                                onChange={handlePanelChange}
+                                variant="scrollable"
+                                scrollButtons="auto"
+                                allowScrollButtonsMobile
+                            >
+                                {panelists.map((panel) => (
+                                    <Tab key={panel.uid} value={panel.uid} label={panel.label} />
+                                ))}
+                            </Tabs>
+                        </Box>
+                    )}
+                </Stack>
+
                 {!stageAccessible ? (
                     <UnauthorizedNotice
                         title={`${getPanelCommentStageLabel(activeStage)} tab locked`}
                         description={lockedDescription}
                         variant="box"
                     />
+                ) : !activePanelUid ? (
+                    <Alert severity="info">
+                        Select a panel sheet to review comments once your assignments become available.
+                    </Alert>
                 ) : (
                     <Stack spacing={2}>
                         <Alert severity="info">
@@ -296,6 +417,7 @@ export default function StudentPanelCommentsPage() {
                             <Alert severity="error">{entriesError}</Alert>
                         )}
                         <PanelCommentTable
+                            title={`${activePanelist?.label ?? 'Panel'} · Comment sheet`}
                             entries={entries}
                             variant="student"
                             loading={entriesLoading}

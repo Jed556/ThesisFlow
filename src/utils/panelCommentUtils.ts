@@ -3,6 +3,7 @@
  */
 import type { PanelCommentReleaseMap, PanelCommentStage } from '../types/panelComment';
 import type { ThesisStage } from '../types/thesis';
+import type { UserProfile } from '../types/profile';
 
 export interface PanelCommentStageMeta {
     id: PanelCommentStage;
@@ -44,16 +45,10 @@ export type StageCompletionMap = Partial<Record<ThesisStage, boolean>>;
  */
 export function canStudentAccessPanelStage(
     stage: PanelCommentStage,
-    completionMap: StageCompletionMap | undefined,
+    _completionMap: StageCompletionMap | undefined,
     releaseMap: PanelCommentReleaseMap | undefined
 ): boolean {
-    const meta = getPanelCommentStageMeta(stage);
-    if (!meta) {
-        return false;
-    }
-    const stageReady = completionMap?.[meta.unlockStage] ?? false;
-    const releaseReady = releaseMap?.[stage]?.sent ?? false;
-    return stageReady && releaseReady;
+    return Boolean(releaseMap?.[stage]?.sent);
 }
 
 /**
@@ -75,4 +70,31 @@ export function isPanelCommentStageReleased(
     releaseMap: PanelCommentReleaseMap | undefined
 ): boolean {
     return Boolean(releaseMap?.[stage]?.sent);
+}
+
+/**
+ * Formats a concise display name for panel members, falling back to their email prefix.
+ */
+export function formatPanelistDisplayName(
+    profile: Pick<UserProfile, 'name' | 'email'> | null | undefined,
+    fallback = 'Panel member'
+): string {
+    if (!profile) {
+        return fallback;
+    }
+
+    const { name, email } = profile;
+    const parts = [name?.prefix, name?.first, name?.middle, name?.last, name?.suffix]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value));
+
+    if (parts.length > 0) {
+        return parts.join(' ');
+    }
+
+    if (email) {
+        return email.split('@')[0] || fallback;
+    }
+
+    return fallback;
 }

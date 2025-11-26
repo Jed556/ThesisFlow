@@ -141,6 +141,22 @@ export async function getTerminalRequirementConfigsByDepartment(
     });
 }
 
+export async function getTerminalRequirementDepartments(): Promise<string[]> {
+    const configsRef = collection(firebaseFirestore, COLLECTION_NAME);
+    const snapshot = await getDocs(configsRef);
+
+    const departments = new Set<string>();
+    snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as Partial<TerminalRequirementConfigDocument>;
+        const department = data.department?.trim();
+        if (department) {
+            departments.add(department);
+        }
+    });
+
+    return Array.from(departments).sort((a, b) => a.localeCompare(b));
+}
+
 export interface SaveTerminalRequirementConfigPayload {
     department: string;
     course: string;

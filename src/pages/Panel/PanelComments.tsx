@@ -42,6 +42,10 @@ export default function PanelPanelCommentsPage() {
     const [dialogMode, setDialogMode] = React.useState<EditorMode>('create');
     const [editingEntry, setEditingEntry] = React.useState<PanelCommentEntry | null>(null);
     const [saving, setSaving] = React.useState(false);
+    const selectedGroup = React.useMemo(
+        () => groups.find((group) => group.id === selectedGroupId) ?? null,
+        [groups, selectedGroupId]
+    );
 
     React.useEffect(() => {
         if (!userUid) {
@@ -69,7 +73,7 @@ export default function PanelPanelCommentsPage() {
     }, [userUid, selectedGroupId]);
 
     React.useEffect(() => {
-        if (!selectedGroupId) {
+        if (!selectedGroupId || !userUid) {
             setEntries([]);
             setEntriesLoading(false);
             return;
@@ -87,9 +91,9 @@ export default function PanelPanelCommentsPage() {
                 setEntriesLoading(false);
                 setEntriesError('Unable to load comments right now.');
             },
-        });
+        }, userUid);
         return () => unsubscribe();
-    }, [selectedGroupId, activeStage]);
+    }, [selectedGroupId, activeStage, userUid]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
@@ -124,6 +128,7 @@ export default function PanelPanelCommentsPage() {
                     comment: values.comment,
                     reference: values.reference,
                     createdBy: userUid,
+                    panelUid: userUid,
                 });
                 showNotification('Comment added.', 'success');
             } else if (editingEntry) {
@@ -179,9 +184,6 @@ export default function PanelPanelCommentsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Panel Comment Sheets
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Select an assigned research group, pick the stage, and log your consolidated feedback.
                     </Typography>
@@ -189,7 +191,7 @@ export default function PanelPanelCommentsPage() {
 
                 <Autocomplete
                     options={groups}
-                    value={groups.find((group) => group.id === selectedGroupId) ?? null}
+                    value={selectedGroup}
                     onChange={handleSelectGroup}
                     getOptionLabel={(option) => option.name || option.id}
                     loading={groupsLoading}
@@ -217,11 +219,13 @@ export default function PanelPanelCommentsPage() {
                         </Tabs>
                         <Alert severity="info">
                             Students will provide their page references and status separately. Focus on the concrete comments here.
+                            {' '}Each panelist works on a dedicated sheet, so you will only see entries that belong to you.
                         </Alert>
                         {entriesError && (
                             <Alert severity="error">{entriesError}</Alert>
                         )}
                         <PanelCommentTable
+                            title={`${selectedGroup?.name ?? 'Selected group'} · ${getPanelCommentStageLabel(activeStage)}`}
                             entries={entries}
                             variant="panel"
                             loading={entriesLoading}

@@ -26,10 +26,11 @@ import type { ThesisStage } from '../../types/thesis';
 import type { TerminalRequirementDefinition } from '../../types/terminalRequirement';
 import type { TerminalRequirementConfigEntry, TerminalRequirementTemplateMetadata } from '../../types/terminalRequirementConfig';
 import { getUserById } from '../../utils/firebase/firestore/user';
-import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
+import { getGroupsByDepartment, getGroupDepartments } from '../../utils/firebase/firestore/groups';
 import {
     getTerminalRequirementConfig,
     getTerminalRequirementConfigsByDepartment,
+    getTerminalRequirementDepartments,
     setTerminalRequirementConfig,
 } from '../../utils/firebase/firestore/terminalRequirementConfigs';
 import {
@@ -177,38 +178,60 @@ export default function AdminTerminalRequirementsPage() {
         let cancelled = false;
         setProfileLoading(true);
 
-        void getUserById(userUid)
-            .then((profile) => {
+        const loadDepartments = async () => {
+            try {
+                const [profile, knownDepartments, groupDepartments] = await Promise.all([
+                    getUserById(userUid),
+                    getTerminalRequirementDepartments().catch(() => []),
+                    getGroupDepartments().catch(() => []),
+                ]);
+
                 if (cancelled) {
                     return;
                 }
+
                 const managedDepartments = profile?.departments?.filter(Boolean)
                     ?? (profile?.department ? [profile.department] : []);
-                managedDepartments.sort((a, b) => a.localeCompare(b));
-                setDepartments(managedDepartments);
-                if (managedDepartments.length > 0) {
-                    setSelectedDepartment((current) => (
-                        current && managedDepartments.includes(current)
-                            ? current
-                            : managedDepartments[0]
-                    ));
-                } else {
-                    setSelectedDepartment('');
-                }
-            })
-            .catch((error) => {
-                console.error('Failed to load admin profile:', error);
+
+                const normalizedManaged = managedDepartments
+                    .map((dept) => dept.trim())
+                    .filter((dept): dept is string => Boolean(dept));
+                normalizedManaged.sort((a, b) => a.localeCompare(b));
+                const normalizedKnown = knownDepartments
+                    .map((dept) => dept.trim())
+                    .filter((dept): dept is string => Boolean(dept));
+
+                const normalizedFromGroups = groupDepartments
+                    .map((dept) => dept.trim())
+                    .filter((dept): dept is string => Boolean(dept));
+
+                const unique = new Set<string>([...normalizedKnown, ...normalizedManaged, ...normalizedFromGroups]);
+                const sortedDepartments = Array.from(unique).sort((a, b) => a.localeCompare(b));
+                setDepartments(sortedDepartments);
+
+                const fallback = normalizedManaged[0] ?? sortedDepartments[0] ?? '';
+                setSelectedDepartment((current) => {
+                    if (current && current.trim()) {
+                        const trimmed = current.trim();
+                        return unique.has(trimmed) ? trimmed : current;
+                    }
+                    return fallback;
+                });
+            } catch (error) {
+                console.error('Failed to load terminal requirement departments:', error);
                 if (!cancelled) {
-                    showNotification('Failed to load your profile. Try refreshing.', 'error');
+                    showNotification('Failed to load available departments.', 'error');
                     setDepartments([]);
                     setSelectedDepartment('');
                 }
-            })
-            .finally(() => {
+            } finally {
                 if (!cancelled) {
                     setProfileLoading(false);
                 }
-            });
+            }
+        };
+
+        void loadDepartments();
 
         return () => {
             cancelled = true;
@@ -571,9 +594,6 @@ export default function AdminTerminalRequirementsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Terminal Requirements
-                    </Typography>
                     <Typography color="text.secondary">
                         Choose which forms are required per stage and attach the latest templates for your courses.
                     </Typography>
@@ -583,9 +603,15 @@ export default function AdminTerminalRequirementsPage() {
                     <CardContent>
                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                             <Autocomplete
+                                freeSolo
                                 options={departments}
                                 value={selectedDepartment}
                                 onChange={(_, value) => setSelectedDepartment(value ?? '')}
+                                onInputChange={(_, value, reason) => {
+                                    if (reason === 'clear') {
+                                        setSelectedDepartment('');
+                                    }
+                                }}
                                 renderInput={(params) => (
                                     <TextField
                                         {...params}

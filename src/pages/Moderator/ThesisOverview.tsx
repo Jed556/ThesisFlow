@@ -19,7 +19,7 @@ import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import type { WorkspaceFilterConfig } from '../../types/workspace';
+import type { WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
 import { getThesisByGroupId } from '../../utils/firebase/firestore/thesis';
 import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
 import { getUserById } from '../../utils/firebase/firestore/user';
@@ -304,16 +304,12 @@ export default function ModeratorThesisOverviewPage() {
 
     const handleCreateComment = React.useCallback(async ({
         chapterId,
+        chapterStage,
         versionIndex,
         content,
         files,
-    }: {
-        chapterId: number;
-        versionIndex: number | null;
-        content: string;
-        files: File[];
-    }) => {
-        if (!moderatorUid || !selectedThesisId) {
+    }: WorkspaceCommentPayload) => {
+        if (!moderatorUid || !selectedThesisId || !thesis?.groupId) {
             throw new Error('Missing moderator context.');
         }
 
@@ -322,7 +318,9 @@ export default function ModeratorThesisOverviewPage() {
             attachments = await uploadConversationAttachments(files, {
                 userUid: moderatorUid,
                 thesisId: selectedThesisId,
+                groupId: thesis.groupId,
                 chapterId,
+                chapterStage,
             });
         }
 
@@ -350,7 +348,7 @@ export default function ModeratorThesisOverviewPage() {
                 ),
             };
         });
-    }, [moderatorUid, selectedThesisId]);
+    }, [moderatorUid, selectedThesisId, thesis?.groupId]);
 
     const isLoading = profileLoading || groupsLoading || thesisLoading;
     const noCourses = !profileLoading && courses.length === 0;
@@ -358,9 +356,6 @@ export default function ModeratorThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    Moderator workspace
-                </Typography>
                 <Typography variant="body1" color="text.secondary">
                     Choose a course, pick a group, and leave chapter-specific moderation notes.
                 </Typography>
@@ -394,10 +389,9 @@ export default function ModeratorThesisOverviewPage() {
                     filters={filters}
                     isLoading={isLoading}
                     allowCommenting={Boolean(thesis)}
-                    emptyStateMessage={selectedGroupId ? 'No thesis data available for this group yet.' : 'Select a course and group to begin.'}
-                    onCreateComment={({ chapterId, versionIndex, content, files }) =>
-                        handleCreateComment({ chapterId, versionIndex, content, files })
-                    }
+                    emptyStateMessage=
+                    {selectedGroupId ? 'No thesis data available for this group yet.' : 'Select a course and group to begin.'}
+                    onCreateComment={handleCreateComment}
                 />
             )}
         </AnimatedPage>

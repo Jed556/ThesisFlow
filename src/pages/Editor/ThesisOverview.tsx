@@ -18,7 +18,7 @@ import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import type { WorkspaceChapterDecisionPayload, WorkspaceFilterConfig } from '../../types/workspace';
+import type { WorkspaceChapterDecisionPayload, WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
 import {
     getReviewerAssignmentsForUser,
     getThesisById,
@@ -212,16 +212,12 @@ export default function EditorThesisOverviewPage() {
 
     const handleCreateComment = React.useCallback(async ({
         chapterId,
+        chapterStage,
         versionIndex,
         content,
         files,
-    }: {
-        chapterId: number;
-        versionIndex: number | null;
-        content: string;
-        files: File[];
-    }) => {
-        if (!editorUid || !selectedThesisId) {
+    }: WorkspaceCommentPayload) => {
+        if (!editorUid || !selectedThesisId || !thesis?.groupId) {
             throw new Error('Missing editor context.');
         }
 
@@ -230,7 +226,9 @@ export default function EditorThesisOverviewPage() {
             attachments = await uploadConversationAttachments(files, {
                 userUid: editorUid,
                 thesisId: selectedThesisId,
+                groupId: thesis.groupId,
                 chapterId,
+                chapterStage,
             });
         }
 
@@ -258,7 +256,7 @@ export default function EditorThesisOverviewPage() {
                 ),
             };
         });
-    }, [editorUid, selectedThesisId]);
+    }, [editorUid, selectedThesisId, thesis?.groupId]);
 
     const handleChapterDecision = React.useCallback(async ({ thesisId: targetThesisId, chapterId, decision }: WorkspaceChapterDecisionPayload) => {
         if (!targetThesisId) {
@@ -337,9 +335,7 @@ export default function EditorThesisOverviewPage() {
                     isLoading={isLoading}
                     allowCommenting
                     emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
-                    onCreateComment={({ chapterId, versionIndex, content, files }) =>
-                        handleCreateComment({ chapterId, versionIndex, content, files })
-                    }
+                    onCreateComment={handleCreateComment}
                     mentorRole="editor"
                     onChapterDecision={handleChapterDecision}
                 />

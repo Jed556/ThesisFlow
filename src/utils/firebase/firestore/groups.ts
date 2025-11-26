@@ -766,6 +766,28 @@ export async function getGroupsByDepartment(department: string): Promise<ThesisG
 }
 
 /**
+ * Retrieve a sorted list of every department referenced by thesis groups.
+ */
+export async function getGroupDepartments(): Promise<string[]> {
+    try {
+        const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+        const snapshot = await getDocs(groupsRef);
+        const departments = new Set<string>();
+        snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data() as Partial<ThesisGroup>;
+            const department = data.department?.trim();
+            if (department) {
+                departments.add(department);
+            }
+        });
+        return Array.from(departments).sort((a, b) => a.localeCompare(b));
+    } catch (error) {
+        console.error('Error loading group departments:', error);
+        throw new Error('Failed to fetch group departments');
+    }
+}
+
+/**
  * Fetch groups via the new hierarchical Firestore path for a specific department/course pair.
  */
 export async function getGroupsInDepartmentCourse(

@@ -20,10 +20,12 @@ import {
     listenPanelCommentRelease,
     setPanelCommentReleaseState,
 } from '../../utils/firebase/firestore/panelComments';
+import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
     PANEL_COMMENT_STAGE_METADATA,
     getPanelCommentStageLabel,
+    formatPanelistDisplayName,
 } from '../../utils/panelCommentUtils';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 
@@ -56,6 +58,10 @@ export default function AdminPanelCommentsPage() {
     const [entriesError, setEntriesError] = React.useState<string | null>(null);
     const [activeStage, setActiveStage] = React.useState<PanelCommentStage>('proposal');
     const [releaseSaving, setReleaseSaving] = React.useState(false);
+    const [panelists, setPanelists] = React.useState<{ uid: string; label: string }[]>([]);
+    const [panelistsLoading, setPanelistsLoading] = React.useState(false);
+    const [panelistsError, setPanelistsError] = React.useState<string | null>(null);
+    const [activePanelUid, setActivePanelUid] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -115,7 +121,7 @@ export default function AdminPanelCommentsPage() {
     }, [selectedGroupId]);
 
     React.useEffect(() => {
-        if (!selectedGroupId) {
+        if (!selectedGroupId || !activePanelUid) {
             setEntries([]);
             setEntriesLoading(false);
             return;
@@ -133,9 +139,74 @@ export default function AdminPanelCommentsPage() {
                 setEntriesLoading(false);
                 setEntriesError('Unable to load comments for this stage.');
             },
-        });
+        }, activePanelUid);
         return () => unsubscribe();
-    }, [selectedGroupId, activeStage]);
+    }, [selectedGroupId, activeStage, activePanelUid]);
+
+    React.useEffect(() => {
+        let isMounted = true;
+        async function loadPanelists() {
+            if (!selectedGroup) {
+                if (isMounted) {
+                    setPanelists([]);
+                    setActivePanelUid(null);
+                    setPanelistsError(null);
+                    setPanelistsLoading(false);
+                }
+                return;
+            }
+
+            const panelUids = selectedGroup.members?.panels ?? [];
+            if (panelUids.length === 0) {
+                if (isMounted) {
+                    setPanelists([]);
+                    setActivePanelUid(null);
+                    setPanelistsError(null);
+                    setPanelistsLoading(false);
+                }
+                return;
+            }
+
+            setPanelistsLoading(true);
+            setPanelistsError(null);
+            try {
+                const profiles = await getUsersByIds(panelUids);
+                if (!isMounted) {
+                    return;
+                }
+                const options = panelUids.map((uid) => {
+                    const profile = profiles.find((record) => record.uid === uid) ?? null;
+                    return {
+                        uid,
+                        label: formatPanelistDisplayName(profile),
+                    };
+                });
+                setPanelists(options);
+                setActivePanelUid((prev) => {
+                    if (prev && panelUids.includes(prev)) {
+                        return prev;
+                    }
+                    return options[0]?.uid ?? null;
+                });
+            } catch (error) {
+                console.error('Failed to fetch panel members for admin panel comments:', error);
+                if (isMounted) {
+                    setPanelists([]);
+                    setActivePanelUid(null);
+                    setPanelistsError('Unable to load panel member list.');
+                }
+            } finally {
+                if (isMounted) {
+                    setPanelistsLoading(false);
+                }
+            }
+        }
+
+        void loadPanelists();
+        return () => {
+            isMounted = false;
+        };
+    }, [selectedGroup]);
 
     const stageCompletionMap = React.useMemo(() => (
         buildStageCompletionMap(thesis?.chapters ?? [], { treatEmptyAsComplete: false })
@@ -145,10 +216,18 @@ export default function AdminPanelCommentsPage() {
         () => PANEL_COMMENT_STAGE_METADATA.find((meta) => meta.id === activeStage),
         [activeStage]
     );
+    const activePanelist = React.useMemo(
+        () => panelists.find((panel) => panel.uid === activePanelUid) ?? null,
+        [panelists, activePanelUid]
+    );
     const canRelease = activeStageMeta ? (stageCompletionMap[activeStageMeta.unlockStage] ?? false) : false;
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
+    }, []);
+
+    const handlePanelTabChange = React.useCallback((_: React.SyntheticEvent, value: string) => {
+        setActivePanelUid(value);
     }, []);
 
     const handleSelectGroup = (_: unknown, value: ThesisGroup | null) => {
@@ -198,9 +277,6 @@ export default function AdminPanelCommentsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Panel Releases
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Monitor panel feedback for every group and control when students can view each stage.
                     </Typography>
@@ -235,6 +311,35 @@ export default function AdminPanelCommentsPage() {
                             ))}
                         </Tabs>
 
+                        <Stack spacing={1.5}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                Panel member sheets
+                            </Typography>
+                            {panelistsLoading ? (
+                                <Skeleton variant="rectangular" height={48} />
+                            ) : panelistsError ? (
+                                <Alert severity="error">{panelistsError}</Alert>
+                            ) : panelists.length === 0 ? (
+                                <Alert severity="info">
+                                    Assign panel members to this group to review their sheets.
+                                </Alert>
+                            ) : (
+                                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                                    <Tabs
+                                        value={activePanelUid ?? panelists[0]?.uid}
+                                        onChange={handlePanelTabChange}
+                                        variant="scrollable"
+                                        scrollButtons="auto"
+                                        allowScrollButtonsMobile
+                                    >
+                                        {panelists.map((panel) => (
+                                            <Tab key={panel.uid} value={panel.uid} label={panel.label} />
+                                        ))}
+                                    </Tabs>
+                                </Box>
+                            )}
+                        </Stack>
+
                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" justifyContent="space-between"
                             sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
                             <Stack spacing={0.5}>
@@ -263,15 +368,25 @@ export default function AdminPanelCommentsPage() {
                             </Button>
                         </Stack>
 
-                        {entriesError && (
-                            <Alert severity="error">{entriesError}</Alert>
-                        )}
+                        {activePanelUid ? (
+                            <>
+                                {entriesError && (
+                                    <Alert severity="error">{entriesError}</Alert>
+                                )}
 
-                        <PanelCommentTable
-                            entries={entries}
-                            variant="admin"
-                            loading={entriesLoading || thesisLoading}
-                        />
+                                <PanelCommentTable
+                                    title=
+                                    {`${activePanelist?.label ?? 'Panel member'} · ${getPanelCommentStageLabel(activeStage, 'admin')}`}
+                                    entries={entries}
+                                    variant="admin"
+                                    loading={entriesLoading || thesisLoading || panelistsLoading}
+                                />
+                            </>
+                        ) : (
+                            <Alert severity="info">
+                                Select a panel member to review their comment sheet.
+                            </Alert>
+                        )}
                     </>
                 )}
             </Stack>

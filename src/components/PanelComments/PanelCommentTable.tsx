@@ -10,6 +10,7 @@ import { formatRelative, normalizeDateInput } from '../../utils/dateUtils';
 export type PanelCommentTableVariant = 'student' | 'panel' | 'admin';
 
 export interface PanelCommentTableProps {
+    title?: string;
     entries: PanelCommentEntry[];
     variant: PanelCommentTableVariant;
     loading?: boolean;
@@ -38,6 +39,7 @@ function formatTimestamp(value?: string) {
  * Shared table component for displaying panel comment entries across student, panel, and admin views.
  */
 export function PanelCommentTable({
+    title = 'Panel comment sheet',
     entries,
     variant,
     loading = false,
@@ -95,7 +97,7 @@ export function PanelCommentTable({
     return (
         <Paper variant="outlined">
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.5 }}>
-                <Typography variant="h6">Panel comment sheet</Typography>
+                <Typography variant="h6">{title}</Typography>
                 {variant === 'panel' && onAddEntry && (
                     <Button
                         variant="contained"

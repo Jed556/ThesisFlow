@@ -21,6 +21,8 @@ export interface PanelCommentEntry {
     createdBy: string;
     /** ISO timestamp for when the entry was created. */
     createdAt: string;
+    /** Panel member to whom this sheet belongs (usually matches createdBy). */
+    panelUid: string;
     /** ISO timestamp for the last time the entry itself was edited. */
     updatedAt?: string;
     /** Firebase uid who last edited the entry text/reference. */
@@ -44,6 +46,8 @@ export interface PanelCommentEntryInput {
     comment: string;
     reference?: string;
     createdBy: string;
+    /** Assign entry to a specific panelist. Defaults to createdBy when omitted. */
+    panelUid?: string;
 }
 
 /**

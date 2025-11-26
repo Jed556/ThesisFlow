@@ -77,7 +77,9 @@ export interface FileAttachment {
     author: string; // Firebase UID of the uploader
     category?: 'submission' | 'attachment';
     thesisId?: string;
+    groupId?: string;
     chapterId?: number;
+    chapterStage?: ThesisStage;
     commentId?: string;
     terminalStage?: ThesisStage;
     terminalRequirementId?: string;
