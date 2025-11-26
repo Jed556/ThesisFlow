@@ -1,23 +1,25 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { firebaseStorage, firebaseAuth } from '../firebaseConfig';
+import { firebaseAuth } from '../firebaseConfig';
 import { validateImageFile, compressImage } from './file';
+import { uploadFileToStorage, generateUniqueFileId } from './common';
+import { getError } from '../../../../utils/errorUtils';
+import { FILE_SIZE_LIMITS, IMAGE_COMPRESSION, STORAGE_PATHS } from '../../../config/files';
 
 /**
- * Maximum file size for banner images (10MB)
+ * Maximum file size for banner images
  */
-export const MAX_BANNER_SIZE = 10 * 1024 * 1024;
+export const MAX_BANNER_SIZE = FILE_SIZE_LIMITS.image;
 
 /**
  * Upload banner image for a user
  * @param file - Image file to upload
- * @param userEmail - User's email (used for file path)
+ * @param userUid - User's UID (used for file path)
  * @returns Download URL of uploaded image
  */
-export async function uploadBanner(file: File, userEmail?: string): Promise<string> {
+export async function uploadBanner(file: File, userUid?: string): Promise<string> {
     const currentUser = firebaseAuth.currentUser;
-    const email = userEmail || currentUser?.email;
+    const uid = userUid || currentUser?.uid;
 
-    if (!email) {
+    if (!uid) {
         throw new Error('User not authenticated');
     }
 
@@ -28,26 +30,28 @@ export async function uploadBanner(file: File, userEmail?: string): Promise<stri
     }
 
     try {
-        // Compress image to 1500x500 max (3:1 aspect ratio for banner)
-        const compressedBlob = await compressImage(file, 1500, 500, 0.85);
+        // Compress image to optimal banner size (3:1 aspect ratio)
+        const compressedBlob = await compressImage(
+            file,
+            IMAGE_COMPRESSION.banner.maxWidth,
+            IMAGE_COMPRESSION.banner.maxHeight,
+            IMAGE_COMPRESSION.banner.quality
+        );
 
-        // Create storage reference
-        const fileName = `banner_${Date.now()}.jpg`;
-        const storageRef = ref(firebaseStorage, `banners/${encodeURIComponent(email)}/${fileName}`);
+        // Generate storage path
+        const fileId = generateUniqueFileId(uid, 'banner');
+        const storagePath = `${STORAGE_PATHS.banners(uid)}/${fileId}.jpg`;
 
-        // Upload file
-        await uploadBytes(storageRef, compressedBlob, {
-            contentType: 'image/jpeg',
-            customMetadata: {
-                uploadedBy: email,
-                originalName: file.name,
-            },
+        // Upload file with metadata
+        const downloadURL = await uploadFileToStorage(compressedBlob, storagePath, {
+            uploadedBy: uid,
+            originalName: file.name,
+            type: 'banner'
         });
 
-        // Get download URL
-        const downloadURL = await getDownloadURL(storageRef);
         return downloadURL;
-    } catch (error: any) {
-        throw new Error(`Failed to upload banner: ${error?.message ?? String(error)}`);
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to upload banner');
+        throw new Error(`Failed to upload banner: ${message}`);
     }
 }

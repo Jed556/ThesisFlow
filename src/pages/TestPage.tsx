@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
     Box, Button, TextField, Typography, LinearProgress, Dialog, DialogTitle, DialogContent,
-    DialogContentText, DialogActions, IconButton, Alert, Snackbar, Card, CardContent, Stack, Chip,
-    Switch, FormControlLabel, Radio, RadioGroup, Checkbox, Select, MenuItem, Slider, Divider, Paper,
+    DialogContentText, DialogActions, IconButton, Alert, Snackbar, Stack, Chip,
+    Switch, FormControlLabel, Radio, RadioGroup, Checkbox, MenuItem, Slider, Divider, Paper,
 } from '@mui/material';
-import { Analytics, Notifications, Colorize, Delete, Edit, Save, Cancel, Add, } from '@mui/icons-material';
+import { Analytics, Notifications, Colorize, Delete, Edit, Save, Add, } from '@mui/icons-material';
 import type { NavigationItem } from '../types/navigation';
 import { ColorPickerDialog } from '../components/ColorPicker';
 
@@ -15,7 +15,7 @@ export const metadata: NavigationItem = {
     segment: 'test',
     icon: <Analytics />,
     children: [],
-    roles: ['admin', 'student', 'editor', 'adviser'],
+    roles: ['developer'],
     hidden: false,
 };
 

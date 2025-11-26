@@ -30,7 +30,7 @@ All admin endpoints support two authentication methods:
 
 2. **API Secret** (For server-to-server)
    - Include in header: `X-API-Secret: <secret>`
-   - Set via `ADMIN_API_SECRET` environment variable
+   - Set via `VITE_ADMIN_API_SECRET` environment variable
 
 ## Environment Variables
 
@@ -38,12 +38,12 @@ Required environment variables:
 
 ```env
 # Firebase Admin SDK
-FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY=your-private-key
 
 # API Authentication
-ADMIN_API_SECRET=your-secret-key
+VITE_ADMIN_API_SECRET=your-secret-key
 
 # CORS (comma-separated origins)
 ALLOWED_ORIGINS=http://localhost:5173,https://yourdomain.com

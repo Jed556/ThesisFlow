@@ -1,9 +1,67 @@
 import type { UserProfile } from '../types/profile';
-import { getProfile } from './dbUtils';
+import { uploadAvatar as uploadAvatarToStorage } from './firebase/storage/avatar';
+import { setUserProfile } from './firebase/firestore';
 
 /**
  * Utility functions for avatar generation and user name handling
  */
+
+/**
+ * Validates an avatar file for upload
+ * @param file - File to validate
+ * @returns Object with validation result and optional error message
+ */
+export const validateAvatarFile = (file: File): { valid: boolean; error?: string } => {
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        return { valid: false, error: 'Please select an image file' };
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+        return { valid: false, error: 'Image size must be less than 10MB' };
+    }
+
+    return { valid: true };
+};
+
+/**
+ * Creates a preview URL from a file using FileReader
+ * @param file - File to create preview from
+ * @returns Promise that resolves to data URL string
+ */
+export const createAvatarPreview = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            resolve(reader.result as string);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+};
+
+/**
+ * Uploads an avatar file to Firebase Storage and updates the user profile
+ * @param avatarFile - File to upload
+ * @param uid - User ID
+ * @param userProfile - Current user profile
+ * @returns Promise that resolves to the uploaded avatar URL
+ * @throws Error if upload fails
+ */
+export const uploadAvatar = async (
+    avatarFile: File,
+    uid: string,
+    userProfile: UserProfile
+): Promise<string> => {
+    // Upload to storage
+    const avatarUrl = await uploadAvatarToStorage(avatarFile, uid);
+
+    // Update the profile with the new avatar URL
+    await setUserProfile(uid, { ...userProfile, avatar: avatarUrl });
+
+    return avatarUrl;
+};
 
 /**
  * Generates initials from first and last name for avatar display
@@ -24,7 +82,7 @@ export const getAvatarInitials = (firstName: string, lastName: string): string =
  * @returns Two-letter initials string in uppercase
  */
 export const getProfileInitials = (profile: UserProfile): string => {
-    return getAvatarInitials(profile.firstName, profile.lastName);
+    return getAvatarInitials(profile.name.first, profile.name.last);
 };
 
 /**
@@ -64,32 +122,21 @@ export const getInitialsFromFullName = (fullName: string): string => {
 export const getDisplayName = (profile: UserProfile): string => {
     const parts: string[] = [];
 
-    if (profile.prefix) {
-        parts.push(profile.prefix);
+    if (profile.name.prefix) {
+        parts.push(profile.name.prefix);
     }
 
-    parts.push(profile.firstName);
+    parts.push(profile.name.first);
 
-    if (profile.middleName) {
-        parts.push(profile.middleName);
+    if (profile.name.middle) {
+        parts.push(profile.name.middle);
     }
 
-    parts.push(profile.lastName);
+    parts.push(profile.name.last);
 
-    if (profile.suffix) {
-        parts.push(profile.suffix);
+    if (profile.name.suffix) {
+        parts.push(profile.name.suffix);
     }
 
     return parts.join(' ');
-};
-
-/**
- * Helper function to find a user profile by email
- * @param email - Email address to search for
- * @returns UserProfile object or null if not found
- * 
- * @internal
- */
-export const findProfileByEmail = (email: string): UserProfile | null => {
-    return getProfile(email) || null;
 };

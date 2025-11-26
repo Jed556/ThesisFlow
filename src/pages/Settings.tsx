@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Container, Typography, Paper, Avatar, CardMedia, Skeleton, Stack, TextField, Button, IconButton,
-    Divider, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip,
+    Box, Container, Typography, Paper, Skeleton, Stack, TextField, Button, IconButton,
+    Divider, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip
 } from '@mui/material';
 import {
-    Settings, PhotoCamera, Person, Edit, Save, Cancel, Lock, Visibility, VisibilityOff, Palette, CheckCircle,
+    Settings, Edit, Save, Cancel, Lock, Visibility, VisibilityOff, Palette, CheckCircle,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
-import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/profile';
+import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/user';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { uploadAvatar, uploadBanner, deleteImage, createImagePreview, revokeImagePreview } from '../utils/firebase/storage';
+import { uploadBanner, deleteFileFromStorage, revokeImagePreview } from '../utils/firebase/storage';
+import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../utils/avatarUtils';
 import { firebaseAuth } from '../utils/firebase/firebaseConfig';
 import { ColorPickerDialog } from '../components/ColorPicker';
 import { AnimatedPage } from '../components/Animate';
 import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
+import { getError } from '../../utils/errorUtils';
+import { ProfileHeader } from '../components/Profile';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile } from '../types/profile';
 import type { Session } from '../types/session';
@@ -25,7 +28,7 @@ export const metadata: NavigationItem = {
     segment: 'settings',
     icon: <Settings />,
     children: [],
-    roles: ['admin', 'student', 'editor', 'adviser'],
+    roles: ['student', 'statistician', 'editor', 'adviser', 'panel', 'moderator', 'head', 'admin'],
 };
 
 /**
@@ -40,23 +43,32 @@ export default function SettingsPage() {
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Form state
-    const [formData, setFormData] = useState({
-        prefix: '',
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        suffix: '',
+    // Form state -- use a shallow partial of UserProfile, with nested fields optional
+    type UserProfileForm = Partial<UserProfile> & {
+        name?: Partial<UserProfile['name']>;
+        preferences?: Partial<UserProfile['preferences']>;
+    };
+
+    // Form state -- using UserProfileForm so nested name/preferences fields are optional
+    const [formData, setFormData] = useState<UserProfileForm>({
+        name: {
+            prefix: '',
+            first: '',
+            middle: '',
+            last: '',
+            suffix: '',
+        },
         phone: '',
         department: '',
         bio: '',
-        themeColor: '#2196F3',
-        reduceAnimations: false,
+        preferences: {
+            themeColor: '#2196F3',
+            reduceAnimations: false,
+        },
     });
 
     // Image upload state
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-    const [bannerPreview, setBannerPreview] = useState<string | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [uploadingBanner, setUploadingBanner] = useState(false);
 
@@ -90,70 +102,76 @@ export default function SettingsPage() {
                 setProfile(userProfile);
                 const themeColor = userProfile.preferences?.themeColor || '#2196F3';
                 setFormData({
-                    prefix: userProfile.prefix || '',
-                    firstName: userProfile.firstName || '',
-                    middleName: userProfile.middleName || '',
-                    lastName: userProfile.lastName || '',
-                    suffix: userProfile.suffix || '',
-                    phone: userProfile.phone || '',
-                    department: userProfile.department || '',
-                    bio: userProfile.bio || '',
-                    themeColor,
-                    reduceAnimations: userProfile.preferences?.reduceAnimations || false,
+                    ...userProfile,
+                    preferences: {
+                        ...(userProfile.preferences ?? {}),
+                        themeColor,
+                    },
                 });
 
-                // Check if theme should be updated
                 if (currentThemeColor !== themeColor && currentThemeColor) {
                     updateThemeFromSeedColor(themeColor);
                 }
             }
-        } catch (error) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to load profile');
             console.error('Error loading profile:', error);
-            showNotification('Failed to load profile', 'error');
+            showNotification(message, 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleInputChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (field: keyof UserProfile) => (event: React.ChangeEvent<HTMLInputElement>) => {
+        // Generic top-level field updater (phone, department, bio, etc.)
         setFormData(prev => ({ ...prev, [field]: event.target.value }));
     };
 
-    const handleSwitchChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData(prev => ({ ...prev, [field]: event.target.checked }));
+    const handleSwitchChange = (
+        field: keyof NonNullable<UserProfile['preferences']>
+    ) => (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({
+            ...prev,
+            preferences: {
+                ...(prev.preferences ?? {}),
+                [field]: event.target.checked,
+            }
+        }));
+    };
+
+    const handleNameChange = (field: keyof NonNullable<UserProfile['name']>) => (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({
+            ...prev,
+            name: {
+                ...(prev.name ?? {}),
+                [field]: event.target.value,
+            }
+        } as UserProfileForm));
     };
 
     const handleSave = async () => {
-        if (!session?.user?.email) return;
+        if (!session?.user?.uid) {
+            showNotification('Unable to update profile because the user ID is missing.', 'error');
+            return;
+        }
 
         try {
             setSaving(true);
-            await setUserProfile(session.user.email, {
-                prefix: formData.prefix,
-                firstName: formData.firstName,
-                middleName: formData.middleName,
-                lastName: formData.lastName,
-                suffix: formData.suffix,
-                phone: formData.phone,
-                department: formData.department,
-                bio: formData.bio,
-                preferences: {
-                    themeColor: formData.themeColor,
-                    reduceAnimations: formData.reduceAnimations,
-                }
-            });
+            // We store a partial UserProfile object in formData, so pass it directly
+            await setUserProfile(session.user.uid, formData as Partial<UserProfile>);
 
             // Update theme if color changed
-            if (formData.themeColor !== currentThemeColor) {
-                updateThemeFromSeedColor(formData.themeColor);
+            if ((formData.preferences?.themeColor ?? '') !== currentThemeColor) {
+                updateThemeFromSeedColor(formData.preferences?.themeColor ?? '');
             }
 
             await loadProfile();
             setEditing(false);
             showNotification('Profile updated successfully', 'success');
-        } catch (error) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to save profile');
             console.error('Error saving profile:', error);
-            showNotification('Failed to save profile', 'error');
+            showNotification(message, 'error');
         } finally {
             setSaving(false);
         }
@@ -162,48 +180,43 @@ export default function SettingsPage() {
     const handleCancel = () => {
         if (profile) {
             setFormData({
-                prefix: profile.prefix || '',
-                firstName: profile.firstName || '',
-                middleName: profile.middleName || '',
-                lastName: profile.lastName || '',
-                suffix: profile.suffix || '',
-                phone: profile.phone || '',
-                department: profile.department || '',
-                bio: profile.bio || '',
-                themeColor: profile.preferences?.themeColor || '#2196F3',
-                reduceAnimations: profile.preferences?.reduceAnimations || false,
+                ...profile,
+                preferences: {
+                    ...(profile.preferences ?? {}),
+                    themeColor: profile.preferences?.themeColor ?? '#2196F3',
+                }
             });
         }
         setEditing(false);
     };
 
-    const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file || !session?.user?.email) return;
+    const handleAvatarChange = async (file: File) => {
+        if (!session?.user?.uid || !profile) return;
+
+        const validation = validateAvatarFile(file);
+        if (!validation.valid) {
+            showNotification(validation.error!, 'error');
+            return;
+        }
 
         try {
             setUploadingAvatar(true);
 
-            // Create preview
-            const preview = createImagePreview(file);
+            const preview = await createAvatarPreview(file);
             setAvatarPreview(preview);
 
-            // Upload to Firebase Storage
-            const downloadURL = await uploadAvatar(file, session.user.email);
-
-            // Delete old avatar if exists
-            if (profile?.avatar) {
-                await deleteImage(profile.avatar).catch(console.error);
+            if (profile.avatar) {
+                await deleteFileFromStorage(profile.avatar).catch(console.error);
             }
 
-            // Update profile
-            await setUserProfile(session.user.email, { avatar: downloadURL });
+            await uploadAvatar(file, session.user.uid, profile);
             await loadProfile();
 
             showNotification('Avatar updated successfully', 'success');
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to upload avatar');
             console.error('Error uploading avatar:', error);
-            showNotification(error.message || 'Failed to upload avatar', 'error');
+            showNotification(message, 'error');
         } finally {
             setUploadingAvatar(false);
             if (avatarPreview) {
@@ -213,64 +226,67 @@ export default function SettingsPage() {
         }
     };
 
-    const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file || !session?.user?.email) return;
+    const handleBannerChange = async (file: File) => {
+        if (!session?.user?.email || !session?.user?.uid) return;
 
         try {
             setUploadingBanner(true);
 
-            // Create preview
-            const preview = createImagePreview(file);
-            setBannerPreview(preview);
-
-            // Upload to Firebase Storage
             const downloadURL = await uploadBanner(file, session.user.email);
 
-            // Delete old banner if exists
             if (profile?.banner) {
-                await deleteImage(profile.banner).catch(console.error);
+                await deleteFileFromStorage(profile.banner).catch(console.error);
             }
 
-            // Update profile
-            await setUserProfile(session.user.email, { banner: downloadURL });
+            await setUserProfile(session.user.uid, { banner: downloadURL });
             await loadProfile();
 
             showNotification('Banner updated successfully', 'success');
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to upload banner');
             console.error('Error uploading banner:', error);
-            showNotification(error.message || 'Failed to upload banner', 'error');
+            showNotification(message, 'error');
         } finally {
             setUploadingBanner(false);
-            if (bannerPreview) {
-                revokeImagePreview(bannerPreview);
-                setBannerPreview(null);
-            }
         }
     };
 
     const handleThemeColorConfirm = async (color: string) => {
-        setFormData(prev => ({ ...prev, themeColor: color }));
+        setFormData(prev => ({
+            ...(prev ?? {}),
+            preferences: {
+                ...(prev?.preferences ?? {}),
+                themeColor: color,
+            }
+        } as UserProfileForm));
         setColorPickerOpen(false);
 
-        if (!session?.user?.email) return;
+        if (!session?.user?.uid) return;
 
         try {
             // Update theme immediately
             updateThemeFromSeedColor(color);
 
             // Save to database
-            await setUserProfile(session.user.email, {
+            // apply change to local form data and persist the updated preferences
+            const updated = {
+                ...(formData ?? {}),
                 preferences: {
+                    ...(formData?.preferences ?? {}),
                     themeColor: color,
-                    reduceAnimations: formData.reduceAnimations
+                    reduceAnimations: formData?.preferences?.reduceAnimations ?? false,
                 }
-            });
+            } as UserProfileForm;
+
+            setFormData(updated);
+
+            await setUserProfile(session.user.uid, { preferences: updated.preferences });
 
             showNotification('Theme color updated successfully', 'success');
-        } catch (error) {
+        } catch (error: unknown) {
+            const { message } = getError(error, 'Failed to update theme color');
             console.error('Error updating theme color:', error);
-            showNotification('Failed to update theme color', 'error');
+            showNotification(message, 'error');
         }
     };
 
@@ -314,12 +330,13 @@ export default function SettingsPage() {
             });
             setPasswordDialogOpen(false);
             showNotification('Password changed successfully', 'success');
-        } catch (error: any) {
-            console.error('Error changing password:', error);
-            if (error.code === 'auth/wrong-password') {
+        } catch (error: unknown) {
+            const parsedError = getError(error, 'Failed to change password');
+            console.error('Error changing password:', parsedError);
+            if (parsedError.code === 'auth/wrong-password') {
                 showNotification('Current password is incorrect', 'error');
             } else {
-                showNotification('Failed to change password', 'error');
+                showNotification(parsedError.message, 'error');
             }
         } finally {
             setChangingPassword(false);
@@ -327,6 +344,8 @@ export default function SettingsPage() {
     };
 
     const isProfileLoading = loading || !profile;
+
+    const isActiveThemeColor = currentThemeColor && currentThemeColor === (formData.preferences?.themeColor ?? '');
 
     return (
         <AnimatedPage variant="fade">
@@ -349,142 +368,20 @@ export default function SettingsPage() {
                             />
                         ) : (
                             <>
-                                <CardMedia
-                                    component={profile?.banner ? 'img' : 'div'}
-                                    image={profile?.banner || undefined}
-                                    sx={{
-                                        width: '100%',
-                                        aspectRatio: '3/1',
-                                        minHeight: '200px',
-                                        bgcolor: profile?.preferences?.themeColor || 'primary.main',
-                                        objectFit: 'cover',
-                                    }}
+                                <ProfileHeader
+                                    profile={profile!}
+                                    bannerEditable
+                                    onBannerChange={handleBannerChange}
+                                    bannerUploading={uploadingBanner}
+                                    avatarEditable
+                                    onAvatarChange={handleAvatarChange}
+                                    avatarUploading={uploadingAvatar}
+                                    showMeta={true}
                                 />
-                                <input
-                                    accept="image/*"
-                                    style={{ display: 'none' }}
-                                    id="banner-upload"
-                                    type="file"
-                                    onChange={handleBannerUpload}
-                                    disabled={uploadingBanner}
-                                />
-                                <label htmlFor="banner-upload">
-                                    <IconButton
-                                        component="span"
-                                        disabled={uploadingBanner}
-                                        sx={{
-                                            position: 'absolute',
-                                            top: 16,
-                                            right: 16,
-                                            bgcolor: 'background.paper',
-                                            '&:hover': { bgcolor: 'background.default' },
-                                        }}
-                                    >
-                                        <PhotoCamera />
-                                    </IconButton>
-                                </label>
-                            </>
-                        )}
-
-                        {/* Avatar - Overlapping */}
-                        {isProfileLoading ? (
-                            <Skeleton
-                                variant="circular"
-                                sx={{
-                                    position: 'absolute',
-                                    left: { xs: '50%', sm: 32 },
-                                    bottom: { xs: -70, sm: -60 },
-                                    transform: { xs: 'translateX(-50%)', sm: 'none' },
-                                    width: { xs: 140, sm: 160 },
-                                    height: { xs: 140, sm: 160 },
-                                    border: '5px solid',
-                                    borderColor: 'background.paper',
-                                    zIndex: 2,
-                                }}
-                            />
-                        ) : (
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    left: { xs: '50%', sm: 32 },
-                                    bottom: { xs: -70, sm: -60 },
-                                    transform: { xs: 'translateX(-50%)', sm: 'none' },
-                                    zIndex: 2,
-                                }}
-                            >
-                                <Avatar
-                                    src={avatarPreview || profile?.avatar}
-                                    sx={{
-                                        width: { xs: 140, sm: 160 },
-                                        height: { xs: 140, sm: 160 },
-                                        bgcolor: 'primary.main',
-                                        border: '5px solid',
-                                        borderColor: 'background.paper',
-                                    }}
-                                >
-                                    {!profile?.avatar && <Person sx={{ fontSize: 64 }} />}
-                                </Avatar>
-                                <input
-                                    accept="image/*"
-                                    style={{ display: 'none' }}
-                                    id="avatar-upload"
-                                    type="file"
-                                    onChange={handleAvatarUpload}
-                                    disabled={uploadingAvatar}
-                                />
-                                <label htmlFor="avatar-upload">
-                                    <IconButton
-                                        component="span"
-                                        disabled={uploadingAvatar}
-                                        sx={{
-                                            position: 'absolute',
-                                            bottom: 0,
-                                            right: 0,
-                                            bgcolor: 'background.paper',
-                                            border: '2px solid',
-                                            borderColor: 'divider',
-                                            '&:hover': { bgcolor: 'background.default' },
-                                        }}
-                                    >
-                                        <PhotoCamera fontSize="small" />
-                                    </IconButton>
-                                </label>
-                            </Box>
-                        )}
-                    </Box>
-
-                    {/* Profile Info */}
-                    <Box
-                        sx={{
-                            px: 3,
-                            pt: { xs: 10, sm: 8 },
-                            pb: 3,
-                            pl: { xs: 3, sm: '220px' },
-                        }}
-                    >
-                        {isProfileLoading ? (
-                            <>
-                                <Skeleton variant="text" width="30%" height={36} />
-                                <Skeleton variant="text" width="50%" height={24} sx={{ mt: 1 }} />
-                            </>
-                        ) : (
-                            <>
-                                <Typography variant="h4" fontWeight={700}>
-                                    {[formData.prefix, formData.firstName, formData.middleName, formData.lastName, formData.suffix]
-                                        .filter(Boolean)
-                                        .join(' ')}
-                                </Typography>
-                                <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    {profile?.email} • {profile?.role}
-                                </Typography>
-                                {formData.department && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        {formData.department}
-                                    </Typography>
-                                )}
                             </>
                         )}
                     </Box>
+
                 </Paper>
 
                 {/* Account Details */}
@@ -523,16 +420,16 @@ export default function SettingsPage() {
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                             <TextField
                                 label="Prefix"
-                                value={formData.prefix}
-                                onChange={handleInputChange('prefix')}
+                                value={formData.name?.prefix ?? ''}
+                                onChange={handleNameChange('prefix')}
                                 disabled={!editing}
                                 placeholder="Dr., Prof., Mr., Ms."
                                 sx={{ width: { xs: '100%', sm: '20%' } }}
                             />
                             <TextField
                                 label="First Name"
-                                value={formData.firstName}
-                                onChange={handleInputChange('firstName')}
+                                value={formData.name?.first ?? ''}
+                                onChange={handleNameChange('first')}
                                 disabled={!editing}
                                 required
                                 fullWidth
@@ -542,23 +439,23 @@ export default function SettingsPage() {
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                             <TextField
                                 label="Middle Name"
-                                value={formData.middleName}
-                                onChange={handleInputChange('middleName')}
+                                value={formData.name?.middle ?? ''}
+                                onChange={handleNameChange('middle')}
                                 disabled={!editing}
                                 fullWidth
                             />
                             <TextField
                                 label="Last Name"
-                                value={formData.lastName}
-                                onChange={handleInputChange('lastName')}
+                                value={formData.name?.last ?? ''}
+                                onChange={handleNameChange('last')}
                                 disabled={!editing}
                                 required
                                 fullWidth
                             />
                             <TextField
                                 label="Suffix"
-                                value={formData.suffix}
-                                onChange={handleInputChange('suffix')}
+                                value={formData.name?.suffix ?? ''}
+                                onChange={handleNameChange('suffix')}
                                 disabled={!editing}
                                 placeholder="Jr., Sr., III"
                                 sx={{ width: { xs: '100%', sm: '20%' } }}
@@ -613,7 +510,7 @@ export default function SettingsPage() {
                                 <Typography variant="subtitle2">
                                     Theme Color
                                 </Typography>
-                                {currentThemeColor && currentThemeColor === formData.themeColor && (
+                                {isActiveThemeColor && (
                                     <Chip
                                         icon={<CheckCircle />}
                                         label="Active"
@@ -632,9 +529,9 @@ export default function SettingsPage() {
                                     sx={{
                                         width: 80,
                                         height: 56,
-                                        bgcolor: formData.themeColor,
+                                        bgcolor: formData.preferences?.themeColor ?? 'primary.main',
                                         border: '3px solid',
-                                        borderColor: currentThemeColor === formData.themeColor ? 'primary.main' : 'divider',
+                                        borderColor: isActiveThemeColor ? 'primary.main' : 'divider',
                                         borderRadius: 2,
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
@@ -648,10 +545,10 @@ export default function SettingsPage() {
                                 />
                                 <Box sx={{ flex: 1 }}>
                                     <Typography variant="body2" fontWeight={600}>
-                                        {formData.themeColor.toUpperCase()}
+                                        {(formData.preferences?.themeColor ?? '').toUpperCase()}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        {currentThemeColor === formData.themeColor
+                                        {isActiveThemeColor
                                             ? 'Currently applied to your interface'
                                             : 'Click the color box to change'}
                                     </Typography>
@@ -670,19 +567,19 @@ export default function SettingsPage() {
                         <FormControlLabel
                             control={
                                 <Switch
-                                    checked={formData.reduceAnimations}
+                                    checked={formData.preferences?.reduceAnimations ?? false}
                                     onChange={handleSwitchChange('reduceAnimations')}
                                     disabled={!editing && !session?.user?.email}
                                 />
                             }
-                            label={
+                            label={(
                                 <Box>
                                     <Typography variant="body2">Reduce Animations</Typography>
                                     <Typography variant="caption" color="text.secondary">
                                         Disable animations for better performance or accessibility
                                     </Typography>
                                 </Box>
-                            }
+                            )}
                         />
                     </Stack>
                 </Paper>
@@ -707,7 +604,7 @@ export default function SettingsPage() {
                 <ColorPickerDialog
                     open={colorPickerOpen}
                     onClose={() => setColorPickerOpen(false)}
-                    value={formData.themeColor}
+                    value={formData.preferences?.themeColor ?? '#2196F3'}
                     onConfirm={handleThemeColorConfirm}
                     title="Choose Theme Color"
                 />
@@ -724,29 +621,31 @@ export default function SettingsPage() {
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
                                 label="Current Password"
-                                type={showPasswords.current ? "text" : "password"}
+                                type={showPasswords.current ? 'text' : 'password'}
                                 value={passwordData.currentPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))
                                 }
                                 fullWidth
                                 disabled={changingPassword}
-                                InputProps={{
-                                    endAdornment: (
-                                        <IconButton
-                                            onClick={() =>
-                                                setShowPasswords(prev => ({ ...prev, current: !prev.current }))
-                                            }
-                                            edge="end"
-                                        >
-                                            {showPasswords.current ? <VisibilityOff /> : <Visibility />}
-                                        </IconButton>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() =>
+                                                    setShowPasswords(prev => ({ ...prev, current: !prev.current }))
+                                                }
+                                                edge="end"
+                                            >
+                                                {showPasswords.current ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }
                                 }}
                             />
                             <TextField
                                 label="New Password"
-                                type={showPasswords.new ? "text" : "password"}
+                                type={showPasswords.new ? 'text' : 'password'}
                                 value={passwordData.newPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))
@@ -754,22 +653,24 @@ export default function SettingsPage() {
                                 fullWidth
                                 disabled={changingPassword}
                                 helperText="Must be at least 6 characters"
-                                InputProps={{
-                                    endAdornment: (
-                                        <IconButton
-                                            onClick={() =>
-                                                setShowPasswords(prev => ({ ...prev, new: !prev.new }))
-                                            }
-                                            edge="end"
-                                        >
-                                            {showPasswords.new ? <VisibilityOff /> : <Visibility />}
-                                        </IconButton>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() =>
+                                                    setShowPasswords(prev => ({ ...prev, new: !prev.new }))
+                                                }
+                                                edge="end"
+                                            >
+                                                {showPasswords.new ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }
                                 }}
                             />
                             <TextField
                                 label="Confirm New Password"
-                                type={showPasswords.confirm ? "text" : "password"}
+                                type={showPasswords.confirm ? 'text' : 'password'}
                                 value={passwordData.confirmPassword}
                                 onChange={(e) =>
                                     setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))
@@ -786,17 +687,19 @@ export default function SettingsPage() {
                                         ? 'Passwords do not match'
                                         : ''
                                 }
-                                InputProps={{
-                                    endAdornment: (
-                                        <IconButton
-                                            onClick={() =>
-                                                setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))
-                                            }
-                                            edge="end"
-                                        >
-                                            {showPasswords.confirm ? <VisibilityOff /> : <Visibility />}
-                                        </IconButton>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() =>
+                                                    setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))
+                                                }
+                                                edge="end"
+                                            >
+                                                {showPasswords.confirm ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }
                                 }}
                             />
                         </Stack>

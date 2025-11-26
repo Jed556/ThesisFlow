@@ -15,12 +15,13 @@ export const FILE_SIZE_LIMITS = {
 } as const;
 
 // Supported file types by category
-export const SUPPORTED_FILE_TYPES = {
-    document: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt', 'rtf'],
+export const SUPPORTED_FILE_TYPES: Record<FileCategory, readonly FileType[]> = {
+    document: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt', 'rtf', 'csv', 'json', 'xml', 'md'],
     image: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'tiff'],
     video: ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', '3gp'],
     audio: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'],
-    archive: ['zip', 'rar', '7z', 'tar', 'gz']
+    archive: ['zip', 'rar', '7z', 'tar', 'gz'],
+    other: []
 } as const;
 
 /**
@@ -39,13 +40,13 @@ export function getFileExtension(filename: string): string {
  * @returns The file category
  */
 export function getFileCategory(extension: string): FileCategory {
-    const ext = extension.toLowerCase();
+    const ext = extension.toLowerCase() as FileType;
 
-    if (SUPPORTED_FILE_TYPES.document.includes(ext as any)) return 'document';
-    if (SUPPORTED_FILE_TYPES.image.includes(ext as any)) return 'image';
-    if (SUPPORTED_FILE_TYPES.video.includes(ext as any)) return 'video';
-    if (SUPPORTED_FILE_TYPES.audio.includes(ext as any)) return 'audio';
-    if (SUPPORTED_FILE_TYPES.archive.includes(ext as any)) return 'archive';
+    if ((SUPPORTED_FILE_TYPES.document as readonly string[]).includes(ext)) return 'document';
+    if ((SUPPORTED_FILE_TYPES.image as readonly string[]).includes(ext)) return 'image';
+    if ((SUPPORTED_FILE_TYPES.video as readonly string[]).includes(ext)) return 'video';
+    if ((SUPPORTED_FILE_TYPES.audio as readonly string[]).includes(ext)) return 'audio';
+    if ((SUPPORTED_FILE_TYPES.archive as readonly string[]).includes(ext)) return 'archive';
 
     return 'other';
 }
@@ -105,8 +106,8 @@ export function validateFile(file: File): { isValid: boolean; error?: string } {
  * @returns True if the file type is safe, false otherwise
  */
 function isSafeFileType(extension: string): boolean {
-    const safeExtensions = ['txt', 'csv', 'json', 'xml', 'md'];
-    return safeExtensions.includes(extension.toLowerCase());
+    const safeExtensions: readonly FileType[] = ['txt', 'csv', 'json', 'xml', 'md'];
+    return (safeExtensions as readonly string[]).includes(extension.toLowerCase());
 }
 
 /**
@@ -504,4 +505,156 @@ export async function batchUploadFiles(
     }
 
     return results;
+}
+
+/**
+ * Database integration utilities for file retrieval
+ * These functions integrate Firebase Firestore with legacy mock data for backward compatibility
+ */
+
+import { getFileById, getFilesByIds, getFilesByThesis } from './firebase/firestore/file';
+
+/**
+ * Get file by hash from Firestore
+ * @param hash - File ID/hash
+ * @param thesisId - Optional thesis ID (legacy parameter, not used)
+ * @returns File attachment or undefined if not found
+ * @deprecated Use getFileById from firebase/firestore/file instead
+ */
+export async function getFileByHash(hash: string, thesisId?: string): Promise<FileAttachment | undefined> {
+    try {
+        const file = await getFileById(hash);
+        return file || undefined;
+    } catch (error) {
+        console.error('Error fetching file from Firestore:', error);
+        return undefined;
+    }
+}
+
+/**
+ * Get all submission files for a specific chapter
+ * @param chapterId - Chapter ID
+ * @param thesisId - Thesis ID (required for Firebase)
+ * @returns Array of submission files
+ */
+export async function getChapterSubmissions(chapterId: number, thesisId?: string): Promise<FileAttachment[]> {
+    if (!thesisId) {
+        console.warn('thesisId is required for Firebase integration');
+        return [];
+    }
+
+    try {
+        const files = await getFilesByThesis(thesisId, chapterId, 'submission');
+        return files;
+    } catch (error) {
+        console.error('Error fetching chapter submissions from Firestore:', error);
+        return [];
+    }
+}
+
+/**
+ * Get attachment files by hash array
+ * @param hashes - Array of file IDs
+ * @param thesisId - Optional thesis ID (legacy parameter, not used)
+ * @returns Array of file attachments
+ */
+export async function getAttachmentFiles(hashes: string[], thesisId?: string): Promise<FileAttachment[]> {
+    if (hashes.length === 0) return [];
+
+    try {
+        return await getFilesByIds(hashes);
+    } catch (error) {
+        console.error('Error fetching attachments from Firestore:', error);
+        return [];
+    }
+}
+
+/**
+ * Get version history for a specific chapter
+ * @param chapterId - Chapter ID
+ * @param thesisId - Thesis ID (required for Firebase)
+ * @returns Array of submission files sorted by date (newest first)
+ */
+export async function getVersionHistory(chapterId: number, thesisId?: string): Promise<FileAttachment[]> {
+    const submissions = await getChapterSubmissions(chapterId, thesisId);
+    return submissions
+        .filter((file: FileAttachment) => file.category === 'submission')
+        .sort((a: FileAttachment, b: FileAttachment) =>
+            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+        );
+}
+
+/**
+ * Get current version for a specific chapter
+ * @param chapterId - Chapter ID
+ * @param thesisId - Thesis ID (required for Firebase)
+ * @returns Latest submission file or null
+ */
+export async function getCurrentVersion(chapterId: number, thesisId?: string): Promise<FileAttachment | null> {
+    const submissions = await getChapterSubmissions(chapterId, thesisId);
+    const versions = submissions.filter((file: FileAttachment) => file.category === 'submission');
+    if (versions.length === 0) return null;
+
+    // Return the most recently submitted file
+    const sorted = versions.sort((a: FileAttachment, b: FileAttachment) =>
+        new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+    );
+    return sorted[0] || null;
+}
+
+/**
+ * Get all versions for a specific chapter
+ * @param chapterId - Chapter ID
+ * @param thesisId - Thesis ID (required for Firebase)
+ * @returns Array of all submission versions
+ */
+export async function getAllVersions(chapterId: number, thesisId?: string): Promise<FileAttachment[]> {
+    return getVersionHistory(chapterId, thesisId);
+}
+
+/**
+ * Get document name from chapter submissions by version index
+ * @param chapterId - Chapter ID
+ * @param version - Version number (1-based index)
+ * @param thesisId - Thesis ID (required for Firebase)
+ * @returns Document name or default version string
+ */
+export async function getDocumentNameByVersion(chapterId: number, version: number, thesisId?: string): Promise<string> {
+    if (!thesisId) {
+        return `Document v${version}`;
+    }
+
+    try {
+        const submissions = await getChapterSubmissions(chapterId, thesisId);
+        if (submissions.length === 0 || !submissions[version - 1]) {
+            return `Document v${version}`;
+        }
+
+        return submissions[version - 1].name || `Document v${version}`;
+    } catch (error) {
+        console.error('Error getting document name:', error);
+        return `Document v${version}`;
+    }
+}
+
+/**
+ * Get version number from file ID in chapter submissions
+ * @param chapterId - Chapter ID
+ * @param fileId - File ID to find
+ * @param thesisId - Thesis ID (required for Firebase)
+ * @returns Version number (1-based index) or 1 if not found
+ */
+export async function getVersionFromHash(chapterId: number, fileId: string, thesisId?: string): Promise<number> {
+    if (!thesisId) {
+        return 1;
+    }
+
+    try {
+        const submissions = await getChapterSubmissions(chapterId, thesisId);
+        const index = submissions.findIndex(file => file.id === fileId);
+        return index >= 0 ? index + 1 : 1;
+    } catch (error) {
+        console.error('Error getting version from hash:', error);
+        return 1;
+    }
 }

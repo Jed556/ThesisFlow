@@ -39,8 +39,8 @@ export interface Calendar {
     eventIds: string[]; // Array of event IDs that belong to this calendar
 
     // Ownership and access control
-    ownerId: string; // email of owner (user for personal, group id for group calendars)
-    createdBy: string; // email of creator
+    ownerUid: string; // Firebase UID of owner (user UID for personal, group id for group calendars)
+    createdBy: string; // Firebase UID of creator
     createdAt: string;
     lastModified: string;
 
@@ -63,7 +63,7 @@ export interface Calendar {
  * Calendar permissions for fine-grained access control
  */
 export interface CalendarPermission {
-    userEmail?: string; // specific user
+    uid?: string; // specific user by Firebase UID
     role?: string; // or role-based (admin, developer, editor, adviser, student)
     groupId?: string; // or group-based
     canView: boolean;
@@ -73,7 +73,7 @@ export interface CalendarPermission {
 
 // Participant interface
 export interface EventParticipant {
-    email: string;
+    uid: string; // Firebase UID instead of email
     role: ParticipantRole;
     status: ParticipantStatus
     responseDate?: Date;
@@ -124,7 +124,7 @@ export interface ScheduleEvent {
     isAllDay: boolean;
 
     // Participants and organizer
-    organizer: string; // email of organizer
+    organizer: string; // Firebase UID of organizer
     participants: EventParticipant[];
 
     // Location information
@@ -140,10 +140,10 @@ export interface ScheduleEvent {
     reminders?: EventReminder[];
 
     // Tracking information
-    createdBy: string;
+    createdBy: string; // Firebase UID
     createdAt: string;
     lastModified: string;
-    lastModifiedBy: string;
+    lastModifiedBy: string; // Firebase UID
 
     // Thesis-specific information
     thesisId?: string;
@@ -158,7 +158,7 @@ export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year';
 export interface ScheduleFilter {
     calendarIds?: string[]; // Filter by specific calendars
     statuses?: EventStatus[];
-    participants?: string[]; // email addresses
+    participants?: string[]; // Firebase UIDs
     dateRange?: {
         start: string;
         end: string;
@@ -175,26 +175,11 @@ export interface ScheduleStats {
     eventsByCalendar: Record<string, number>; // Count by calendar ID
 }
 
-// Event creation/update payload
-export interface EventPayload {
-    title: string;
-    description?: string;
-    calendarId: string; // Required: which calendar to add event to
-    startDate: string;
-    endDate: string;
-    isAllDay: boolean;
-    participants: Omit<EventParticipant, 'status' | 'responseDate'>[];
-    location?: Omit<EventLocation, 'notes'>;
-    tags?: string[];
-    recurrence?: RecurrenceSettings;
-    reminders?: EventReminder[];
-}
-
 // Schedule notification interface
 export interface ScheduleNotification {
     id: string;
     eventId: string;
-    userId: string;
+    uid: string; // Firebase UID
     type: 'reminder' | 'update' | 'cancellation' | 'invitation';
     message: string;
     sentDate: string;
@@ -213,7 +198,7 @@ export interface TimeSlot {
 
 // Availability interface
 export interface UserAvailability {
-    userId: string;
+    uid: string; // Firebase UID
     date: string;
     timeSlots: TimeSlot[];
     workingHours: {

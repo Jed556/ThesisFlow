@@ -1,7 +1,7 @@
 /**
  * Roles that participate in thesis review workflows.
  */
-export type ReviewerRole = 'adviser' | 'editor';
+export type ReviewerRole = 'adviser' | 'editor' | 'statistician';
 
 /**
  * Assignment metadata for theses handled by advisers or editors.

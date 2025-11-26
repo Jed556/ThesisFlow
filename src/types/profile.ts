@@ -1,14 +1,7 @@
 // User role types - System-wide roles
-export type UserRole = 'student' | 'editor' | 'adviser' | 'admin' | 'developer';
+export type UserRole = 'student' | 'statistician' | 'editor' | 'adviser' | 'panel' | 'moderator' | 'head' | 'admin' | 'developer';
 
-/**
- * Interface for user profiles in the ThesisFlow system
- */
-export interface UserProfile {
-    /**
-     * User's unique identifier
-     */
-    id: number;
+export interface UserName {
     /**
      * User's name prefix (e.g., "Dr.", "Prof.", "Mr.", "Ms.")
      */
@@ -16,19 +9,47 @@ export interface UserProfile {
     /**
      * User's first name
      */
-    firstName: string;
+    first: string;
     /**
      * User's middle name or initial
      */
-    middleName?: string;
+    middle?: string;
     /**
      * User's last name
      */
-    lastName: string;
+    last: string;
     /**
      * User's name suffix (e.g., "Jr.", "Sr.", "III", "Ph.D.")
-        */
+    */
     suffix?: string;
+}
+
+/**
+ * Skill rating metadata for mentor expertise
+ */
+export interface SkillRating {
+    /** Display name of the skill */
+    name: string;
+    /** Mentor self- or system-assessed rating using a 0-5 scale */
+    rating: number;
+    /** Optional count of endorsements backing the rating */
+    endorsements?: number;
+    /** Optional free-form note or description */
+    note?: string;
+}
+
+/**
+ * Interface for user profiles in the ThesisFlow system
+ */
+export interface UserProfile {
+    /**
+     * Firebase Auth UID (optional, used for admin operations)
+     */
+    uid: string;
+    /**
+     * User's name
+     */
+    name: UserName;
     /**
      * User's email address
      */
@@ -41,6 +62,18 @@ export interface UserProfile {
      * User's department or affiliation within the institution
      */
     department?: string;
+    /**
+     * Optional list of departments the user is associated with (for multi-department heads/admins)
+     */
+    departments?: string[];
+    /**
+     * User's degree program or course (e.g., BS Computer Science)
+     */
+    course?: string;
+    /**
+     * Optional list of sections/courses the user moderates or manages
+     */
+    moderatedCourses?: string[];
     /**
      * URL to the user's avatar image
      */
@@ -59,16 +92,20 @@ export interface UserProfile {
     bio?: string;
 
     /**
-     * Capacity for advising theses (only for advisers)
-     * If 0 or undefined, not accepting advisees
+     * Expertise areas or skills (for advisers)
      */
-    adviserCapacity?: number;
+    skills?: string[];
 
     /**
-     * Capacity for editing theses (only for editors)
-     * If 0 or undefined, not accepting editing assignments
+     * Optional skill ratings with proficiency scores (0-5 scale)
      */
-    editorCapacity?: number;
+    skillRatings?: SkillRating[];
+
+    /**
+     * Capacity for handled theses (only for advisers, editors and statisticians)
+     * If 0 or undefined, not accepting advisees
+     */
+    capacity?: number;
 
     preferences?: {
         /**

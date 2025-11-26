@@ -36,17 +36,21 @@ export const thesisRoleToChatRole = (thesisRole: ThesisRole): ChatParticipantRol
 export const thesisCommentToChatMessage = (comment: ThesisComment, index?: number): ChatMessage => {
     const id = `msg-${comment.author}-${comment.date}-${index || 0}`;
 
-    // Parse attachments (assuming they're file hashes/IDs in the thesis comment)
-    const attachments: FileAttachment[] = comment.attachments?.map((attachmentId, attIndex) => ({
-        name: `Attachment ${attIndex + 1}`,
-        type: 'file' as const,
-        size: '0 Bytes', // Size would need to be retrieved from mockFileRegistry or similar
-        url: attachmentId,
-        mimeType: 'application/octet-stream',
-        uploadDate: comment.date,
-        author: comment.author,
-        category: 'attachment' as const
-    })) || [];
+    const attachments: FileAttachment[] = (comment.attachments ?? []).map((attachment, attIndex) => {
+        if (typeof attachment === 'string') {
+            return {
+                name: `Attachment ${attIndex + 1}`,
+                type: 'file',
+                size: '0',
+                url: attachment,
+                mimeType: 'application/octet-stream',
+                uploadDate: comment.date,
+                author: comment.author,
+                category: 'attachment',
+            } satisfies FileAttachment;
+        }
+        return attachment;
+    });
 
     return {
         id,
@@ -66,15 +70,22 @@ export const thesisCommentToChatMessage = (comment: ThesisComment, index?: numbe
  * @param version - Optional version number for the comment
  * @returns The corresponding thesis comment
  */
-export const chatMessageToThesisComment = (message: ChatMessage, version?: number): ThesisComment => {
-    return {
-        author: message.senderId,
-        date: typeof message.timestamp === 'string' ? message.timestamp : message.timestamp.toISOString(),
-        comment: message.content,
-        attachments: message.attachments?.map(att => att.url) || [],
-        version: version || message.metadata?.version
-    };
+const randomId = () => {
+    const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis.crypto as Crypto | undefined) : undefined;
+    if (cryptoObj?.randomUUID) {
+        return cryptoObj.randomUUID();
+    }
+    return `comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 };
+
+export const chatMessageToThesisComment = (message: ChatMessage, version?: number): ThesisComment => ({
+    id: message.id ?? randomId(),
+    author: message.senderId,
+    date: typeof message.timestamp === 'string' ? message.timestamp : message.timestamp.toISOString(),
+    comment: message.content,
+    attachments: message.attachments ?? [],
+    version: version ?? (typeof message.metadata?.version === 'number' ? message.metadata.version : undefined),
+});
 
 /**
  * Sort chat messages using sortUtils

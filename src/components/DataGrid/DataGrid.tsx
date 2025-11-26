@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
-    DataGrid as MuiDataGrid, GridRowModes, GridRowEditStopReasons, GridActionsCellItem, GridCallbackDetails,
-    GridColumnVisibilityModel, Toolbar, ToolbarButton, ColumnsPanelTrigger, FilterPanelTrigger, ExportPrint,
+    DataGrid as MuiDataGrid, GridRowModes, GridRowEditStopReasons, GridActionsCellItem,
+    Toolbar, ToolbarButton, ColumnsPanelTrigger, FilterPanelTrigger, ExportPrint,
     useGridApiContext, QuickFilter, QuickFilterClear, QuickFilterControl, QuickFilterTrigger,
 } from '@mui/x-data-grid';
 import type {
@@ -68,6 +68,8 @@ export interface DataGridProps<T extends GridValidRowModel> {
     enableExport?: boolean;
     /** Enable import functionality */
     enableImport?: boolean;
+    /** Disable import button (useful when background jobs are running) */
+    importDisabled?: boolean;
     /** Enable refresh button in toolbar */
     enableRefresh?: boolean;
     /** Enable add button in toolbar */
@@ -156,6 +158,7 @@ export default function DataGrid<T extends GridValidRowModel>({
     enableMultiDelete = false,
     enableExport = false,
     enableImport = false,
+    importDisabled = false,
     enableRefresh = false,
     enableAdd = false,
     enableQuickFilter = false,
@@ -518,8 +521,8 @@ export default function DataGrid<T extends GridValidRowModel>({
                             style={{ display: 'none' }}
                             onChange={handleFileChange}
                         />
-                        <Tooltip title="Import">
-                            <ToolbarButton onClick={handleImportClick} disabled={importing}>
+                        <Tooltip title={importDisabled ? 'Import in progress' : 'Import'}>
+                            <ToolbarButton onClick={handleImportClick} disabled={importing || importDisabled}>
                                 <Upload fontSize="small" />
                             </ToolbarButton>
                         </Tooltip>

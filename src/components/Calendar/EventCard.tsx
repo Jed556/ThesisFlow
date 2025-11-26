@@ -2,8 +2,7 @@ import * as React from 'react';
 import { Box, Card, CardContent, Typography, Chip, Stack, IconButton, Skeleton } from '@mui/material';
 import { AccessTime, LocationOn, CalendarMonth, Monitor, Edit, Delete } from '@mui/icons-material';
 import type { ScheduleEvent, EventStatus, Calendar as CalendarType } from '../../types/schedule';
-import { getDisplayName, getProfile } from '../../utils/dbUtils';
-import { Avatar, Name } from '../Avatar';
+import { AvatarGroup } from '../Avatar';
 
 const defaultEventColor = '#bdbdbd';
 const statusColors: Record<EventStatus, string> = {
@@ -197,21 +196,12 @@ export default function EventCard({
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                                 Participants ({event.participants.length}):
                             </Typography>
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                {event.participants.slice(0, 5).map((participant, index) => (
-                                    <Avatar
-                                        key={index}
-                                        email={participant?.email}
-                                        initials={[Name.FIRST]}
-                                        size="medium"
-                                        tooltipText={`${getDisplayName(participant?.email)} (${participant?.role})`}
-                                        sx={{ ...(participant?.status === 'declined' && { opacity: 0.5 }) }}
-                                    />
-                                ))}
-                                {event.participants.length > 5 && (
-                                    <Avatar name={`+${event.participants.length - 5}`} size="medium" sx={{ fontSize: '0.75rem' }} />
-                                )}
-                            </Box>
+                            <AvatarGroup
+                                participants={event.participants}
+                                max={5}
+                                size="medium"
+                                showRole={true}
+                            />
                         </Box>
                     )
                 )}

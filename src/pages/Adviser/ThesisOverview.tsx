@@ -1,248 +1,346 @@
 import * as React from 'react';
 import {
-    Box, Card, CardContent, Chip, Divider, Grid, LinearProgress, List, ListItem, ListItemText, Skeleton, Stack, Typography
+    Alert, Box, Card, CardContent, Skeleton, Stack, Typography,
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
-import ForumIcon from '@mui/icons-material/Forum';
-import SummarizeIcon from '@mui/icons-material/Summarize';
+import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import { useSession } from '@toolpad/core';
-import { AnimatedPage } from '../../components/Animate';
-import ChatBox from '../../components/Chat/ChatBox';
-import type { ChatMessage } from '../../types/chat';
+import type { ReviewerAssignment } from '../../types/reviewer';
 import type { ThesisData } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
-import { getReviewerAssignments, getReviewerWorkspace, getThesisBySlug } from '../../data/reviewerWorkspace';
-import { mockFileRegistry } from '../../data/mockData';
-import { getDisplayName } from '../../utils/dbUtils';
+import type { ConversationParticipant } from '../../components/Conversation';
+import { AnimatedPage } from '../../components/Animate';
+import { ThesisWorkspace } from '../../components/ThesisWorkspace';
+import type { WorkspaceFilterConfig, WorkspaceChapterDecisionPayload } from '../../types/workspace';
+import {
+    getReviewerAssignmentsForUser,
+    getThesisById,
+} from '../../utils/firebase/firestore/thesis';
+import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
+import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
+import { getDisplayName } from '../../utils/userUtils';
+import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDecisions';
 
 export const metadata: NavigationItem = {
-    group: 'adviser-editor',
+    group: 'thesis',
     index: 3,
-    title: 'Adviser Thesis Overview',
-    segment: 'adviser/thesis-overview',
+    title: 'Thesis Overview',
+    segment: 'adviser-thesis-overview',
     icon: <SchoolIcon />,
-    roles: ['adviser', 'admin'],
+    roles: ['adviser'],
 };
-
-function calculateThesisProgress(thesis: ThesisData): number {
-    if (thesis.chapters.length === 0) return 0;
-    const approved = thesis.chapters.filter((chapter) => chapter.status === 'approved').length;
-    return Math.round((approved / thesis.chapters.length) * 100);
-}
-
-function resolveAttachments(hashes: string[]): FileAttachment[] {
-    return hashes
-        .map((hash) => mockFileRegistry[hash])
-        .filter((file): file is FileAttachment => Boolean(file));
-}
-
-function resolveDisplayName(email?: string | null): string {
-    if (!email) return 'Unknown user';
-    return getDisplayName(email) || email;
-}
-
-const EMPTY_STATE = 'No advisee selected. Assign yourself to a thesis to view its workspace.';
 
 export default function AdviserThesisOverviewPage() {
     const session = useSession<Session>();
-    const adviserEmail = session?.user?.email;
-    const assignments = React.useMemo(
-        () => getReviewerAssignments('adviser', adviserEmail ?? undefined),
-        [adviserEmail],
-    );
-    const activeAssignment = assignments[0];
-    const thesis = React.useMemo(
-        () => (activeAssignment ? getThesisBySlug(activeAssignment.thesisId) : undefined),
-        [activeAssignment],
-    );
-    const workspace = React.useMemo(
-        () => (activeAssignment ? getReviewerWorkspace(activeAssignment.thesisId) : undefined),
-        [activeAssignment],
-    );
+    const adviserUid = session?.user?.uid ?? '';
 
-    const progress = React.useMemo(
-        () => (thesis ? calculateThesisProgress(thesis) : 0),
-        [thesis],
-    );
-    const chatMessages = React.useMemo<ChatMessage[]>(
-        () => workspace?.chatMessages ?? [],
-        [workspace],
-    );
-    const focusFiles = React.useMemo(
-        () => (workspace ? resolveAttachments(workspace.recentFileHashes) : []),
-        [workspace],
-    );
+    const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
+    const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
+    const [selectedThesisId, setSelectedThesisId] = React.useState<string>('');
+    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesisLoading, setThesisLoading] = React.useState(false);
+    const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
+    const [error, setError] = React.useState<string | null>(null);
+
+    const resolveDisplayName = React.useCallback((uid?: string | null) => {
+        if (!uid) {
+            return 'Unknown user';
+        }
+        return displayNames[uid] ?? uid;
+    }, [displayNames]);
+
+    const hydrateDisplayNames = React.useCallback(async (uids: (string | undefined | null)[]) => {
+        const unique = Array.from(new Set(
+            uids.filter((uid): uid is string => Boolean(uid && !displayNames[uid]))
+        ));
+        if (!unique.length) {
+            return;
+        }
+        const results = await Promise.all(unique.map(async (uid) => {
+            try {
+                const name = await getDisplayName(uid);
+                return [uid, name] as const;
+            } catch (err) {
+                console.error('Failed to resolve display name:', err);
+                return [uid, uid] as const;
+            }
+        }));
+        setDisplayNames((prev) => {
+            const next = { ...prev };
+            results.forEach(([uid, name]) => {
+                next[uid] = name;
+            });
+            return next;
+        });
+    }, [displayNames]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+
+        const loadAssignments = async () => {
+            if (!adviserUid) {
+                setAssignments([]);
+                setAssignmentsLoading(false);
+                return;
+            }
+            setAssignmentsLoading(true);
+            setError(null);
+            try {
+                const rows = await getReviewerAssignmentsForUser('adviser', adviserUid);
+                if (!cancelled) {
+                    setAssignments(rows);
+                }
+            } catch (err) {
+                console.error('Failed to load adviser assignments:', err);
+                if (!cancelled) {
+                    setAssignments([]);
+                    setError('Unable to load your assigned theses right now.');
+                }
+            } finally {
+                if (!cancelled) {
+                    setAssignmentsLoading(false);
+                }
+            }
+        };
+
+        void loadAssignments();
+        return () => {
+            cancelled = true;
+        };
+    }, [adviserUid]);
+
+    React.useEffect(() => {
+        if (assignments.length && !selectedThesisId) {
+            setSelectedThesisId(assignments[0].thesisId);
+        } else if (!assignments.length) {
+            setSelectedThesisId('');
+        }
+    }, [assignments, selectedThesisId]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+
+        const loadThesis = async () => {
+            if (!selectedThesisId) {
+                setThesis(null);
+                return;
+            }
+            setThesisLoading(true);
+            setError(null);
+            try {
+                const data = await getThesisById(selectedThesisId);
+                if (!cancelled) {
+                    setThesis(data);
+                    await hydrateDisplayNames([
+                        data?.leader,
+                        ...(data?.members ?? []),
+                        data?.adviser,
+                        data?.editor,
+                        data?.statistician,
+                    ]);
+                }
+            } catch (err) {
+                console.error('Failed to load thesis data:', err);
+                if (!cancelled) {
+                    setError('Failed to load thesis details. Please try again later.');
+                    setThesis(null);
+                }
+            } finally {
+                if (!cancelled) {
+                    setThesisLoading(false);
+                }
+            }
+        };
+
+        void loadThesis();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedThesisId, hydrateDisplayNames]);
+
+    const participants = React.useMemo(() => {
+        if (!thesis) {
+            return undefined;
+        }
+        const map: Record<string, ConversationParticipant> = {};
+        const register = (uid?: string | null, roleLabel?: string) => {
+            if (!uid) {
+                return;
+            }
+            map[uid] = {
+                uid,
+                displayName: resolveDisplayName(uid),
+                roleLabel,
+            };
+        };
+        register(thesis.leader, 'Leader');
+        thesis.members?.forEach((uid) => register(uid, 'Member'));
+        register(thesis.adviser, 'Adviser');
+        register(thesis.editor, 'Editor');
+        register(thesis.statistician, 'Statistician');
+        if (adviserUid && !map[adviserUid]) {
+            register(adviserUid, 'You');
+        }
+        return map;
+    }, [thesis, resolveDisplayName, adviserUid]);
+
+    const filters: WorkspaceFilterConfig[] | undefined = React.useMemo(() => {
+        if (!assignments.length) {
+            return undefined;
+        }
+        return [
+            {
+                id: 'group',
+                label: 'Group',
+                value: selectedThesisId,
+                options: assignments.map((assignment) => ({
+                    value: assignment.thesisId,
+                    label: assignment.thesisTitle || assignment.thesisId,
+                    description: assignment.stage,
+                })),
+                onChange: (value) => setSelectedThesisId(value),
+            },
+        ];
+    }, [assignments, selectedThesisId]);
+
+    const handleCreateComment = React.useCallback(async ({
+        chapterId,
+        versionIndex,
+        content,
+        files,
+    }: {
+        chapterId: number;
+        versionIndex: number | null;
+        content: string;
+        files: File[];
+    }) => {
+        if (!adviserUid || !selectedThesisId) {
+            throw new Error('Missing adviser context.');
+        }
+
+        let attachments: FileAttachment[] = [];
+        if (files.length) {
+            attachments = await uploadConversationAttachments(files, {
+                userUid: adviserUid,
+                thesisId: selectedThesisId,
+                chapterId,
+            });
+        }
+
+        const savedComment = await appendChapterComment({
+            thesisId: selectedThesisId,
+            chapterId,
+            comment: {
+                author: adviserUid,
+                comment: content,
+                attachments,
+                version: typeof versionIndex === 'number' ? versionIndex : undefined,
+            },
+        });
+
+        setThesis((prev) => {
+            if (!prev) {
+                return prev;
+            }
+            return {
+                ...prev,
+                chapters: prev.chapters.map((chapter) =>
+                    chapter.id === chapterId
+                        ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
+                        : chapter
+                ),
+            };
+        });
+    }, [adviserUid, selectedThesisId]);
+
+    const handleChapterDecision = React.useCallback(async ({
+        thesisId: targetThesisId,
+        chapterId,
+        decision,
+    }: WorkspaceChapterDecisionPayload) => {
+        if (!targetThesisId) {
+            throw new Error('Missing thesis context for decision.');
+        }
+
+        const result = await updateChapterDecision({
+            thesisId: targetThesisId,
+            chapterId,
+            decision,
+            role: 'adviser',
+        });
+
+        if (targetThesisId !== selectedThesisId) {
+            return;
+        }
+
+        setThesis((prev) => {
+            if (!prev) {
+                return prev;
+            }
+            return {
+                ...prev,
+                lastUpdated: result.decidedAt,
+                chapters: prev.chapters.map((chapter) =>
+                    chapter.id === chapterId
+                        ? {
+                            ...chapter,
+                            status: result.status,
+                            lastModified: result.decidedAt,
+                            mentorApprovals: result.mentorApprovals,
+                        }
+                        : chapter
+                ),
+            };
+        });
+    }, [selectedThesisId]);
+
+    const isLoading = assignmentsLoading || thesisLoading;
+    const noAssignments = !assignmentsLoading && assignments.length === 0;
 
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    Advisee workspace
-                </Typography>
                 <Typography variant="body1" color="text.secondary">
-                    Review submissions, identify blockers, and coordinate with editors in real time.
+                    Monitor thesis activity, select a group, and leave feedback for each chapter version.
                 </Typography>
             </Box>
 
-            {!activeAssignment || !thesis || !workspace ? (
+            {error && (
+                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+                    {error}
+                </Alert>
+            )}
+
+            {noAssignments ? (
                 <Card>
                     <CardContent>
-                        <Typography variant="body1" color="text.secondary">
-                            {EMPTY_STATE}
+                        <Typography variant="body2" color="text.secondary">
+                            No advisee selected. Assign yourself to a thesis to view its workspace.
                         </Typography>
                     </CardContent>
                 </Card>
+            ) : isLoading && !thesis ? (
+                <Stack spacing={2}>
+                    <Skeleton variant="text" width="40%" height={32} />
+                    <Skeleton variant="rounded" height={420} />
+                </Stack>
             ) : (
-                <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, lg: 5 }}>
-                        <Stack spacing={3}>
-                            <Card>
-                                <CardContent>
-                                    <Stack direction="row" spacing={2} alignItems="center">
-                                        <SummarizeIcon color="primary" />
-                                        <Box>
-                                            <Typography variant="h6">{thesis.title}</Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Stage: {thesis.overallStatus}
-                                            </Typography>
-                                        </Box>
-                                    </Stack>
-                                    <Box sx={{ mt: 2 }}>
-                                        <Stack
-                                            direction="row"
-                                            alignItems="center"
-                                            justifyContent="space-between"
-                                            sx={{ mb: 1 }}
-                                        >
-                                            <Typography variant="body2" color="text.secondary">
-                                                Chapter progress
-                                            </Typography>
-                                            <Typography variant="subtitle2">{progress}%</Typography>
-                                        </Stack>
-                                        <LinearProgress
-                                            variant="determinate"
-                                            value={progress}
-                                            sx={{ height: 8, borderRadius: 1 }}
-                                        />
-                                    </Box>
-                                    <Stack spacing={1.5} sx={{ mt: 2 }}>
-                                        <Typography variant="subtitle2">Team roster</Typography>
-                                        <Chip
-                                            label={`${resolveDisplayName(thesis.leader)} (Leader)`}
-                                            size="small"
-                                            color="primary"
-                                            variant="outlined"
-                                        />
-                                        {thesis.members.map((memberEmail) => (
-                                            <Chip
-                                                key={memberEmail}
-                                                label={`${resolveDisplayName(memberEmail)} (Member)`}
-                                                size="small"
-                                                variant="outlined"
-                                            />
-                                        ))}
-                                        <Divider sx={{ my: 1 }} />
-                                        <Typography variant="subtitle2">Assigned editor</Typography>
-                                        <Chip label={resolveDisplayName(thesis.editor)} size="small" color="info" />
-                                    </Stack>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent>
-                                    <Typography variant="h6" gutterBottom>
-                                        Files to review
-                                    </Typography>
-                                    {focusFiles.length === 0 ? (
-                                        <Typography variant="body2" color="text.secondary">
-                                            Students have not uploaded new artefacts yet.
-                                        </Typography>
-                                    ) : (
-                                        <List dense>
-                                            {focusFiles.map((file) => (
-                                                <ListItem key={file.url} disablePadding>
-                                                    <ListItemText
-                                                        primary={file.name}
-                                                        secondary={`${file.type.toUpperCase()} • ${file.uploadDate}`}
-                                                    />
-                                                </ListItem>
-                                            ))}
-                                        </List>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent>
-                                    <Typography variant="h6" gutterBottom>
-                                        Attention areas
-                                    </Typography>
-                                    <Stack spacing={1}>
-                                        {workspace.focusChapters.length === 0 ? (
-                                            <Typography variant="body2" color="text.secondary">
-                                                No outstanding actions. Keep mentoring the team on next milestones.
-                                            </Typography>
-                                        ) : (
-                                            workspace.focusChapters.map((chapterId) => {
-                                                const chapter = thesis.chapters.find((item) => item.id === chapterId);
-                                                if (!chapter) return null;
-                                                const color: 'success' | 'info' | 'warning' | 'default' =
-                                                    chapter.status === 'revision_required'
-                                                        ? 'warning'
-                                                        : chapter.status === 'under_review'
-                                                            ? 'info'
-                                                            : chapter.status === 'approved'
-                                                                ? 'success'
-                                                                : 'default';
-                                                return (
-                                                    <Chip
-                                                        key={chapter.id}
-                                                        label={`${chapter.title} – ${chapter.status.replace('_', ' ')}`}
-                                                        color={color}
-                                                        variant="outlined"
-                                                    />
-                                                );
-                                            })
-                                        )}
-                                    </Stack>
-                                </CardContent>
-                            </Card>
-                        </Stack>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, lg: 7 }}>
-                        <Card sx={{ height: '100%' }}>
-                            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-                                    <ForumIcon color="primary" />
-                                    <Typography variant="h6">Mentor chat</Typography>
-                                </Stack>
-                                <Box sx={{ flexGrow: 1 }}>
-                                    {chatMessages.length === 0 ? (
-                                        <Skeleton variant="rounded" height={360} />
-                                    ) : (
-                                        <ChatBox
-                                            currentUserId={adviserEmail ?? ''}
-                                            messages={chatMessages}
-                                            height={360}
-                                            showInput={false}
-                                            getDisplayName={resolveDisplayName}
-                                            getRoleDisplayText={(id) => (
-                                                id === thesis.editor
-                                                    ? 'Editor'
-                                                    : id === thesis.leader
-                                                        ? 'Leader'
-                                                        : 'Contributor'
-                                            )}
-                                        />
-                                    )}
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                </Grid>
+                <ThesisWorkspace
+                    thesisId={selectedThesisId}
+                    thesis={thesis}
+                    participants={participants}
+                    currentUserId={adviserUid}
+                    filters={filters}
+                    isLoading={isLoading}
+                    allowCommenting
+                    emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
+                    onCreateComment={({ chapterId, versionIndex, content, files }) =>
+                        handleCreateComment({ chapterId, versionIndex, content, files })
+                    }
+                    mentorRole="adviser"
+                    onChapterDecision={handleChapterDecision}
+                />
             )}
         </AnimatedPage>
     );

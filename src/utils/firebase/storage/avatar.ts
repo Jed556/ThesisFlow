@@ -1,23 +1,25 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { firebaseStorage, firebaseAuth } from '../firebaseConfig';
+import { firebaseAuth } from '../firebaseConfig';
 import { validateImageFile, compressImage } from './file';
+import { uploadFileToStorage, generateUniqueFileId } from './common';
+import { getError } from '../../../../utils/errorUtils';
+import { FILE_SIZE_LIMITS, IMAGE_COMPRESSION, STORAGE_PATHS } from '../../../config/files';
 
 /**
- * Maximum file size for avatar images (5MB)
+ * Maximum file size for avatar images
  */
-export const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+export const MAX_AVATAR_SIZE = FILE_SIZE_LIMITS.image;
 
 /**
  * Upload avatar image for a user
  * @param file - Image file to upload
- * @param userEmail - User's email (used for file path)
+ * @param userUid - User's UID (used for file path)
  * @returns Download URL of uploaded image
  */
-export async function uploadAvatar(file: File, userEmail?: string): Promise<string> {
+export async function uploadAvatar(file: File, userUid?: string): Promise<string> {
     const currentUser = firebaseAuth.currentUser;
-    const email = userEmail || currentUser?.email;
+    const uid = userUid || currentUser?.uid;
 
-    if (!email) {
+    if (!uid) {
         throw new Error('User not authenticated');
     }
 
@@ -28,26 +30,28 @@ export async function uploadAvatar(file: File, userEmail?: string): Promise<stri
     }
 
     try {
-        // Compress image to 400x400 max
-        const compressedBlob = await compressImage(file, 400, 400, 0.85);
+        // Compress image to optimal avatar size
+        const compressedBlob = await compressImage(
+            file,
+            IMAGE_COMPRESSION.avatar.maxWidth,
+            IMAGE_COMPRESSION.avatar.maxHeight,
+            IMAGE_COMPRESSION.avatar.quality
+        );
 
-        // Create storage reference
-        const fileName = `avatar_${Date.now()}.jpg`;
-        const storageRef = ref(firebaseStorage, `avatars/${encodeURIComponent(email)}/${fileName}`);
+        // Generate storage path
+        const fileId = generateUniqueFileId(uid, 'avatar');
+        const storagePath = `${STORAGE_PATHS.avatars(uid)}/${fileId}.jpg`;
 
-        // Upload file
-        await uploadBytes(storageRef, compressedBlob, {
-            contentType: 'image/jpeg',
-            customMetadata: {
-                uploadedBy: email,
-                originalName: file.name,
-            },
+        // Upload file with metadata
+        const downloadURL = await uploadFileToStorage(compressedBlob, storagePath, {
+            uploadedBy: uid,
+            originalName: file.name,
+            type: 'avatar'
         });
 
-        // Get download URL
-        const downloadURL = await getDownloadURL(storageRef);
         return downloadURL;
-    } catch (error: any) {
-        throw new Error(`Failed to upload avatar: ${error?.message ?? String(error)}`);
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Failed to upload avatar');
+        throw new Error(`Failed to upload avatar: ${message}`);
     }
 }

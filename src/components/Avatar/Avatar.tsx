@@ -1,6 +1,15 @@
-import { Avatar as MuiAvatar, Chip, type AvatarProps as MuiAvatarProps, Tooltip, Skeleton } from '@mui/material';
-import { getAvatarInitials, getInitialsFromFullName, findProfileByEmail, getDisplayName } from '../../utils/avatarUtils';
+import React from 'react';
+import { getAvatarInitials } from '../../utils/avatarUtils';
+import { getProfile } from '../../utils/firebase/firestore/user';
+import { getDisplayName as getDisplayNameAsync } from '../../utils/userUtils';
 import type { UserProfile } from '../../types/profile';
+import MuiAvatar, { type AvatarProps as MuiAvatarProps } from '@mui/material/Avatar';
+import Chip from '@mui/material/Chip';
+import Tooltip from '@mui/material/Tooltip';
+import Skeleton from '@mui/material/Skeleton';
+import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
+import PhotoCamera from '@mui/icons-material/PhotoCamera';
 
 /**
  * Define which name parts to include for initials generation
@@ -37,28 +46,12 @@ export type AvatarMode = 'default' | 'chip';
  */
 export interface AvatarProps {
     // Data sources (use one of these)
-    /**
-     * User profile object to derive avatar from
-     * If not provided, `email` or `name` can be used as fallbacks
-     * If multiple are provided, `profile` takes precedence over `email`, which takes precedence over `name`
-     */
-    profile?: UserProfile;
 
     /**
-     * User email string to lookup profile
+     * User ID string to lookup profile
      * If `profile` is not provided, this will be used to find the profile
-     * If neither `profile` nor `email` is provided, `name` will be used as a fallback
      */
-    email?: string;
-
-    /**
-     * Full name string to derive initials from
-     * Used as a fallback if neither `profile` nor `email` is provided
-     * Note: This does not support detailed initials configuration like `profile` does
-     * and will simply use the first letters of the first and last words in the name
-     * If you need more control over initials, provide a `profile` or `email` instead
-     */
-    name?: string;
+    uid: string;
 
     // Customization options
     /**
@@ -131,6 +124,25 @@ export interface AvatarProps {
      * @default false
      */
     loading?: boolean;
+
+    /**
+     * Enable edit mode - shows edit button on lower right corner
+     * @default false
+     */
+    editable?: boolean;
+
+    /**
+     * Callback when avatar file is selected for upload
+     * Only called when `editable` is true
+     */
+    onAvatarChange?: (file: File) => void;
+
+    /**
+     * Whether avatar upload is in progress
+     * Shows loading state on edit button
+     * @default false
+     */
+    uploading?: boolean;
 }
 
 // Size mappings for predefined sizes
@@ -143,15 +155,14 @@ const sizeMap = {
 /**
  * Generate initials based on configuration
  * @param profile - User profile object
- * @param name - Fallback name string
  * @param config - Initials configuration
  * @returns Generated initials
  */
-function generateInitials(profile: UserProfile | null, name: string | null, config: InitialsConfig): string {
+function generateInitials(profile: UserProfile, config: InitialsConfig): string {
     if (profile) {
         // Handle 'auto' mode - defaults to first + last
         if (config === 'auto') {
-            return getAvatarInitials(profile.firstName, profile.lastName);
+            return getAvatarInitials(profile.name.first, profile.name.last);
         }
 
         // Handle array of name parts
@@ -161,24 +172,24 @@ function generateInitials(profile: UserProfile | null, name: string | null, conf
             config.forEach(part => {
                 switch (part) {
                     case Name.PREFIX:
-                        if (profile.prefix) {
-                            initials.push(profile.prefix.charAt(0));
+                        if (profile.name.prefix) {
+                            initials.push(profile.name.prefix.charAt(0));
                         }
                         break;
                     case Name.FIRST:
-                        initials.push(profile.firstName.charAt(0));
+                        initials.push(profile.name.first.charAt(0));
                         break;
                     case Name.MIDDLE:
-                        if (profile.middleName) {
-                            initials.push(profile.middleName.charAt(0));
+                        if (profile.name.middle) {
+                            initials.push(profile.name.middle.charAt(0));
                         }
                         break;
                     case Name.LAST:
-                        initials.push(profile.lastName.charAt(0));
+                        initials.push(profile.name.last.charAt(0));
                         break;
                     case Name.SUFFIX:
-                        if (profile.suffix) {
-                            initials.push(profile.suffix.charAt(0));
+                        if (profile.name.suffix) {
+                            initials.push(profile.name.suffix.charAt(0));
                         }
                         break;
                 }
@@ -186,18 +197,13 @@ function generateInitials(profile: UserProfile | null, name: string | null, conf
 
             return initials.join('').toUpperCase();
         }
-    } else if (name) {
-        // For name strings, use existing utility
-        return getInitialsFromFullName(name);
     }
     return '';
 }
 
 /**
  * Display for user profile pictures or initials
- * @param profile - User profile object
- * @param email - User email string
- * @param name - Full name string
+ * @param uid - User ID
  * @param initials - Initials configuration
  * @param mode - Display mode ('default' or 'chip')
  * @param label - Chip label text (for chip mode)
@@ -208,23 +214,74 @@ function generateInitials(profile: UserProfile | null, name: string | null, conf
  * @param tooltip - Quick tooltip selection ('email', 'full', 'none')
  * @param tooltipText - Optional custom tooltip text (overrides `tooltip`)
  * @param loading - Whether the avatar is still loading
+ * @param editable - Enable edit mode with edit button
+ * @param onAvatarChange - Callback when avatar file is selected
+ * @param uploading - Whether avatar upload is in progress
  */
-export default function Avatar({ profile, email, name, initials = NAME_PRESETS.firstLast, mode = 'default',
-    label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, loading = false }: AvatarProps) {
-    // Resolve profile from email if needed
-    const resolvedProfile = profile || (email ? findProfileByEmail(email) : null);
+export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 'default',
+    label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, loading = false,
+    editable = false, onAvatarChange, uploading = false }: AvatarProps) {
+    const [resolvedProfile, setResolvedProfile] = React.useState<UserProfile | null>(null);
+    const [displayName, setDisplayName] = React.useState<string>('');
+    const [isLoading, setIsLoading] = React.useState(true);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-    // Generate display name and initials
-    const displayName = resolvedProfile ? getDisplayName(resolvedProfile) : (name || 'Unknown');
-    const avatarInitials = generateInitials(resolvedProfile, name || null, initials);
+    // Fetch profile and display name
+    React.useEffect(() => {
+        let isMounted = true;
+
+        async function fetchData() {
+            setIsLoading(true);
+            try {
+                const profile = await getProfile(uid);
+                if (isMounted && profile) {
+                    setResolvedProfile(profile);
+                    const name = await getDisplayNameAsync(uid);
+                    if (isMounted) {
+                        setDisplayName(name);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+            }
+        }
+
+        fetchData();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [uid]);
+
+    // Handle file input change
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file && onAvatarChange) {
+            onAvatarChange(file);
+        }
+        // Reset input so same file can be selected again
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    // Generate avatar initials
+    const avatarInitials = resolvedProfile ? generateInitials(resolvedProfile, initials) : '??';
 
     // Calculate avatar size
-    const avatarSize = typeof size === 'number'
-        ? { width: size, height: size, fontSize: `${size * 0.4}px` }
-        : sizeMap[size];
+    const avatarSize = typeof size === 'number' ?
+        { width: size, height: size, fontSize: `${size * 0.4}px` } : sizeMap[size];
+
+    // Calculate edit button size based on avatar size
+    const editButtonSize = typeof size === 'number' ?
+        size * 0.25 : { small: 20, medium: 24, large: 28 }[size as 'small' | 'medium' | 'large'];
 
     // Create the avatar element with embedded skeleton
-    const avatarCore = loading ? (
+    const avatarCore = (loading || isLoading) ? (
         <Skeleton
             variant="circular"
             width={avatarSize.width}
@@ -233,7 +290,13 @@ export default function Avatar({ profile, email, name, initials = NAME_PRESETS.f
         />
     ) : (
         <MuiAvatar
+            src={resolvedProfile?.avatar}
             sx={{
+                // default background / text color for initials when no avatar is set
+                bgcolor: resolvedProfile?.avatar ? undefined : 'primary.main',
+                color: resolvedProfile?.avatar ? undefined : 'primary.contrastText',
+                // default border so the outline matches theme; callers can override via sx
+                border: '2px solid background.paper',
                 ...avatarSize,
                 cursor: onClick ? 'pointer' : 'default',
                 ...sx
@@ -244,12 +307,55 @@ export default function Avatar({ profile, email, name, initials = NAME_PRESETS.f
         </MuiAvatar>
     );
 
+    // Wrap avatar with container for edit button when editable
+    const avatarWithEdit = editable ? (
+        <Box sx={{ position: 'relative', display: 'inline-block' }}>
+            {avatarCore}
+            <input
+                ref={fileInputRef}
+                accept="image/*"
+                style={{ display: 'none' }}
+                id={`avatar-upload-${uid}`}
+                type="file"
+                onChange={handleFileChange}
+                disabled={uploading || loading || isLoading}
+            />
+            <label htmlFor={`avatar-upload-${uid}`}>
+                <IconButton
+                    component="span"
+                    disabled={uploading || loading || isLoading}
+                    size="small"
+                    sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        bgcolor: 'background.paper',
+                        border: '2px solid',
+                        borderColor: 'divider',
+                        width: editButtonSize,
+                        height: editButtonSize,
+                        '&:hover': {
+                            bgcolor: 'primary.main',
+                            color: 'primary.contrastText',
+                            borderColor: 'primary.main',
+                        },
+                        '&.Mui-disabled': {
+                            bgcolor: 'action.disabledBackground',
+                        },
+                    }}
+                >
+                    <PhotoCamera sx={{ fontSize: editButtonSize * 0.6 }} />
+                </IconButton>
+            </label>
+        </Box>
+    ) : avatarCore;
+
     // Tooltip logic: `tooltipText` takes precedence. Otherwise compute from `tooltip`.
     let finalTooltip: string | undefined = undefined;
     if (tooltipText) {
         finalTooltip = tooltipText;
     } else if (tooltip === 'email') {
-        finalTooltip = resolvedProfile?.email ?? name ?? undefined;
+        finalTooltip = resolvedProfile?.email ?? undefined;
     } else if (tooltip === 'full') {
         finalTooltip = displayName || undefined;
     }
@@ -257,17 +363,18 @@ export default function Avatar({ profile, email, name, initials = NAME_PRESETS.f
     const avatarElement = finalTooltip
         ? (
             <Tooltip title={finalTooltip} arrow>
-                {avatarCore}
+                {avatarWithEdit}
             </Tooltip>
         )
-        : avatarCore;
+        : avatarWithEdit;
 
     // Return chip mode if requested
     if (mode === 'chip') {
+        // Note: Editable mode is not supported in chip mode
         const chipCore = (
             <Chip
                 avatar={avatarCore}
-                label={loading ? <Skeleton variant="text" width={80} /> : (label || displayName)}
+                label={(loading || isLoading) ? <Skeleton variant="text" width={80} /> : (label || displayName)}
                 variant={chipProps?.variant || 'outlined'}
                 size={chipProps?.size || 'small'}
                 color={chipProps?.color || 'default'}
@@ -284,45 +391,4 @@ export default function Avatar({ profile, email, name, initials = NAME_PRESETS.f
 
     // Return default avatar
     return avatarElement;
-}
-
-// Convenience components for common use cases
-
-/**
- * ProfileAvatar component for displaying user profile pictures or initials
- * @param profile - User profile object
- * @param AvatarProps - Avatar props
- */
-export function ProfileAvatar({ profile, ...props }: Omit<AvatarProps, 'profile'> & { profile: UserProfile }) {
-    return <Avatar profile={profile} {...props} />;
-}
-
-/**
- * EmailAvatar component for displaying user email initials
- * @param email - User email string
- * @param AvatarProps - Avatar props
- * @returns EmailAvatar element
- */
-export function EmailAvatar({ email, ...props }: Omit<AvatarProps, 'email'> & { email: string }) {
-    return <Avatar email={email} {...props} />;
-}
-
-/**
- * NameAvatar component for displaying user name initials
- * @param name - Full name string
- * @param AvatarProps - Avatar props
- * @returns NameAvatar element
- */
-export function NameAvatar({ name, ...props }: Omit<AvatarProps, 'name'> & { name: string }) {
-    return <Avatar name={name} {...props} />;
-}
-
-/**
- * ChipAvatar component for displaying user initials in a chip
- * @param label - Optional label for the chip
- * @param AvatarProps - Avatar props
- * @returns ChipAvatar element
- */
-export function ChipAvatar({ label, ...props }: AvatarProps & { label?: string }) {
-    return <Avatar mode="chip" label={label} {...props} />;
 }

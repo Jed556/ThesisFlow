@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
 import type { Theme } from '@mui/material/styles';
 import { generateThemeFromSeedColor, isValidHexColor } from '../utils/themeGenerator';
 import baseTheme from '../theme';
@@ -26,18 +26,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         return baseTheme;
     }, [seedColor]);
 
-    const updateThemeFromSeedColor = (color: string) => {
+    const updateThemeFromSeedColor = useCallback((color: string) => {
         if (isValidHexColor(color)) {
             console.log('🎨 Updating theme with color:', color);
             setSeedColor(color);
         } else {
             console.warn('❌ Invalid hex color provided:', color);
         }
-    };
+    }, [setSeedColor]);
 
-    const resetTheme = () => {
+    const resetTheme = useCallback(() => {
         setSeedColor(null);
-    };
+    }, [setSeedColor]);
 
     const value = useMemo(
         () => ({

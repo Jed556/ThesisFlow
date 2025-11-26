@@ -1,5 +1,9 @@
 import * as React from 'react';
-import { Box, Card, CardContent, Typography, type SxProps, type Theme } from '@mui/material';
+import {
+    Box, Container, Paper, Typography,
+    type SxProps, type Theme
+} from '@mui/material';
+import { Lock as LockIcon } from '@mui/icons-material';
 
 export interface UnauthorizedNoticeProps {
     /** Headline displayed to the user */
@@ -8,6 +12,8 @@ export interface UnauthorizedNoticeProps {
     description?: string;
     /** Choose between a contained card or a bare box container */
     variant?: 'card' | 'box';
+    /** Icon component to display above the title */
+    icon?: React.ElementType;
     /** Optional styles forwarded to the root container */
     sx?: SxProps<Theme>;
 }
@@ -20,29 +26,57 @@ export function UnauthorizedNotice({
     title = 'Not authorized',
     description = 'You do not have permission to access this area.',
     variant = 'card',
+    icon: IconComponent = LockIcon,
     sx,
 }: UnauthorizedNoticeProps) {
     const content = (
         <>
-            <Typography variant="h5" gutterBottom>
-                {title}
-            </Typography>
-            <Typography variant="body1">{description}</Typography>
+            <Box sx={{ mb: 4 }}>
+                <IconComponent color="warning" sx={{ fontSize: 80, mb: 2 }} />
+                <Typography variant="h4" component="h1" gutterBottom>
+                    {title}
+                </Typography>
+            </Box>
+
+            <Box sx={{ mb: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                    {description}
+                </Typography>
+            </Box>
+
+            <Box sx={{ mt: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                    If you believe this is an error, please contact your administrator.
+                </Typography>
+            </Box>
         </>
     );
 
+    const containerSx = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '90%',
+        px: 2,
+        ...sx,
+    } as const;
+
     if (variant === 'box') {
         return (
-            <Box sx={{ p: 4, ...sx }}>
-                {content}
-            </Box>
+            <Container maxWidth="md" sx={containerSx}>
+                <Box sx={{ p: 6, textAlign: 'center' }}>
+                    {content}
+                </Box>
+            </Container>
         );
     }
 
     return (
-        <Card sx={sx}>
-            <CardContent>{content}</CardContent>
-        </Card>
+        <Container maxWidth="md" sx={containerSx}>
+            <Paper elevation={3} sx={{ p: 6, textAlign: 'center' }}>
+                {content}
+            </Paper>
+        </Container>
     );
 }
 

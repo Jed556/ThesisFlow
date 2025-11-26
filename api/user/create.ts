@@ -3,9 +3,10 @@
  * Creates a new Firebase user with email and password
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleCors, errorResponse, successResponse } from '../utils.js';
-import { authenticate } from '../auth.js';
-import { auth } from '../firebase.js';
+import { handleCors, errorResponse, successResponse } from '../../utils/utils.js';
+import { getError } from '../../utils/errorUtils.js';
+import { authenticate } from '../../utils/auth.js';
+import { auth } from '../../utils/firebase.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Handle CORS
@@ -22,39 +23,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return errorResponse(res, 'Unauthorized: Provide either Bearer token or X-API-Secret', 401);
     }
 
-    const { email, password } = req.body;
+    const { email, password, role, uid: customUid } = req.body ?? {};
 
-    if (!email || !password) {
+    const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+    const normalizedPassword = typeof password === 'string' ? password : '';
+
+    if (!normalizedEmail || !normalizedPassword) {
         return errorResponse(res, 'Email and password are required', 400);
     }
 
+    const isValidEmailShape = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    if (!isValidEmailShape) {
+        // Surface the payload shape to aid debugging without logging sensitive data like the password value
+        console.error('Invalid email payload received during user creation', {
+            receivedEmail: email,
+            bodyKeys: typeof req.body === 'object' && req.body ? Object.keys(req.body) : [],
+        });
+        return errorResponse(res, 'Email must be a valid email address', 400);
+    }
+
     try {
-        // Check if user already exists
+        // Check if user already exists by email
         try {
-            await auth.getUserByEmail(email);
-            return successResponse(res, {}, 'User already exists');
-        } catch (notFoundError: any) {
-            // User doesn't exist, proceed with creation
-            if (notFoundError.code !== 'auth/user-not-found') {
+            const existingUser = await auth.getUserByEmail(normalizedEmail);
+            return successResponse(res, { uid: existingUser.uid }, 'User already exists');
+        } catch (notFoundError: unknown) {
+            // User doesn't exist, proceed with creation unless different error
+            const { code } = getError(notFoundError);
+            if (code !== 'auth/user-not-found') {
                 throw notFoundError;
             }
         }
 
-        // Create the user using Admin SDK
+        // If custom UID provided, check if it's already in use
+        if (customUid) {
+            try {
+                await auth.getUser(customUid);
+                return errorResponse(res, 'Custom UID already exists', 409);
+            } catch (uidError: unknown) {
+                const { code } = getError(uidError);
+                if (code !== 'auth/user-not-found') {
+                    throw uidError;
+                }
+                // UID doesn't exist, good to proceed
+            }
+        }
+
+        // Create the user using Admin SDK with optional custom UID
         const userRecord = await auth.createUser({
-            email,
-            password,
+            uid: customUid, // If undefined, Firebase will auto-generate
+            email: normalizedEmail,
+            password: normalizedPassword,
             emailVerified: false,
         });
 
-        console.log(`Created user: ${email}`);
+        // Set custom claims if role is provided
+        if (role) {
+            await auth.setCustomUserClaims(userRecord.uid, { role });
+            console.log(`Set custom claims for user: ${email} with role: ${role}`);
+        }
+
+        console.log(`Created user: ${normalizedEmail}`);
         return successResponse(
             res,
             { uid: userRecord.uid },
             'User created successfully'
         );
-    } catch (error: any) {
-        console.error(`Failed to create user: ${email}`, error);
-        return errorResponse(res, error?.message ?? 'Unable to create user', 500);
+    } catch (error: unknown) {
+        const { message } = getError(error, 'Unable to create user');
+        console.error(`Failed to create user: ${normalizedEmail}`, error);
+        return errorResponse(res, message, 500);
     }
 }

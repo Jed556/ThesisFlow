@@ -198,3 +198,7 @@ firebase-adminsdk-*.json
 # Local IDE workspace states
 .idea/
 .vscode/**/*.code-workspace
+
+
+# Mock data
+mock/

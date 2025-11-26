@@ -1,23 +1,7 @@
 import * as React from 'react';
 import {
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Checkbox,
-    Chip,
-    FormControl,
-    FormControlLabel,
-    FormHelperText,
-    InputLabel,
-    ListItemText,
-    MenuItem,
-    Paper,
-    Select,
-    Skeleton,
-    Stack,
-    TextField,
-    Typography,
+    Box, Button, Card, CardContent, Checkbox, Chip, FormControl, FormControlLabel, FormHelperText, InputLabel,
+    ListItemText, MenuItem, Paper, Select, Skeleton, Stack, TextField, Typography
 } from '@mui/material';
 import type { FormAssignment, FormField, FormFieldValue, FormTemplate } from '../../types/forms';
 import { useSnackbar } from '../Snackbar';
@@ -262,7 +246,7 @@ export function FormRenderer({ template, assignment, loading = false, onSubmit }
                                         onChange={handleTextChange(field)}
                                         required={field.required}
                                         helperText={field.helperText}
-                                        InputLabelProps={{ shrink: true }}
+                                        slotProps={{ inputLabel: { shrink: true } }}
                                     />
                                 );
                             case 'file':
