@@ -289,7 +289,8 @@ export default function StudentPanelCommentsPage() {
                 ) : (
                     <Stack spacing={2}>
                         <Alert severity="info">
-                            Update the <strong>Page</strong> column with the exact location of your revision and describe the action taken under <strong>Status</strong>.
+                            Update the <strong>Page</strong> column with the exact location of your revision
+                            and describe the action taken under <strong>Status</strong>.
                         </Alert>
                         {entriesError && (
                             <Alert severity="error">{entriesError}</Alert>

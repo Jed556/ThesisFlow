@@ -1,8 +1,9 @@
 import * as React from 'react';
 import {
-    Alert, Box, Card, CardContent, Chip, Divider, List, ListItem,
+    Alert, Box, Button, Card, CardContent, Chip, Divider, List, ListItem,
     ListItemText, Paper, Skeleton, Stack, Typography, type ChipProps,
 } from '@mui/material';
+import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { formatDateShort } from '../../utils/dateUtils';
 import type { ThesisGroup } from '../../types/group';
 import type { ThesisData } from '../../types/thesis';
@@ -24,6 +25,10 @@ interface GroupViewProps {
     headerActions?: React.ReactNode | ((context: GroupViewHeaderContext) => React.ReactNode);
     hint?: string;
     refreshToken?: number;
+    backButton?: {
+        label?: string;
+        onClick: () => void;
+    };
 }
 
 interface GroupState {
@@ -175,7 +180,7 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
     };
 }
 
-export function GroupView({ groupId, headerActions, hint, refreshToken }: GroupViewProps) {
+export function GroupView({ groupId, headerActions, hint, refreshToken, backButton }: GroupViewProps) {
     const [state, setState] = React.useState<GroupState>(() => ({
         group: null,
         thesis: null,
@@ -276,9 +281,22 @@ export function GroupView({ groupId, headerActions, hint, refreshToken }: GroupV
             <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>
                     <Box sx={{ flex: 1 }}>
-                        <Typography variant="h4" gutterBottom>
-                            {group.name}
-                        </Typography>
+                        <Stack spacing={1}>
+                            {backButton ? (
+                                <Button
+                                    variant="text"
+                                    color="inherit"
+                                    startIcon={<ArrowBackIcon />}
+                                    onClick={backButton.onClick}
+                                    sx={{ alignSelf: 'flex-start', mb: 1, color: 'text.secondary' }}
+                                >
+                                    {backButton.label ?? 'Back'}
+                                </Button>
+                            ) : null}
+                            <Typography variant="h4">
+                                {group.name}
+                            </Typography>
+                        </Stack>
                         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                             <Chip label={formatGroupStatus(group.status)} color={statusColor} size="small" />
                             {group.department && (

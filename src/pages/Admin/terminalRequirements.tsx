@@ -43,9 +43,7 @@ import {
     TERMINAL_REQUIREMENTS,
 } from '../../utils/terminalRequirements';
 
-interface RequirementStateMap {
-    [requirementId: string]: TerminalRequirementConfigEntry;
-}
+type RequirementStateMap = Record<string, TerminalRequirementConfigEntry>;
 
 function createDefaultRequirementState(): RequirementStateMap {
     return TERMINAL_REQUIREMENTS.reduce<RequirementStateMap>((acc, definition) => {
@@ -163,7 +161,10 @@ export default function AdminTerminalRequirementsPage() {
         }, {});
     }, []);
 
-    const hasUnsavedChanges = React.useMemo(() => !areRequirementStatesEqual(requirementState, syncedStateRef.current), [requirementState]);
+    const hasUnsavedChanges = React.useMemo(
+        () => !areRequirementStatesEqual(requirementState, syncedStateRef.current),
+        [requirementState]
+    );
 
     React.useEffect(() => {
         if (!canManage || !userUid) {

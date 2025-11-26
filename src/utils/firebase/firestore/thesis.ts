@@ -349,7 +349,7 @@ function collectGroupMemberIds(members: ThesisGroupMembers | undefined): Set<str
 /**
  * Transform thesis documents into reviewer assignment models while reusing cached profiles.
  * @param theses - Thesis records that belong to the reviewer role
- * @param role - Reviewer role generating the view (adviser/editor)
+ * @param role - Reviewer role generating the view (adviser/editor/statistician)
  * @param profileCache - Map tracking hydrated user profiles to avoid duplicate reads
  * @returns Reviewer assignment rows derived from the provided theses
  */
@@ -377,19 +377,30 @@ async function buildReviewerAssignments(
         const memberUids = members?.members ?? [];
         const adviserUid = members?.adviser ?? '';
         const editorUid = members?.editor ?? '';
+        const statisticianUid = members?.statistician ?? '';
 
         const progressRatio = computeThesisProgressRatio(thesis);
         const studentEmails = [leaderUid, ...memberUids]
             .map((uid) => (uid ? profileCache.get(uid)?.email : undefined))
             .filter((email): email is string => Boolean(email));
 
-        const assignedUid = role === 'adviser' ? adviserUid : editorUid;
-        const counterpartUid = role === 'adviser' ? editorUid : adviserUid;
+        let assignedUid = '';
+        if (role === 'adviser') {
+            assignedUid = adviserUid;
+        } else if (role === 'editor') {
+            assignedUid = editorUid;
+        } else {
+            assignedUid = statisticianUid;
+        }
 
+        const mentorUids = [adviserUid, editorUid, statisticianUid]
+            .filter((uid): uid is string => Boolean(uid));
         const assignedEmail = assignedUid ? profileCache.get(assignedUid)?.email : undefined;
-        const counterpartEmail = counterpartUid ? profileCache.get(counterpartUid)?.email : undefined;
-        const assignedTo = [assignedEmail, counterpartEmail]
+        const peerEmails = mentorUids
+            .filter((uid) => uid !== assignedUid)
+            .map((uid) => profileCache.get(uid)?.email)
             .filter((email): email is string => Boolean(email));
+        const assignedTo = Array.from(new Set([assignedEmail, ...peerEmails].filter((email): email is string => Boolean(email))));
 
         return {
             id: thesis.id,
@@ -518,7 +529,12 @@ export async function getReviewerAssignmentsForUser(role: ReviewerRole, userUid?
         return [];
     }
 
-    const roleField = role === 'adviser' ? 'adviser' : 'editor';
+    const roleFieldMap: Record<ReviewerRole, keyof ThesisData> = {
+        adviser: 'adviser',
+        editor: 'editor',
+        statistician: 'statistician',
+    };
+    const roleField = roleFieldMap[role];
     const roleQuery = query(
         collection(firebaseFirestore, THESES_COLLECTION),
         where(roleField, '==', userUid)
@@ -619,7 +635,12 @@ export function listenReviewerAssignmentsForUser(
         return () => { /* no-op */ };
     }
 
-    const roleField = role === 'adviser' ? 'adviser' : 'editor';
+    const roleFieldMap: Record<ReviewerRole, keyof ThesisData> = {
+        adviser: 'adviser',
+        editor: 'editor',
+        statistician: 'statistician',
+    };
+    const roleField = roleFieldMap[role];
     const roleQuery = query(
         collection(firebaseFirestore, THESES_COLLECTION),
         where(roleField, '==', userUid)

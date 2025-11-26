@@ -1,10 +1,15 @@
 import * as React from 'react';
 import {
-    Alert, Box, Card, CardContent, Chip, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
+    Alert, Box, Button, Card, CardContent, Chip, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import UploadIcon from '@mui/icons-material/Upload';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import { AnimatedPage } from '../../components/Animate';
-import { TerminalRequirementCard } from '../../components/TerminalRequirements';
+import {
+    SubmissionStatus,
+    TerminalRequirementCard,
+    TERMINAL_REQUIREMENT_ROLE_LABELS,
+} from '../../components/TerminalRequirements';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
@@ -13,6 +18,10 @@ import type { ThesisGroup } from '../../types/group';
 import type { TerminalRequirementDefinition } from '../../types/terminalRequirement';
 import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementConfig';
 import type { FileAttachment } from '../../types/file';
+import type {
+    TerminalRequirementApproverAssignments,
+    TerminalRequirementSubmissionRecord,
+} from '../../types/terminalRequirementSubmission';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupById } from '../../utils/firebase/firestore/groups';
@@ -27,6 +36,10 @@ import {
     getTerminalRequirementStatus,
     getTerminalRequirementsByStage,
 } from '../../utils/terminalRequirements';
+import {
+    listenTerminalRequirementSubmission,
+    submitTerminalRequirementStage,
+} from '../../utils/firebase/firestore/terminalRequirementSubmissions';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 
 export const metadata: NavigationItem = {
@@ -43,6 +56,12 @@ type ThesisRecord = ThesisData & { id: string };
 type RequirementFilesMap = Record<string, FileAttachment[]>;
 type RequirementFlagMap = Record<string, boolean>;
 type RequirementMessageMap = Record<string, string | null>;
+
+interface StageStatusMeta {
+    label: string;
+    color: 'default' | 'success' | 'info' | 'warning' | 'error';
+    variant: 'filled' | 'outlined';
+}
 
 export default function TerminalRequirementsPage() {
     const session = useSession<Session>();
@@ -61,6 +80,21 @@ export default function TerminalRequirementsPage() {
     const [requirementsConfig, setRequirementsConfig] = React.useState<TerminalRequirementConfigEntry[] | null>(null);
     const [configLoading, setConfigLoading] = React.useState(false);
     const [configError, setConfigError] = React.useState<string | null>(null);
+    const [submissionByStage, setSubmissionByStage] = React.useState<
+        Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
+    >({});
+    const [submitLoading, setSubmitLoading] = React.useState(false);
+
+    const formatDateTime = React.useCallback((value?: string | null) => {
+        if (!value) {
+            return '—';
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+        return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    }, []);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -163,6 +197,32 @@ export default function TerminalRequirementsPage() {
         };
     }, [groupMeta?.department, groupMeta?.course]);
 
+    React.useEffect(() => {
+        if (!thesis?.id) {
+            setSubmissionByStage({});
+            return;
+        }
+
+        const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => {
+            const stageValue = stageMeta.value;
+            return listenTerminalRequirementSubmission(thesis.id, stageValue, {
+                onData: (record) => {
+                    setSubmissionByStage((prev) => ({
+                        ...prev,
+                        [stageValue]: record,
+                    }));
+                },
+                onError: (listenerError) => {
+                    console.error(`Terminal requirement submission listener error for ${stageValue}:`, listenerError);
+                },
+            });
+        });
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [thesis?.id]);
+
     const configRequirementMap = React.useMemo(() => {
         if (!requirementsConfig) {
             return null;
@@ -200,6 +260,33 @@ export default function TerminalRequirementsPage() {
             return acc;
         }, {} as Record<ThesisStage, TerminalRequirementDefinition[]>);
     }, [configRequirementMap]);
+
+    const approverAssignments = React.useMemo<TerminalRequirementApproverAssignments>(() => {
+        const assignments: TerminalRequirementApproverAssignments = {};
+        const members = groupMeta?.members;
+
+        const panels = members?.panels?.filter((uid): uid is string => Boolean(uid)) ?? [];
+        if (panels.length) {
+            assignments.panel = panels;
+        }
+
+        const adviserUid = members?.adviser ?? thesis?.adviser;
+        if (adviserUid) {
+            assignments.adviser = [adviserUid];
+        }
+
+        const editorUid = members?.editor ?? thesis?.editor;
+        if (editorUid) {
+            assignments.editor = [editorUid];
+        }
+
+        const statisticianUid = members?.statistician ?? thesis?.statistician;
+        if (statisticianUid) {
+            assignments.statistician = [statisticianUid];
+        }
+
+        return assignments;
+    }, [groupMeta?.members, thesis?.adviser, thesis?.editor, thesis?.statistician]);
 
     const isConfigInitializing = configLoading && !requirementsConfig;
 
@@ -320,6 +407,157 @@ export default function TerminalRequirementsPage() {
         };
     }, [stageRequirements, requirementFiles]);
 
+    const stageStatusMetaMap = React.useMemo(() => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, StageStatusMeta>>((acc, stageMeta) => {
+            const stageValue = stageMeta.value;
+            const unlocked = stageUnlockMap[stageValue];
+            const submission = submissionByStage[stageValue];
+            let label: string;
+            let color: StageStatusMeta['color'];
+            let variant: StageStatusMeta['variant'];
+
+            if (!unlocked) {
+                label = 'Locked';
+                color = 'default';
+                variant = 'outlined';
+            } else if (submission) {
+                if (submission.status === 'approved') {
+                    label = 'Approved';
+                    color = 'success';
+                    variant = 'filled';
+                } else if (submission.status === 'returned') {
+                    label = 'Needs updates';
+                    color = 'warning';
+                    variant = 'filled';
+                } else {
+                    label = 'Submitted';
+                    color = 'info';
+                    variant = 'filled';
+                }
+            } else {
+                const requirements = stageRequirementsByStage[stageValue] ?? [];
+                const submittedCount = requirements.filter((requirement) => (
+                    (requirementFiles[requirement.id]?.length ?? 0) > 0
+                )).length;
+                const completed = requirements.length > 0 && submittedCount === requirements.length;
+                const inProgress = submittedCount > 0 && !completed;
+                label = completed ? 'Ready to submit' : inProgress ? 'In progress' : 'Ready';
+                color = completed ? 'success' : inProgress ? 'info' : 'default';
+                variant = completed || inProgress ? 'filled' : 'outlined';
+            }
+
+            acc[stageValue] = { label, color, variant };
+            return acc;
+        }, {} as Record<ThesisStage, StageStatusMeta>);
+    }, [stageUnlockMap, submissionByStage, stageRequirementsByStage, requirementFiles]);
+
+    const activeSubmission = submissionByStage[activeStage] ?? null;
+    const stageLockedByWorkflow = Boolean(activeSubmission?.locked);
+    const allowFileActions = activeStageUnlocked && !stageLockedByWorkflow;
+    const readyForSubmission = stageRequirements.length > 0
+        && stageRequirements.every((requirement) => (requirementFiles[requirement.id]?.length ?? 0) > 0);
+    const submitButtonLabel = activeSubmission?.status === 'returned'
+        ? 'Resubmit requirements'
+        : 'Submit requirements';
+    const canSubmit = allowFileActions && readyForSubmission && !submitLoading;
+    const pendingRoleLabel = activeSubmission?.currentRole
+        ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.currentRole]
+        : 'mentor';
+
+    const handleSubmitStage = React.useCallback(async () => {
+        if (!thesis?.id || !thesis.groupId) {
+            showNotification('Missing thesis metadata. Please reload the page and try again.', 'error');
+            return;
+        }
+        if (!userUid) {
+            showNotification('You must be signed in to submit requirements.', 'error');
+            return;
+        }
+        if (stageRequirements.length === 0) {
+            showNotification('No requirements are configured for this stage yet.', 'info');
+            return;
+        }
+        if (!readyForSubmission) {
+            showNotification('Upload all required files before submitting.', 'error');
+            return;
+        }
+
+        setSubmitLoading(true);
+        try {
+            await submitTerminalRequirementStage({
+                thesisId: thesis.id,
+                groupId: thesis.groupId,
+                stage: activeStage,
+                requirementIds: stageRequirements.map((requirement) => requirement.id),
+                submittedBy: userUid,
+                assignments: approverAssignments,
+            });
+            showNotification('Submitted for mentor review.', 'success');
+        } catch (submitError) {
+            console.error('Failed to submit terminal requirements:', submitError);
+            const message = submitError instanceof Error
+                ? submitError.message
+                : 'Failed to submit requirements.';
+            showNotification(message, 'error');
+        } finally {
+            setSubmitLoading(false);
+        }
+    }, [
+        thesis?.id,
+        thesis?.groupId,
+        userUid,
+        stageRequirements,
+        readyForSubmission,
+        activeStage,
+        approverAssignments,
+        showNotification,
+    ]);
+
+    const workflowAlert = React.useMemo(() => {
+        if (!activeSubmission) {
+            return null;
+        }
+
+        if (activeSubmission.status === 'in_review') {
+            return (
+                <Alert severity="info">
+                    Submitted {formatDateTime(activeSubmission.submittedAt)}. Uploads are locked while{' '}
+                    {pendingRoleLabel.toLowerCase()} reviews your files.
+                </Alert>
+            );
+        }
+
+        if (activeSubmission.status === 'returned') {
+            return (
+                <Alert severity="warning">
+                    {activeSubmission.returnNote ?? 'A mentor requested changes to your submission.'}
+                    {activeSubmission.returnedBy && (
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                            Returned by{' '}
+                            {TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.returnedBy]} on{' '}
+                            {formatDateTime(activeSubmission.returnedAt)}.
+                        </Typography>
+                    )}
+                </Alert>
+            );
+        }
+
+        if (activeSubmission.status === 'approved') {
+            const approvedAt = formatDateTime(
+                activeSubmission.completedAt
+                ?? activeSubmission.updatedAt
+                ?? activeSubmission.submittedAt,
+            );
+            return (
+                <Alert severity="success">
+                    Stage approved on {approvedAt}. You can continue to the next milestone.
+                </Alert>
+            );
+        }
+
+        return null;
+    }, [activeSubmission, formatDateTime, pendingRoleLabel]);
+
     const renderTabs = () => (
         <Card variant="outlined" sx={{ mb: 3 }}>
             <Tabs
@@ -331,19 +569,11 @@ export default function TerminalRequirementsPage() {
             >
                 {THESIS_STAGE_METADATA.map((stageMeta) => {
                     const unlocked = stageUnlockMap[stageMeta.value];
-                    const requirements = stageRequirementsByStage[stageMeta.value] ?? [];
-                    const submittedCount = requirements.filter((requirement) => (
-                        (requirementFiles[requirement.id]?.length ?? 0) > 0
-                    )).length;
-                    const completed = unlocked && requirements.length > 0 && submittedCount === requirements.length;
-                    const inProgress = unlocked && submittedCount > 0 && !completed;
-                    const label = unlocked
-                        ? (completed ? 'Submitted' : inProgress ? 'In progress' : 'Ready')
-                        : 'Locked';
-                    const chipColor: 'default' | 'success' | 'info' = unlocked
-                        ? (completed ? 'success' : inProgress ? 'info' : 'default')
-                        : 'default';
-                    const chipVariant: 'filled' | 'outlined' = unlocked && (completed || inProgress) ? 'filled' : 'outlined';
+                    const statusMeta = stageStatusMetaMap[stageMeta.value] ?? {
+                        label: unlocked ? 'Ready' : 'Locked',
+                        color: unlocked ? 'default' : 'default',
+                        variant: unlocked ? 'outlined' : 'outlined',
+                    };
                     return (
                         <Tab
                             key={stageMeta.value}
@@ -351,7 +581,12 @@ export default function TerminalRequirementsPage() {
                             label={(
                                 <Stack spacing={0.5} alignItems="center">
                                     <Typography variant="body2" fontWeight={600}>{stageMeta.label}</Typography>
-                                    <Chip label={label} size="small" color={chipColor} variant={chipVariant} />
+                                    <Chip
+                                        label={statusMeta.label}
+                                        size="small"
+                                        color={statusMeta.color}
+                                        variant={statusMeta.variant}
+                                    />
                                 </Stack>
                             )}
                         />
@@ -456,7 +691,34 @@ export default function TerminalRequirementsPage() {
                                             value={Number.isFinite(stageProgress.percent) ? stageProgress.percent : 0}
                                             sx={{ mt: 1, height: 8, borderRadius: 4 }}
                                         />
+                                        <Stack
+                                            direction={{ xs: 'column', sm: 'row' }}
+                                            spacing={1.5}
+                                            alignItems={{ sm: 'center' }}
+                                            sx={{ mt: 2 }}
+                                        >
+                                            <Button
+                                                variant="contained"
+                                                startIcon={<TaskAltIcon />}
+                                                onClick={handleSubmitStage}
+                                                disabled={!canSubmit}
+                                            >
+                                                {submitLoading ? 'Submitting…' : submitButtonLabel}
+                                            </Button>
+                                            {!readyForSubmission && allowFileActions && (
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Upload files for every requirement to enable submission.
+                                                </Typography>
+                                            )}
+                                        </Stack>
                                     </Box>
+
+                                    {workflowAlert}
+
+                                    <SubmissionStatus
+                                        submission={activeSubmission}
+                                        highlightRole={activeSubmission?.currentRole ?? null}
+                                    />
 
                                     {stageRequirements.length === 0 ? (
                                         <Alert severity="info">
@@ -473,8 +735,13 @@ export default function TerminalRequirementsPage() {
                                                         loading={requirementLoading[requirement.id]}
                                                         uploading={uploadingMap[requirement.id]}
                                                         error={uploadErrors[requirement.id] ?? undefined}
-                                                        onUpload={(files) => handleUploadRequirement(requirement, files)}
-                                                        onDeleteFile={(file) => handleDeleteFile(requirement.id, file)}
+                                                        disabled={!allowFileActions}
+                                                        onUpload={allowFileActions
+                                                            ? (files) => handleUploadRequirement(requirement, files)
+                                                            : undefined}
+                                                        onDeleteFile={allowFileActions
+                                                            ? (file) => handleDeleteFile(requirement.id, file)
+                                                            : undefined}
                                                     />
                                                 </Grid>
                                             ))}

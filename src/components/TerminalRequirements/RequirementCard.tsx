@@ -79,7 +79,8 @@ export function TerminalRequirementCard({
 
     const statusMeta = STATUS_META[status];
     const hasFiles = Boolean(files && files.length > 0);
-    const uploadDisabled = disabled || uploading || !onUpload;
+    const canUpload = Boolean(onUpload);
+    const uploadDisabled = disabled || uploading || !canUpload;
 
     return (
         <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -104,29 +105,33 @@ export function TerminalRequirementCard({
                     </Stack>
                 </Stack>
 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<CloudUploadIcon />}
-                        onClick={handleUploadClick}
-                        disabled={uploadDisabled}
-                    >
-                        {uploading ? 'Uploading…' : 'Upload files'}
-                    </Button>
-                    {uploading && (
-                        <Box sx={{ flexGrow: 1, width: '100%' }}>
-                            <LinearProgress />
-                        </Box>
-                    )}
-                </Stack>
+                {canUpload && (
+                    <>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                            <Button
+                                variant="contained"
+                                startIcon={<CloudUploadIcon />}
+                                onClick={handleUploadClick}
+                                disabled={uploadDisabled}
+                            >
+                                {uploading ? 'Uploading…' : 'Upload files'}
+                            </Button>
+                            {uploading && (
+                                <Box sx={{ flexGrow: 1, width: '100%' }}>
+                                    <LinearProgress />
+                                </Box>
+                            )}
+                        </Stack>
 
-                <input
-                    type="file"
-                    ref={inputRef}
-                    hidden
-                    multiple
-                    onChange={handleFileChange}
-                />
+                        <input
+                            type="file"
+                            ref={inputRef}
+                            hidden
+                            multiple
+                            onChange={handleFileChange}
+                        />
+                    </>
+                )}
 
                 {requirement.templateFileUrl && (
                     <Button
