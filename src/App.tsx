@@ -17,9 +17,13 @@ import type { Navigation } from '@toolpad/core/AppProvider';
 import type { Session, ExtendedAuthentication } from './types/session';
 import type { User } from 'firebase/auth';
 
-import CssBaseline from '@mui/material/CssBaseline';
+import { CssBaseline } from '@mui/material';
+import BrandingLogo from './components/BrandingLogo';
+
 const BRANDING = {
     title: 'ThesisFlow',
+    logo: <BrandingLogo />,
+    homeUrl: '/dashboard'
 };
 
 function AppContent() {

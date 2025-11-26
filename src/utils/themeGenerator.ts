@@ -214,6 +214,7 @@ export function generateThemeFromSeedColor(seedColor: string): Theme {
                             transform: 'scale(1.02) translateX(1px)',
                         },
                         '&.Mui-selected': {
+
                             transition: theme.transitions.create(['background-color', 'transform'], {
                                 duration: theme.transitions.duration.shorter,
                                 easing: theme.transitions.easing.easeInOut,
@@ -222,6 +223,21 @@ export function generateThemeFromSeedColor(seedColor: string): Theme {
                                 theme.palette.mode === 'light' ? lightColors.primary : darkColors.primary,
                                 theme.palette.mode === 'light' ? 0.16 : 0.24
                             ),
+                            // TODO: Fix, not changing color
+                            color: theme.palette.mode === 'light' ? lightColors.primary : darkColors.primary,
+                            '& .MuiListItemIcon-root': {
+                                color: theme.palette.mode === 'light' ? lightColors.primary : darkColors.primary,
+                            },
+                            '& .MuiSvgIcon-root': {
+                                color: theme.palette.mode === 'light' ? lightColors.primary : darkColors.primary,
+                            },
+                            '& .MuiTypography-root': {
+                                color: theme.palette.mode === 'light' ? lightColors.primary : darkColors.primary,
+                            },
+                            '& .MuiListItemText-root': {
+                                color: theme.palette.mode === 'light' ? lightColors.primary : darkColors.primary,
+                            },
+                            // ----------------------------
                             '&:hover': {
                                 backgroundColor: rgbaFromHex(
                                     theme.palette.mode === 'light' ? lightColors.primary : darkColors.primary,

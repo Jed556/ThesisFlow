@@ -1,5 +1,5 @@
 import { deepmerge } from '@mui/utils';
-import { createTheme } from '@mui/material/styles';
+import { createTheme, alpha } from '@mui/material/styles';
 
 // Extend MUI theme types to include custom animation properties
 declare module '@mui/material/styles' {
@@ -551,13 +551,14 @@ const components = {
                     duration: base.transitions.duration.short,
                     easing: base.transitions.easing.easeInOut,
                 }),
-                borderRadius: base.shape?.borderRadius ?? 8,
+                borderRadius: base.shape?.borderRadius ?? 3,
             },
         },
     },
     MuiCard: {
         styleOverrides: {
             root: {
+                borderRadius: base.shape?.borderRadius ?? 3,
                 transition: base.transitions.create(['box-shadow', 'transform', 'width', 'height'], {
                     duration: base.transitions.duration.short,
                     easing: base.transitions.easing.emphasized,
@@ -587,6 +588,22 @@ const components = {
             },
         },
     },
+    // MuiToolbar: {
+    //     styleOverrides: {
+    //         root: {
+    //             // Color toolbar svg icons with primary color, but exclude icons that live under Box containers
+    //             '& .MuiSvgIcon-root': {
+    //                 color: base.palette?.primary.main,
+    //             },
+    //             '& .MuiBox-root .MuiSvgIcon-root': {
+    //                 color: 'inherit',
+    //             },
+    //             '& .Stack-root .Stack-root .MuiSvgIcon-root': {
+    //                 color: 'inherit',
+    //             },
+    //         }
+    //     }
+    // },
     MuiDrawer: {
         styleOverrides: {
             paper: {
@@ -594,12 +611,9 @@ const components = {
                     duration: base.transitions.duration.enteringScreen,
                     easing: base.transitions.easing.emphasized,
                 }) + ' !important',
-                // Target only the first direct child Box component inside Drawer
                 '& > .MuiBox-root:first-of-type': {
                     paddingTop: 0,
                     paddingBottom: base.spacing(2),
-                    paddingLeft: base.spacing(2),
-                    paddingRight: base.spacing(2),
                 },
             },
         },
@@ -616,6 +630,7 @@ const components = {
             },
         },
     },
+
     MuiListItem: {
         styleOverrides: {
             root: {
@@ -641,59 +656,20 @@ const components = {
                 '&:hover': {
                     transform: 'scale(1.02) translateX(1px)',
                 },
-            },
-        },
-    },
-    MuiAccordion: {
-        styleOverrides: {
-            root: {
-                marginTop: base.spacing(1),
-                marginBottom: base.spacing(1),
-                borderRadius: base.shape?.borderRadius ?? 8,
-                '&:before, &:after': { display: 'none' },
-                boxShadow: base.shadows?.[3] ?? 'none',
-                transition: base.transitions.create(['margin', 'box-shadow'], {
-                    duration: base.transitions.duration.standard,
-                    easing: base.transitions.easing.emphasized,
-                }),
-                '&.Mui-expanded': {
-                    marginTop: base.spacing(1),
-                    marginBottom: base.spacing(1),
-                    minHeight: 80,
-                },
-                '&:first-of-type, &:last-of-type': {
-                    borderRadius: base.shape?.borderRadius ?? 8,
-                },
-                '&:first-of-type': {
-                    marginTop: 0,
-                },
-            },
-        },
-    },
-    MuiAccordionSummary: {
-        styleOverrides: {
-            root: {
-                backgroundColor: base.palette?.background?.paper,
-                borderRadius: base.shape?.borderRadius ?? 8,
-                position: 'sticky',
-                top: 0,
-                zIndex: (base.zIndex?.appBar ?? 1100) - 1,
-                cursor: 'pointer',
-                minHeight: 80,
-                transition: base.transitions.create('background-color', {
-                    duration: base.transitions.duration.shorter,
-                    easing: base.transitions.easing.easeInOut,
-                }),
-                '& .MuiTypography-root': {
-                    cursor: 'pointer',
-                },
-                '&.Mui-expanded': {
-                    minHeight: 80,
-                },
-                '& .MuiAccordionSummary-content': {
-                    margin: 0,
-                    '&.Mui-expanded': {
-                        minHeight: 80,
+                '&.Mui-selected': {
+                    color: base.palette.primary.main,
+                    backgroundColor: alpha(base.palette.primary.main, 0.12),
+                    '& .MuiListItemIcon-root': {
+                        color: base.palette.primary.main,
+                    },
+                    '& .MuiListItemText-root': {
+                        color: base.palette.primary.main,
+                    },
+                    '& .MuiSvgIcon-root': {
+                        color: base.palette.primary.main,
+                    },
+                    '& .MuiTypography-root': {
+                        color: base.palette.primary.main,
                     },
                 },
             },
