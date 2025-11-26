@@ -18,7 +18,6 @@ export default function AdviserTerminalRequirementApprovalsPage() {
         <AnimatedPage variant="slideUp">
             <TerminalRequirementApprovalWorkspace
                 role="adviser"
-                title="Terminal Requirement Approvals"
                 description="Verify each stage once the panels finish their review so editors and statisticians can continue the workflow."
                 emptyStateMessage="No thesis groups are currently assigned to you as an adviser."
             />

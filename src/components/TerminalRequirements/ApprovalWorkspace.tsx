@@ -58,14 +58,12 @@ const ROLE_TITLES: Record<TerminalRequirementApprovalRole, string> = {
 
 export interface TerminalRequirementApprovalWorkspaceProps {
     role: TerminalRequirementApprovalRole;
-    title: string;
     description: string;
     emptyStateMessage: string;
 }
 
 export function TerminalRequirementApprovalWorkspace({
     role,
-    title,
     description,
     emptyStateMessage,
 }: TerminalRequirementApprovalWorkspaceProps) {
@@ -361,10 +359,11 @@ export function TerminalRequirementApprovalWorkspace({
             showNotification('This group has no thesis yet.', 'info');
             return;
         }
+        const groupId = option.groupId;
         setThesisLoading(true);
         void (async () => {
             try {
-                const groupThesis = await getThesisByGroupId(option.groupId);
+                const groupThesis = await getThesisByGroupId(groupId as string);
                 if (groupThesis?.id) {
                     setSelectedThesisId(groupThesis.id);
                 } else {
@@ -503,9 +502,6 @@ export function TerminalRequirementApprovalWorkspace({
     return (
         <Stack spacing={3}>
             <Box>
-                <Typography variant="h4" gutterBottom>
-                    {title}
-                </Typography>
                 <Typography variant="body1" color="text.secondary">
                     {description}
                 </Typography>

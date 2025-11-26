@@ -18,7 +18,6 @@ export default function EditorTerminalRequirementApprovalsPage() {
         <AnimatedPage variant="slideUp">
             <TerminalRequirementApprovalWorkspace
                 role="editor"
-                title="Terminal Requirement Approvals"
                 description="Review and mark each submission after adviser sign-off so statisticians and admins know when manuscript formatting is finished."
                 emptyStateMessage="No thesis groups are currently assigned to you as an editor."
             />

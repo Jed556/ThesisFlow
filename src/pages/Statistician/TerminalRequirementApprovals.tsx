@@ -18,7 +18,6 @@ export default function StatisticianTerminalRequirementApprovalsPage() {
         <AnimatedPage variant="slideUp">
             <TerminalRequirementApprovalWorkspace
                 role="statistician"
-                title="Terminal Requirement Approvals"
                 description="Confirm that the quantitative deliverables meet the data standards after editors finish their pass."
                 emptyStateMessage="No thesis groups are currently assigned to you as a statistician."
             />
