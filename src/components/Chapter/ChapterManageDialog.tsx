@@ -1,15 +1,23 @@
 import * as React from 'react';
 import {
     Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
-    IconButton, Stack, TextField, Typography, Paper,
+    IconButton, Stack, TextField, Typography, Paper, MenuItem,
 } from '@mui/material';
 import {
     Add as AddIcon, ArrowUpward as ArrowUpwardIcon,
     ArrowDownward as ArrowDownwardIcon, Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { ChapterConfigFormData, ChapterFormErrorKey, ChapterTemplate } from '../../types/chapter';
+import type { ThesisStage } from '../../types/thesis';
 import { GrowTransition } from '../Animate';
-import { createEmptyChapterTemplate, moveChapterTemplate, normalizeChapterOrder } from '../../utils/chapterUtils';
+import {
+    DEFAULT_CHAPTER_STAGE,
+    coerceChapterStages,
+    createEmptyChapterTemplate,
+    moveChapterTemplate,
+    normalizeChapterOrder,
+} from '../../utils/chapterUtils';
+import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
 import { buildDefaultChapters } from './constants';
 
 interface ChapterManageDialogProps {
@@ -86,7 +94,13 @@ export default function ChapterManageDialog({
 
     const handleAddChapter = React.useCallback(() => {
         const nextOrder = formData.chapters.length + 1;
-        onFieldChange({ chapters: [...formData.chapters, createEmptyChapterTemplate(nextOrder)] });
+        const lastChapter = formData.chapters[formData.chapters.length - 1];
+        const fallbackStages = coerceChapterStages(lastChapter?.stage);
+        const nextStage = fallbackStages[fallbackStages.length - 1] ?? DEFAULT_CHAPTER_STAGE;
+
+        onFieldChange({
+            chapters: [...formData.chapters, createEmptyChapterTemplate(nextOrder, nextStage)],
+        });
     }, [formData.chapters, onFieldChange]);
 
     const handleRemoveChapter = React.useCallback(
@@ -104,6 +118,9 @@ export default function ChapterManageDialog({
     const handleMoveChapter = React.useCallback(
         (index: number, direction: 1 | -1) => {
             const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= formData.chapters.length) {
+                return;
+            }
             onFieldChange({ chapters: moveChapterTemplate(formData.chapters, index, targetIndex) });
         },
         [formData.chapters, onFieldChange]
@@ -175,7 +192,12 @@ export default function ChapterManageDialog({
 
                     <Box>
                         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                            <Typography variant="subtitle1">Chapter Requirements</Typography>
+                            <Box>
+                                <Typography variant="subtitle1">Chapters</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Add, reorder, or edit chapter requirements. Stage selection now supports multiples.
+                                </Typography>
+                            </Box>
                             <Button startIcon={<AddIcon />} onClick={handleAddChapter}>
                                 Add Chapter
                             </Button>
@@ -186,66 +208,107 @@ export default function ChapterManageDialog({
                             </Typography>
                         )}
                         <Stack spacing={2}>
-                            {formData.chapters.map((chapter, index) => (
-                                <Paper key={chapter.id} variant="outlined" sx={{ p: 2 }}>
-                                    <Stack spacing={1.5}>
-                                        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                                            <Typography variant="subtitle2">
-                                                Chapter {chapter.id}
-                                            </Typography>
-                                            <Stack direction="row" spacing={1}>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleMoveChapter(index, -1)}
-                                                    disabled={index === 0}
-                                                    aria-label="Move chapter up"
-                                                >
-                                                    <ArrowUpwardIcon fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleMoveChapter(index, 1)}
-                                                    disabled={index === formData.chapters.length - 1}
-                                                    aria-label="Move chapter down"
-                                                >
-                                                    <ArrowDownwardIcon fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleRemoveChapter(index)}
-                                                    disabled={formData.chapters.length <= MIN_CHAPTERS}
-                                                    aria-label="Remove chapter"
-                                                >
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
-                                            </Stack>
-                                        </Stack>
-                                        <TextField
-                                            label="Title"
-                                            value={chapter.title}
-                                            onChange={(event) => handleChapterFieldChange(index, { title: event.target.value })}
-                                            fullWidth
-                                            required
-                                            helperText="Provide the chapter title as it should appear in ThesisData"
-                                        />
-                                        <TextField
-                                            label="Description"
-                                            value={chapter.description || ''}
-                                            onChange={(event) =>
-                                                handleChapterFieldChange(index, { description: event.target.value })
-                                            }
-                                            fullWidth
-                                            multiline
-                                            minRows={2}
-                                            helperText="Optional: add guidance or requirements for this chapter"
-                                        />
-                                    </Stack>
+                            {formData.chapters.length === 0 ? (
+                                <Paper variant="outlined" sx={{ p: 2 }}>
+                                    <Typography color="text.secondary">
+                                        No chapters configured yet. Use “Add Chapter” to get started.
+                                    </Typography>
                                 </Paper>
-                            ))}
+                            ) : (
+                                formData.chapters.map((chapter, index) => {
+                                    const stageValues = coerceChapterStages(chapter.stage);
+                                    return (
+                                        <Paper key={chapter.id} variant="outlined" sx={{ p: 2 }}>
+                                            <Stack spacing={1.5}>
+                                                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                                                    <Typography variant="subtitle2">Chapter {chapter.id}</Typography>
+                                                    <Stack direction="row" spacing={1}>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleMoveChapter(index, -1)}
+                                                            disabled={index === 0}
+                                                            aria-label="Move chapter up"
+                                                        >
+                                                            <ArrowUpwardIcon fontSize="small" />
+                                                        </IconButton>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleMoveChapter(index, 1)}
+                                                            disabled={index === formData.chapters.length - 1}
+                                                            aria-label="Move chapter down"
+                                                        >
+                                                            <ArrowDownwardIcon fontSize="small" />
+                                                        </IconButton>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleRemoveChapter(index)}
+                                                            disabled={formData.chapters.length <= MIN_CHAPTERS}
+                                                            aria-label="Remove chapter"
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Stack>
+                                                </Stack>
+                                                <TextField
+                                                    label="Title"
+                                                    value={chapter.title}
+                                                    onChange={(event) =>
+                                                        handleChapterFieldChange(index, { title: event.target.value })
+                                                    }
+                                                    fullWidth
+                                                    required
+                                                    helperText="Provide the chapter title as it should appear in ThesisData"
+                                                />
+                                                <TextField
+                                                    select
+                                                    label="Thesis Stages"
+                                                    value={stageValues}
+                                                    slotProps={{
+                                                        select: {
+                                                            multiple: true,
+                                                            renderValue: (selected) => (selected as string[]).join(', '),
+                                                        },
+                                                    }}
+                                                    onChange={(event) => {
+                                                        const value = event.target.value;
+                                                        const nextStages = Array.isArray(value)
+                                                            ? (value as ThesisStage[])
+                                                            : [(value as ThesisStage)];
+                                                        const normalizedStages = nextStages.length > 0
+                                                            ? nextStages
+                                                            : [DEFAULT_CHAPTER_STAGE];
+                                                        handleChapterFieldChange(index, {
+                                                            stage: normalizedStages,
+                                                        });
+                                                    }}
+                                                    fullWidth
+                                                >
+                                                    {THESIS_STAGE_METADATA.map((stage) => (
+                                                        <MenuItem key={stage.value} value={stage.value}>
+                                                            {stage.label}
+                                                        </MenuItem>
+                                                    ))}
+                                                </TextField>
+                                                <TextField
+                                                    label="Description"
+                                                    value={chapter.description || ''}
+                                                    onChange={(event) =>
+                                                        handleChapterFieldChange(index, { description: event.target.value })
+                                                    }
+                                                    fullWidth
+                                                    multiline
+                                                    minRows={2}
+                                                    helperText="Optional: add guidance or requirements for this chapter"
+                                                />
+                                            </Stack>
+                                        </Paper>
+                                    );
+                                })
+                            )}
                         </Stack>
                     </Box>
                 </Stack>
-            </DialogContent>
+            </DialogContent >
             <DialogActions>
                 <Button onClick={onClose} disabled={saving}>
                     Cancel
@@ -260,6 +323,6 @@ export default function ChapterManageDialog({
                     {saving ? 'Saving…' : editMode ? 'Save Changes' : 'Create Template'}
                 </Button>
             </DialogActions>
-        </Dialog>
+        </Dialog >
     );
 }

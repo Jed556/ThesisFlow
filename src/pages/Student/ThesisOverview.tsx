@@ -4,7 +4,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
-import type { ThesisData } from '../../types/thesis';
+import type { ThesisData, ThesisStage } from '../../types/thesis';
 import type { ConversationParticipant } from '../../components/Conversation';
 import type { WorkspaceUploadPayload } from '../../types/workspace';
 import type { UserProfile } from '../../types/profile';
@@ -14,6 +14,12 @@ import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesi
 import { appendChapterSubmission } from '../../utils/firebase/firestore/chapterSubmissions';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
 import { getThesisTeamMembers } from '../../utils/thesisUtils';
+import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
+import { listenTerminalRequirementSubmission } from '../../utils/firebase/firestore/terminalRequirementSubmissions';
+import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
+import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
+import type { PanelCommentReleaseMap } from '../../types/panelComment';
+import { listenPanelCommentRelease } from '../../utils/firebase/firestore/panelComments';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -44,6 +50,10 @@ export default function StudentThesisOverviewPage() {
     const [isLoading, setIsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
     const [participants, setParticipants] = React.useState<Record<string, ConversationParticipant>>();
+    const [terminalSubmissions, setTerminalSubmissions] = React.useState<
+        Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
+    >({});
+    const [panelRelease, setPanelRelease] = React.useState<PanelCommentReleaseMap | null>(null);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -76,8 +86,24 @@ export default function StudentThesisOverviewPage() {
     React.useEffect(() => {
         if (!thesis?.id) {
             setParticipants(undefined);
+            setTerminalSubmissions({});
+            setPanelRelease(null);
             return;
         }
+
+        const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => (
+            listenTerminalRequirementSubmission(thesis.id!, stageMeta.value, {
+                onData: (record) => {
+                    setTerminalSubmissions((prev) => ({
+                        ...prev,
+                        [stageMeta.value]: record,
+                    }));
+                },
+                onError: (listenerError) => {
+                    console.error('Failed to listen for terminal requirement progress:', listenerError);
+                },
+            })
+        ));
 
         let cancelled = false;
         void (async () => {
@@ -105,10 +131,37 @@ export default function StudentThesisOverviewPage() {
 
         return () => {
             cancelled = true;
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
     }, [thesis?.id]);
 
-    const handleUploadChapter = React.useCallback(async ({ thesisId, chapterId, file }: WorkspaceUploadPayload) => {
+    React.useEffect(() => {
+        if (!thesis?.groupId) {
+            setPanelRelease(null);
+            return;
+        }
+
+        const unsubscribe = listenPanelCommentRelease(thesis.groupId, {
+            onData: (release) => setPanelRelease(release),
+            onError: (listenerError) => {
+                console.error('Failed to listen for panel comment release states:', listenerError);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesis?.groupId]);
+
+    const terminalRequirementCompletionMap = React.useMemo(() => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
+            const submission = terminalSubmissions[stageMeta.value];
+            acc[stageMeta.value] = submission?.status === 'approved';
+            return acc;
+        }, {} as Record<ThesisStage, boolean>);
+    }, [terminalSubmissions]);
+
+    const handleUploadChapter = React.useCallback(async ({ thesisId, groupId, chapterId, chapterStage, file }: WorkspaceUploadPayload) => {
         if (!userUid) {
             throw new Error('You must be signed in to upload a chapter.');
         }
@@ -117,7 +170,9 @@ export default function StudentThesisOverviewPage() {
             file,
             userUid,
             thesisId,
+            groupId,
             chapterId,
+            chapterStage,
             category: 'submission',
             metadata: { scope: 'student-workspace' },
         });
@@ -134,6 +189,13 @@ export default function StudentThesisOverviewPage() {
             submittedAt: result.fileAttachment.uploadDate,
         });
     }, [userUid]);
+
+    const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({
+        chapters: {
+            'Post-Proposal': panelRelease?.proposal?.sent ?? false,
+            'Post-Defense': panelRelease?.defense?.sent ?? false,
+        },
+    }), [panelRelease?.proposal?.sent, panelRelease?.defense?.sent]);
 
     return (
         <AnimatedPage variant="slideUp">
@@ -162,6 +224,12 @@ export default function StudentThesisOverviewPage() {
                         </Typography>
                     </CardContent>
                 </Card>
+            ) : !thesis.adviser ? (
+                <UnauthorizedNotice
+                    title="Assign a research adviser to continue"
+                    description="Your thesis workspace unlocks after a research adviser accepts your request."
+                    variant="box"
+                />
             ) : (
                 <ThesisWorkspace
                     thesisId={thesis.id}
@@ -172,6 +240,9 @@ export default function StudentThesisOverviewPage() {
                     allowCommenting={false}
                     emptyStateMessage="Select a chapter to upload your first version and unlock feedback."
                     onUploadChapter={handleUploadChapter}
+                    enforceTerminalRequirementSequence
+                    terminalRequirementCompletionMap={terminalRequirementCompletionMap}
+                    stageGateOverrides={stageGateOverrides}
                 />
             )}
         </AnimatedPage>

@@ -17,6 +17,7 @@ import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { listenTheses, listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
 import { getGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
+import { isTopicApproved } from '../../../utils/thesisUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { ThesisData } from '../../../types/thesis';
 import type { Session } from '../../../types/session';
@@ -303,17 +304,17 @@ export default function AdviserEditorRecommendationsPage() {
         [statisticianProfiles, thesisStats]
     );
 
-    const topicApproved = React.useMemo(() => {
-        if (!studentThesis || !studentThesis.title) {
-            return false;
-        }
-        const normalized = (studentThesis.overallStatus ?? '').toLowerCase();
-        return normalized.includes('approved') || normalized.includes('accepted') || normalized.includes('granted');
-    }, [studentThesis]);
+    const topicApproved = React.useMemo(() => isTopicApproved(studentThesis), [studentThesis]);
+
+    const hasThesisRecord = React.useMemo(() => (
+        Boolean(studentThesis?.id)
+        || Boolean(studentGroup?.thesisId)
+        || Boolean(studentGroup?.thesisTitle)
+    ), [studentGroup?.thesisId, studentGroup?.thesisTitle, studentThesis?.id]);
 
     const hasGroupRecord = Boolean(studentGroupId || studentGroup);
     const editorTabLocked = !hasGroupRecord;
-    const adviserTabLocked = !topicApproved;
+    const adviserTabLocked = !(topicApproved || hasThesisRecord);
     const adviserAssigned = Boolean(studentThesis?.adviser ?? studentGroup?.members?.adviser);
     const statisticianTabLocked = !adviserAssigned;
 

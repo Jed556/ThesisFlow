@@ -12,7 +12,7 @@ import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import type { WorkspaceFilterConfig, WorkspaceChapterDecisionPayload } from '../../types/workspace';
+import type { WorkspaceFilterConfig, WorkspaceChapterDecisionPayload, WorkspaceCommentPayload } from '../../types/workspace';
 import {
     getReviewerAssignmentsForUser,
     getThesisById,
@@ -206,16 +206,12 @@ export default function AdviserThesisOverviewPage() {
 
     const handleCreateComment = React.useCallback(async ({
         chapterId,
+        chapterStage,
         versionIndex,
         content,
         files,
-    }: {
-        chapterId: number;
-        versionIndex: number | null;
-        content: string;
-        files: File[];
-    }) => {
-        if (!adviserUid || !selectedThesisId) {
+    }: WorkspaceCommentPayload) => {
+        if (!adviserUid || !selectedThesisId || !thesis?.groupId) {
             throw new Error('Missing adviser context.');
         }
 
@@ -224,7 +220,9 @@ export default function AdviserThesisOverviewPage() {
             attachments = await uploadConversationAttachments(files, {
                 userUid: adviserUid,
                 thesisId: selectedThesisId,
+                groupId: thesis.groupId,
                 chapterId,
+                chapterStage,
             });
         }
 
@@ -252,7 +250,7 @@ export default function AdviserThesisOverviewPage() {
                 ),
             };
         });
-    }, [adviserUid, selectedThesisId]);
+    }, [adviserUid, selectedThesisId, thesis?.groupId]);
 
     const handleChapterDecision = React.useCallback(async ({
         thesisId: targetThesisId,
@@ -335,9 +333,7 @@ export default function AdviserThesisOverviewPage() {
                     isLoading={isLoading}
                     allowCommenting
                     emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
-                    onCreateComment={({ chapterId, versionIndex, content, files }) =>
-                        handleCreateComment({ chapterId, versionIndex, content, files })
-                    }
+                    onCreateComment={handleCreateComment}
                     mentorRole="adviser"
                     onChapterDecision={handleChapterDecision}
                 />

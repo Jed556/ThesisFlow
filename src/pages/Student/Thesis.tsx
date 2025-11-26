@@ -15,7 +15,7 @@ import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import { AnimatedList, AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
-import { getThesisTeamMembers } from '../../utils/thesisUtils';
+import { getThesisTeamMembers, isTopicApproved } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { normalizeDateInput } from '../../utils/dateUtils';
@@ -170,7 +170,8 @@ function buildThesisWorkflowSteps(
                 description: 'Upload final documents and complete terminal requirements for submission.',
                 completedMessage: 'All terminal requirements have been submitted.',
                 state: 'available',
-                actionLabel: 'Coming Soon',
+                actionLabel: 'View Requirements',
+                actionPath: '/terminal-requirements',
                 icon: <UploadIcon />,
                 prerequisites: [
                     { stepId: 'upload-chapters', type: 'prerequisite' },
@@ -195,10 +196,7 @@ function buildThesisWorkflowSteps(
     const adviserAssigned = Boolean(record.adviser ?? group?.members?.adviser);
     const editorAssigned = Boolean(record.editor ?? group?.members?.editor);
     const hasTopicProposals = Boolean(record.title);
-    const normalizedOverallStatus = (record.overallStatus ?? '').toLowerCase();
-    const topicApproved = normalizedOverallStatus.includes('approved')
-        || normalizedOverallStatus.includes('accepted')
-        || normalizedOverallStatus.includes('granted');
+    const topicApproved = isTopicApproved(record);
     const chaptersSubmitted = chapters.some((chapter) => chapter.status !== 'not_submitted');
     const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
     const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
@@ -310,7 +308,8 @@ function buildThesisWorkflowSteps(
             description: 'Upload final documents and complete terminal requirements for submission.',
             completedMessage: 'All terminal requirements have been submitted successfully.',
             state: 'available',
-            actionLabel: 'Coming Soon',
+            actionLabel: 'View Requirements',
+            actionPath: '/terminal-requirements',
             icon: <UploadIcon />,
             prerequisites: [
                 { stepId: 'upload-chapters', type: 'prerequisite' },

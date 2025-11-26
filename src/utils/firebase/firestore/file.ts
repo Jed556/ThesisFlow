@@ -7,6 +7,7 @@ import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, query, where, orde
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import type { FileAttachment } from '../../../types/file';
+import type { ThesisStage } from '../../../types/thesis';
 
 /** Firestore collection name for file metadata */
 const FILES_COLLECTION = 'files';
@@ -121,50 +122,56 @@ export async function getFilesByOwner(
 export async function getFilesByThesis(
     thesisId: string,
     chapterId?: number,
-    category?: 'submission' | 'attachment'
+    category?: 'submission' | 'attachment',
+    stage?: ThesisStage,
 ): Promise<FileAttachment[]> {
     try {
         const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-
-        if (chapterId !== undefined && category) {
-            const q = query(
-                filesRef,
-                where('thesisId', '==', thesisId),
-                where('chapterId', '==', chapterId),
-                where('category', '==', category),
-                orderBy('uploadDate', 'desc')
-            );
-            const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
-        } else if (chapterId !== undefined) {
-            const q = query(
-                filesRef,
-                where('thesisId', '==', thesisId),
-                where('chapterId', '==', chapterId),
-                orderBy('uploadDate', 'desc')
-            );
-            const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
-        } else if (category) {
-            const q = query(
-                filesRef,
-                where('thesisId', '==', thesisId),
-                where('category', '==', category),
-                orderBy('uploadDate', 'desc')
-            );
-            const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
-        } else {
-            const q = query(
-                filesRef,
-                where('thesisId', '==', thesisId),
-                orderBy('uploadDate', 'desc')
-            );
-            const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
-        }
+        const constraints = [
+            where('thesisId', '==', thesisId),
+            ...(chapterId !== undefined ? [where('chapterId', '==', chapterId)] : []),
+            ...(category ? [where('category', '==', category)] : []),
+            ...(stage ? [where('chapterStage', '==', stage)] : []),
+            orderBy('uploadDate', 'desc'),
+        ];
+        const q = query(filesRef, ...constraints);
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
     } catch (error) {
         console.error('Error getting files by thesis:', error);
+        return [];
+    }
+}
+
+/**
+ * Get files uploaded for a specific terminal requirement.
+ * @param thesisId - Thesis document identifier
+ * @param requirementId - Terminal requirement identifier
+ */
+export async function getFilesByTerminalRequirement(
+    thesisId: string,
+    requirementId: string,
+): Promise<FileAttachment[]> {
+    try {
+        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
+        const q = query(
+            filesRef,
+            where('thesisId', '==', thesisId),
+            where('terminalRequirementId', '==', requirementId)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const files = querySnapshot.docs.map((doc) => doc.data() as FileAttachment);
+        return files.sort((a, b) => {
+            const aTime = new Date(a.uploadDate ?? '').getTime();
+            const bTime = new Date(b.uploadDate ?? '').getTime();
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+                return 0;
+            }
+            return bTime - aTime;
+        });
+    } catch (error) {
+        console.error('Error getting files by terminal requirement:', error);
         return [];
     }
 }

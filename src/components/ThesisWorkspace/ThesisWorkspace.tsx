@@ -17,15 +17,17 @@ import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getAssignedMentorRoles, resolveChapterMentorApprovals } from '../../utils/mentorUtils';
 import { extractSubmissionId, normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import ChapterRail, { buildVersionOptions, formatChapterLabel } from './ChapterRail';
-
-const STAGE_METADATA: { value: ThesisStage; label: string; helper?: string }[] = [
-    { value: 'Pre-Proposal', label: 'Pre-Proposal' },
-    { value: 'Post-Proposal', label: 'Post-Proposal' },
-    { value: 'Pre-Defense', label: 'Pre Defense' },
-    { value: 'Post-Defense', label: 'Post Defense' },
-];
-
-const resolveChapterStage = (chapter: ThesisChapter): ThesisStage => chapter.stage ?? 'Pre-Proposal';
+import {
+    buildSequentialStageLockMap,
+    buildStageCompletionMap,
+    buildInterleavedStageLockMap,
+    chapterHasStage,
+    resolveChapterStage,
+    describeStageSequenceStep,
+    getPreviousSequenceStep,
+    THESIS_STAGE_METADATA,
+    type StageGateOverrides,
+} from '../../utils/thesisStageUtils';
 
 interface ThesisWorkspaceProps {
     thesisId?: string;
@@ -42,6 +44,9 @@ interface ThesisWorkspaceProps {
     onEditComment?: (payload: WorkspaceEditPayload) => Promise<void> | void;
     onUploadChapter?: (payload: WorkspaceUploadPayload) => Promise<void> | void;
     onChapterDecision?: (payload: WorkspaceChapterDecisionPayload) => Promise<void> | void;
+    terminalRequirementCompletionMap?: Partial<Record<ThesisStage, boolean>>;
+    enforceTerminalRequirementSequence?: boolean;
+    stageGateOverrides?: StageGateOverrides;
 }
 
 const fetchChapterFiles = async (thesisId: string, chapter: ThesisChapter): Promise<FileAttachment[]> => {
@@ -116,7 +121,10 @@ export default function ThesisWorkspace({
     thesisId, thesis, participants, currentUserId, mentorRole, filters, isLoading,
     allowCommenting = true,
     emptyStateMessage = 'Select a group to inspect its thesis.',
-    conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision
+    conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision,
+    terminalRequirementCompletionMap,
+    enforceTerminalRequirementSequence = false,
+    stageGateOverrides,
 }: ThesisWorkspaceProps) {
     const [activeChapterId, setActiveChapterId] = React.useState<number | null>(null);
     const [activeVersionIndex, setActiveVersionIndex] = React.useState<number | null>(null);
@@ -131,7 +139,7 @@ export default function ThesisWorkspace({
     } | null>(null);
     const [decisionError, setDecisionError] = React.useState<string | null>(null);
     const [isSubmittingDecision, setIsSubmittingDecision] = React.useState(false);
-    const [activeStage, setActiveStage] = React.useState<ThesisStage>(STAGE_METADATA[0].value);
+    const [activeStage, setActiveStage] = React.useState<ThesisStage>(THESIS_STAGE_METADATA[0].value);
 
     React.useEffect(() => {
         setChapterFiles({});
@@ -150,27 +158,29 @@ export default function ThesisWorkspace({
         } satisfies ThesisChapter));
     }, [thesis]);
 
-    const stageCompletionMap = React.useMemo(() => {
-        return STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stage) => {
-            const stageChapters = normalizedChapters.filter((chapter) => resolveChapterStage(chapter) === stage.value);
-            acc[stage.value] = stageChapters.length > 0
-                && stageChapters.every((chapter) => chapter.status === 'approved');
-            return acc;
-        }, {} as Record<ThesisStage, boolean>);
-    }, [normalizedChapters]);
+    const stageCompletionMap = React.useMemo(
+        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: false }),
+        [normalizedChapters],
+    );
 
-    const stageLockMap = React.useMemo(() => STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stage, index) => {
-        if (index === 0) {
-            acc[stage.value] = false;
-        } else {
-            const previousStage = STAGE_METADATA[index - 1].value;
-            acc[stage.value] = !(stageCompletionMap[previousStage] ?? false);
+    const stageLockMap = React.useMemo(() => {
+        if (!enforceTerminalRequirementSequence) {
+            return buildSequentialStageLockMap(stageCompletionMap);
         }
-        return acc;
-    }, {} as Record<ThesisStage, boolean>), [stageCompletionMap]);
+        const interleavedLocks = buildInterleavedStageLockMap({
+            chapters: stageCompletionMap,
+            terminalRequirements: terminalRequirementCompletionMap,
+        }, stageGateOverrides);
+        return interleavedLocks.chapters;
+    }, [
+        enforceTerminalRequirementSequence,
+        stageCompletionMap,
+        terminalRequirementCompletionMap,
+        stageGateOverrides,
+    ]);
 
     const stageChapters = React.useMemo(
-        () => normalizedChapters.filter((chapter) => resolveChapterStage(chapter) === activeStage),
+        () => normalizedChapters.filter((chapter) => chapterHasStage(chapter, activeStage)),
         [normalizedChapters, activeStage],
     );
 
@@ -182,25 +192,36 @@ export default function ThesisWorkspace({
 
     const isStageLocked = stageLockMap[activeStage] ?? false;
     const previousStageMeta = React.useMemo(() => {
-        const currentIndex = STAGE_METADATA.findIndex((stage) => stage.value === activeStage);
+        const currentIndex = THESIS_STAGE_METADATA.findIndex((stage) => stage.value === activeStage);
         if (currentIndex <= 0) {
             return null;
         }
-        return STAGE_METADATA[currentIndex - 1];
+        return THESIS_STAGE_METADATA[currentIndex - 1];
     }, [activeStage]);
     const activeStageMeta = React.useMemo(
-        () => STAGE_METADATA.find((stage) => stage.value === activeStage) ?? STAGE_METADATA[0],
+        () => THESIS_STAGE_METADATA.find((stage) => stage.value === activeStage) ?? THESIS_STAGE_METADATA[0],
         [activeStage],
     );
     const stageLockedDescription = React.useMemo(() => {
         if (!isStageLocked) {
             return undefined;
         }
-        if (previousStageMeta) {
+        if (enforceTerminalRequirementSequence) {
+            const previousStep = getPreviousSequenceStep(activeStage, 'chapters');
+            if (previousStep) {
+                return `Complete ${describeStageSequenceStep(previousStep)} to unlock ${activeStageMeta.label} chapters.`;
+            }
+        } else if (previousStageMeta) {
             return `Complete all ${previousStageMeta.label} chapters to unlock ${activeStageMeta.label}.`;
         }
         return 'This stage will unlock once prerequisites are satisfied.';
-    }, [isStageLocked, previousStageMeta, activeStageMeta]);
+    }, [
+        isStageLocked,
+        enforceTerminalRequirementSequence,
+        activeStage,
+        activeStageMeta,
+        previousStageMeta,
+    ]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStage) => {
         setActiveStage(nextStage);
@@ -216,10 +237,16 @@ export default function ThesisWorkspace({
         setActiveVersionIndex((previous) => (previous === versionIndex ? null : versionIndex));
     }, []);
 
+    const determineChapterStage = React.useCallback((chapterId: number): ThesisStage => {
+        const chapter = normalizedChapters.find((entry) => entry.id === chapterId);
+        return resolveChapterStage(chapter);
+    }, [normalizedChapters]);
+
     const handleChapterUpload = React.useCallback((chapterId: number, file: File) => {
         if (!onUploadChapter || !thesisId) {
             return;
         }
+        const chapterStage = determineChapterStage(chapterId);
         setUploadError(null);
         setUploadingChapterId(chapterId);
         setActiveChapterId(chapterId);
@@ -227,7 +254,10 @@ export default function ThesisWorkspace({
 
         void (async () => {
             try {
-                await onUploadChapter({ thesisId, chapterId, file });
+                await onUploadChapter({
+                    thesisId, chapterId, chapterStage, file,
+                    groupId: ''
+                });
                 setChapterFiles((current) => {
                     const next = { ...current };
                     delete next[chapterId];
@@ -242,7 +272,7 @@ export default function ThesisWorkspace({
                 setUploadingChapterId((current) => (current === chapterId ? null : current));
             }
         })();
-    }, [onUploadChapter, thesisId]);
+    }, [onUploadChapter, thesisId, determineChapterStage]);
 
     React.useEffect(() => {
         if (isStageLocked || stageChapters.length === 0) {
@@ -339,10 +369,10 @@ export default function ThesisWorkspace({
     const versionOptionsByChapter = React.useMemo<ChapterVersionMap>(() => {
         const map: ChapterVersionMap = {};
         normalizedChapters.forEach((chapter) => {
-            map[chapter.id] = buildVersionOptions(chapter, chapterFiles[chapter.id]);
+            map[chapter.id] = buildVersionOptions(chapter, chapterFiles[chapter.id], activeStage);
         });
         return map;
-    }, [normalizedChapters, chapterFiles]);
+    }, [normalizedChapters, chapterFiles, activeStage]);
 
     const versionOptions = activeChapterId ? (versionOptionsByChapter[activeChapterId] ?? []) : [];
     const loadingChapterId = isFetchingChapterFiles ? activeChapter?.id ?? null : null;
@@ -494,6 +524,7 @@ export default function ThesisWorkspace({
         const request: WorkspaceCommentPayload = {
             thesisId,
             chapterId: activeChapter.id,
+            chapterStage: resolveChapterStage(activeChapter),
             versionIndex: activeVersionIndex,
             content: payload.content,
             files: payload.files,
@@ -514,6 +545,7 @@ export default function ThesisWorkspace({
         await onEditComment({
             thesisId,
             chapterId: activeChapter.id,
+            chapterStage: resolveChapterStage(activeChapter),
             versionIndex: activeVersionIndex,
             content: payload.content,
             files: payload.files,
@@ -637,7 +669,7 @@ export default function ThesisWorkspace({
                         variant="scrollable"
                         scrollButtons="auto"
                     >
-                        {STAGE_METADATA.map((stage) => {
+                        {THESIS_STAGE_METADATA.map((stage) => {
                             const stageLocked = stageLockMap[stage.value];
                             const stageCompleted = stageCompletionMap[stage.value];
                             const chipLabel = stageLocked ? 'Locked' : stageCompleted ? 'Completed' : 'In progress';
@@ -698,6 +730,7 @@ export default function ThesisWorkspace({
                                             loadingChapterId={loadingChapterId}
                                             loadingMessage="Fetching submissions…"
                                             participants={participants}
+                                            activeStage={activeStage}
                                             reviewActions={enableChapterDecisions ? {
                                                 onApprove: (chapterId) => handleRequestDecision(chapterId, 'approved'),
                                                 onRequestRevision: (chapterId) => handleRequestDecision(

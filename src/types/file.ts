@@ -1,3 +1,5 @@
+import type { ThesisStage } from './thesis';
+
 /**
  * File-related type definitions for the ThesisFlow application
  * Contains all file handling, upload, and metadata types
@@ -75,8 +77,12 @@ export interface FileAttachment {
     author: string; // Firebase UID of the uploader
     category?: 'submission' | 'attachment';
     thesisId?: string;
+    groupId?: string;
     chapterId?: number;
+    chapterStage?: ThesisStage;
     commentId?: string;
+    terminalStage?: ThesisStage;
+    terminalRequirementId?: string;
 }
 
 /**

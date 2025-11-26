@@ -12,7 +12,7 @@ import {
 import {
     Upload as UploadIcon,
 } from '@mui/icons-material';
-import type { ChapterSubmissionStatus, MentorRole, ThesisChapter } from '../../types/thesis';
+import type { ChapterSubmissionStatus, MentorRole, ThesisChapter, ThesisStage } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../Conversation';
 import { FileCard } from '../File';
@@ -20,6 +20,7 @@ import { formatFileSize } from '../../utils/fileUtils';
 import type { ChapterVersionMap, VersionOption } from '../../types/workspace';
 import { mentorRoleLabels } from '../../utils/mentorUtils';
 import { normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
+import { resolveChapterStage } from '../../utils/thesisStageUtils';
 
 const statusMeta: Record<string, { label: string; chipColor: 'default' | 'success' | 'warning' | 'error' | 'info' }> = {
     approved: { label: 'Approved', chipColor: 'success' },
@@ -106,34 +107,57 @@ export const buildSubmissionMeta = (
     return parts.length ? parts.join(' • ') : undefined;
 };
 
-export const buildVersionOptions = (chapter?: ThesisChapter, files?: FileAttachment[]): VersionOption[] => {
+export const buildVersionOptions = (
+    chapter?: ThesisChapter,
+    files?: FileAttachment[],
+    stageFilter?: ThesisStage,
+): VersionOption[] => {
     if (!chapter) {
         return [];
     }
 
     const submissions = normalizeChapterSubmissions(chapter.submissions);
     const fileMap = new Map((files ?? []).map((file) => [file.id ?? '', file]));
+    const defaultStage = resolveChapterStage(chapter);
+    const matchesStage = (file?: FileAttachment) => {
+        if (!stageFilter) {
+            return true;
+        }
+        if (!file) {
+            return stageFilter === defaultStage;
+        }
+        if (!file.chapterStage) {
+            return stageFilter === defaultStage;
+        }
+        return file.chapterStage === stageFilter;
+    };
 
     if (submissions.length > 0) {
-        return submissions.map((submission, index) => {
+        return submissions.reduce<VersionOption[]>((acc, submission, index) => {
             const file = submission.id ? fileMap.get(submission.id) : undefined;
-            return {
+            if (!matchesStage(file)) {
+                return acc;
+            }
+            acc.push({
                 id: submission.id || file?.id || `version-${index + 1}`,
                 label: file?.name ?? `Version ${index + 1}`,
                 versionIndex: index,
                 file,
                 status: submission.status,
-            } satisfies VersionOption;
-        });
+            });
+            return acc;
+        }, []);
     }
 
     if (files && files.length > 0) {
-        return files.map((file, index) => ({
-            id: file.id ?? `version-${index + 1}`,
-            label: file.name ?? `Version ${index + 1}`,
-            versionIndex: index,
-            file,
-        } satisfies VersionOption));
+        return files
+            .filter((file) => matchesStage(file))
+            .map((file, index) => ({
+                id: file.id ?? `version-${index + 1}`,
+                label: file.name ?? `Version ${index + 1}`,
+                versionIndex: index,
+                file,
+            } satisfies VersionOption));
     }
 
     return [];
@@ -154,6 +178,7 @@ interface ChapterRailProps {
     participants?: Record<string, ConversationParticipant>;
     loadingChapterId?: number | null;
     loadingMessage?: string;
+    activeStage: ThesisStage;
     reviewActions?: {
         onApprove: (chapterId: number) => void;
         onRequestRevision: (chapterId: number) => void;
@@ -178,6 +203,7 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
     participants,
     loadingChapterId,
     loadingMessage,
+    activeStage,
     reviewActions,
 }) => {
     const handleUploadChange = React.useCallback((chapterId: number, event: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,7 +221,8 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
             {chapters.map((chapter) => {
                 const isActive = chapter.id === selectedChapterId;
                 const meta = statusMeta[chapter.status] ?? statusMeta.not_submitted;
-                const versions = versionOptionsByChapter[chapter.id] ?? buildVersionOptions(chapter);
+                const versions = versionOptionsByChapter[chapter.id]
+                    ?? buildVersionOptions(chapter, undefined, activeStage);
                 const isUploading = uploadingChapterId === chapter.id;
                 const isDecisionInFlight = reviewActions?.processingChapterId === chapter.id;
                 const showReviewActions = !enableUploads && Boolean(reviewActions);

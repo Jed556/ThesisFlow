@@ -1,14 +1,6 @@
 import * as React from 'react';
 import {
-    Box,
-    Button,
-    Card,
-    CardActionArea,
-    CardActions,
-    CardContent,
-    Chip,
-    Stack,
-    Typography,
+    Box, Card, CardActionArea, CardContent, Chip, Stack, Typography,
 } from '@mui/material';
 import Skeleton from '@mui/material/Skeleton';
 import type { ThesisChapterConfig } from '../../types/chapter';
@@ -17,33 +9,15 @@ import { CHAPTER_CARD_PREVIEW_LIMIT, formatChapterLabel } from './constants';
 interface ChapterCardProps {
     config: ThesisChapterConfig;
     onClick?: (config: ThesisChapterConfig) => void;
-    onEdit?: (config: ThesisChapterConfig) => void;
-    onDelete?: (config: ThesisChapterConfig) => void;
 }
 
 /**
  * Displays a thesis chapter configuration summary inside a clickable card.
  */
-export default function ChapterCard({ config, onClick, onEdit, onDelete }: ChapterCardProps) {
+export default function ChapterCard({ config, onClick }: ChapterCardProps) {
     const handleCardClick = React.useCallback(() => {
         onClick?.(config);
     }, [config, onClick]);
-
-    const handleEdit = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            onEdit?.(config);
-        },
-        [config, onEdit]
-    );
-
-    const handleDelete = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            onDelete?.(config);
-        },
-        [config, onDelete]
-    );
 
     const previewChapters = React.useMemo(
         () => config.chapters.slice(0, CHAPTER_CARD_PREVIEW_LIMIT),
@@ -105,20 +79,6 @@ export default function ChapterCard({ config, onClick, onEdit, onDelete }: Chapt
                     </Stack>
                 </CardContent>
             </CardActionArea>
-            {(onEdit || onDelete) && (
-                <CardActions sx={{ justifyContent: 'flex-end' }}>
-                    {onEdit && (
-                        <Button size="small" onClick={handleEdit}>
-                            Edit
-                        </Button>
-                    )}
-                    {onDelete && (
-                        <Button size="small" color="error" onClick={handleDelete}>
-                            Delete
-                        </Button>
-                    )}
-                </CardActions>
-            )}
         </Card>
     );
 }

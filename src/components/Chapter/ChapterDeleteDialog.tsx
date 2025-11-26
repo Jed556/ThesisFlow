@@ -24,7 +24,8 @@ export default function ChapterDeleteDialog({ open, config, deleting, onClose, o
                 <Typography>
                     Are you sure you want to delete the chapter requirements for
                     {' '}<strong>{config?.department || 'this department'}</strong>
-                    {' '}({config?.course || 'course'})? This action cannot be undone.
+                    {' '}({config?.course || 'course'})? This removes all stored chapter data for
+                    students in the same course and cannot be undone.
                 </Typography>
             </DialogContent>
             <DialogActions>

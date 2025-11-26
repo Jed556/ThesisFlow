@@ -440,6 +440,35 @@ export function listenGroupsByMentorRole(
 }
 
 /**
+ * Listen to groups where the specified user is assigned as a panel member.
+ */
+export function listenGroupsByPanelist(
+    panelUid: string | null | undefined,
+    options: GroupListenerOptions
+): () => void {
+    if (!panelUid) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+    const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+    const groupsQuery = query(groupsRef, where('members.panels', 'array-contains', panelUid));
+    return onSnapshot(
+        groupsQuery,
+        (snapshot) => {
+            const groups = snapshot.docs.map((docSnap) => mapGroupDocument(docSnap));
+            options.onData(groups);
+        },
+        (error) => {
+            if (options.onError) {
+                options.onError(error as Error);
+            } else {
+                console.error('Group panel listener error:', error);
+            }
+        }
+    );
+}
+
+/**
  * Assign the provided mentor to a group by updating the relevant members.* slot.
  */
 export async function assignMentorToGroup(
@@ -733,6 +762,28 @@ export async function getGroupsByDepartment(department: string): Promise<ThesisG
     } catch (error) {
         console.error('Error getting groups by department:', error);
         throw new Error('Failed to fetch groups by department');
+    }
+}
+
+/**
+ * Retrieve a sorted list of every department referenced by thesis groups.
+ */
+export async function getGroupDepartments(): Promise<string[]> {
+    try {
+        const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+        const snapshot = await getDocs(groupsRef);
+        const departments = new Set<string>();
+        snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data() as Partial<ThesisGroup>;
+            const department = data.department?.trim();
+            if (department) {
+                departments.add(department);
+            }
+        });
+        return Array.from(departments).sort((a, b) => a.localeCompare(b));
+    } catch (error) {
+        console.error('Error loading group departments:', error);
+        throw new Error('Failed to fetch group departments');
     }
 }
 
