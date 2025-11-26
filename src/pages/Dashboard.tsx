@@ -9,13 +9,8 @@ import { PieChart } from '@mui/x-charts/PieChart';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { useSession } from '@toolpad/core';
 import {
-    Block as BlockIcon,
-    CheckCircle as CheckCircleIcon,
-    Dashboard as DashboardIcon,
-    EventAvailable as EventAvailableIcon,
-    Notifications as NotificationsIcon,
-    Schedule as ScheduleIcon,
-    Warning as WarningIcon,
+    Block as BlockIcon, CheckCircle as CheckCircleIcon, Dashboard as DashboardIcon, EventAvailable as EventAvailableIcon,
+    Notifications as NotificationsIcon, Schedule as ScheduleIcon, Warning as WarningIcon
 } from '@mui/icons-material';
 import { AnimatedPage } from '../components/Animate';
 import type { NavigationItem } from '../types/navigation';
@@ -27,10 +22,7 @@ import type { GroupNotificationDoc, GroupNotificationEntry } from '../types/noti
 import { listenTheses } from '../utils/firebase/firestore/thesis';
 import { getUsersByIds, onUserProfile } from '../utils/firebase/firestore/user';
 import { listenEventsByThesisIds } from '../utils/firebase/firestore/events';
-import {
-    ensureGroupNotificationDocument,
-    listenGroupNotifications,
-} from '../utils/firebase/firestore/groupNotifications';
+import { ensureGroupNotificationDocument, listenGroupNotifications } from '../utils/firebase/firestore/groupNotifications';
 
 export const metadata: NavigationItem = {
     group: 'main',

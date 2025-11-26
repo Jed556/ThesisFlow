@@ -21,10 +21,7 @@ import {
 import { getGroupsByLeader, getGroupsByMember, updateGroup } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import {
-    areAllProposalsRejected,
-    canEditProposalSet,
-    getProposalSetMeta,
-    pickActiveProposalSet,
+    areAllProposalsRejected, canEditProposalSet, getProposalSetMeta, pickActiveProposalSet
 } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
 import { getThesisById } from '../../utils/firebase/firestore/thesis';
@@ -698,7 +695,7 @@ export default function StudentTopicProposalsPage() {
                     <Stack spacing={2}>
                         <Typography variant="h6">Previous submission cycles</Typography>
                         {historySets.map((set) => {
-                            const meta = computeSetMeta(set);
+                            const meta = getProposalSetMeta(set);
                             const statusLabel = meta.hasApproved
                                 ? 'Topic approved'
                                 : meta.allRejected

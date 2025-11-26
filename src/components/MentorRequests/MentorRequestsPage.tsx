@@ -1,21 +1,7 @@
 import * as React from 'react';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardActions,
-    CardContent,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    Paper,
-    Skeleton,
-    Stack,
-    TextField,
-    Typography,
+    Alert, Box, Button, Card, CardActions, CardContent,
+    Paper, Skeleton, Stack, TextField, Typography,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
@@ -27,14 +13,8 @@ import type { UserProfile, UserRole } from '../../types/profile';
 import { AnimatedPage } from '../Animate';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
-import {
-    assignMentorToGroup,
-    getGroupById,
-} from '../../utils/firebase/firestore/groups';
-import {
-    listenMentorRequestsByMentor,
-    respondToMentorRequest,
-} from '../../utils/firebase/firestore/mentorRequests';
+import { getGroupById } from '../../utils/firebase/firestore/groups';
+import { listenMentorRequestsByMentor } from '../../utils/firebase/firestore/mentorRequests';
 import { listenThesesForMentor } from '../../utils/firebase/firestore/thesis';
 import { getUsersByIds, onUserProfile, setUserProfile } from '../../utils/firebase/firestore/user';
 import MentorRequestCard from './MentorRequestCard';
@@ -44,19 +24,7 @@ interface MentorRequestViewModel {
     request: MentorRequest;
     group: ThesisGroup | null;
     requester: UserProfile | null;
-}
-
-function resolveGroupMentor(group: ThesisGroup | null, role: MentorRequestRole): string | undefined {
-    if (!group) {
-        return undefined;
-    }
-    if (role === 'adviser') {
-        return group.members.adviser;
-    }
-    if (role === 'editor') {
-        return group.members.editor;
-    }
-    return group.members.statistician;
+    usersByUid: Map<string, UserProfile>;
 }
 
 function formatMinimumCapacityMessage(currentCount: number): string {
@@ -111,21 +79,33 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
 
     React.useEffect(() => {
         let cancelled = false;
-        const uniqueRequesterIds = Array.from(new Set(requests.map((req) => req.requestedBy)));
-        if (uniqueRequesterIds.length === 0) {
+        const uniqueIds = new Set<string>();
+        requests.forEach((req) => {
+            if (req.requestedBy) {
+                uniqueIds.add(req.requestedBy);
+            }
+        });
+        groupsById.forEach((groupRecord) => {
+            const leaderUid = groupRecord?.members.leader;
+            if (leaderUid) {
+                uniqueIds.add(leaderUid);
+            }
+        });
+        const ids = Array.from(uniqueIds);
+        if (ids.length === 0) {
             setProfilesByUid(new Map());
             return () => { /* no-op */ };
         }
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(uniqueRequesterIds);
+                const profiles = await getUsersByIds(ids);
                 if (!cancelled) {
                     setProfilesByUid(new Map(profiles.map((profile) => [profile.uid, profile])));
                 }
             } catch (err) {
                 if (!cancelled) {
-                    console.error('Failed to resolve requester profiles:', err);
+                    console.error('Failed to resolve group/requester profiles:', err);
                 }
             }
         })();
@@ -133,14 +113,30 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
         return () => {
             cancelled = true;
         };
-    }, [requests]);
+    }, [groupsById, requests]);
 
     return React.useMemo(() => (
-        requests.map((request) => ({
-            request,
-            group: groupsById.get(request.groupId) ?? null,
-            requester: profilesByUid.get(request.requestedBy) ?? null,
-        }))
+        requests.map((request) => {
+            const group = groupsById.get(request.groupId) ?? null;
+            const requester = profilesByUid.get(request.requestedBy) ?? null;
+            const usersByUid = new Map<string, UserProfile>();
+            if (requester) {
+                usersByUid.set(requester.uid, requester);
+            }
+            const leaderUid = group?.members.leader;
+            if (leaderUid) {
+                const leaderProfile = profilesByUid.get(leaderUid);
+                if (leaderProfile) {
+                    usersByUid.set(leaderUid, leaderProfile);
+                }
+            }
+            return {
+                request,
+                group,
+                requester,
+                usersByUid,
+            } satisfies MentorRequestViewModel;
+        })
     ), [groupsById, profilesByUid, requests]);
 }
 
@@ -154,18 +150,12 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     const permittedRoles = allowedRoles ?? [role];
     const { showNotification } = useSnackbar();
     const navigate = useNavigate();
-    const roleLabelLower = roleLabel.toLowerCase();
-    const roleArticle = /^[aeiou]/i.test(roleLabelLower) ? 'an' : 'a';
 
     const [requests, setRequests] = React.useState<MentorRequest[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
-    const [dialogOpen, setDialogOpen] = React.useState(false);
-    const [dialogMode, setDialogMode] = React.useState<'approve' | 'reject'>('approve');
-    const [dialogNote, setDialogNote] = React.useState('');
-    const [selectedRequest, setSelectedRequest] = React.useState<MentorRequest | null>(null);
-    const [submitting, setSubmitting] = React.useState(false);
+    // Dialog state removed: approvals are handled in the group view header now.
     const [mentorProfile, setMentorProfile] = React.useState<UserProfile | null>(null);
     const [capacityInput, setCapacityInput] = React.useState('');
     const [capacityError, setCapacityError] = React.useState<string | null>(null);
@@ -374,69 +364,16 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     }, [mentorProfile, minimumCapacity]);
 
 
-    const handleOpenDialog = React.useCallback((mode: 'approve' | 'reject', request: MentorRequest) => {
-        setDialogMode(mode);
-        setSelectedRequest(request);
-        setDialogNote('');
-        setDialogOpen(true);
-    }, []);
 
-    const handleOpenGroupView = React.useCallback((targetGroupId: string) => {
-        if (role === 'adviser') navigate(`/adviser-requests/${targetGroupId}`);
-        if (role === 'editor') navigate(`/editor-requests/${targetGroupId}`);
-        if (role === 'statistician') navigate(`/statistician-requests/${targetGroupId}`);
-    }, [navigate]);
+    const handleOpenGroupView = React.useCallback((requestToOpen: MentorRequest) => {
+        const basePath = role === 'adviser'
+            ? '/adviser-requests'
+            : role === 'editor'
+                ? '/editor-requests'
+                : '/statistician-requests';
+        navigate(`${basePath}/${requestToOpen.groupId}`, { state: { mentorRequest: requestToOpen } });
+    }, [navigate, role]);
 
-    const handleCloseDialog = React.useCallback(() => {
-        if (submitting) {
-            return;
-        }
-        setDialogOpen(false);
-        setSelectedRequest(null);
-        setDialogNote('');
-    }, [submitting]);
-
-    const handleSubmitDecision = React.useCallback(async () => {
-        if (!selectedRequest || !mentorUid) {
-            return;
-        }
-        if (selectedRequest.status !== 'pending') {
-            handleCloseDialog();
-            return;
-        }
-
-        setSubmitting(true);
-        const note = dialogNote.trim() || undefined;
-        try {
-            if (dialogMode === 'approve') {
-                const targetGroup = viewModels.find((model) => model.request.id === selectedRequest.id)?.group ?? null;
-                const currentMentor = resolveGroupMentor(targetGroup, role);
-                if (!targetGroup) {
-                    showNotification('Group record is missing. Please ask the students to resend the request.', 'error');
-                    return;
-                }
-                if (currentMentor && currentMentor !== mentorUid) {
-                    showNotification('This group already has another mentor assigned to this role.', 'warning');
-                    return;
-                }
-                await assignMentorToGroup(selectedRequest.groupId, role, mentorUid);
-                await respondToMentorRequest(selectedRequest.id, 'approved', { responseNote: note });
-                showNotification('Request approved successfully.', 'success');
-            } else {
-                await respondToMentorRequest(selectedRequest.id, 'rejected', { responseNote: note });
-                showNotification('Request rejected.', 'info');
-            }
-            setDialogOpen(false);
-            setDialogNote('');
-            setSelectedRequest(null);
-        } catch (err) {
-            console.error('Failed to update mentor request:', err);
-            const fallback = err instanceof Error ? err.message : 'Unable to update request. Please try again.';
-            showNotification(fallback, 'error');
-        } finally {
-            setSubmitting(false);
-        }
-    }, [dialogMode, dialogNote, handleCloseDialog, mentorUid, role, selectedRequest, showNotification, viewModels]);
 
     if (!viewerRole && session?.loading) {
         return (
@@ -602,16 +539,17 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                         gap: 2,
                     }}
                 >
-                    {viewModels.map(({ request, group, requester }) => {
-                        const assignedMentorUid = resolveGroupMentor(group, role);
-                        const isAssigned = Boolean(assignedMentorUid);
-                        const alreadyMentoredByViewer = Boolean(mentorUid && assignedMentorUid === mentorUid);
-                        const disableApprove = isAssigned;
-                        let approveDisabledReason: string | undefined;
-                        if (isAssigned) {
-                            approveDisabledReason = alreadyMentoredByViewer
-                                ? 'You already mentor this group.'
-                                : `This group already has ${roleArticle} ${roleLabelLower} assigned.`;
+                    {viewModels.map(({ request, group, requester, usersByUid }) => {
+                        if (!group) {
+                            return (
+                                <Card key={request.id} variant="outlined">
+                                    <CardContent>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Group details are unavailable. Please ask the students to resend their request.
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            );
                         }
 
                         return (
@@ -620,11 +558,8 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                                     request={request}
                                     group={group}
                                     requester={requester}
-                                    onApprove={(pendingRequest) => handleOpenDialog('approve', pendingRequest)}
-                                    onReject={(pendingRequest) => handleOpenDialog('reject', pendingRequest)}
+                                    usersByUid={usersByUid}
                                     onOpenGroup={handleOpenGroupView}
-                                    disableApprove={disableApprove}
-                                    approveDisabledReason={approveDisabledReason}
                                 />
                             </Box>
                         );
@@ -632,42 +567,6 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                 </Box>
             )}
 
-            <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                <DialogTitle>
-                    {dialogMode === 'approve' ? `Approve ${roleLabel} Request` : `Reject ${roleLabel} Request`}
-                </DialogTitle>
-                <DialogContent>
-                    <DialogContentText sx={{ mb: 2 }}>
-                        {dialogMode === 'approve'
-                            ? 'Approving this request assigns you to the group immediately.'
-                            : 'Please provide a short note so the group understands the rejection.'}
-                    </DialogContentText>
-                    <TextField
-                        label="Response note"
-                        multiline
-                        minRows={3}
-                        fullWidth
-                        value={dialogNote}
-                        onChange={(event) => setDialogNote(event.target.value)}
-                        placeholder={dialogMode === 'approve'
-                            ? 'Optional note (e.g., preferred meeting schedule)'
-                            : 'Explain why the request is being rejected'}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog} disabled={submitting}>
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color={dialogMode === 'approve' ? 'primary' : 'error'}
-                        onClick={handleSubmitDecision}
-                        disabled={submitting || (dialogMode === 'reject' && dialogNote.trim().length === 0)}
-                    >
-                        {dialogMode === 'approve' ? 'Approve Request' : 'Reject Request'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
         </AnimatedPage>
     );
 }

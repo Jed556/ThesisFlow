@@ -1,5 +1,5 @@
 import {
-    addDoc, collection, doc, getDocs, onSnapshot, query,
+    addDoc, collection, doc, getDocs, limit, onSnapshot, query,
     updateDoc, where, type DocumentData, type QueryDocumentSnapshot
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
@@ -154,6 +154,35 @@ export async function createMentorRequest(payload: CreateMentorRequestPayload): 
         respondedAt: null,
         responseNote: null,
     });
+}
+
+/**
+ * Retrieve the pending mentor request for a given group/mentor/role triple if it exists.
+ */
+export async function getPendingMentorRequest(
+    groupId: string,
+    mentorUid: string,
+    role: MentorRequestRole,
+): Promise<MentorRequest | null> {
+    if (!groupId || !mentorUid || !role) {
+        return null;
+    }
+
+    const requestsRef = collection(firebaseFirestore, COLLECTION_NAME);
+    const pendingQuery = query(
+        requestsRef,
+        where('groupId', '==', groupId),
+        where('mentorUid', '==', mentorUid),
+        where('role', '==', role),
+        where('status', '==', 'pending'),
+        limit(1),
+    );
+    const snapshot = await getDocs(pendingQuery);
+    if (snapshot.empty) {
+        return null;
+    }
+    const docSnap = snapshot.docs[0] as QueryDocumentSnapshot<DocumentData>;
+    return mapMentorRequest(docSnap);
 }
 
 export interface RespondToMentorRequestOptions {

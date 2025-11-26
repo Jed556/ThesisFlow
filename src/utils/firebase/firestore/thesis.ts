@@ -1,5 +1,5 @@
 import {
-    doc, setDoc, collection, getDocs, addDoc, getDoc, deleteDoc, query, where, onSnapshot, writeBatch, limit,
+    doc, setDoc, collection, getDocs, addDoc, getDoc, deleteDoc, query, where, onSnapshot, writeBatch,
     type WithFieldValue, type QueryConstraint, type QuerySnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
@@ -9,17 +9,16 @@ import { getUserById, getUsersByIds } from './user';
 import { getGroupById } from './groups';
 import { getChapterConfigByCourse } from './chapter';
 import { buildDefaultThesisChapters, templatesToThesisChapters } from '../../thesisChapterTemplates';
-import { THESES_COLLECTION } from './constants';
 
 import type { ThesisChapter, ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
 import type { ReviewerAssignment, ReviewerRole } from '../../../types/reviewer';
 import type { ThesisGroupMembers } from '../../../types/group';
-import { applyChapterUpdate } from './chapterMutations';
 
 export type ThesisRecord = ThesisData & { id: string };
 
 /** Firestore collection name used for user documents */
+const THESES_COLLECTION = 'theses';
 
 /**
  * Get a thesis data by id
@@ -30,34 +29,6 @@ export async function getThesisById(id: string): Promise<ThesisData | null> {
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
     return snap.data() as ThesisData;
-}
-
-/**
- * Fetch the thesis record associated with a given group identifier.
- * @param groupId - Thesis group identifier.
- * @returns Thesis data including its document id when found, otherwise null.
- */
-export async function getThesisByGroupId(groupId: string): Promise<(ThesisData & { id: string }) | null> {
-    if (!groupId) {
-        return null;
-    }
-
-    const groupQuery = query(
-        collection(firebaseFirestore, THESES_COLLECTION),
-        where('groupId', '==', groupId),
-        limit(1)
-    );
-
-    const snapshot = await getDocs(groupQuery);
-    if (snapshot.empty) {
-        return null;
-    }
-
-    const docSnap = snapshot.docs[0];
-    return {
-        ...(docSnap.data() as ThesisData),
-        id: docSnap.id,
-    };
 }
 
 /**
@@ -300,13 +271,8 @@ function collectGroupMemberIds(members: ThesisGroupMembers | undefined): Set<str
         uids.add(members.editor);
     }
 
-    if (members.statistician) {
-        uids.add(members.statistician);
-    }
-
     return uids;
 }
-
 
 /**
  * Extract all participant UIDs (students, adviser, editor) from a thesis document.
@@ -344,56 +310,19 @@ async function buildReviewerAssignments(
         const memberUids = members?.members ?? [];
         const adviserUid = members?.adviser ?? '';
         const editorUid = members?.editor ?? '';
-        const statisticianUid = members?.statistician ?? '';
 
         const progressRatio = computeThesisProgressRatio(thesis);
         const studentEmails = [leaderUid, ...memberUids]
             .map((uid) => (uid ? profileCache.get(uid)?.email : undefined))
             .filter((email): email is string => Boolean(email));
 
-        const assignedUid = role === 'adviser'
-            ? adviserUid
-            : role === 'editor'
-                ? editorUid
-                : statisticianUid;
+        const assignedUid = role === 'adviser' ? adviserUid : editorUid;
+        const counterpartUid = role === 'adviser' ? editorUid : adviserUid;
 
-        const counterpartUids = new Set<string>();
-        if (role === 'adviser') {
-            if (editorUid) {
-                counterpartUids.add(editorUid);
-            }
-            if (statisticianUid) {
-                counterpartUids.add(statisticianUid);
-            }
-        } else if (role === 'editor') {
-            if (adviserUid) {
-                counterpartUids.add(adviserUid);
-            }
-            if (statisticianUid) {
-                counterpartUids.add(statisticianUid);
-            }
-        } else {
-            if (adviserUid) {
-                counterpartUids.add(adviserUid);
-            }
-            if (editorUid) {
-                counterpartUids.add(editorUid);
-            }
-        }
-
-        const assignedTo = new Set<string>();
-        const pushEmail = (uid?: string) => {
-            if (!uid) {
-                return;
-            }
-            const email = profileCache.get(uid)?.email;
-            if (email) {
-                assignedTo.add(email);
-            }
-        };
-
-        pushEmail(assignedUid);
-        counterpartUids.forEach((uid) => pushEmail(uid));
+        const assignedEmail = assignedUid ? profileCache.get(assignedUid)?.email : undefined;
+        const counterpartEmail = counterpartUid ? profileCache.get(counterpartUid)?.email : undefined;
+        const assignedTo = [assignedEmail, counterpartEmail]
+            .filter((email): email is string => Boolean(email));
 
         return {
             id: thesis.id,
@@ -403,7 +332,7 @@ async function buildReviewerAssignments(
             stage: thesis.overallStatus ?? 'In Progress',
             progress: progressRatio,
             dueDate: undefined,
-            assignedTo: Array.from(assignedTo),
+            assignedTo,
             priority: determinePriority(progressRatio, thesis.lastUpdated),
             lastUpdated: normalizeTimestamp(thesis.lastUpdated ?? thesis.submissionDate, true),
             studentEmails,
@@ -522,7 +451,7 @@ export async function getReviewerAssignmentsForUser(role: ReviewerRole, userUid?
         return [];
     }
 
-    const roleField = role === 'adviser' ? 'adviser' : role === 'editor' ? 'editor' : 'statistician';
+    const roleField = role === 'adviser' ? 'adviser' : 'editor';
     const roleQuery = query(
         collection(firebaseFirestore, THESES_COLLECTION),
         where(roleField, '==', userUid)
@@ -623,7 +552,7 @@ export function listenReviewerAssignmentsForUser(
         return () => { /* no-op */ };
     }
 
-    const roleField = role === 'adviser' ? 'adviser' : role === 'editor' ? 'editor' : 'statistician';
+    const roleField = role === 'adviser' ? 'adviser' : 'editor';
     const roleQuery = query(
         collection(firebaseFirestore, THESES_COLLECTION),
         where(roleField, '==', userUid)
@@ -762,3 +691,4 @@ export function listenThesesForMentor(
         where(roleField, '==', userUid),
     ], options);
 }
+// manual test

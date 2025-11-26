@@ -812,7 +812,7 @@ export default function ThesisPage() {
                 {(thesis.chapters ?? []).map((chapter) => {
                     const commentsCount = chapter.comments?.length ?? 0;
                     return (
-                        <Card key={chapter.id} sx={{ mb: 2 }}>
+                        <Card key={chapter.id} sx={{ mb: 2, borderRadius: 3 }}>
                             <CardContent>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                     <Typography variant="h6">{chapter.title}</Typography>

@@ -1,7 +1,13 @@
 import * as React from 'react';
 import {
-    Card, CardActionArea, CardContent, Chip,
-    Stack, Typography, Box,
+    Box,
+    Card,
+    CardActionArea,
+    CardActions,
+    CardContent,
+    Chip,
+    Stack,
+    Typography,
 } from '@mui/material';
 import Skeleton from '@mui/material/Skeleton';
 import type { ThesisGroup } from '../../types/group';
@@ -12,6 +18,8 @@ interface GroupCardProps {
     group: ThesisGroup;
     usersByUid: Map<string, UserProfile>;
     onClick?: (group: ThesisGroup) => void;
+    footer?: React.ReactNode;
+    actions?: React.ReactNode;
 }
 
 const getUserDisplayName = (profile: UserProfile | undefined): string => {
@@ -29,10 +37,11 @@ const getUserDisplayName = (profile: UserProfile | undefined): string => {
  * Displays a thesis group summary inside a clickable card.
  * Actions (edit/delete) have been moved to the group view page.
  */
-export default function GroupCard({ group, usersByUid, onClick }: GroupCardProps) {
+export default function GroupCard({ group, usersByUid, onClick, footer, actions }: GroupCardProps) {
     const leaderProfile = usersByUid.get(group.members.leader);
     // Count leader + members for total team size
     const memberCount = 1 + (group.members?.members.length ?? 0);
+    const isInteractive = Boolean(onClick);
 
     const handleCardClick = React.useCallback(() => {
         onClick?.(group);
@@ -40,7 +49,12 @@ export default function GroupCard({ group, usersByUid, onClick }: GroupCardProps
 
     return (
         <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <CardActionArea onClick={handleCardClick} sx={{ flexGrow: 1, alignItems: 'flex-start' }}>
+            <CardActionArea
+                component={isInteractive ? 'button' : 'div'}
+                disabled={!isInteractive}
+                onClick={isInteractive ? handleCardClick : undefined}
+                sx={{ flexGrow: 1, alignItems: 'flex-start' }}
+            >
                 <CardContent>
                     <Stack spacing={1.5}>
                         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
@@ -88,9 +102,18 @@ export default function GroupCard({ group, usersByUid, onClick }: GroupCardProps
                                 <Typography variant="body2">{memberCount}</Typography>
                             </Box>
                         </Stack>
+
+                        {footer ? (
+                            <Box sx={{ pt: 1 }}>{footer}</Box>
+                        ) : null}
                     </Stack>
                 </CardContent>
             </CardActionArea>
+            {actions ? (
+                <CardActions sx={{ justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
+                    {actions}
+                </CardActions>
+            ) : null}
         </Card>
     );
 }

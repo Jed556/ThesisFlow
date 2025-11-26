@@ -1,5 +1,6 @@
 import type { ThesisGroup } from '../types/group';
 import type { UserProfile } from '../types/profile';
+import type { MentorRequestRole } from '../types/mentorRequest';
 import { getUserById } from './firebase/firestore/user';
 
 export {
@@ -62,4 +63,23 @@ export async function buildGroupProfileMap(groupData: ThesisGroup): Promise<Map<
         })
     );
     return profileMap;
+}
+
+/**
+ * Resolves the mentor UID assigned to the requested role for the provided group.
+ */
+export function getGroupMentorByRole(
+    group: ThesisGroup | null | undefined,
+    role: MentorRequestRole,
+): string | undefined {
+    if (!group) {
+        return undefined;
+    }
+    if (role === 'adviser') {
+        return group.members.adviser;
+    }
+    if (role === 'editor') {
+        return group.members.editor;
+    }
+    return group.members.statistician;
 }

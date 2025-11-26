@@ -1,12 +1,5 @@
 import * as React from 'react';
-import {
-    Alert,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
+import { Alert, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
