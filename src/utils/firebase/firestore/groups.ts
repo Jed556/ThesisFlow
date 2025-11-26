@@ -440,6 +440,35 @@ export function listenGroupsByMentorRole(
 }
 
 /**
+ * Listen to groups where the specified user is assigned as a panel member.
+ */
+export function listenGroupsByPanelist(
+    panelUid: string | null | undefined,
+    options: GroupListenerOptions
+): () => void {
+    if (!panelUid) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+    const groupsRef = collection(firebaseFirestore, COLLECTION_NAME);
+    const groupsQuery = query(groupsRef, where('members.panels', 'array-contains', panelUid));
+    return onSnapshot(
+        groupsQuery,
+        (snapshot) => {
+            const groups = snapshot.docs.map((docSnap) => mapGroupDocument(docSnap));
+            options.onData(groups);
+        },
+        (error) => {
+            if (options.onError) {
+                options.onError(error as Error);
+            } else {
+                console.error('Group panel listener error:', error);
+            }
+        }
+    );
+}
+
+/**
  * Assign the provided mentor to a group by updating the relevant members.* slot.
  */
 export async function assignMentorToGroup(

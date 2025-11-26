@@ -17,15 +17,12 @@ import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getAssignedMentorRoles, resolveChapterMentorApprovals } from '../../utils/mentorUtils';
 import { extractSubmissionId, normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import ChapterRail, { buildVersionOptions, formatChapterLabel } from './ChapterRail';
-
-const STAGE_METADATA: { value: ThesisStage; label: string; helper?: string }[] = [
-    { value: 'Pre-Proposal', label: 'Pre-Proposal' },
-    { value: 'Post-Proposal', label: 'Post-Proposal' },
-    { value: 'Pre-Defense', label: 'Pre Defense' },
-    { value: 'Post-Defense', label: 'Post Defense' },
-];
-
-const resolveChapterStage = (chapter: ThesisChapter): ThesisStage => chapter.stage ?? 'Pre-Proposal';
+import {
+    buildSequentialStageLockMap,
+    buildStageCompletionMap,
+    resolveChapterStage,
+    THESIS_STAGE_METADATA,
+} from '../../utils/thesisStageUtils';
 
 interface ThesisWorkspaceProps {
     thesisId?: string;
@@ -131,7 +128,7 @@ export default function ThesisWorkspace({
     } | null>(null);
     const [decisionError, setDecisionError] = React.useState<string | null>(null);
     const [isSubmittingDecision, setIsSubmittingDecision] = React.useState(false);
-    const [activeStage, setActiveStage] = React.useState<ThesisStage>(STAGE_METADATA[0].value);
+    const [activeStage, setActiveStage] = React.useState<ThesisStage>(THESIS_STAGE_METADATA[0].value);
 
     React.useEffect(() => {
         setChapterFiles({});
@@ -150,24 +147,15 @@ export default function ThesisWorkspace({
         } satisfies ThesisChapter));
     }, [thesis]);
 
-    const stageCompletionMap = React.useMemo(() => {
-        return STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stage) => {
-            const stageChapters = normalizedChapters.filter((chapter) => resolveChapterStage(chapter) === stage.value);
-            acc[stage.value] = stageChapters.length > 0
-                && stageChapters.every((chapter) => chapter.status === 'approved');
-            return acc;
-        }, {} as Record<ThesisStage, boolean>);
-    }, [normalizedChapters]);
+    const stageCompletionMap = React.useMemo(
+        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: false }),
+        [normalizedChapters],
+    );
 
-    const stageLockMap = React.useMemo(() => STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stage, index) => {
-        if (index === 0) {
-            acc[stage.value] = false;
-        } else {
-            const previousStage = STAGE_METADATA[index - 1].value;
-            acc[stage.value] = !(stageCompletionMap[previousStage] ?? false);
-        }
-        return acc;
-    }, {} as Record<ThesisStage, boolean>), [stageCompletionMap]);
+    const stageLockMap = React.useMemo(
+        () => buildSequentialStageLockMap(stageCompletionMap),
+        [stageCompletionMap],
+    );
 
     const stageChapters = React.useMemo(
         () => normalizedChapters.filter((chapter) => resolveChapterStage(chapter) === activeStage),
@@ -182,14 +170,14 @@ export default function ThesisWorkspace({
 
     const isStageLocked = stageLockMap[activeStage] ?? false;
     const previousStageMeta = React.useMemo(() => {
-        const currentIndex = STAGE_METADATA.findIndex((stage) => stage.value === activeStage);
+        const currentIndex = THESIS_STAGE_METADATA.findIndex((stage) => stage.value === activeStage);
         if (currentIndex <= 0) {
             return null;
         }
-        return STAGE_METADATA[currentIndex - 1];
+        return THESIS_STAGE_METADATA[currentIndex - 1];
     }, [activeStage]);
     const activeStageMeta = React.useMemo(
-        () => STAGE_METADATA.find((stage) => stage.value === activeStage) ?? STAGE_METADATA[0],
+        () => THESIS_STAGE_METADATA.find((stage) => stage.value === activeStage) ?? THESIS_STAGE_METADATA[0],
         [activeStage],
     );
     const stageLockedDescription = React.useMemo(() => {
@@ -637,7 +625,7 @@ export default function ThesisWorkspace({
                         variant="scrollable"
                         scrollButtons="auto"
                     >
-                        {STAGE_METADATA.map((stage) => {
+                        {THESIS_STAGE_METADATA.map((stage) => {
                             const stageLocked = stageLockMap[stage.value];
                             const stageCompleted = stageCompletionMap[stage.value];
                             const chipLabel = stageLocked ? 'Locked' : stageCompleted ? 'Completed' : 'In progress';

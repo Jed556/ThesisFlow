@@ -170,6 +170,39 @@ export async function getFilesByThesis(
 }
 
 /**
+ * Get files uploaded for a specific terminal requirement.
+ * @param thesisId - Thesis document identifier
+ * @param requirementId - Terminal requirement identifier
+ */
+export async function getFilesByTerminalRequirement(
+    thesisId: string,
+    requirementId: string,
+): Promise<FileAttachment[]> {
+    try {
+        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
+        const q = query(
+            filesRef,
+            where('thesisId', '==', thesisId),
+            where('terminalRequirementId', '==', requirementId)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const files = querySnapshot.docs.map((doc) => doc.data() as FileAttachment);
+        return files.sort((a, b) => {
+            const aTime = new Date(a.uploadDate ?? '').getTime();
+            const bTime = new Date(b.uploadDate ?? '').getTime();
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+                return 0;
+            }
+            return bTime - aTime;
+        });
+    } catch (error) {
+        console.error('Error getting files by terminal requirement:', error);
+        return [];
+    }
+}
+
+/**
  * Get files by comment ID
  * @param commentId - Comment ID
  * @returns Array of file attachments

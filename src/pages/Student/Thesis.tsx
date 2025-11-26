@@ -170,7 +170,8 @@ function buildThesisWorkflowSteps(
                 description: 'Upload final documents and complete terminal requirements for submission.',
                 completedMessage: 'All terminal requirements have been submitted.',
                 state: 'available',
-                actionLabel: 'Coming Soon',
+                actionLabel: 'View Requirements',
+                actionPath: '/terminal-requirements',
                 icon: <UploadIcon />,
                 prerequisites: [
                     { stepId: 'upload-chapters', type: 'prerequisite' },
@@ -310,7 +311,8 @@ function buildThesisWorkflowSteps(
             description: 'Upload final documents and complete terminal requirements for submission.',
             completedMessage: 'All terminal requirements have been submitted successfully.',
             state: 'available',
-            actionLabel: 'Coming Soon',
+            actionLabel: 'View Requirements',
+            actionPath: '/terminal-requirements',
             icon: <UploadIcon />,
             prerequisites: [
                 { stepId: 'upload-chapters', type: 'prerequisite' },

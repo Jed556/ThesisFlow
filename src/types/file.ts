@@ -1,3 +1,5 @@
+import type { ThesisStage } from './thesis';
+
 /**
  * File-related type definitions for the ThesisFlow application
  * Contains all file handling, upload, and metadata types
@@ -77,6 +79,8 @@ export interface FileAttachment {
     thesisId?: string;
     chapterId?: number;
     commentId?: string;
+    terminalStage?: ThesisStage;
+    terminalRequirementId?: string;
 }
 
 /**

@@ -6,6 +6,7 @@
 import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
 import { firebaseStorage } from '../firebaseConfig';
 import type { FileAttachment, FileCategory } from '../../../types/file';
+import type { ThesisStage } from '../../../types/thesis';
 import { getError } from '../../../../utils/errorUtils';
 import { getFileCategory, getFileExtension, validateFile } from '../../fileUtils';
 import { setFileMetadata, getFilesByThesis, deleteFileMetadata } from '../firestore/file';
@@ -46,6 +47,8 @@ interface UploadThesisFileOptions {
     commentId?: string;
     category?: 'submission' | 'attachment' | 'revision';
     metadata?: Record<string, string>;
+    terminalStage?: ThesisStage;
+    terminalRequirementId?: string;
 }
 
 interface UploadThesisFileResult {
@@ -156,7 +159,9 @@ export async function uploadThesisFile(
         chapterId,
         commentId,
         category = 'submission',
-        metadata = {}
+        metadata = {},
+        terminalStage,
+        terminalRequirementId,
     } = options;
 
     try {
@@ -194,6 +199,8 @@ export async function uploadThesisFile(
                 originalName: file.name,
                 ...(chapterId !== undefined && { chapterId: chapterId.toString() }),
                 ...(commentId && { commentId }),
+                ...(terminalStage && { terminalStage }),
+                ...(terminalRequirementId && { terminalRequirementId }),
                 ...metadata
             }
         };
@@ -221,7 +228,9 @@ export async function uploadThesisFile(
             uploadDate: new Date().toISOString(),
             category: category === 'revision' ? 'submission' : category as 'submission' | 'attachment',
             ...(chapterId !== undefined && { chapterId }),
-            ...(commentId && { commentId })
+            ...(commentId && { commentId }),
+            ...(terminalStage && { terminalStage }),
+            ...(terminalRequirementId && { terminalRequirementId })
         };
 
         // Save metadata to Firestore
@@ -282,7 +291,7 @@ export async function deleteThesisFile(
     try {
         // Extract storage path from URL
         const url = new URL(fileUrl);
-        const pathMatch = url.pathname.match(/\/o\/(.+)\?/);
+        const pathMatch = url.pathname.match(/\/o\/(.+?)(\?|$)/);
         if (!pathMatch) {
             throw new Error('Invalid file URL format');
         }
