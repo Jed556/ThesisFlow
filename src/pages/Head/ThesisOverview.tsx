@@ -1,14 +1,6 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
-import SchoolIcon from '@mui/icons-material/School';
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -19,9 +11,7 @@ import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceFilterConfig } from '../../types/workspace';
-import {
-    getThesisByGroupId,
-} from '../../utils/firebase/firestore/thesis';
+import { getThesisByGroupId } from '../../utils/firebase/firestore/thesis';
 import { getUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { getDisplayName } from '../../utils/userUtils';

@@ -1,14 +1,6 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -29,7 +21,7 @@ export const metadata: NavigationItem = {
     index: 4,
     title: 'Thesis Overview',
     segment: 'admin-thesis-overview',
-    icon: <AdminPanelSettingsIcon />,
+    icon: <SchoolIcon />,
     roles: ['admin'],
 };
 

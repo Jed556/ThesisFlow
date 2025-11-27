@@ -7,8 +7,8 @@ import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalR
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 5,
-    title: 'Terminal Approvals',
-    segment: 'panel-terminal-approvals',
+    title: 'Terminal Requirements',
+    segment: 'panel-terminal-requirements',
     icon: <VerifiedIcon />,
     roles: ['panel'],
 };
@@ -18,7 +18,6 @@ export default function PanelTerminalRequirementApprovalsPage() {
         <AnimatedPage variant="slideUp">
             <TerminalRequirementApprovalWorkspace
                 role="panel"
-                title="Terminal Requirement Approvals"
                 description="Review each stage’s submissions and endorse the group so advisers can continue the workflow."
                 emptyStateMessage="No thesis groups are currently assigned to you as a panel member."
             />

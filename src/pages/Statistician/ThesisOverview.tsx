@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
-import ScienceIcon from '@mui/icons-material/Science';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -25,7 +25,7 @@ export const metadata: NavigationItem = {
     index: 1,
     title: 'Thesis Overview',
     segment: 'statistician-thesis-overview',
-    icon: <ScienceIcon />,
+    icon: <SchoolIcon />,
     roles: ['statistician'],
 };
 

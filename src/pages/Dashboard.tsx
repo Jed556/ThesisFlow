@@ -407,7 +407,8 @@ function DashboardPage(): React.ReactElement {
     }, [profile?.name?.first, session?.user?.name]);
 
     const roleDisplay = profile?.role ?? userRole ?? 'Contributor';
-    const departmentDisplay = profile?.department ?? profile?.course ?? '';
+    const departmentDisplay = profile?.department ?? '';
+    const courseDisplay = profile?.course ?? '';
 
     if (loadingTheses) {
         return (
@@ -438,6 +439,9 @@ function DashboardPage(): React.ReactElement {
                         <Chip label={roleDisplay} color="primary" size="small" />
                         {departmentDisplay && (
                             <Chip label={departmentDisplay} variant="outlined" size="small" />
+                        )}
+                        {courseDisplay && (
+                            <Chip label={courseDisplay} variant="outlined" size="small" color="secondary" />
                         )}
                     </Stack>
                 </Box>

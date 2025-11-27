@@ -1,14 +1,6 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
-import GavelIcon from '@mui/icons-material/Gavel';
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
@@ -42,7 +34,7 @@ export const metadata: NavigationItem = {
     index: 2,
     title: 'Thesis Overview',
     segment: 'moderator-thesis-overview',
-    icon: <GavelIcon />,
+    icon: <SchoolIcon />,
     roles: ['moderator'],
 };
 

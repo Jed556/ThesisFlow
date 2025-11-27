@@ -7,8 +7,8 @@ import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalR
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 2,
-    title: 'Terminal Approvals',
-    segment: 'statistician-terminal-approvals',
+    title: 'Terminal Requirements',
+    segment: 'statistician-terminal-requirements',
     icon: <QueryStatsIcon />,
     roles: ['statistician'],
 };
