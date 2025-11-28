@@ -16,7 +16,7 @@ import type { ThesisChapterConfig, ChapterTemplate } from '../../../../types/cha
 import {
     getChapterConfigByCourse, updateChapterTemplatesWithCascade, deleteChapterConfigWithCascade,
 } from '../../../../utils/firebase/firestore';
-import type { ThesisStage } from '../../../../types/thesis';
+import type { ThesisStageName } from '../../../../types/thesis';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
 import { THESIS_STAGE_METADATA } from '../../../../utils/thesisStageUtils';
 import {
@@ -454,8 +454,8 @@ export default function ChapterViewPage() {
                                                     onChange={(event) => {
                                                         const value = event.target.value;
                                                         const nextStages = Array.isArray(value)
-                                                            ? (value as ThesisStage[])
-                                                            : [(value as ThesisStage)];
+                                                            ? (value as ThesisStageName[])
+                                                            : [(value as ThesisStageName)];
                                                         const normalizedStages = nextStages.length > 0
                                                             ? nextStages
                                                             : [DEFAULT_CHAPTER_STAGE];

@@ -4,7 +4,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
-import type { ThesisData, ThesisStage } from '../../types/thesis';
+import type { ThesisData, ThesisStageName } from '../../types/thesis';
 import type { ConversationParticipant } from '../../components/Conversation';
 import type { WorkspaceUploadPayload } from '../../types/workspace';
 import type { UserProfile } from '../../types/profile';
@@ -15,7 +15,7 @@ import { appendChapterSubmission } from '../../utils/firebase/firestore/chapterS
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
 import { getThesisTeamMembers } from '../../utils/thesisUtils';
 import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
-import { listenTerminalRequirementSubmission } from '../../utils/firebase/firestore/terminalRequirementSubmissions';
+import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import type { PanelCommentReleaseMap } from '../../types/panelComment';
@@ -51,7 +51,7 @@ export default function StudentThesisOverviewPage() {
     const [error, setError] = React.useState<string | null>(null);
     const [participants, setParticipants] = React.useState<Record<string, ConversationParticipant>>();
     const [terminalSubmissions, setTerminalSubmissions] = React.useState<
-        Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
     >({});
     const [panelRelease, setPanelRelease] = React.useState<PanelCommentReleaseMap | null>(null);
 
@@ -92,11 +92,11 @@ export default function StudentThesisOverviewPage() {
         }
 
         const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => (
-            listenTerminalRequirementSubmission(thesis.id!, stageMeta.value, {
-                onData: (record) => {
+            findAndListenTerminalRequirements(thesis.id!, stageMeta.value, {
+                onData: (records) => {
                     setTerminalSubmissions((prev) => ({
                         ...prev,
-                        [stageMeta.value]: record,
+                        [stageMeta.value]: records[0] ?? null,
                     }));
                 },
                 onError: (listenerError) => {
@@ -154,11 +154,11 @@ export default function StudentThesisOverviewPage() {
     }, [thesis?.groupId]);
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
             const submission = terminalSubmissions[stageMeta.value];
             acc[stageMeta.value] = submission?.status === 'approved';
             return acc;
-        }, {} as Record<ThesisStage, boolean>);
+        }, {} as Record<ThesisStageName, boolean>);
     }, [terminalSubmissions]);
 
     const handleUploadChapter = React.useCallback(async ({ thesisId, groupId, chapterId, chapterStage, file }: WorkspaceUploadPayload) => {

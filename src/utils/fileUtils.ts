@@ -1,5 +1,5 @@
 import type { FileType, FileCategory, FileTypeInfo, FileUploadProgress, MediaMetadata, FileAttachment } from '../types/file';
-import type { ThesisStage } from '../types/thesis';
+import type { ThesisStageName } from '../types/thesis';
 
 /**
  * File utilities for handling file encoding, processing, and database upload preparation
@@ -541,7 +541,7 @@ export async function getFileByHash(hash: string, thesisId?: string): Promise<Fi
 export async function getChapterSubmissions(
     chapterId: number,
     thesisId?: string,
-    stage?: ThesisStage,
+    stage?: ThesisStageName,
 ): Promise<FileAttachment[]> {
     if (!thesisId) {
         console.warn('thesisId is required for Firebase integration');

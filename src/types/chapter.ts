@@ -1,4 +1,4 @@
-import type { ThesisStage } from './thesis';
+import type { ThesisStageName } from './thesis';
 
 /**
  * Chapter template definition for a course
@@ -11,7 +11,7 @@ export interface ChapterTemplate {
     /** Chapter description or requirements */
     description?: string;
     /** Thesis stage(s) when the chapter is expected */
-    stage?: ThesisStage | ThesisStage[];
+    stage?: ThesisStageName | ThesisStageName[];
 }
 
 /**

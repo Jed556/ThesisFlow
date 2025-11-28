@@ -6,7 +6,7 @@
 import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
 import { firebaseStorage } from '../firebaseConfig';
 import type { FileAttachment, FileCategory } from '../../../types/file';
-import type { ThesisStage } from '../../../types/thesis';
+import type { ThesisStageName } from '../../../types/thesis';
 import { getError } from '../../../../utils/errorUtils';
 import { getFileCategory, getFileExtension, validateFile } from '../../fileUtils';
 import { setFileMetadata, getFilesByThesis, deleteFileMetadata } from '../firestore/file';
@@ -45,11 +45,11 @@ interface UploadThesisFileOptions {
     thesisId: string;
     groupId: string;
     chapterId?: number;
-    chapterStage?: ThesisStage;
+    chapterStage?: ThesisStageName;
     commentId?: string;
     category?: 'submission' | 'attachment' | 'revision';
     metadata?: Record<string, string>;
-    terminalStage?: ThesisStage;
+    terminalStage?: ThesisStageName;
     terminalRequirementId?: string;
 }
 
@@ -125,10 +125,10 @@ interface GenerateFilePathParams {
     groupId: string;
     fileName: string;
     chapterId?: number;
-    chapterStage?: ThesisStage;
+    chapterStage?: ThesisStageName;
     commentId?: string;
     category: string;
-    terminalStage?: ThesisStage;
+    terminalStage?: ThesisStageName;
 }
 
 function sanitizePathSegment(value: string | number | undefined | null, fallback: string = 'general'): string {
@@ -401,7 +401,7 @@ export async function listThesisFilesFromStorage(
     thesisId: string,
     chapterId?: number,
     groupId?: string,
-    chapterStage?: ThesisStage,
+    chapterStage?: ThesisStageName,
 ): Promise<string[]> {
     try {
         const sanitizedGroup = sanitizePathSegment(groupId ?? thesisId, thesisId);

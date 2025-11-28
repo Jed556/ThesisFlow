@@ -1,3 +1,12 @@
+import type { ExpertRequest } from './expertRequest';
+import type { TopicProposalSet } from './proposal';
+import type { ThesisData } from './thesis';
+
+/**
+ * Group-specific status values
+ */
+export type GroupStatus = 'draft' | 'review' | 'active' | 'inactive' | 'rejected' | 'completed' | 'archived';
+
 /**
  * Thesis group represents a team working on a thesis project
  */
@@ -8,9 +17,11 @@ export interface ThesisGroup {
     members: ThesisGroupMembers;
     createdAt: string;
     updatedAt: string;
-    status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
-    thesisId?: string;
-    thesisTitle?: string;
+    status: GroupStatus;
+    expertRequests?: ExpertRequest[]; // Array of ExpertRequest IDs
+    proposals?: TopicProposalSet[];
+    thesis?: ThesisData;
+    panelComments?: string[];
     department?: string;
     course?: string;
     /** Pending invites to other students (array of UIDs) */
@@ -44,9 +55,8 @@ export interface ThesisGroupFormData {
     members: string[];
     adviser?: string;
     editor?: string;
-    thesisId?: string;
-    status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
-    thesisTitle?: string;
+    thesis?: ThesisData;
+    status: GroupStatus;
     department?: string;
     course?: string;
 }

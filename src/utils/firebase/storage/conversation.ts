@@ -1,12 +1,12 @@
 import type { FileAttachment } from '../../../types/file';
-import type { ThesisStage } from '../../../types/thesis';
+import type { ThesisStageName } from '../../../types/thesis';
 import { uploadThesisFilesBatch } from './thesis';
 
 export interface ConversationAttachmentUploadOptions {
     thesisId: string;
     groupId: string;
     chapterId: number;
-    chapterStage: ThesisStage;
+    chapterStage: ThesisStageName;
     userUid: string;
     commentId?: string;
     metadata?: Record<string, string>;

@@ -5,7 +5,7 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ReviewerAssignment } from '../../types/reviewer';
-import type { ThesisData, ThesisStage } from '../../types/thesis';
+import type { ThesisData, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
@@ -17,7 +17,7 @@ import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDec
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
 import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
-import { listenTerminalRequirementSubmission } from '../../utils/firebase/firestore/terminalRequirementSubmissions';
+import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 
 export const metadata: NavigationItem = {
@@ -41,7 +41,7 @@ export default function StatisticianThesisOverviewPage() {
     const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
     const [error, setError] = React.useState<string | null>(null);
     const [submissionByStage, setSubmissionByStage] = React.useState<
-        Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
     >({});
 
     const resolveDisplayName = React.useCallback((uid?: string | null) => {
@@ -168,11 +168,11 @@ export default function StatisticianThesisOverviewPage() {
         }
 
         const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => (
-            listenTerminalRequirementSubmission(thesis.id!, stageMeta.value, {
-                onData: (record) => {
+            findAndListenTerminalRequirements(thesis.id!, stageMeta.value, {
+                onData: (records) => {
                     setSubmissionByStage((prev) => ({
                         ...prev,
-                        [stageMeta.value]: record,
+                        [stageMeta.value]: records[0] ?? null,
                     }));
                 },
                 onError: (listenerError) => {
@@ -187,11 +187,11 @@ export default function StatisticianThesisOverviewPage() {
     }, [thesis?.id]);
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
             const record = submissionByStage[stageMeta.value];
             acc[stageMeta.value] = record?.status === 'approved';
             return acc;
-        }, {} as Record<ThesisStage, boolean>);
+        }, {} as Record<ThesisStageName, boolean>);
     }, [submissionByStage]);
 
     const participants = React.useMemo(() => {

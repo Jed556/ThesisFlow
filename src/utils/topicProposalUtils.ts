@@ -3,7 +3,7 @@ import type {
     TopicProposalEntryStatus,
     TopicProposalSet,
     TopicProposalSetRecord,
-} from '../types/topicProposal';
+} from '../types/proposal';
 
 export type ProposalStatusChipColor = 'default' | 'info' | 'success' | 'warning' | 'error';
 

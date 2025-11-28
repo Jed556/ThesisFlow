@@ -7,7 +7,7 @@ import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, query, where, orde
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import type { FileAttachment } from '../../../types/file';
-import type { ThesisStage } from '../../../types/thesis';
+import type { ThesisStageName } from '../../../types/thesis';
 
 /** Firestore collection name for file metadata */
 const FILES_COLLECTION = 'files';
@@ -123,7 +123,7 @@ export async function getFilesByThesis(
     thesisId: string,
     chapterId?: number,
     category?: 'submission' | 'attachment',
-    stage?: ThesisStage,
+    stage?: ThesisStageName,
 ): Promise<FileAttachment[]> {
     try {
         const filesRef = collection(firebaseFirestore, FILES_COLLECTION);

@@ -283,24 +283,24 @@ export default function SignIn() {
         return () => { active = false; };
     }, [showNotification]);
 
-    if (session?.loading) {
-        return (
-            <AnimatedPage variant="fade">
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-                    <Stack spacing={2} alignItems="center">
-                        <CircularProgress size={28} />
-                        <Typography variant="body2" color="text.secondary">
-                            Preparing your session...
-                        </Typography>
-                    </Stack>
-                </Box>
-            </AnimatedPage>
-        );
-    }
+    // if (session?.loading) {
+    //     return (
+    //         <AnimatedPage variant="fade">
+    //             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+    //                 <Stack spacing={2} alignItems="center">
+    //                     <CircularProgress size={28} />
+    //                     <Typography variant="body2" color="text.secondary">
+    //                         Preparing your session...
+    //                     </Typography>
+    //                 </Stack>
+    //             </Box>
+    //         </AnimatedPage>
+    //     );
+    // }
 
-    if (session?.user) {
-        return <Navigate to="/" />;
-    }
+    // if (session?.user) {
+    //     return <Navigate to="/" />;
+    // }
 
     const formContextValue = {
         emailValue,

@@ -1,9 +1,9 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Chip, Divider, IconButton, Paper, Skeleton, Stack, Typography,
+    Alert, Box, Button, Chip, Divider, IconButton, Skeleton, Stack, Typography,
 } from '@mui/material';
 import {
-    Add as AddIcon, Delete as DeleteIcon, PersonAdd as PersonAddIcon, Search as SearchIcon, Send as SendIcon,
+    Delete as DeleteIcon, PersonAdd as PersonAddIcon, Send as SendIcon,
     Check as CheckIcon, Close as CloseIcon,
 } from '@mui/icons-material';
 import type { ThesisGroup } from '../../../types/group';
@@ -25,7 +25,6 @@ export interface StudentGroupCardProps {
     formatLabel: LabelFormatter;
     onOpenProfile: UidCallback;
     onOpenCreateDialog: VoidCallback;
-    onOpenSearchDialog: VoidCallback;
     onOpenInviteDialog: VoidCallback;
     onSubmitForReview: VoidCallback;
     onDeleteGroup: VoidCallback;
@@ -34,30 +33,22 @@ export interface StudentGroupCardProps {
     inviteActionsDisabled: boolean;
 }
 
-function renderEmptyState(onOpenCreateDialog: VoidCallback, onOpenSearchDialog: VoidCallback) {
+function renderEmptyState() {
     return (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ p: 0, mb: 0 }}>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                 You are not part of any group yet. Create a new group or join an existing one.
             </Typography>
-            <Stack direction="row" spacing={2}>
-                <Button startIcon={<AddIcon />} variant="contained" onClick={onOpenCreateDialog}>
-                    Create Group
-                </Button>
-                <Button startIcon={<SearchIcon />} variant="outlined" onClick={onOpenSearchDialog}>
-                    Search Group by ID
-                </Button>
-            </Stack>
-        </Paper>
+        </Box>
     );
 }
 
 function renderSkeleton() {
     return (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ p: 0, mb: 0 }}>
             <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
             <Skeleton variant="rounded" height={120} />
-        </Paper>
+        </Box>
     );
 }
 
@@ -72,7 +63,6 @@ export default function StudentGroupCard({
     formatLabel,
     onOpenProfile,
     onOpenCreateDialog,
-    onOpenSearchDialog,
     onOpenInviteDialog,
     onSubmitForReview,
     onDeleteGroup,
@@ -87,13 +77,13 @@ export default function StudentGroupCard({
         if (!profile) {
             const displayName = formatLabel(uid);
             return (
-                <Paper
+                <Box
                     key={`${roleLabel}-${uid}`}
-                    variant="outlined"
                     sx={{
                         p: 2,
                         borderRadius: 2,
                         bgcolor: 'background.default',
+                        border: '1px solid',
                         borderColor: 'divider',
                         width: '100%',
                     }}
@@ -109,7 +99,7 @@ export default function StudentGroupCard({
                             </Typography>
                         </Box>
                     </Stack>
-                </Paper>
+                </Box>
             );
         }
 
@@ -167,7 +157,7 @@ export default function StudentGroupCard({
     }
 
     if (!group) {
-        return renderEmptyState(onOpenCreateDialog, onOpenSearchDialog);
+        return renderEmptyState();
     }
 
     const researcherEntries = [
@@ -183,7 +173,7 @@ export default function StudentGroupCard({
     const panelEntries = (group.members.panels ?? []).map((uid) => ({ uid, role: 'Panelist' }));
 
     return (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ p: 0, mb: 0 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                 <Box>
                     <Typography variant="overline" color="text.secondary">
@@ -291,6 +281,6 @@ export default function StudentGroupCard({
                     </Stack>
                 </>
             )}
-        </Paper>
+        </Box>
     );
 }

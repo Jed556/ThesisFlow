@@ -59,7 +59,7 @@ export default function Layout() {
 
     return (
         <>
-            <Fade in={isLoading} timeout={{ enter: 200, exit: 450 }} unmountOnExit>
+            <Fade in={isLoading} timeout={{ enter: 200, exit: 450 }}>
                 <Box sx={{ width: '100%', position: 'fixed', left: 0, right: 0, top: 0, zIndex: (theme) => theme.zIndex.appBar + 1 }}>
                     <LinearProgress />
                 </Box>

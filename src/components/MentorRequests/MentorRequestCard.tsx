@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { Chip, Stack, Typography } from '@mui/material';
-import type { MentorRequest } from '../../types/mentorRequest';
+import type { ExpertRequest } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
 import type { UserProfile } from '../../types/profile';
 import { formatDateShort } from '../../utils/dateUtils';
 import GroupCard from '../Group/GroupCard';
 
 interface MentorRequestCardProps {
-    request: MentorRequest;
+    request: ExpertRequest;
     group: ThesisGroup;
     requester: UserProfile | null;
     usersByUid: Map<string, UserProfile>;
-    onOpenGroup?: (request: MentorRequest) => void;
+    onOpenGroup?: (request: ExpertRequest) => void;
 }
 
 interface StatusDisplayConfig {
@@ -19,7 +19,7 @@ interface StatusDisplayConfig {
     color: 'success' | 'warning' | 'error' | 'default';
 }
 
-const STATUS_CONFIG: Record<MentorRequest['status'], StatusDisplayConfig> = {
+const STATUS_CONFIG: Record<ExpertRequest['status'], StatusDisplayConfig> = {
     pending: { label: 'Pending', color: 'warning' },
     approved: { label: 'Approved', color: 'success' },
     rejected: { label: 'Rejected', color: 'error' },

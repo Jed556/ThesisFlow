@@ -4,7 +4,7 @@ import {
     DialogContentText, DialogTitle, TextField, Tooltip,
 } from '@mui/material';
 import { CheckCircle as ApproveIcon, Close as RejectIcon } from '@mui/icons-material';
-import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
+import type { ExpertRequest, MentorRequestRole } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
 import { assignMentorToGroup } from '../../utils/firebase/firestore/groups';
 import { respondToMentorRequest } from '../../utils/firebase/firestore/mentorRequests';
@@ -12,7 +12,7 @@ import { getGroupMentorByRole } from '../../utils/groupUtils';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 
 export interface MentorRequestDecisionActionsProps {
-    request: MentorRequest | null;
+    request: ExpertRequest | null;
     group: ThesisGroup | null;
     role: MentorRequestRole;
     roleLabel: string;

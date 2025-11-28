@@ -12,7 +12,7 @@ import {
 import {
     Upload as UploadIcon,
 } from '@mui/icons-material';
-import type { ChapterSubmissionStatus, MentorRole, ThesisChapter, ThesisStage } from '../../types/thesis';
+import type { ChapterSubmissionStatus, MentorRole, ThesisChapter, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../Conversation';
 import { FileCard } from '../File';
@@ -110,7 +110,7 @@ export const buildSubmissionMeta = (
 export const buildVersionOptions = (
     chapter?: ThesisChapter,
     files?: FileAttachment[],
-    stageFilter?: ThesisStage,
+    stageFilter?: ThesisStageName,
 ): VersionOption[] => {
     if (!chapter) {
         return [];
@@ -178,7 +178,7 @@ interface ChapterRailProps {
     participants?: Record<string, ConversationParticipant>;
     loadingChapterId?: number | null;
     loadingMessage?: string;
-    activeStage: ThesisStage;
+    activeStage: ThesisStageName;
     reviewActions?: {
         onApprove: (chapterId: number) => void;
         onRequestRevision: (chapterId: number) => void;

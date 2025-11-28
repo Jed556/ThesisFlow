@@ -14,8 +14,10 @@ import type { NavigationItem } from '../../../types/navigation';
 import type { UserProfile, UserRole } from '../../../types/profile';
 import type { Session } from '../../../types/session';
 import {
-    getAllUsers, getUserById, getUserByEmail, setUserProfile, deleteUserProfile, createPersonalCalendar
+    getAllUsers, getUserById, getUserByEmail, setUserProfile, updateUserProfile,
+    deleteUserProfile, createPersonalCalendar,
 } from '../../../utils/firebase/firestore';
+import { getCurrentAcademicYear } from '../../../config/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../../utils/csv/user';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../../utils/avatarUtils';
@@ -191,12 +193,11 @@ export default function AdminUsersPage() {
     async function handleAvatarUpload(
         avatarFile: File,
         uid: string,
-        userProfile: UserProfile,
         onUploadingChange: (uploading: boolean) => void
     ) {
         try {
             onUploadingChange(true);
-            await uploadAvatar(avatarFile, uid, userProfile);
+            await uploadAvatar(avatarFile, uid);
             showNotification('Avatar uploaded successfully', 'success', 3000);
         } catch (error) {
             // Avatar upload failed, but user is already created - just warn
@@ -298,8 +299,15 @@ export default function AdminUsersPage() {
                     avatar: formData.avatar, // Keep existing avatar URL if any
                 };
 
+                // Build context for hierarchical path
+                const userContext = {
+                    year: getCurrentAcademicYear(),
+                    department: newUser.department,
+                    course: newUser.course,
+                };
+
                 try {
-                    await setUserProfile(uid, newUser);
+                    await setUserProfile(uid, userRole, userContext, newUser);
                 } catch {
                     // Step 2 failed - delete auth account to avoid orphaned accounts
                     showNotification('Failed to create user profile. Rolling back...', 'error');
@@ -314,7 +322,7 @@ export default function AdminUsersPage() {
 
                 // STEP 3: Upload avatar (assume this won't fail, but handle gracefully)
                 if (avatarFile) {
-                    await handleAvatarUpload(avatarFile, uid, newUser, setUploadingAvatar);
+                    await handleAvatarUpload(avatarFile, uid, setUploadingAvatar);
                 }
 
                 // Create personal calendar for the new user
@@ -343,7 +351,7 @@ export default function AdminUsersPage() {
                 if (avatarFile) {
                     try {
                         setUploadingAvatar(true);
-                        avatarUrl = await uploadAvatar(avatarFile, selectedUser.uid, formData);
+                        avatarUrl = await uploadAvatar(avatarFile, selectedUser.uid);
                         showNotification('Avatar uploaded successfully', 'success', 3000);
                     } catch (error) {
                         showNotification(
@@ -375,7 +383,13 @@ export default function AdminUsersPage() {
 
                         if (authResult.success) {
                             await deleteUserProfile(selectedUser.uid);
-                            await setUserProfile(selectedUser.uid, updatedUser);
+                            // Use setUserProfile with context for new path after role change
+                            const userContext = {
+                                year: getCurrentAcademicYear(),
+                                department: updatedUser.department,
+                                course: updatedUser.course,
+                            };
+                            await setUserProfile(selectedUser.uid, role, userContext, updatedUser);
                         } else {
                             showNotification(`Auth update failed: ${authResult.message}.`, 'error', 6000);
                         }
@@ -383,8 +397,8 @@ export default function AdminUsersPage() {
                         showNotification('Failed to update User.', 'error', 6000);
                     }
                 } else {
-                    // Just update the profile
-                    await setUserProfile(selectedUser.uid, updatedUser);
+                    // Just update the profile in place
+                    await updateUserProfile(selectedUser.uid, updatedUser);
                 }
 
                 showNotification(
@@ -579,7 +593,13 @@ export default function AdminUsersPage() {
                             errors.push(`Missing UID after creating auth record for ${user.email}`);
                             continue;
                         }
-                        await setUserProfile(profileUid, profileWithUid);
+                        // Build context for hierarchical path
+                        const importContext = {
+                            year: getCurrentAcademicYear(),
+                            department: profileWithUid.department,
+                            course: profileWithUid.course,
+                        };
+                        await setUserProfile(profileUid, user.role, importContext, profileWithUid);
                         successCount++;
                     } catch (error) {
                         errors.push(`Failed to create ${user.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -690,8 +710,13 @@ export default function AdminUsersPage() {
                             phone: newRow.phone,
                         };
 
-                        // setUserProfile now automatically cleans empty values
-                        await setUserProfile(email, updatedUser);
+                        // Build context for hierarchical path (using new role path if changed)
+                        const inlineContext = {
+                            year: getCurrentAcademicYear(),
+                            department: updatedUser.department,
+                            course: updatedUser.course,
+                        };
+                        await setUserProfile(oldRow.uid, newRow.role, inlineContext, updatedUser);
                     } else {
                         showNotification(`Auth update failed: ${authResult.message}.`, 'warning', 4000);
                     }

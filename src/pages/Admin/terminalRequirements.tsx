@@ -22,8 +22,8 @@ import { useSnackbar } from '../../components/Snackbar';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ThesisStage } from '../../types/thesis';
-import type { TerminalRequirementDefinition } from '../../types/terminalRequirement';
+import type { ThesisStageName } from '../../types/thesis';
+import type { TerminalRequirement } from '../../types/terminalRequirement';
 import type { TerminalRequirementConfigEntry, TerminalRequirementTemplateMetadata } from '../../types/terminalRequirementConfig';
 import { getUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment, getGroupDepartments } from '../../utils/firebase/firestore/groups';
@@ -116,7 +116,7 @@ function areRequirementStatesEqual(a: RequirementStateMap, b: RequirementStateMa
 }
 
 interface RequirementRow {
-    definition: TerminalRequirementDefinition;
+    definition: TerminalRequirement;
     entry: TerminalRequirementConfigEntry;
 }
 
@@ -150,13 +150,13 @@ export default function AdminTerminalRequirementsPage() {
     const [requirementState, setRequirementState] = React.useState<RequirementStateMap>(() => createDefaultRequirementState());
     const syncedStateRef = React.useRef<RequirementStateMap>(createDefaultRequirementState());
 
-    const [activeStage, setActiveStage] = React.useState<ThesisStage>(THESIS_STAGE_METADATA[0].value);
+    const [activeStage, setActiveStage] = React.useState<ThesisStageName>(THESIS_STAGE_METADATA[0].value);
     const [saving, setSaving] = React.useState(false);
     const [uploadingMap, setUploadingMap] = React.useState<Record<string, boolean>>({});
     const [removingMap, setRemovingMap] = React.useState<Record<string, boolean>>({});
 
-    const definitionById = React.useMemo<Record<string, TerminalRequirementDefinition>>(() => {
-        return TERMINAL_REQUIREMENTS.reduce<Record<string, TerminalRequirementDefinition>>((acc, definition) => {
+    const definitionById = React.useMemo<Record<string, TerminalRequirement>>(() => {
+        return TERMINAL_REQUIREMENTS.reduce<Record<string, TerminalRequirement>>((acc, definition) => {
             acc[definition.id] = definition;
             return acc;
         }, {});
@@ -392,7 +392,7 @@ export default function AdminTerminalRequirementsPage() {
         });
     }, []);
 
-    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStage) => {
+    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStageName) => {
         setActiveStage(nextStage);
     }, []);
 

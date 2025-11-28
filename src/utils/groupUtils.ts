@@ -1,23 +1,39 @@
 import type { ThesisGroup } from '../types/group';
 import type { UserProfile } from '../types/profile';
-import type { MentorRequestRole } from '../types/mentorRequest';
+import type { MentorRequestRole } from '../types/expertRequest';
 import { getUserById } from './firebase/firestore/user';
 
 export {
     acceptInvite,
     acceptJoinRequest,
+    approveGroup,
+    assignMentorToGroup,
     cancelJoinRequest,
     createGroup,
     deleteGroup,
-    getGroupById,
+    findGroupById,
+    getAllGroups,
+    getAllProposalsFromGroups,
+    getAllThesesFromGroups,
+    getGroupDepartments,
     getGroupsByCourse,
+    getGroupsByDepartment,
     getGroupsByLeader,
     getGroupsByMember,
+    getGroupsByStatus,
+    getGroupsInDepartmentCourse,
     inviteUserToGroup,
+    listenAllGroups,
+    listenGroups,
+    listenGroupsByMentorRole,
+    listenGroupsByPanelist,
+    rejectGroup,
     rejectJoinRequest,
     removeInviteFromGroup,
     requestToJoinGroup,
+    setGroup,
     submitGroupForReview,
+    updateGroup,
 } from './firebase/firestore/groups';
 
 export { getUserById, getUsersByFilter } from './firebase/firestore/user';

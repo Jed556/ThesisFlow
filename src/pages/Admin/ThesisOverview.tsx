@@ -11,7 +11,7 @@ import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceFilterConfig } from '../../types/workspace';
-import { getThesisByGroupId } from '../../utils/firebase/firestore/thesis';
+import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
 import { getUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { getDisplayName } from '../../utils/userUtils';
@@ -215,7 +215,7 @@ export default function AdminThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const record = await getThesisByGroupId(selectedGroupId);
+                const record = await findThesisByGroupId(selectedGroupId);
                 if (!cancelled) {
                     setSelectedThesisId(record?.id ?? '');
                     setThesis(record ?? null);

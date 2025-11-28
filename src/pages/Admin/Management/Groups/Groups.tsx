@@ -45,7 +45,7 @@ const emptyFormData: ThesisGroupFormData = {
     adviser: '',
     editor: '',
     status: 'active',
-    thesisTitle: '',
+    thesis: undefined,
     department: '',
     course: '',
 };
@@ -338,7 +338,7 @@ export default function AdminGroupManagementPage() {
                     adviser: groupToEdit.members.adviser ?? '',
                     editor: groupToEdit.members.editor ?? '',
                     status: groupToEdit.status,
-                    thesisTitle: groupToEdit.thesisTitle,
+                    thesis: groupToEdit.thesis,
                     department: groupToEdit.department,
                     course: groupToEdit.course || derivedCourse || '',
                 });
@@ -668,7 +668,10 @@ export default function AdminGroupManagementPage() {
                         editor: formData.editor || undefined,
                     },
                     status: formData.status,
-                    thesisTitle: formData.thesisTitle?.trim(),
+                    thesis: formData.thesis?.title?.trim() ? {
+                        ...formData.thesis,
+                        title: formData.thesis.title.trim(),
+                    } : undefined,
                     department: normalizedDepartment || '',
                     course: normalizedCourse,
                 };
@@ -694,7 +697,10 @@ export default function AdminGroupManagementPage() {
                         panels: selectedGroup.members.panels,
                     },
                     status: formData.status,
-                    thesisTitle: formData.thesisTitle?.trim(),
+                    thesis: formData.thesis?.title?.trim() ? {
+                        ...formData.thesis,
+                        title: formData.thesis.title.trim(),
+                    } : undefined,
                     department: normalizedDepartment || '',
                     course: normalizedCourse,
                 };
@@ -867,14 +873,14 @@ export default function AdminGroupManagementPage() {
     if (!canManage) {
         return (
             <AnimatedPage variant="fade">
-                <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." variant='box'/>
+                <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." variant='box' />
             </AnimatedPage>
         );
     }
 
     return (
         <AnimatedPage variant="fade">
-            <Box sx={{ width: '100%'}}>
+            <Box sx={{ width: '100%' }}>
                 <Stack spacing={3}>
                     <Stack
                         direction={{ xs: 'column', lg: 'row' }}

@@ -15,7 +15,7 @@ import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { listenTheses, listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
-import { getGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
+import { findGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import { isTopicApproved } from '../../../utils/thesisUtils';
 import type { UserProfile } from '../../../types/profile';
@@ -26,7 +26,7 @@ import type { ThesisGroup } from '../../../types/group';
 export const metadata: NavigationItem = {
     group: 'mentors',
     index: 0,
-    title: 'Recommendations',
+    title: 'Pool of Experts',
     segment: 'recommendation',
     icon: <PeopleAltIcon />,
     roles: ['student'],
@@ -98,7 +98,7 @@ export default function AdviserEditorRecommendationsPage() {
 
         let cancelled = false;
         setGroupError(null);
-        void getGroupById(studentGroupId)
+        void findGroupById(studentGroupId)
             .then((groupRecord) => {
                 if (!cancelled) {
                     setStudentGroup(groupRecord ?? null);

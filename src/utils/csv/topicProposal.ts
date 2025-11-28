@@ -5,8 +5,8 @@
 import type {
     TopicProposalEntry, TopicProposalEntryStatus, TopicProposalReviewEvent,
     TopicProposalReviewerDecision, TopicProposalSetRecord
-} from '../../types/topicProposal';
-import { TOPIC_PROPOSAL_ENTRY_STATUSES } from '../../types/topicProposal';
+} from '../../types/proposal';
+import { TOPIC_PROPOSAL_ENTRY_STATUSES } from '../../types/proposal';
 import { parseCsvText, normalizeHeader, mapHeaderIndexes, parseBoolean, generateCsvText } from './parser';
 
 const nowIso = () => new Date().toISOString();

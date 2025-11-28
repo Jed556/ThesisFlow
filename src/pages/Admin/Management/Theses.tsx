@@ -23,7 +23,7 @@ import {
     bulkDeleteTheses, deleteThesis, getAllTheses, listenTheses,
     setThesis, createThesisForGroup, computeThesisProgressRatio, type ThesisRecord,
 } from '../../../utils/firebase/firestore/thesis';
-import { getAllGroups, getGroupById, updateGroup } from '../../../utils/firebase/firestore/groups';
+import { getAllGroups, findGroupById, updateGroup } from '../../../utils/firebase/firestore/groups';
 import { getUserById, getUsersByIds, listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { importThesesFromCsv, exportThesesToCsv } from '../../../utils/csv/thesis';
 import { formatProfileLabel } from '../../../utils/userUtils';
@@ -213,7 +213,7 @@ export default function AdminThesisManagementPage() {
         if (missingGroupIds.length > 0) {
             const fetchedGroups = await Promise.all(missingGroupIds.map(async (groupId) => {
                 try {
-                    return await getGroupById(groupId);
+                    return await findGroupById(groupId);
                 } catch (error) {
                     console.error(`Failed to fetch thesis group ${groupId}:`, error);
                     return null;
@@ -632,7 +632,7 @@ export default function AdminThesisManagementPage() {
                         const groupCache = groupCacheRef.current;
                         let group = groupCache.get(thesis.groupId);
                         if (!group) {
-                            const fetchedGroup = await getGroupById(thesis.groupId);
+                            const fetchedGroup = await findGroupById(thesis.groupId);
                             if (fetchedGroup) {
                                 groupCache.set(fetchedGroup.id, fetchedGroup);
                             }

@@ -17,7 +17,7 @@ import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesi
 import {
     listenPanelCommentEntries, listenPanelCommentRelease, updatePanelCommentStudentFields
 } from '../../utils/firebase/firestore/panelComments';
-import { getGroupById } from '../../utils/firebase/firestore/groups';
+import { findGroupById } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
@@ -166,7 +166,7 @@ export default function StudentPanelCommentsPage() {
             setPanelistsError(null);
 
             try {
-                const group = await getGroupById(groupId);
+                const group = await findGroupById(groupId);
                 const panelUids = group?.members?.panels ?? [];
 
                 if (!isMounted) {

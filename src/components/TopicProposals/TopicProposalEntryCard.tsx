@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Box, Card, CardContent, Chip, Divider, Stack, Typography } from '@mui/material';
-import type { TopicProposalEntry } from '../../types/topicProposal';
+import type { TopicProposalEntry } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { Avatar, Name } from '../Avatar';
 import { getStatusChipConfig } from '../../utils/topicProposalUtils';

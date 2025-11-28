@@ -22,26 +22,33 @@ import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import UndoIcon from '@mui/icons-material/Undo';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
-import type { ThesisStage, ThesisData } from '../../types/thesis';
+import type { ThesisStageName, ThesisData } from '../../types/thesis';
 import type { ThesisGroup } from '../../types/group';
 import type { FileAttachment } from '../../types/file';
-import type { ReviewerAssignment, ReviewerRole } from '../../types/reviewer';
-import type { TerminalRequirementApprovalRole, TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
+import type {
+    TerminalRequirementApprovalRole,
+    TerminalRequirementSubmissionRecord,
+} from '../../types/terminalRequirementSubmission';
 import { SubmissionStatus, TERMINAL_REQUIREMENT_ROLE_LABELS } from './SubmissionStatus';
 import { TerminalRequirementCard } from './RequirementCard';
 import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
 import { useSnackbar } from '../Snackbar';
 import {
     getReviewerAssignmentsForUser,
-    getThesisById,
-    getThesisByGroupId,
+    findThesisById,
+    findThesisByGroupId,
+    type ReviewerRole,
+    type ReviewerAssignment,
 } from '../../utils/firebase/firestore/thesis';
-import { getGroupById, listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
+import { findGroupById, listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
 import {
-    listenTerminalRequirementSubmission,
-    recordTerminalRequirementDecision,
-} from '../../utils/firebase/firestore/terminalRequirementSubmissions';
-import { fetchTerminalRequirementFiles, getTerminalRequirementsByStage } from '../../utils/terminalRequirements';
+    findAndListenTerminalRequirements,
+    findAndRecordTerminalRequirementDecision,
+} from '../../utils/firebase/firestore/terminalRequirements';
+import {
+    fetchTerminalRequirementFiles,
+    getTerminalRequirementsByStage,
+} from '../../utils/terminalRequirements';
 
 interface AssignmentOption {
     thesisId: string;
@@ -78,9 +85,13 @@ export function TerminalRequirementApprovalWorkspace({
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [thesisError, setThesisError] = React.useState<string | null>(null);
     const [groupMeta, setGroupMeta] = React.useState<ThesisGroup | null>(null);
-    const [submissionByStage, setSubmissionByStage] = React.useState<Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>>({});
-    const [activeStage, setActiveStage] = React.useState<ThesisStage | null>(null);
-    const [filesByRequirement, setFilesByRequirement] = React.useState<Record<string, FileAttachment[]>>({});
+    const [submissionByStage, setSubmissionByStage] = React.useState<
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
+    >({});
+    const [activeStage, setActiveStage] = React.useState<ThesisStageName | null>(null);
+    const [filesByRequirement, setFilesByRequirement] = React.useState<
+        Record<string, FileAttachment[]>
+    >({});
     const [fileLoading, setFileLoading] = React.useState<Record<string, boolean>>({});
     const [decisionLoading, setDecisionLoading] = React.useState(false);
     const [returnDialogOpen, setReturnDialogOpen] = React.useState(false);
@@ -107,15 +118,15 @@ export function TerminalRequirementApprovalWorkspace({
         if (role === 'panel') {
             setAssignmentLoading(true);
             const unsubscribe = listenGroupsByPanelist(userUid, {
-                onData: (groups) => {
+                onData: (groups: ThesisGroup[]) => {
                     setAssignmentOptions(groups.map((group) => ({
-                        thesisId: group.thesisId ?? '',
+                        thesisId: group.thesis?.id ?? '',
                         label: group.name || group.id,
                         groupId: group.id,
                     })));
                     setAssignmentLoading(false);
                 },
-                onError: (listenerError) => {
+                onError: (listenerError: Error) => {
                     console.error('Failed to load panel assignments:', listenerError);
                     setAssignmentOptions([]);
                     setAssignmentLoading(false);
@@ -179,7 +190,7 @@ export function TerminalRequirementApprovalWorkspace({
         setThesisLoading(true);
         void (async () => {
             try {
-                const groupThesis = await getThesisByGroupId(fallback.groupId!);
+                const groupThesis = await findThesisByGroupId(fallback.groupId!);
                 if (cancelled) {
                     return;
                 }
@@ -222,14 +233,14 @@ export function TerminalRequirementApprovalWorkspace({
             setThesis(null);
             setGroupMeta(null);
             try {
-                const data = await getThesisById(selectedThesisId);
+                const data = await findThesisById(selectedThesisId);
                 if (cancelled) {
                     return;
                 }
                 if (data) {
                     setThesis({ ...data, id: selectedThesisId });
                     if (data.groupId) {
-                        const group = await getGroupById(data.groupId);
+                        const group = await findGroupById(data.groupId);
                         if (!cancelled) {
                             setGroupMeta(group);
                         }
@@ -262,14 +273,16 @@ export function TerminalRequirementApprovalWorkspace({
         }
         const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => {
             const stageValue = stageMeta.value;
-            return listenTerminalRequirementSubmission(selectedThesisId, stageValue, {
-                onData: (record) => {
+            return findAndListenTerminalRequirements(selectedThesisId, stageValue, {
+                onData: (records: TerminalRequirementSubmissionRecord[]) => {
+                    // Take the first record if any exist, otherwise null
+                    const record = records.length > 0 ? records[0] : null;
                     setSubmissionByStage((prev) => ({
                         ...prev,
                         [stageValue]: record,
                     }));
                 },
-                onError: (listenerError) => {
+                onError: (listenerError: Error) => {
                     console.error(`Submission listener error for ${stageValue}:`, listenerError);
                 },
             });
@@ -363,7 +376,7 @@ export function TerminalRequirementApprovalWorkspace({
         setThesisLoading(true);
         void (async () => {
             try {
-                const groupThesis = await getThesisByGroupId(groupId as string);
+                const groupThesis = await findThesisByGroupId(groupId as string);
                 if (groupThesis?.id) {
                     setSelectedThesisId(groupThesis.id);
                 } else {
@@ -388,7 +401,7 @@ export function TerminalRequirementApprovalWorkspace({
         }
         setDecisionLoading(true);
         try {
-            await recordTerminalRequirementDecision({
+            await findAndRecordTerminalRequirementDecision({
                 thesisId: thesis.id,
                 stage: resolvedStage,
                 role,
@@ -415,7 +428,7 @@ export function TerminalRequirementApprovalWorkspace({
         }
         setDecisionLoading(true);
         try {
-            await recordTerminalRequirementDecision({
+            await findAndRecordTerminalRequirementDecision({
                 thesisId: thesis.id,
                 stage: resolvedStage,
                 role,
@@ -462,9 +475,13 @@ export function TerminalRequirementApprovalWorkspace({
         }
 
         if (activeSubmission.status === 'returned') {
+            const returnedByLabel = activeSubmission.returnedBy
+                ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.returnedBy]
+                : 'a mentor';
             return (
                 <Alert severity="warning">
-                    Returned to students by {activeSubmission.returnedBy ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.returnedBy] : 'a mentor'} on {formatDateTime(activeSubmission.returnedAt)}.
+                    Returned to students by {returnedByLabel} on{' '}
+                    {formatDateTime(activeSubmission.returnedAt)}.
                 </Alert>
             );
         }
@@ -549,13 +566,17 @@ export function TerminalRequirementApprovalWorkspace({
                                         {thesis?.title ?? 'Thesis'}
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                        {groupMeta?.name ? `Group ${groupMeta.name}` : groupMeta?.id ? `Group ${groupMeta.id}` : 'No group metadata'}
+                                        {groupMeta?.name
+                                            ? `Group ${groupMeta.name}`
+                                            : groupMeta?.id
+                                                ? `Group ${groupMeta.id}`
+                                                : 'No group metadata'}
                                     </Typography>
                                 </Box>
 
                                 <Tabs
                                     value={resolvedStage}
-                                    onChange={(_, value: ThesisStage) => setActiveStage(value)}
+                                    onChange={(_, value: ThesisStageName) => setActiveStage(value)}
                                     variant="scrollable"
                                     allowScrollButtonsMobile
                                 >

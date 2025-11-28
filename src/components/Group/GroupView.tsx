@@ -8,7 +8,7 @@ import { formatDateShort } from '../../utils/dateUtils';
 import type { ThesisGroup } from '../../types/group';
 import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
-import { getGroupById } from '../../utils/firebase/firestore/groups';
+import { findGroupById } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import { getThesisById } from '../../utils/firebase/firestore/thesis';
 import Avatar from '../Avatar';
@@ -148,7 +148,7 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
     if (!groupId) {
         return { group: null, thesis: null, profiles: new Map(), error: 'Missing group ID.' };
     }
-    const group = await getGroupById(groupId);
+    const group = await findGroupById(groupId);
     if (!group) {
         return { group: null, thesis: null, profiles: new Map(), error: 'Group not found.' };
     }
@@ -160,14 +160,15 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
         profileIds.length > 0
             ? getUsersByIds(profileIds)
             : Promise.resolve<UserProfile[]>([]),
-        group.thesisId
-            ? getThesisById(group.thesisId)
-                .then((result) => (result ? { ...result, id: result.id ?? group.thesisId } : null))
+        // Thesis is now embedded in group, but fetch fresh if id exists
+        group.thesis?.id
+            ? getThesisById(group.thesis.id)
+                .then((result) => (result ? { ...result, id: result.id ?? group.thesis?.id } : group.thesis ?? null))
                 .catch((error) => {
-                    console.error(`Failed to load thesis ${group.thesisId} for group ${group.id}:`, error);
-                    return null;
+                    console.error(`Failed to load thesis ${group.thesis?.id} for group ${group.id}:`, error);
+                    return group.thesis ?? null;
                 })
-            : Promise.resolve(null),
+            : Promise.resolve(group.thesis ?? null),
     ]);
     if (signal.aborted) {
         return { group: null, thesis: null, profiles: new Map(), error: null };
@@ -229,9 +230,10 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
     const resolvedHeaderActions = typeof headerActions === 'function'
         ? headerActions({ group, loading: state.loading, error: state.error })
         : headerActions;
-    const thesisTitle = thesis?.title ?? group.thesisTitle ?? '—';
-    const thesisIdDisplay = group.thesisId ?? thesis?.id ?? '—';
-    const thesisStatus = thesis?.overallStatus ?? '—';
+    const thesisTitle = thesis?.title ?? group.thesis?.title ?? '—';
+    const thesisIdDisplay = group.thesis?.id ?? thesis?.id ?? '—';
+    // Compute thesis status from the latest stage or use group status as fallback
+    const thesisStatus = thesis?.stages?.[thesis.stages.length - 1]?.name ?? '—';
     const statusColor = STATUS_COLOR_MAP[group.status] ?? 'default';
     const metadataItems = [
         { label: 'Group ID', value: group.id },

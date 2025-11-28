@@ -8,7 +8,7 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/topicProposal';
+import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard, TopicProposalFormDialog, type TopicProposalFormValues } from '../../components/TopicProposals';
@@ -106,17 +106,17 @@ function computeNextTopicSequence(groupId: string | undefined, sets: TopicPropos
 }
 
 async function ensureGroupThesisReference(group: ThesisGroup): Promise<ThesisGroup> {
-    if (!group.thesisId) {
+    if (!group.thesis?.id) {
         return group;
     }
 
     try {
-        const thesis = await getThesisById(group.thesisId);
+        const thesis = await getThesisById(group.thesis.id);
         if (thesis) {
             return group;
         }
-        await updateGroup(group.id, { thesisId: undefined, thesisTitle: undefined });
-        return { ...group, thesisId: undefined, thesisTitle: undefined };
+        await updateGroup(group.id, { thesis: undefined });
+        return { ...group, thesis: undefined };
     } catch (error) {
         console.error('Failed to verify thesis reference for group:', error);
         return group;

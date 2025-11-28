@@ -5,7 +5,7 @@ import {
 import { CloudUpload as CloudUploadIcon, Download as DownloadIcon } from '@mui/icons-material';
 import type { FileAttachment } from '../../types/file';
 import type {
-    TerminalRequirementDefinition,
+    TerminalRequirement,
     TerminalRequirementStatus,
 } from '../../types/terminalRequirement';
 import { FileCard } from '../File';
@@ -16,7 +16,7 @@ const STATUS_META: Record<TerminalRequirementStatus, { label: string; color: 'de
 };
 
 export interface TerminalRequirementCardProps {
-    requirement: TerminalRequirementDefinition;
+    requirement: TerminalRequirement;
     files?: FileAttachment[];
     status: TerminalRequirementStatus;
     loading?: boolean;

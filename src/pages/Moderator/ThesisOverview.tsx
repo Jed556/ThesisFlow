@@ -12,7 +12,7 @@ import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
-import { getThesisByGroupId } from '../../utils/firebase/firestore/thesis';
+import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
 import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
 import { getUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
@@ -197,7 +197,7 @@ export default function ModeratorThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const result = await getThesisByGroupId(selectedGroupId);
+                const result = await findThesisByGroupId(selectedGroupId);
                 if (!cancelled) {
                     setSelectedThesisId(result?.id ?? '');
                     setThesis(result ?? null);

@@ -9,7 +9,7 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord } from '../../types/topicProposal';
+import type { TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard } from '../../components/TopicProposals';

@@ -7,7 +7,7 @@ import type {
     WorkspaceFilterConfig, WorkspaceCommentPayload, WorkspaceEditPayload,
     WorkspaceUploadPayload, ChapterVersionMap, WorkspaceChapterDecisionPayload, WorkspaceChapterDecision,
 } from '../../types/workspace';
-import type { MentorRole, ThesisChapter, ThesisData, ThesisStage } from '../../types/thesis';
+import type { MentorRole, ThesisChapter, ThesisData, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import { ConversationPanel, type ConversationParticipant } from '../Conversation';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
@@ -44,7 +44,7 @@ interface ThesisWorkspaceProps {
     onEditComment?: (payload: WorkspaceEditPayload) => Promise<void> | void;
     onUploadChapter?: (payload: WorkspaceUploadPayload) => Promise<void> | void;
     onChapterDecision?: (payload: WorkspaceChapterDecisionPayload) => Promise<void> | void;
-    terminalRequirementCompletionMap?: Partial<Record<ThesisStage, boolean>>;
+    terminalRequirementCompletionMap?: Partial<Record<ThesisStageName, boolean>>;
     enforceTerminalRequirementSequence?: boolean;
     stageGateOverrides?: StageGateOverrides;
 }
@@ -139,7 +139,7 @@ export default function ThesisWorkspace({
     } | null>(null);
     const [decisionError, setDecisionError] = React.useState<string | null>(null);
     const [isSubmittingDecision, setIsSubmittingDecision] = React.useState(false);
-    const [activeStage, setActiveStage] = React.useState<ThesisStage>(THESIS_STAGE_METADATA[0].value);
+    const [activeStage, setActiveStage] = React.useState<ThesisStageName>(THESIS_STAGE_METADATA[0].value);
 
     React.useEffect(() => {
         setChapterFiles({});
@@ -223,7 +223,7 @@ export default function ThesisWorkspace({
         previousStageMeta,
     ]);
 
-    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStage) => {
+    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStageName) => {
         setActiveStage(nextStage);
     }, []);
 
@@ -237,7 +237,7 @@ export default function ThesisWorkspace({
         setActiveVersionIndex((previous) => (previous === versionIndex ? null : versionIndex));
     }, []);
 
-    const determineChapterStage = React.useCallback((chapterId: number): ThesisStage => {
+    const determineChapterStage = React.useCallback((chapterId: number): ThesisStageName => {
         const chapter = normalizedChapters.find((entry) => entry.id === chapterId);
         return resolveChapterStage(chapter);
     }, [normalizedChapters]);

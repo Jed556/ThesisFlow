@@ -1,3 +1,4 @@
+
 /**
  * Supported stages for panel feedback workflows. These map to the major review events.
  */
@@ -27,8 +28,6 @@ export interface PanelCommentEntry {
     updatedAt?: string;
     /** Firebase uid who last edited the entry text/reference. */
     updatedBy?: string;
-    /** Page number or section recorded by the student. */
-    studentPage?: string;
     /** Status of compliance recorded by the student. */
     studentStatus?: string;
     /** ISO timestamp for the latest student update. */
@@ -37,8 +36,43 @@ export interface PanelCommentEntry {
     studentUpdatedBy?: string;
 }
 
+export interface PanelCommentTable {
+    panelUid: string;
+    stage: PanelCommentStage;
+    comments: PanelCommentEntry[];
+}
+
+// TODO: Check if this can be simplified
+
 /**
- * Payload required when a panelist creates a new comment entry.
+ * Release status for a single panel comment stage.
+ */
+export interface PanelCommentReleaseStatus {
+    /** Whether comments for this stage have been released to students. */
+    sent: boolean;
+    /** ISO timestamp for when the comments were released. */
+    sentAt?: string;
+    /** Firebase uid of the admin who released the comments. */
+    sentBy?: string;
+}
+
+/**
+ * Map of release status by stage.
+ */
+export type PanelCommentReleaseMap = Record<PanelCommentStage, PanelCommentReleaseStatus>;
+
+/**
+ * Creates a default release map with all stages unreleased.
+ */
+export function createDefaultPanelCommentReleaseMap(): PanelCommentReleaseMap {
+    return {
+        proposal: { sent: false },
+        defense: { sent: false },
+    };
+}
+
+/**
+ * Input payload for creating a new panel comment entry.
  */
 export interface PanelCommentEntryInput {
     groupId: string;
@@ -46,12 +80,11 @@ export interface PanelCommentEntryInput {
     comment: string;
     reference?: string;
     createdBy: string;
-    /** Assign entry to a specific panelist. Defaults to createdBy when omitted. */
-    panelUid?: string;
+    panelUid: string;
 }
 
 /**
- * Payload for panelists editing their previously created entries.
+ * Payload for updating an existing panel comment entry.
  */
 export interface PanelCommentEntryUpdate {
     comment?: string;
@@ -60,34 +93,10 @@ export interface PanelCommentEntryUpdate {
 }
 
 /**
- * Student-owned fields that can be edited independently from panel data.
+ * Payload for student updates to a panel comment entry.
  */
 export interface PanelCommentStudentUpdate {
     studentPage?: string;
     studentStatus?: string;
-    updatedBy: string;
-}
-
-/**
- * Release metadata describing whether a tab is visible to students.
- */
-export interface PanelCommentReleaseState {
-    sent: boolean;
-    sentAt?: string;
-    sentBy?: string;
-}
-
-/**
- * Lookup map for release state per stage.
- */
-export type PanelCommentReleaseMap = Record<PanelCommentStage, PanelCommentReleaseState>;
-
-/**
- * Utility helper for building default release maps.
- */
-export function createDefaultPanelCommentReleaseMap(): PanelCommentReleaseMap {
-    return {
-        proposal: { sent: false },
-        defense: { sent: false },
-    };
+    studentUpdatedBy: string;
 }

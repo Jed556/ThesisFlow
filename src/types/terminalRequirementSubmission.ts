@@ -1,4 +1,4 @@
-import type { ThesisStage } from './thesis';
+import type { ThesisStageName } from './thesis';
 
 export type TerminalRequirementApprovalRole = 'panel' | 'adviser' | 'editor' | 'statistician';
 export type TerminalRequirementApprovalStatus = 'pending' | 'approved' | 'returned';
@@ -25,7 +25,7 @@ export interface TerminalRequirementSubmissionRecord {
     id: string;
     thesisId: string;
     groupId: string;
-    stage: ThesisStage;
+    stage: ThesisStageName;
     stageKey: string;
     requirementIds: string[];
     status: TerminalRequirementSubmissionStatus;

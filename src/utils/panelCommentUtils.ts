@@ -2,7 +2,7 @@
  * Helper utilities for panel comment workflows shared across multiple pages.
  */
 import type { PanelCommentReleaseMap, PanelCommentStage } from '../types/panelComment';
-import type { ThesisStage } from '../types/thesis';
+import type { ThesisStageName } from '../types/thesis';
 import type { UserProfile } from '../types/profile';
 
 export interface PanelCommentStageMeta {
@@ -10,7 +10,7 @@ export interface PanelCommentStageMeta {
     studentLabel: string;
     adminLabel: string;
     description: string;
-    unlockStage: ThesisStage;
+    unlockStage: ThesisStageName;
 }
 
 export const PANEL_COMMENT_STAGE_METADATA: readonly PanelCommentStageMeta[] = [
@@ -37,7 +37,7 @@ export function getPanelCommentStageMeta(stage: PanelCommentStage): PanelComment
     return PANEL_COMMENT_STAGE_METADATA.find((meta) => meta.id === stage);
 }
 
-export type StageCompletionMap = Partial<Record<ThesisStage, boolean>>;
+export type StageCompletionMap = Partial<Record<ThesisStageName, boolean>>;
 
 /**
  * Determines whether a student should see a specific stage tab.

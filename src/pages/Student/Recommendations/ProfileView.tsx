@@ -20,7 +20,7 @@ import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile, HistoricalThesisEntry, UserRole } from '../../../types/profile';
 import type { ThesisGroup } from '../../../types/group';
 import type { Session } from '../../../types/session';
-import type { MentorRequest } from '../../../types/mentorRequest';
+import type { ExpertRequest } from '../../../types/expertRequest';
 
 type MentorRole = 'adviser' | 'editor' | 'statistician';
 
@@ -56,7 +56,7 @@ export default function MentorProfileViewPage() {
     const [selectedGroupId, setSelectedGroupId] = React.useState('');
     const [requestMessage, setRequestMessage] = React.useState('');
     const [requestSubmitting, setRequestSubmitting] = React.useState(false);
-    const [groupRequests, setGroupRequests] = React.useState<Map<string, MentorRequest[]>>(new Map());
+    const [groupRequests, setGroupRequests] = React.useState<Map<string, ExpertRequest[]>>(new Map());
 
     React.useEffect(() => {
         if (!uid) {

@@ -7,7 +7,7 @@ import type { NavigationItem } from '../../../../types/navigation';
 import { AnimatedPage } from '../../../../components/Animate';
 import GroupView from '../../../../components/Group/GroupView';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
-import { getGroupById, updateGroup } from '../../../../utils/firebase/firestore/groups';
+import { findGroupById, updateGroup } from '../../../../utils/firebase/firestore/groups';
 import { getUsersByFilter, getUsersByIds } from '../../../../utils/firebase/firestore/user';
 import type { ThesisGroup } from '../../../../types/group';
 import type { UserProfile } from '../../../../types/profile';
@@ -111,7 +111,7 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
     const loadAssignments = React.useCallback(async () => {
         setLoadingAssignments(true);
         try {
-            const group = await getGroupById(groupId);
+            const group = await findGroupById(groupId);
             if (!group) {
                 setError('Group not found.');
                 setSelectedPanelUids([]);
