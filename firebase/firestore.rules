@@ -1,0 +1,553 @@
+rules_version = '2';
+
+service cloud.firestore {
+    match /databases/{database}/documents {
+
+        // ====================================
+        // HELPER FUNCTIONS
+        // ====================================
+
+        /**
+         * Check if user is authenticated
+         */
+        function isAuthenticated() {
+            return request.auth != null;
+        }
+
+        /**
+         * Get user role from custom claims (set during authentication)
+         * This is more efficient than reading from Firestore on every request
+         */
+        function getUserRole() {
+            return request.auth.token.role;
+        }
+
+        /**
+         * Check if user has specific role via custom claims
+         */
+        function hasRole(role) {
+            return isAuthenticated() && getUserRole() == role;
+        }
+
+        /**
+         * Check if user has any of the specified roles
+         */
+        function hasAnyRole(roles) {
+            return isAuthenticated() && getUserRole() in roles;
+        }
+
+        /**
+         * Check if user is admin
+         */
+        function isAdmin() {
+            return hasRole('admin');
+        }
+
+        /**
+         * Check if user is developer (for initial setup)
+         */
+        function isDeveloper() {
+            return hasRole('developer');
+        }
+
+        /**
+         * Check if user is admin or developer
+         */
+        function isAdminOrDeveloper() {
+            return isAdmin() || isDeveloper();
+        }
+
+        /**
+         * Check if user is head
+         */
+        function isHead() {
+            return hasRole('head');
+        }
+
+        /**
+         * Check if user is adviser
+         */
+        function isAdviser() {
+            return hasRole('adviser');
+        }
+
+        /**
+         * Check if user is editor
+         */
+        function isEditor() {
+            return hasRole('editor');
+        }
+
+        /**
+         * Check if user is moderator
+         */
+        function isModerator() {
+            return hasRole('moderator');
+        }
+
+        /**
+         * Check if user is statistician
+         */
+        function isStatistician() {
+            return hasRole('statistician');
+        }
+
+        /**
+         * Check if user is panel member
+         */
+        function isPanelMember() {
+            return hasRole('panel');
+        }
+
+        /**
+         * Check if user is student
+         */
+        function isStudent() {
+            return hasRole('student');
+        }
+
+        /**
+         * Check if user is staff (any role with elevated privileges)
+         */
+        function isStaff() {
+            return hasAnyRole(['admin', 'developer', 'head', 'adviser', 'editor', 'moderator', 'statistician', 'panel']);
+        }
+
+        /**
+         * Check if user is mentor (adviser, editor, or statistician)
+         */
+        function isMentor() {
+            return hasAnyRole(['adviser', 'editor', 'statistician']);
+        }
+
+        /**
+         * Check if user is moderator or above (moderator, head, admin)
+         */
+        function isModeratorOrAbove() {
+            return hasAnyRole(['moderator', 'head', 'admin', 'developer']);
+        }
+
+        /**
+         * Check if user is the owner of a document
+         */
+        function isOwner(userId) {
+            return isAuthenticated() && request.auth.uid == userId;
+        }
+
+        /**
+         * Check if user belongs to a specific department (via custom claims)
+         */
+        function userInDepartment(department) {
+            return isAuthenticated() && request.auth.token.department == department;
+        }
+
+        /**
+         * Check if user belongs to a specific course (via custom claims)
+         */
+        function userInCourse(course) {
+            return isAuthenticated() && request.auth.token.course == course;
+        }
+
+        // ====================================
+        // COLLECTION GROUP RULES
+        // These rules allow collection group queries across all paths
+        // Admins/developers have full access for imports and management
+        // ====================================
+
+        // Collection group: users - allows querying and managing users across all hierarchical paths
+        match /{path=**}/users/{userId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: groups - allows querying and managing groups across all paths
+        match /{path=**}/groups/{groupId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: thesis - allows querying and managing thesis across all paths
+        match /{path=**}/thesis/{thesisId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: expertRequests
+        match /{path=**}/expertRequests/{requestId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: terminal
+        match /{path=**}/terminal/{terminalId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: proposals
+        match /{path=**}/proposals/{proposalId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: stages
+        match /{path=**}/stages/{stageId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: chapters
+        match /{path=**}/chapters/{chapterId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: submissions
+        match /{path=**}/submissions/{submissionId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: chats
+        match /{path=**}/chats/{chatId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: audits
+        match /{path=**}/audits/{auditId} {
+            allow read: if isAuthenticated();
+            // Audits are immutable - only admins can create, no updates/deletes
+            allow create: if isAdminOrDeveloper();
+        }
+
+        // ====================================
+        // GLOBAL USERS COLLECTION (legacy/lookup)
+        // ====================================
+
+        match /users/{userId} {
+            // Anyone authenticated can read user profiles for lookup
+            allow read: if isAuthenticated();
+            // Users can update their own profile, admins/developers can update any
+            allow update: if isOwner(userId) || isAdminOrDeveloper();
+            // Only admins/developers can create or delete users
+            allow create, delete: if isAdminOrDeveloper();
+        }
+
+        // ====================================
+        // YEAR-BASED HIERARCHICAL STRUCTURE
+        // ====================================
+
+        match /year/{year} {
+            // Year documents - accessible to all authenticated users
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper() || isHead();
+
+            // Year-level users (admin, developer)
+            match /users/{userId} {
+                allow read: if isAuthenticated();
+                allow write: if isAdminOrDeveloper();
+            }
+
+            // ================================
+            // DEPARTMENTS
+            // ================================
+
+            match /departments/{department} {
+                // Department documents
+                allow read: if isAuthenticated();
+                allow write: if isAdminOrDeveloper() || isHead();
+
+                // Department-level users (adviser, editor, statistician, panel, moderator, head)
+                match /users/{userId} {
+                    allow read: if isAuthenticated();
+                    allow write: if isAdminOrDeveloper() || isHead() || (isOwner(userId) && userInDepartment(department));
+                }
+
+                // ================================
+                // COURSES
+                // ================================
+
+                match /courses/{course} {
+                    // Course documents
+                    allow read: if isAuthenticated();
+                    allow write: if isAdminOrDeveloper() || isHead() || isAdviser();
+
+                    // Course-level users (students)
+                    match /users/{userId} {
+                        allow read: if isAuthenticated();
+                        allow write: if isAdminOrDeveloper() || isHead() || isAdviser() || isOwner(userId);
+                    }
+
+                    // ================================
+                    // GROUPS
+                    // ================================
+
+                    match /groups/{groupId} {
+                        /**
+                         * Check if user is the group leader
+                         */
+                        function isGroupLeader() {
+                            let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
+                            return group.data.members.leader == request.auth.uid;
+                        }
+
+                        /**
+                         * Check if user is a group member (in members.members array)
+                         */
+                        function isGroupMember() {
+                            let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
+                            return request.auth.uid == group.data.members.leader || 
+                                   request.auth.uid in group.data.members.members;
+                        }
+
+                        /**
+                         * Check if user is the group adviser
+                         */
+                        function isGroupAdviser() {
+                            let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
+                            return group.data.members.adviser != null && 
+                                   request.auth.uid == group.data.members.adviser;
+                        }
+
+                        /**
+                         * Check if user is the group editor
+                         */
+                        function isGroupEditor() {
+                            let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
+                            return group.data.members.editor != null && 
+                                   request.auth.uid == group.data.members.editor;
+                        }
+
+                        /**
+                         * Check if user is the group statistician
+                         */
+                        function isGroupStatistician() {
+                            let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
+                            return group.data.members.statistician != null && 
+                                   request.auth.uid == group.data.members.statistician;
+                        }
+
+                        /**
+                         * Check if user is a group panel member
+                         */
+                        function isGroupPanel() {
+                            let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
+                            return group.data.members.panels != null && 
+                                   request.auth.uid in group.data.members.panels;
+                        }
+
+                        /**
+                         * Check if user is assigned mentor for this group
+                         */
+                        function isAssignedMentor() {
+                            return isGroupAdviser() || isGroupEditor() || isGroupStatistician();
+                        }
+
+                        /**
+                         * Check if user has access to the group
+                         */
+                        function hasGroupAccess() {
+                            return isGroupMember() || isAssignedMentor() || isGroupPanel() || isModeratorOrAbove();
+                        }
+
+                        // Group documents - read by members, staff; write by adviser, admin, head
+                        allow read: if isAuthenticated() && hasGroupAccess();
+                        allow create: if isAdminOrDeveloper() || isHead() || isAdviser() || isStudent();
+                        allow update: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader();
+                        allow delete: if isAdminOrDeveloper() || isHead();
+
+                        // ================================
+                        // EXPERT REQUESTS (under group)
+                        // ================================
+
+                        match /expertRequests/{requestId} {
+                            // Expert requests - group members and staff can read
+                            allow read: if isAuthenticated() && hasGroupAccess();
+                            // Members can create, adviser/admin can manage
+                            allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
+                            allow update: if isGroupAdviser() || isAdminOrDeveloper() || isHead();
+                            allow delete: if isAdminOrDeveloper() || isHead();
+                        }
+
+                        // ================================
+                        // PROPOSALS (under group)
+                        // ================================
+
+                        match /proposals/{proposalId} {
+                            // Proposals - group members and staff can read
+                            allow read: if isAuthenticated() && hasGroupAccess();
+                            // Members can create proposals
+                            allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
+                            // Members can update their own, adviser/staff can update any
+                            allow update: if isGroupMember() || isGroupAdviser() || isStaff();
+                            allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
+                        }
+
+                        // ================================
+                        // AUDITS (under group)
+                        // ================================
+
+                        match /audits/{auditId} {
+                            // Audits - read by group members and staff
+                            allow read: if isAuthenticated() && hasGroupAccess();
+                            // System creates audits automatically
+                            allow create: if isAuthenticated() && hasGroupAccess();
+                            // Audits should not be modified or deleted (immutable)
+                            allow update, delete: if false;
+                        }
+
+                        // ================================
+                        // THESIS (under group)
+                        // ================================
+
+                        match /thesis/{thesisId} {
+                            /**
+                             * Check if user is thesis reviewer
+                             */
+                            function isThesisReviewer() {
+                                let thesis = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId)/thesis/$(thesisId));
+                                let reviewers = thesis.data.reviewers;
+                                return reviewers != null && request.auth.uid in reviewers.keys();
+                            }
+
+                            /**
+                             * Check thesis access
+                             */
+                            function hasThesisAccess() {
+                                return hasGroupAccess() || isThesisReviewer();
+                            }
+
+                            // Thesis documents
+                            allow read: if isAuthenticated() && hasThesisAccess();
+                            allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
+                            allow update: if isGroupMember() || isAssignedMentor() || isThesisReviewer() || isModeratorOrAbove();
+                            allow delete: if isAdminOrDeveloper() || isHead();
+
+                            // ================================
+                            // STAGES (under thesis)
+                            // ================================
+
+                            match /stages/{stage} {
+                                // Stages inherit thesis access
+                                allow read: if isAuthenticated() && hasThesisAccess();
+                                allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
+                                allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                allow delete: if isAdminOrDeveloper() || isHead();
+
+                                // ================================
+                                // CHAPTERS (under stage)
+                                // ================================
+
+                                match /chapters/{chapterId} {
+                                    // Chapters inherit thesis access
+                                    allow read: if isAuthenticated() && hasThesisAccess();
+                                    allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
+                                    allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                    allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
+
+                                    // ================================
+                                    // SUBMISSIONS (under chapter)
+                                    // ================================
+
+                                    match /submissions/{submissionId} {
+                                        // Submissions - thesis members and reviewers can read
+                                        allow read: if isAuthenticated() && hasThesisAccess();
+                                        // Group members can create submissions
+                                        allow create: if isGroupMember() || isAssignedMentor();
+                                        // Members and reviewers can update
+                                        allow update: if isGroupMember() || isAssignedMentor() || isThesisReviewer() || isModeratorOrAbove();
+                                        allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
+
+                                        // ================================
+                                        // CHATS (under submission)
+                                        // ================================
+
+                                        match /chats/{chatId} {
+                                            // Chats - thesis members and reviewers can read
+                                            allow read: if isAuthenticated() && hasThesisAccess();
+                                            // Anyone with thesis access can create chat messages
+                                            allow create: if isAuthenticated() && hasThesisAccess();
+                                            // Only message author can update their own message
+                                            allow update: if isOwner(resource.data.senderId);
+                                            // Only admin can delete chat messages
+                                            allow delete: if isAdminOrDeveloper();
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ================================
+                            // TERMINAL REQUIREMENTS (under thesis)
+                            // ================================
+
+                            match /terminal/{terminalId} {
+                                allow read: if isAuthenticated() && hasThesisAccess();
+                                allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
+                                allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                allow delete: if isAdminOrDeveloper() || isHead();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====================================
+        // GLOBAL COLLECTIONS
+        // ====================================
+
+        // Calendars - global schedule events
+        match /calendars/{eventId} {
+            allow read: if isAuthenticated();
+            allow create: if isStaff();
+            allow update: if isStaff();
+            allow delete: if isAdminOrDeveloper() || isHead();
+        }
+
+        // Notifications - user-specific notifications
+        match /notifications/{notificationId} {
+            allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdminOrDeveloper());
+            allow create: if isAuthenticated();
+            allow update: if isOwner(resource.data.userId) || isAdminOrDeveloper();
+            allow delete: if isOwner(resource.data.userId) || isAdminOrDeveloper();
+        }
+
+        // Background jobs - system operations
+        match /backgroundJobs/{jobId} {
+            allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdminOrDeveloper());
+            allow create: if isAuthenticated();
+            allow update: if isAuthenticated() && (isOwner(resource.data.userId) || isAdminOrDeveloper());
+            allow delete: if isAdminOrDeveloper();
+        }
+
+        // Forms - global form definitions
+        match /forms/{formId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper() || isHead();
+        }
+
+        // Form submissions
+        match /formSubmissions/{submissionId} {
+            allow read: if isAuthenticated() && (isOwner(resource.data.submittedBy) || isStaff());
+            allow create: if isAuthenticated();
+            allow update: if isOwner(resource.data.submittedBy) || isStaff();
+            allow delete: if isAdminOrDeveloper();
+        }
+
+        // System settings
+        match /settings/{settingId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // ====================================
+        // CATCH-ALL DENY RULE
+        // ====================================
+
+        // Deny all other access by default
+        match /{document=**} {
+            allow read, write: if false;
+        }
+    }
+}

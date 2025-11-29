@@ -1,0 +1,217 @@
+rules_version = '2';
+
+service firebase.storage {
+    match /b/{bucket}/o {
+
+        // ====================================
+        // HELPER FUNCTIONS
+        // ====================================
+
+        /**
+         * Check if user is authenticated
+         */
+        function isAuthenticated() {
+            return request.auth != null;
+        }
+
+        /**
+         * Get user role from custom claims
+         */
+        function getUserRole() {
+            return request.auth.token.role;
+        }
+
+        /**
+         * Check if user has specific role
+         */
+        function hasRole(role) {
+            return isAuthenticated() && getUserRole() == role;
+        }
+
+        /**
+         * Check if user has any of the specified roles
+         */
+        function hasAnyRole(roles) {
+            return isAuthenticated() && getUserRole() in roles;
+        }
+
+        /**
+         * Check if user is admin
+         */
+        function isAdmin() {
+            return hasRole('admin');
+        }
+
+        /**
+         * Check if user is developer
+         */
+        function isDeveloper() {
+            return hasRole('developer');
+        }
+
+        /**
+         * Check if user is admin or developer
+         */
+        function isAdminOrDeveloper() {
+            return isAdmin() || isDeveloper();
+        }
+
+        /**
+         * Check if user is moderator, head, admin, or developer
+         */
+        function isModeratorOrAbove() {
+            return hasAnyRole(['moderator', 'head', 'admin', 'developer']);
+        }
+
+        /**
+         * Check if user is mentor (adviser, editor, or statistician)
+         */
+        function isMentor() {
+            return hasAnyRole(['adviser', 'editor', 'statistician']);
+        }
+
+        /**
+         * Validate file size (max 100MB)
+         */
+        function isValidFileSize() {
+            return request.resource.size <= 100 * 1024 * 1024;
+        }
+
+        /**
+         * Validate file is not empty
+         */
+        function isNotEmpty() {
+            return request.resource.size > 0;
+        }
+
+        /**
+         * Check if file is an image
+         */
+        function isImage() {
+            return request.resource.contentType.matches('image/.*');
+        }
+
+        /**
+         * Check if file is a document (PDF, Word, etc.)
+         */
+        function isDocument() {
+            return request.resource.contentType.matches('application/pdf') ||
+                   request.resource.contentType.matches('application/msword') ||
+                   request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*');
+        }
+
+        // ====================================
+        // USER AVATARS AND BANNERS
+        // Path: users/{uid}/avatar.* or users/{uid}/banner.*
+        // ====================================
+
+        match /users/{uid}/{file} {
+            // Authenticated users can read avatars/banners
+            allow read: if isAuthenticated();
+
+            // User can upload their own avatar/banner, admins can upload for anyone
+            allow write: if isAuthenticated() && (
+                request.auth.uid == uid || isAdminOrDeveloper()
+            ) && (
+                file.matches('avatar\\..*') || file.matches('banner\\..*')
+            ) && isNotEmpty() && isValidFileSize() && isImage();
+
+            allow delete: if isAuthenticated() && (
+                request.auth.uid == uid || isAdminOrDeveloper()
+            );
+        }
+
+        // ====================================
+        // THESIS CHAPTER FILES (hierarchical path)
+        // Path: year/{year}/departments/{dept}/courses/{course}/groups/{groupId}/thesis/{thesisId}/stages/{stage}/chapters/{chapterId}/{filename}
+        // ====================================
+
+        match /year/{year}/departments/{dept}/courses/{course}/groups/{groupId}/thesis/{thesisId}/stages/{stage}/chapters/{chapterId}/{filename} {
+            // Authenticated users can read (access controlled via Firestore)
+            // Note: Storage rules can't efficiently check Firestore group membership,
+            // so we rely on the fact that users need to know the path to access files
+            allow read: if isAuthenticated();
+
+            // Authenticated users can upload chapter files
+            allow create: if isAuthenticated() && isNotEmpty() && isValidFileSize();
+
+            // Allow updates and deletes for authenticated users
+            // Fine-grained control is handled at the application level
+            allow update: if isAuthenticated() && isNotEmpty() && isValidFileSize();
+            allow delete: if isAuthenticated();
+        }
+
+        // ====================================
+        // THESIS CHAPTER FILES (simplified path)
+        // Path: {department}/{course}/{groupId}/{stage}/Chapter {X}/{filename}
+        // ====================================
+
+        match /{department}/{course}/{groupId}/{stage}/{chapter}/{filename} {
+            // Read: Authenticated users (path knowledge acts as access control)
+            allow read: if isAuthenticated();
+
+            // Write: Authenticated users can upload with valid chapter naming
+            allow create: if isAuthenticated() &&
+                isNotEmpty() &&
+                isValidFileSize() &&
+                chapter.matches('Chapter \\d+');
+
+            // Update: Authenticated users can replace files
+            allow update: if isAuthenticated() && isNotEmpty() && isValidFileSize();
+
+            // Delete: Authenticated users can delete
+            allow delete: if isAuthenticated();
+        }
+
+        // ====================================
+        // COMMENT ATTACHMENTS
+        // Path: comments/{department}/{course}/{groupId}/{stage}/Chapter {X}/comments/{commentId}/{filename}
+        // ====================================
+
+        match /comments/{department}/{course}/{groupId}/{stage}/{chapter}/comments/{commentId}/{filename} {
+            // Read: Authenticated users
+            allow read: if isAuthenticated();
+
+            // Create: Authenticated users can upload comment attachments
+            allow create: if isAuthenticated() && isNotEmpty() && isValidFileSize();
+
+            // Update: Authenticated users can update
+            allow update: if isAuthenticated() && isNotEmpty() && isValidFileSize();
+
+            // Delete: Authenticated users can delete
+            allow delete: if isAuthenticated();
+        }
+
+        // ====================================
+        // FORM ATTACHMENTS
+        // Path: forms/{formId}/{filename}
+        // ====================================
+
+        match /forms/{formId}/{filename} {
+            allow read: if isAuthenticated();
+            allow write: if isAuthenticated() && isNotEmpty() && isValidFileSize();
+            allow delete: if isAdminOrDeveloper();
+        }
+
+        // ====================================
+        // TEMP UPLOADS
+        // Path: temp/{uid}/{filename}
+        // ====================================
+
+        match /temp/{uid}/{filename} {
+            // Users can read/write their own temp files
+            allow read: if isAuthenticated() && request.auth.uid == uid;
+            allow write: if isAuthenticated() && request.auth.uid == uid && isNotEmpty() && isValidFileSize();
+            allow delete: if isAuthenticated() && (request.auth.uid == uid || isAdminOrDeveloper());
+        }
+
+        // ====================================
+        // DEFAULT DENY
+        // ====================================
+
+        // Deny all other access
+        match /{allPaths=**} {
+            allow read, write: if false;
+        }
+    }
+}
