@@ -97,16 +97,34 @@ const topicProposalEntryStatuses = ['draft', 'submitted', 'head_review', 'head_a
 const MAX_TOPIC_PROPOSALS = 3;
 
 const ROLE_KEYS = ['admin', 'adviser', 'editor', 'panel', 'developer', 'moderator', 'statistician', 'head', 'student'];
+
+// Number of academic departments (excluding Research and IT)
+const academicDepartments = departments.filter(d => d !== 'Research Department' && d !== 'IT Department');
+const ACADEMIC_DEPT_COUNT = academicDepartments.length; // 6 departments
+const USERS_PER_DEPT = 5; // Default: 5 users of the same role per department
+
+/**
+ * Default role counts ensure 5 users per role per department.
+ * - admin: 5 per academic dept + 5 in Research = 35
+ * - adviser: 5 per academic dept = 30
+ * - editor: Only Education dept = 5
+ * - panel: 5 per academic dept = 30
+ * - developer: IT + Research = 10
+ * - moderator: 1 per academic dept = 6 (special: one per dept)
+ * - statistician: 5 per academic dept = 30
+ * - head: 1 per academic dept = 6 (special: one per dept)
+ * - student: 5 per academic dept = 30
+ */
 const defaultRoleCounts = {
-    admin: 9,
-    adviser: 12,
-    editor: 13,
-    panel: 10,
-    developer: 1,
-    moderator: 3,
-    statistician: 2,
-    head: 1,
-    student: 49,
+    admin: ACADEMIC_DEPT_COUNT * USERS_PER_DEPT + USERS_PER_DEPT, // 35 (5 per academic + 5 Research)
+    adviser: ACADEMIC_DEPT_COUNT * USERS_PER_DEPT, // 30
+    editor: USERS_PER_DEPT, // 5 (only Education dept)
+    panel: ACADEMIC_DEPT_COUNT * USERS_PER_DEPT, // 30
+    developer: USERS_PER_DEPT * 2, // 10 (IT + Research)
+    moderator: ACADEMIC_DEPT_COUNT, // 6 (one per academic dept)
+    statistician: ACADEMIC_DEPT_COUNT * USERS_PER_DEPT, // 30
+    head: ACADEMIC_DEPT_COUNT, // 6 (one per academic dept)
+    student: ACADEMIC_DEPT_COUNT * USERS_PER_DEPT, // 30
 };
 const roleArgMap = {
     admin: 'admins',
@@ -274,46 +292,53 @@ const generateUsers = (roleCounts = defaultRoleCounts) => {
     };
 
     // Helper to pick a department that respects role constraints
-    const pickDepartmentForRole = (role, idx) => {
+    // Distributes users evenly: 5 users per department by default
+    const pickDepartmentForRole = (role, roleIndex) => {
+        // Calculate which department this user should be in (round-robin every USERS_PER_DEPT)
+        const deptIndex = Math.floor(roleIndex / USERS_PER_DEPT);
+
         if (role === 'admin') {
-            const giveResearch = (idx % 5) === 0; // ~20% of admins in Research
-            return giveResearch ? 'Research Department' : pickWithOffset(departments.filter(d => d !== 'Research Department'), idx);
+            // First 30 admins go to 6 academic depts (5 each), rest go to Research
+            if (roleIndex < ACADEMIC_DEPT_COUNT * USERS_PER_DEPT) {
+                return academicDepartments[deptIndex % ACADEMIC_DEPT_COUNT];
+            }
+            return 'Research Department';
         }
         if (role === 'developer') {
-            // Developers must be only from IT Department or School of Computer Studies and Technology
+            // Developers split between IT and Research (5 each)
             const devDepts = ['IT Department', 'Research Department'];
-            return pickWithOffset(devDepts, idx);
+            return devDepts[deptIndex % devDepts.length];
         }
         if (role === 'adviser') {
-            // Advisers cannot be from Research Department
-            return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 1);
+            // Advisers distributed across all academic departments (5 per dept)
+            return academicDepartments[deptIndex % ACADEMIC_DEPT_COUNT];
         }
         if (role === 'editor') {
             // Editors only come from School of Education, Arts, and Sciences
             return 'School of Education, Arts, and Sciences';
         }
         if (role === 'panel') {
-            // Panel members are faculty outside Research Department for broader coverage
-            return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 3);
+            // Panel members distributed across all academic departments (5 per dept)
+            return academicDepartments[deptIndex % ACADEMIC_DEPT_COUNT];
         }
         if (role === 'moderator') {
-            const moderatorDepts = departments.filter(d => d !== 'Research Department' && d !== 'IT Department');
-            return pickWithOffset(moderatorDepts, idx + 4);
+            // One moderator per academic department
+            return academicDepartments[roleIndex % ACADEMIC_DEPT_COUNT];
         }
         if (role === 'statistician') {
-            const statDepts = departments.filter(d => d !== 'Research Department' && d !== 'IT Department');
-            return pickWithOffset(statDepts, idx + 5);
+            // Statisticians distributed across all academic departments (5 per dept)
+            return academicDepartments[deptIndex % ACADEMIC_DEPT_COUNT];
         }
         if (role === 'head') {
-            const headDepts = departments.filter(d => d !== 'Research Department' && d !== 'IT Department');
-            return pickWithOffset(headDepts, idx + 6);
+            // One head per academic department
+            return academicDepartments[roleIndex % ACADEMIC_DEPT_COUNT];
         }
         if (role === 'student') {
-            // Students must not be assigned to Research Department or IT Department
-            return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 2);
+            // Students distributed across all academic departments (5 per dept)
+            return academicDepartments[deptIndex % ACADEMIC_DEPT_COUNT];
         }
-        // Fallback for any other role: avoid Research Department and IT Department
-        return pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), idx + 2);
+        // Fallback for any other role: distribute across academic departments
+        return academicDepartments[deptIndex % ACADEMIC_DEPT_COUNT];
     };
 
     for (const plan of rolePlan) {
@@ -342,16 +367,9 @@ const generateUsers = (roleCounts = defaultRoleCounts) => {
             usedFullNames.add(fullName || `${pickWithOffset(firstNames, globalIndex)} ${pickWithOffset(familyNames, i)} ${pickWithOffset(familyNames, globalIndex)}`);
             const uid = `${prefix}${pad(i + 1)}`;
             const email = `${role.charAt(0).toUpperCase() + role.slice(1)}${pad(i + 1)}@thesisflow.dev`;
-            // special-case to ensure one-per-department assignment for moderator and head roles
-            let department = pickDepartmentForRole(role, globalIndex + i);
-            if (role === 'moderator') {
-                // assign moderators so each maps to a department (round-robin), and they cover all courses
-                department = departments[i % departments.length];
-            }
-            if (role === 'head') {
-                // each head maps to a department (one per department)
-                department = departments[i % departments.length];
-            }
+            // Pick department based on role index (i) to ensure even distribution
+            // roleIndex (i) determines which department group this user belongs to
+            let department = pickDepartmentForRole(role, i);
             const suffix = (globalIndex % 10 === 0 && role !== 'student') ? 'PhD' : '';
             const password = 'Password_123';
 
@@ -396,33 +414,35 @@ const generateUsers = (roleCounts = defaultRoleCounts) => {
 
     // Fill remaining slots with students if rounding left gaps
     while (users.length < totalUsers) {
-        const i = users.length;
+        const studentIndex = usersByRole.student.length;
         const role = 'student';
         // Fill remaining students: ensure unique full names here too
         let attemptName = 0;
-        let firstName = pickWithOffset(firstNames, i, 0);
-        let lastName = pickWithOffset(familyNames, i * 2, 0);
-        let middleName = pickRandomWithJitter(familyNames, i, attemptName);
+        let firstName = pickWithOffset(firstNames, studentIndex, 0);
+        let lastName = pickWithOffset(familyNames, studentIndex * 2, 0);
+        let middleName = pickRandomWithJitter(familyNames, studentIndex, attemptName);
         let fullName = `${firstName} ${middleName} ${lastName}`;
         while (usedFullNames.has(fullName) && attemptName < 100) {
             attemptName += 1;
-            firstName = pickRandomWithJitter(firstNames, i + attemptName, 0);
-            lastName = pickRandomWithJitter(familyNames, i * 2 + attemptName, 0);
-            middleName = pickRandomWithJitter(familyNames, i + attemptName, attemptName);
-            if (middleName === lastName) middleName = pickRandomWithJitter(familyNames, i + attemptName + 1, attemptName + 1);
+            firstName = pickRandomWithJitter(firstNames, studentIndex + attemptName, 0);
+            lastName = pickRandomWithJitter(familyNames, studentIndex * 2 + attemptName, 0);
+            middleName = pickRandomWithJitter(familyNames, studentIndex + attemptName, attemptName);
+            if (middleName === lastName) middleName = pickRandomWithJitter(familyNames, studentIndex + attemptName + 1, attemptName + 1);
             fullName = `${firstName} ${middleName} ${lastName}`;
         }
         usedFullNames.add(fullName);
-        const uid = `${rolePrefixes.student}${pad(usersByRole.student.length + 1)}`;
-        const email = `Student${pad(usersByRole.student.length + 1)}@thesisflow.dev`;
-        const department = pickWithOffset(departments.filter(d => d !== 'Research Department' && d !== 'IT Department'), i + 2);
-        const course = pickCourseForDepartment(department, usersByRole.student.length + attemptName);
+        const uid = `${rolePrefixes.student}${pad(studentIndex + 1)}`;
+        const email = `Student${pad(studentIndex + 1)}@thesisflow.dev`;
+        // Distribute remaining students evenly across academic departments
+        const deptIndex = Math.floor(studentIndex / USERS_PER_DEPT);
+        const department = academicDepartments[deptIndex % ACADEMIC_DEPT_COUNT];
+        const course = pickCourseForDepartment(department, studentIndex + attemptName);
         const userRow = [
             uid, email, firstName, middleName, lastName, '', '', role, department,
             course,
-            `+1-555-${pad(1000 + i)}`, `https://storage.thesisflow.edu/avatars/${uid.toLowerCase()}.png`,
+            `+1-555-${pad(1000 + studentIndex)}`, `https://storage.thesisflow.edu/avatars/${uid.toLowerCase()}.png`,
             `https://storage.thesisflow.edu/banners/${uid.toLowerCase()}.jpg`,
-            `${firstName} ${lastName} focuses on ${pickWithOffset(thesisTopics, i)} research.`, 'Password_123',
+            `${firstName} ${lastName} focuses on ${pickWithOffset(thesisTopics, studentIndex)} research.`, 'Password_123',
         ];
         users.push(userRow);
         userEmails.set(uid, email);
@@ -850,7 +870,7 @@ const generateTopicProposals = (groups, usersByRole) => {
             .map(uid => uid.trim())
             .filter(Boolean);
         const department = groupRow[12] || pickWithOffset(departments, idx);
-        const cycle = (idx % 4) + 1;
+        const set = (idx % 4) + 1;
         const entryCount = idx % 5 === 0 ? 0 : Math.min(MAX_TOPIC_PROPOSALS, (idx % MAX_TOPIC_PROPOSALS) + 1);
         const reviewHistory = [];
         const entries = [];
@@ -950,7 +970,7 @@ const generateTopicProposals = (groups, usersByRole) => {
             buildIso(baseDate, idx, 8, 0),
             buildIso(baseDate, idx + entryCount + 1, 16, 0),
             setStatus,
-            String(cycle),
+            String(set),
             awaitingModerator ? 'true' : 'false',
             awaitingHead ? 'true' : 'false',
             nonDraft?.proposedBy || '',
