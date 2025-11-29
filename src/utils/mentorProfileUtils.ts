@@ -51,7 +51,7 @@ export function deriveMentorThesisHistory(
                 : role === 'editor'
                     ? 'Editor'
                     : 'Statistician',
-            outcome: thesis.overallStatus,
+            outcome: thesis.overallStatus ?? 'completed',
         } satisfies HistoricalThesisEntry;
     }).sort((a, b) => (Number.parseInt(b.year, 10) || 0) - (Number.parseInt(a.year, 10) || 0));
 }

@@ -1,19 +1,7 @@
 import * as React from 'react';
 import {
-    Alert,
-    Autocomplete,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    CircularProgress,
-    Grid,
-    Stack,
-    Switch,
-    Tab,
-    Tabs,
-    TextField,
-    Typography,
+    Alert, Autocomplete, Box, Button, Card, CardContent, CircularProgress, Grid,
+    Stack, Switch, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import { FactCheck as FactCheckIcon, Upload as UploadIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
@@ -25,12 +13,11 @@ import type { Session } from '../../types/session';
 import type { ThesisStageName } from '../../types/thesis';
 import type { TerminalRequirement } from '../../types/terminalRequirement';
 import type { TerminalRequirementConfigEntry, TerminalRequirementTemplateMetadata } from '../../types/terminalRequirementConfig';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment, getGroupDepartments } from '../../utils/firebase/firestore/groups';
 import {
+    getAllTerminalRequirementConfigs,
     getTerminalRequirementConfig,
-    getTerminalRequirementConfigsByDepartment,
-    getTerminalRequirementDepartments,
     setTerminalRequirementConfig,
 } from '../../utils/firebase/firestore/terminalRequirements';
 import {
@@ -180,9 +167,9 @@ export default function AdminTerminalRequirementsPage() {
 
         const loadDepartments = async () => {
             try {
-                const [profile, knownDepartments, groupDepartments] = await Promise.all([
-                    getUserById(userUid),
-                    getTerminalRequirementDepartments().catch(() => []),
+                const [profile, allConfigs, groupDepartments] = await Promise.all([
+                    findUserById(userUid),
+                    getAllTerminalRequirementConfigs().catch(() => []),
                     getGroupDepartments().catch(() => []),
                 ]);
 
@@ -194,16 +181,22 @@ export default function AdminTerminalRequirementsPage() {
                     ?? (profile?.department ? [profile.department] : []);
 
                 const normalizedManaged = managedDepartments
-                    .map((dept) => dept.trim())
-                    .filter((dept): dept is string => Boolean(dept));
-                normalizedManaged.sort((a, b) => a.localeCompare(b));
-                const normalizedKnown = knownDepartments
-                    .map((dept) => dept.trim())
-                    .filter((dept): dept is string => Boolean(dept));
+                    .map((dept: string) => dept.trim())
+                    .filter((dept: string): dept is string => Boolean(dept));
+                normalizedManaged.sort((a: string, b: string) => a.localeCompare(b));
+
+                // Extract departments from all terminal requirement configs
+                const knownDepartments = new Set<string>();
+                allConfigs.forEach((config) => {
+                    if (config.department) {
+                        knownDepartments.add(config.department.trim());
+                    }
+                });
+                const normalizedKnown = Array.from(knownDepartments);
 
                 const normalizedFromGroups = groupDepartments
-                    .map((dept) => dept.trim())
-                    .filter((dept): dept is string => Boolean(dept));
+                    .map((dept: string) => dept.trim())
+                    .filter((dept: string): dept is string => Boolean(dept));
 
                 const unique = new Set<string>([...normalizedKnown, ...normalizedManaged, ...normalizedFromGroups]);
                 const sortedDepartments = Array.from(unique).sort((a, b) => a.localeCompare(b));
@@ -254,20 +247,25 @@ export default function AdminTerminalRequirementsPage() {
 
         const loadCourses = async () => {
             try {
-                const [groups, configs] = await Promise.all([
+                const [groups, allConfigs] = await Promise.all([
                     getGroupsByDepartment(selectedDepartment),
-                    getTerminalRequirementConfigsByDepartment(selectedDepartment).catch(() => []),
+                    getAllTerminalRequirementConfigs().catch(() => []),
                 ]);
 
                 if (cancelled) {
                     return;
                 }
 
+                // Filter configs by department
+                const filteredConfigs = allConfigs.filter(
+                    (config) => config.department?.toLowerCase() === selectedDepartment.toLowerCase()
+                );
+
                 const fromGroups = groups
                     .map((group) => group.course?.trim())
                     .filter((course): course is string => Boolean(course));
 
-                const fromConfigs = configs
+                const fromConfigs = filteredConfigs
                     .map((config) => config.course?.trim())
                     .filter((course): course is string => Boolean(course));
 

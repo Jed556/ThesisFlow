@@ -12,7 +12,7 @@ import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceFilterConfig } from '../../types/workspace';
 import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { getDisplayName } from '../../utils/userUtils';
 
@@ -89,7 +89,7 @@ export default function HeadThesisOverviewPage() {
         setProfileLoading(true);
         setError(null);
 
-        void getUserById(headUid)
+        void findUserById(headUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;

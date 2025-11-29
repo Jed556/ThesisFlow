@@ -36,16 +36,21 @@ export function buildDefaultChapterTemplates(): ChapterTemplate[] {
 
 export function templatesToThesisChapters(templates: ChapterTemplate[]): ThesisChapter[] {
     const normalized = normalizeChapterOrder(templates);
-    return normalized.map((template, index) => ({
-        id: template.id ?? index + 1,
-        title: template.title || `Chapter ${index + 1}`,
-        status: 'not_submitted',
-        submissionDate: null,
-        lastModified: null,
-        submissions: [],
-        comments: [],
-        stage: template.stage ?? DEFAULT_CHAPTER_STAGE,
-    }));
+    return normalized.map((template, index) => {
+        // Normalize stage to always be an array
+        const templateStage = template.stage ?? DEFAULT_CHAPTER_STAGE;
+        const stage = Array.isArray(templateStage) ? templateStage : [templateStage];
+        return {
+            id: template.id ?? index + 1,
+            title: template.title || `Chapter ${index + 1}`,
+            status: 'not_submitted',
+            submissionDate: null,
+            lastModified: null,
+            submissions: [],
+            comments: [],
+            stage,
+        };
+    });
 }
 
 export function buildDefaultThesisChapters(): ThesisChapter[] {

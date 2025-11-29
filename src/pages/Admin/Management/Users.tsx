@@ -14,7 +14,7 @@ import type { NavigationItem } from '../../../types/navigation';
 import type { UserProfile, UserRole } from '../../../types/profile';
 import type { Session } from '../../../types/session';
 import {
-    getAllUsers, getUserById, getUserByEmail, setUserProfile, updateUserProfile,
+    findAllUsers, findUserById, findUserByEmail, setUserProfile, updateUserProfile,
     deleteUserProfile, createPersonalCalendar,
 } from '../../../utils/firebase/firestore';
 import { getCurrentAcademicYear } from '../../../config/firestore';
@@ -131,7 +131,7 @@ export default function AdminUsersPage() {
 
         try {
             setLoading(true);
-            const allUsers = await getAllUsers();
+            const allUsers = await findAllUsers();
             setUsers(allUsers);
         } catch {
             showNotification('Failed to load users. Please try again.', 'error');
@@ -261,13 +261,13 @@ export default function AdminUsersPage() {
 
             if (!editMode) {
                 // Create new user
-                const existingID = await getUserById(uid);
+                const existingID = await findUserById(uid);
                 if (existingID) {
                     setFormErrors({ uid: 'A user with this ID already exists' });
                     setSaving(false);
                     return;
                 }
-                const existingEmail = await getUserByEmail(email);
+                const existingEmail = await findUserByEmail(email);
                 if (existingEmail) {
                     setFormErrors({ email: 'A user with this email already exists' });
                     setSaving(false);
@@ -532,7 +532,7 @@ export default function AdminUsersPage() {
                 const toImport: ImportedUser[] = [];
                 for (let i = 0; i < parsed.length; i++) {
                     const u = parsed[i];
-                    const exists = await getUserById(u.uid);
+                    const exists = await findUserById(u.uid);
                     if (exists) {
                         errors.push(`Row ${i + 2}: user ${u.email} already exists`);
                         continue;
@@ -618,11 +618,11 @@ export default function AdminUsersPage() {
                 // Only reload users if component is still mounted (user is still on this page)
                 // Force reload even if import is "active" since we're in the completion callback
                 if (isMountedRef.current) {
-                    // Call getAllUsers directly to bypass the hasActiveImport check
+                    // Call findAllUsers directly to bypass the hasActiveImport check
                     (async () => {
                         try {
                             setLoading(true);
-                            const allUsers = await getAllUsers();
+                            const allUsers = await findAllUsers();
                             setUsers(allUsers);
                         } catch {
                             // Silent fail - notification will be shown for job status

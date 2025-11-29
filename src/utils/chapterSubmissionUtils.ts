@@ -23,10 +23,25 @@ export const normalizeSubmissionEntry = (
         } satisfies ChapterSubmissionEntry;
     }
 
+    // Map ThesisStatus to ChapterSubmissionStatus
+    const normalizeStatus = (status?: string): ChapterSubmissionStatus => {
+        switch (status) {
+            case 'approved':
+                return 'approved';
+            case 'rejected':
+                return 'rejected';
+            case 'revision':
+            case 'revision_required':
+                return 'revision_required';
+            default:
+                return DEFAULT_STATUS;
+        }
+    };
+
     return {
         id: submission.id,
-        status: submission.status ?? DEFAULT_STATUS,
-        decidedAt: submission.decidedAt ?? null,
+        status: normalizeStatus(submission.status),
+        decidedAt: submission.decidedAt ?? undefined,
         decidedBy: submission.decidedBy,
     } satisfies ChapterSubmissionEntry;
 };

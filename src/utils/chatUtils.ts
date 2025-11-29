@@ -35,6 +35,8 @@ export const thesisRoleToChatRole = (thesisRole: ThesisRole): ChatParticipantRol
  */
 export const thesisCommentToChatMessage = (comment: ThesisComment, index?: number): ChatMessage => {
     const id = `msg-${comment.author}-${comment.date}-${index || 0}`;
+    const dateStr = typeof comment.date === 'string' ? comment.date : comment.date.toISOString();
+    const dateObj = typeof comment.date === 'string' ? new Date(comment.date) : comment.date;
 
     const attachments: FileAttachment[] = (comment.attachments ?? []).map((attachment, attIndex) => {
         if (typeof attachment === 'string') {
@@ -44,7 +46,7 @@ export const thesisCommentToChatMessage = (comment: ThesisComment, index?: numbe
                 size: '0',
                 url: attachment,
                 mimeType: 'application/octet-stream',
-                uploadDate: comment.date,
+                uploadDate: dateStr,
                 author: comment.author,
                 category: 'attachment',
             } satisfies FileAttachment;
@@ -56,7 +58,7 @@ export const thesisCommentToChatMessage = (comment: ThesisComment, index?: numbe
         id,
         senderId: comment.author,
         content: comment.comment,
-        timestamp: comment.date,
+        timestamp: dateObj,
         attachments,
         metadata: {
             version: comment.version

@@ -13,8 +13,12 @@ import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole, HistoricalThesisEntry } from '../../types/profile';
 import type { ThesisData } from '../../types/thesis';
 import { onUserProfile } from '../../utils/firebase/firestore/user';
-import { listenThesesForMentor, listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
-import { filterActiveMentorTheses, deriveMentorThesisHistory, isCompletedThesisStatus } from '../../utils/mentorProfileUtils';
+import {
+    listenThesesForMentor, listenThesesForParticipant, type ThesisRecord,
+} from '../../utils/firebase/firestore/thesis';
+import {
+    filterActiveMentorTheses, deriveMentorThesisHistory, isCompletedThesisStatus,
+} from '../../utils/mentorProfileUtils';
 
 export const metadata: NavigationItem = {
     title: 'User Profile',
@@ -82,12 +86,12 @@ export default function AdminProfileViewPage() {
         let unsubscribe = () => { /* no-op */ };
 
         if (mentorRole) {
-            unsubscribe = listenThesesForMentor(mentorRole, uid, {
-                onData: (records) => {
+            unsubscribe = listenThesesForMentor(uid, {
+                onData: (records: ThesisRecord[]) => {
                     setAssignments(records);
                     setAssignmentsLoading(false);
                 },
-                onError: (listenerError) => {
+                onError: (listenerError: Error) => {
                     console.error('Failed to load assignments:', listenerError);
                     setAssignments([]);
                     setAssignmentsLoading(false);

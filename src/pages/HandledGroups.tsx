@@ -13,7 +13,7 @@ import { AnimatedPage } from '../components/Animate';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { formatProfileLabel } from '../utils/userUtils';
 import { listenGroupsByMentorRole, approveGroup, rejectGroup } from '../utils/firebase/firestore/groups';
-import { getUsersByIds, onUserProfile, updateUserProfile } from '../utils/firebase/firestore/user';
+import { findUsersByIds, onUserProfile, updateUserProfile } from '../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',
@@ -109,7 +109,7 @@ export default function MentorGroupsPage() {
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(Array.from(memberIds));
+                const profiles = await findUsersByIds(Array.from(memberIds));
                 if (cancelled) return;
                 const next = new Map<string, UserProfile>();
                 profiles.forEach((profileEntry) => {

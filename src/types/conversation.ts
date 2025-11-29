@@ -6,9 +6,19 @@ import type { FileAttachment } from './file';
 export type ChatMessageStatus = 'sent' | 'delivered' | 'read' | 'failed';
 
 /**
- * Role of a participant in a conversation
+ * Role of a participant in a conversation.
+ * Includes both user roles and thesis-specific roles (leader/member).
  */
-export type ChatParticipantRole = 'student' | 'adviser' | 'editor' | 'statistician' | 'panel' | 'admin';
+export type ChatParticipantRole =
+    | 'student'
+    | 'adviser'
+    | 'editor'
+    | 'statistician'
+    | 'panel'
+    | 'admin'
+    | 'leader'
+    | 'member'
+    | 'unknown';
 
 /**
  * Metadata associated with a chat message

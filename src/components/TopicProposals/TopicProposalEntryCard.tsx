@@ -18,7 +18,7 @@ export interface TopicProposalEntryCardProps {
  */
 export default function TopicProposalEntryCard(props: TopicProposalEntryCardProps) {
     const { entry, author, actions, footer, highlight = false } = props;
-    const statusChip = getStatusChipConfig(entry.status);
+    const statusChip = getStatusChipConfig(entry.status ?? 'draft');
 
     return (
         <Card

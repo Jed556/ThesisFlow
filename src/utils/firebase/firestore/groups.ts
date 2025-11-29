@@ -1379,3 +1379,39 @@ async function getGroupContext(
 
     return extractGroupContext(snapshot.docs[0].ref.path);
 }
+
+// ============================================================================
+// Context-Free Convenience Functions
+// ============================================================================
+
+/**
+ * Create a group using department and course from user profile data.
+ * This function computes the year and uses the profile's department/course.
+ *
+ * @param userDepartment User's department
+ * @param userCourse User's course
+ * @param data Group form data
+ * @returns The created group ID
+ */
+export async function createGroupForUser(
+    userDepartment: string,
+    userCourse: string,
+    data: ThesisGroupFormData
+): Promise<string> {
+    const year = String(new Date().getFullYear());
+    return createGroup(year, userDepartment, userCourse, data);
+}
+
+/**
+ * Delete a group by its ID (context-free version).
+ * Uses collectionGroup to find the group context, then deletes.
+ *
+ * @param groupId Group document ID
+ */
+export async function deleteGroupById(groupId: string): Promise<void> {
+    const ctx = await getGroupContext(groupId);
+    if (!ctx) {
+        throw new Error(`Group not found: ${groupId}`);
+    }
+    return deleteGroup(ctx.year, ctx.department, ctx.course, groupId);
+}

@@ -14,7 +14,9 @@ import { MentorRecommendationCard } from '../../../components/Profile';
 import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
-import { listenTheses, listenThesesForParticipant } from '../../../utils/firebase/firestore/thesis';
+import {
+    listenTheses, listenThesesForParticipant, type ThesisRecord,
+} from '../../../utils/firebase/firestore/thesis';
 import { findGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
 import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
 import { isTopicApproved } from '../../../utils/thesisUtils';
@@ -239,15 +241,15 @@ export default function AdviserEditorRecommendationsPage() {
             }
         );
 
-        const unsubscribeTheses = listenTheses(undefined, {
-            onData: (thesisData) => {
+        const unsubscribeTheses = listenTheses({
+            onData: (thesisData: ThesisRecord[]) => {
                 if (!active) return;
                 setError(null);
                 setTheses(thesisData);
                 loaded.theses = true;
                 tryResolveLoading();
             },
-            onError: (err) => {
+            onError: (err: Error) => {
                 if (!active) return;
                 console.error('Failed to load thesis data for recommendations:', err);
                 setError('Unable to load thesis data for recommendations.');
@@ -308,9 +310,9 @@ export default function AdviserEditorRecommendationsPage() {
 
     const hasThesisRecord = React.useMemo(() => (
         Boolean(studentThesis?.id)
-        || Boolean(studentGroup?.thesisId)
-        || Boolean(studentGroup?.thesisTitle)
-    ), [studentGroup?.thesisId, studentGroup?.thesisTitle, studentThesis?.id]);
+        || Boolean(studentGroup?.thesis?.id)
+        || Boolean(studentGroup?.thesis?.title)
+    ), [studentGroup?.thesis?.id, studentGroup?.thesis?.title, studentThesis?.id]);
 
     const hasGroupRecord = Boolean(studentGroupId || studentGroup);
     const editorTabLocked = !hasGroupRecord;

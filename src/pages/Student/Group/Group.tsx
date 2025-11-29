@@ -20,9 +20,9 @@ import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
 import StudentGroupCard from './StudentGroupCard';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import {
-    acceptInvite, acceptJoinRequest, buildGroupProfileMap, createGroup, deleteGroup, findGroupById,
-    getGroupsByCourse, getGroupsByLeader, getGroupsByMember, getUserById, getUsersByFilter, inviteUserToGroup,
-    rejectJoinRequest, removeInviteFromGroup, submitGroupForReview,
+    acceptInvite, acceptJoinRequest, buildGroupProfileMap, createGroupForUser, deleteGroupById,
+    findGroupById, getGroupsByCourse, getGroupsByLeader, getGroupsByMember, findUserById,
+    findUsersByFilter, inviteUserToGroup, rejectJoinRequest, removeInviteFromGroup, submitGroupForReview,
 } from '../../../utils/groupUtils';
 
 export const metadata: NavigationItem = {
@@ -81,7 +81,6 @@ export default function StudentGroupPage() {
         adviser: '',
         editor: '',
         status: 'draft',
-        thesisTitle: '',
         department: '',
         course: '',
     });
@@ -136,7 +135,7 @@ export default function StudentGroupPage() {
 
         const loadProfile = async () => {
             try {
-                const profile = await getUserById(userUid);
+                const profile = await findUserById(userUid);
                 if (!cancelled && profile) {
                     setUserProfile(profile);
                 }
@@ -228,7 +227,7 @@ export default function StudentGroupPage() {
                     const usersMap = new Map<string, UserProfile>();
                     await Promise.all(
                         Array.from(allMemberUids).map(async (uid) => {
-                            const profile = await getUserById(uid);
+                            const profile = await findUserById(uid);
                             if (profile) {
                                 usersMap.set(uid, profile);
                             }
@@ -277,7 +276,6 @@ export default function StudentGroupPage() {
             adviser: '',
             editor: '',
             status: 'draft',
-            thesisTitle: '',
             department: userProfile.department || '',
             course: userProfile.course || '',
         });
@@ -325,7 +323,7 @@ export default function StudentGroupPage() {
             // Load students from same course
             try {
                 setStudentOptionsLoading(true);
-                const students = await getUsersByFilter({
+                const students = await findUsersByFilter({
                     role: 'student',
                     course: userProfile.course,
                 });
@@ -440,20 +438,23 @@ export default function StudentGroupPage() {
 
         setSaving(true);
         try {
-            const newGroupData: Omit<ThesisGroup, 'id' | 'createdAt' | 'updatedAt'> = {
+            const newGroupData: ThesisGroupFormData = {
                 name: formData.name.trim(),
                 description: formData.description?.trim(),
-                members: {
-                    leader: userUid,
-                    members: formData.members,
-                },
+                leader: userUid,
+                members: formData.members,
                 status: 'draft',
                 course: userProfile.course || '',
                 department: userProfile.department || '',
-                thesisTitle: formData.thesisTitle?.trim(),
             };
 
-            const createdGroup = await createGroup(newGroupData);
+            const createdGroupId = await createGroupForUser(
+                userProfile.department || '',
+                userProfile.course || '',
+                newGroupData
+            );
+            const createdGroup = await findGroupById(createdGroupId);
+            if (!createdGroup) throw new Error('Failed to find created group');
             setMyGroup(createdGroup);
             setIsLeader(true);
             const profileMap = await buildGroupProfileMap(createdGroup);
@@ -470,7 +471,6 @@ export default function StudentGroupPage() {
                 adviser: '',
                 editor: '',
                 status: 'draft',
-                thesisTitle: '',
                 department: userProfile.department || '',
                 course: userProfile.course || '',
             });
@@ -493,7 +493,6 @@ export default function StudentGroupPage() {
             adviser: '',
             editor: '',
             status: 'draft',
-            thesisTitle: '',
             department: '',
             course: '',
         });
@@ -506,7 +505,7 @@ export default function StudentGroupPage() {
         if (!myGroup) return;
 
         try {
-            await deleteGroup(myGroup.id);
+            await deleteGroupById(myGroup.id);
             setMyGroup(null);
             setIsLeader(false);
             setDeleteDialogOpen(false);

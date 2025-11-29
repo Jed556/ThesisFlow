@@ -16,7 +16,7 @@ import {
     type ThesisWithGroupContext
 } from '../../utils/firebase/firestore/thesis';
 import { appendChapterComment } from '../../utils/firebase/firestore/chat';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
@@ -105,7 +105,7 @@ export default function ModeratorThesisOverviewPage() {
         setProfileLoading(true);
         setError(null);
 
-        void getUserById(moderatorUid)
+        void findUserById(moderatorUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;

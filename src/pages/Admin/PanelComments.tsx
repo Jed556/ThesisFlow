@@ -4,7 +4,6 @@ import {
     Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
-import { where } from 'firebase/firestore';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
@@ -14,14 +13,14 @@ import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable } from '../../components/PanelComments';
 import { useSnackbar } from '../../components/Snackbar';
 import { getAllGroups } from '../../utils/firebase/firestore/groups';
-import { listenTheses, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
+import { listenThesisByGroupId, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import {
     listenPanelCommentEntries,
     listenPanelCommentRelease,
     setPanelCommentReleaseState,
     type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
-import { getUsersByIds } from '../../utils/firebase/firestore/user';
+import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
     PANEL_COMMENT_STAGE_METADATA,
@@ -106,14 +105,12 @@ export default function AdminPanelCommentsPage() {
             return;
         }
         setThesisLoading(true);
-        const unsubscribe = listenTheses([
-            where('groupId', '==', selectedGroupId),
-        ], {
-            onData: (records) => {
+        const unsubscribe = listenThesisByGroupId(selectedGroupId, {
+            onData: (records: ThesisRecord[]) => {
                 setThesis(records[0] ?? null);
                 setThesisLoading(false);
             },
-            onError: (error) => {
+            onError: (error: Error) => {
                 console.error('Failed to load thesis for admin panel page:', error);
                 setThesis(null);
                 setThesisLoading(false);
@@ -184,7 +181,7 @@ export default function AdminPanelCommentsPage() {
             setPanelistsLoading(true);
             setPanelistsError(null);
             try {
-                const profiles = await getUsersByIds(panelUids);
+                const profiles = await findUsersByIds(panelUids);
                 if (!isMounted) {
                     return;
                 }

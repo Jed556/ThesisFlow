@@ -6,13 +6,8 @@ import {
 import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import {
-    buildCourseUsersCollectionPath,
-    buildCourseUserDocPath,
-    buildDepartmentUsersCollectionPath,
-    buildDepartmentUserDocPath,
-    buildYearUsersCollectionPath,
-    buildYearUserDocPath,
-    USERS_SUBCOLLECTION,
+    buildCourseUsersCollectionPath, buildCourseUserDocPath, buildDepartmentUsersCollectionPath,
+    buildDepartmentUserDocPath, buildYearUsersCollectionPath, buildYearUserDocPath, USERS_SUBCOLLECTION,
 } from '../../../config/firestore';
 
 import type { UserProfile, UserRole } from '../../../types/profile';
@@ -783,67 +778,4 @@ export function listenYearUsers(
             else console.error('Year users listener error:', error);
         }
     );
-}
-
-// ============================================================================
-// Backward Compatibility Aliases
-// ============================================================================
-
-/**
- * Fetch a user profile by UID.
- * Alias for findUserById for backward compatibility.
- * @param uid - User ID to look up
- * @returns UserProfile or null when not found
- */
-export const getUserById = findUserById;
-
-/**
- * Fetch a user profile by email.
- * Alias for findUserByEmail for backward compatibility.
- * @param email - Email address to look up
- * @returns UserProfile or null when not found
- */
-export const getUserByEmail = findUserByEmail;
-
-/**
- * Fetch multiple user profiles by their UIDs.
- * Alias for findUsersByIds for backward compatibility.
- * @param uids - Array of user UIDs
- * @returns Array of UserProfile documents
- */
-export const getUsersByIds = findUsersByIds;
-
-/**
- * Get all users.
- * Alias for findAllUsers for backward compatibility.
- * @returns Array of UserProfile
- */
-export const getAllUsers = findAllUsers;
-
-/**
- * Query users by filter.
- * Alias for findUsersByFilter for backward compatibility.
- * @param options - Filter options
- * @returns Array of matching UserProfile documents
- */
-export const getUsersByFilter = findUsersByFilter;
-
-/**
- * Find users by field.
- * Alias for findUsersByField for backward compatibility.
- * @param field - Field name
- * @param value - Value to match
- * @returns Array of matching UserProfile documents
- */
-export const findUserByField = findUsersByField;
-
-/**
- * Get user profile by UID.
- * Alias for findUserById for backward compatibility.
- * @param uid - User ID
- * @returns UserProfile or undefined
- */
-export async function getProfile(uid: string): Promise<UserProfile | undefined> {
-    const profile = await findUserById(uid);
-    return profile || undefined;
 }

@@ -674,9 +674,9 @@ export interface SaveTerminalRequirementConfigPayload {
     id?: string;
     name?: string;
     description?: string;
-    /** @deprecated Use name instead - will auto-generate ID from department/course */
+    /** Optional department for organization/filtering. Auto-generates ID if provided with course. */
     department?: string;
-    /** @deprecated Use name instead - will auto-generate ID from department/course */
+    /** Optional course for organization/filtering. Auto-generates ID if provided with department. */
     course?: string;
     requirements: TerminalRequirementConfigEntry[];
 }
@@ -738,34 +738,6 @@ export async function deleteTerminalRequirementConfig(configId: string): Promise
     }
     const ref = getConfigRef(configId);
     await deleteDoc(ref);
-}
-
-/**
- * Get unique departments from all terminal requirement configs
- * @deprecated Terminal requirements are now global
- */
-export async function getTerminalRequirementDepartments(): Promise<string[]> {
-    const configs = await getAllTerminalRequirementConfigs();
-    const departments = new Set<string>();
-    configs.forEach((config) => {
-        if (config.department) {
-            departments.add(config.department.trim());
-        }
-    });
-    return Array.from(departments).sort();
-}
-
-/**
- * Get terminal requirement configs by department
- * @deprecated Terminal requirements are now global
- */
-export async function getTerminalRequirementConfigsByDepartment(
-    department: string
-): Promise<TerminalRequirementConfigDocument[]> {
-    const configs = await getAllTerminalRequirementConfigs();
-    return configs.filter(
-        (config) => config.department?.toLowerCase() === department.toLowerCase()
-    );
 }
 
 /**

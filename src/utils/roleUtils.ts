@@ -6,8 +6,9 @@
 import type { ThesisRole, ThesisData } from '../types/thesis';
 import type { UserRole } from '../types/profile';
 import { firebaseAuth, firebaseFirestore } from './firebase/firebaseConfig';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { getUserById } from './firebase/firestore';
+import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
+import { findUserById } from './firebase/firestore/user';
+import { THESIS_SUBCOLLECTION } from '../config/firestore';
 
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
@@ -32,18 +33,11 @@ export async function getUserRole(forceRefresh: boolean = true): Promise<UserRol
             return role;
         }
 
-        // Fallback to Firestore if no claim exists
-        const userEmail = user.email;
-        if (userEmail) {
-            const userDocRef = doc(firebaseFirestore, 'users', encodeURIComponent(userEmail));
-            const docSnap = await getDoc(userDocRef);
-
-            if (docSnap.exists()) {
-                const userData = docSnap.data();
-                if (userData.role) {
-                    return userData.role as UserRole;
-                }
-            }
+        // Fallback to Firestore using collectionGroup query across hierarchical paths
+        // Use UID as the primary identifier (more stable than email which can change)
+        const userProfile = await findUserById(user.uid);
+        if (userProfile?.role) {
+            return userProfile.role;
         }
 
         console.warn('No role found in Auth claims or Firestore, defaulting to student');
@@ -98,7 +92,7 @@ export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boole
  * @returns true when the user's role matches, false otherwise
  */
 export async function isUserInRole(uid: string, role: UserRole): Promise<boolean> {
-    const profile = await getUserById(uid);
+    const profile = await findUserById(uid);
     if (!profile) return false;
     return profile.role === role;
 }
@@ -108,36 +102,37 @@ export async function isUserInRole(uid: string, role: UserRole): Promise<boolean
 // ==================================================
 
 /**
- * Get thesis by user UID from Firestore
+ * Get thesis by user UID from Firestore using collectionGroup query
  * Searches for a thesis where the user is leader, member, adviser, or editor
+ * Uses hierarchical thesis subcollection path
  */
 async function getThesisByUserUid(uid: string): Promise<ThesisData | null> {
     try {
-        const thesesRef = collection(firebaseFirestore, 'theses');
+        const thesesGroup = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
 
         // Query for theses where user is leader
-        const leaderQuery = query(thesesRef, where('leader', '==', uid));
+        const leaderQuery = query(thesesGroup, where('leader', '==', uid));
         const leaderSnap = await getDocs(leaderQuery);
         if (!leaderSnap.empty) {
             return leaderSnap.docs[0].data() as ThesisData;
         }
 
         // Query for theses where user is in members array
-        const memberQuery = query(thesesRef, where('members', 'array-contains', uid));
+        const memberQuery = query(thesesGroup, where('members', 'array-contains', uid));
         const memberSnap = await getDocs(memberQuery);
         if (!memberSnap.empty) {
             return memberSnap.docs[0].data() as ThesisData;
         }
 
         // Query for theses where user is adviser
-        const adviserQuery = query(thesesRef, where('adviser', '==', uid));
+        const adviserQuery = query(thesesGroup, where('adviser', '==', uid));
         const adviserSnap = await getDocs(adviserQuery);
         if (!adviserSnap.empty) {
             return adviserSnap.docs[0].data() as ThesisData;
         }
 
         // Query for theses where user is editor
-        const editorQuery = query(thesesRef, where('editor', '==', uid));
+        const editorQuery = query(thesesGroup, where('editor', '==', uid));
         const editorSnap = await getDocs(editorQuery);
         if (!editorSnap.empty) {
             return editorSnap.docs[0].data() as ThesisData;
@@ -159,7 +154,7 @@ export async function getThesisRole(uid: string): Promise<ThesisRole> {
     if (!thesis) return 'unknown';
 
     if (uid === thesis.leader) return 'leader';
-    if (thesis.members.includes(uid)) return 'member';
+    if (thesis.members?.includes(uid)) return 'member';
     if (uid === thesis.adviser) return 'adviser';
     if (uid === thesis.editor) return 'editor';
 

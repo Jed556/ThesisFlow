@@ -31,7 +31,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
-import { getUserById, getUsersByIds } from './user';
+import { findUserById, findUsersByIds } from './user';
 import { getGroup } from './groups';
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
@@ -456,13 +456,13 @@ export async function getThesisTeamMembers(
 
     if (memberRoles.length === 0) return [];
 
-    const profiles = await getUsersByIds(memberRoles.map((m) => m.uid));
+    const profiles = await findUsersByIds(memberRoles.map((m) => m.uid));
     const profileMap = new Map<string, UserProfile>();
     profiles.forEach((profile) => profileMap.set(profile.uid, profile));
 
     const remaining = memberRoles.filter((m) => !profileMap.has(m.uid)).map((m) => m.uid);
     if (remaining.length > 0) {
-        const fallback = await Promise.all(remaining.map((uid) => getUserById(uid)));
+        const fallback = await Promise.all(remaining.map((uid) => findUserById(uid)));
         fallback.forEach((profile) => {
             if (profile) profileMap.set(profile.uid, profile);
         });
@@ -474,6 +474,37 @@ export async function getThesisTeamMembers(
             return profile ? { ...profile, thesisRole: m.role } : null;
         })
         .filter((entry): entry is UserProfile & { thesisRole: string } => Boolean(entry));
+}
+
+/**
+ * Get thesis team members by thesis ID (context-free version).
+ * Uses collectionGroup to find the thesis and its group context.
+ *
+ * @param thesisId - Thesis document ID
+ * @returns Array of user profiles with their thesis roles
+ */
+export async function getThesisTeamMembersById(
+    thesisId: string
+): Promise<(UserProfile & { thesisRole: string })[]> {
+    // Find thesis to get context
+    const thesisQuery = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
+    const tSnap = await getDocs(thesisQuery);
+
+    for (const docSnap of tSnap.docs) {
+        if (docSnap.id === thesisId) {
+            const params = extractPathParams(docSnap.ref.path);
+            if (params.year && params.department && params.course && params.groupId) {
+                return getThesisTeamMembers({
+                    year: params.year,
+                    department: params.department,
+                    course: params.course,
+                    groupId: params.groupId,
+                });
+            }
+        }
+    }
+
+    return [];
 }
 
 // ============================================================================
@@ -1009,4 +1040,51 @@ export async function getReviewerAssignmentsForUser(
     }
 
     return assignments;
+}
+
+/**
+ * Listen to thesis records for a specific group (context-free version).
+ * Uses collectionGroup to find thesis documents for the given group ID.
+ *
+ * @param groupId - Group document ID
+ * @param options - Callbacks for data and errors
+ * @returns Unsubscribe function
+ */
+export function listenThesisByGroupId(
+    groupId: string,
+    options: ThesisListenerOptions
+): () => void {
+    if (!groupId) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+
+    const thesisQuery = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
+
+    return onSnapshot(
+        thesisQuery,
+        (snapshot) => {
+            const records: ThesisRecord[] = [];
+            for (const docSnap of snapshot.docs) {
+                const params = extractPathParams(docSnap.ref.path);
+                if (params.groupId === groupId) {
+                    const data = docToThesisData(docSnap);
+                    if (data) {
+                        records.push({ ...data, id: docSnap.id });
+                    }
+                }
+            }
+            // Sort by lastUpdated descending
+            records.sort((a, b) => {
+                const aDate = a.lastUpdated?.toString() ?? '';
+                const bDate = b.lastUpdated?.toString() ?? '';
+                return bDate.localeCompare(aDate);
+            });
+            options.onData(records);
+        },
+        (error) => {
+            if (options.onError) options.onError(error);
+            else console.error('Thesis by group listener error:', error);
+        }
+    );
 }

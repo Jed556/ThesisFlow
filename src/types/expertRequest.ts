@@ -24,8 +24,6 @@ export interface ExpertRequest {
     updatedAt: string;
     respondedAt?: string | null;
     responseNote?: string | null;
-    /** @deprecated Use parent path to determine groupId */
+    /** Group ID extracted from document path */
     groupId?: string;
-    /** @deprecated Use expertUid instead */
-    mentorUid?: string;
 }

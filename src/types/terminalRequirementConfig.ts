@@ -21,7 +21,7 @@ export interface TerminalRequirementConfigEntry {
  * 
  * Terminal requirements are now global (same for all departments/courses).
  * The `name` field is the display name for the configuration.
- * The `department` and `course` fields are deprecated but kept for backward compatibility.
+ * The `department` and `course` fields are optional metadata for organization.
  */
 export interface TerminalRequirementConfigDocument {
     /** Document ID */
@@ -30,9 +30,9 @@ export interface TerminalRequirementConfigDocument {
     name: string;
     /** Optional description */
     description?: string;
-    /** @deprecated Terminal requirements are now global */
+    /** Optional department for organization/filtering */
     department?: string;
-    /** @deprecated Terminal requirements are now global */
+    /** Optional course for organization/filtering */
     course?: string;
     /** Requirement entries */
     requirements: TerminalRequirementConfigEntry[];

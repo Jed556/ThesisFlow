@@ -16,12 +16,12 @@ import type { ThesisGroup, ThesisGroupFormData } from '../../../../types/group';
 import type { Session } from '../../../../types/session';
 import type { UserProfile } from '../../../../types/profile';
 import {
-    getAllUsers,
+    findAllUsers,
     getAllGroups,
     createGroup,
     updateGroupById,
     setGroupById,
-    getUsersByFilter,
+    findUsersByFilter,
 } from '../../../../utils/firebase/firestore';
 import { getCurrentAcademicYear } from '../../../../config/firestore';
 import { importGroupsFromCsv, exportGroupsToCsv } from '../../../../utils/csv/group';
@@ -174,7 +174,7 @@ export default function AdminGroupManagementPage() {
 
             setStudentOptionsLoading(true);
             try {
-                const filteredStudents = await getUsersByFilter({
+                const filteredStudents = await findUsersByFilter({
                     role: 'student',
                     department: normalizedDepartment,
                     course: normalizedCourse,
@@ -287,7 +287,7 @@ export default function AdminGroupManagementPage() {
         try {
             setLoading(true);
             // Load users
-            const allUsers = await getAllUsers();
+            const allUsers = await findAllUsers();
             setUsers(allUsers);
 
             // Load groups based on filters
@@ -847,7 +847,7 @@ export default function AdminGroupManagementPage() {
                             try {
                                 setLoading(true);
                                 const [allUsers, groupsData] = await Promise.all([
-                                    getAllUsers(),
+                                    findAllUsers(),
                                     getAllGroups(),
                                 ]);
                                 setUsers(allUsers);

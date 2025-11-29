@@ -8,10 +8,12 @@ import { useSession } from '@toolpad/core';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../../components/Profile/ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
-import { onUserProfile, getUsersByIds } from '../../../utils/firebase/firestore/user';
-import { listenThesesForMentor } from '../../../utils/firebase/firestore/thesis';
+import { onUserProfile, findUsersByIds } from '../../../utils/firebase/firestore/user';
+import { listenThesesForMentor, type ThesisRecord } from '../../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, listenGroupsByMentorRole } from '../../../utils/firebase/firestore/groups';
-import { createMentorRequest, listenMentorRequestsByGroup } from '../../../utils/firebase/firestore/mentorRequests';
+import {
+    createMentorRequestByGroup, listenMentorRequestsByGroup,
+} from '../../../utils/firebase/firestore/mentorRequests';
 import { filterActiveMentorTheses, deriveMentorThesisHistory } from '../../../utils/mentorProfileUtils';
 import { evaluateMentorCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
@@ -98,12 +100,12 @@ export default function MentorProfileViewPage() {
         }
 
         setAssignmentsLoading(true);
-        const unsubscribe = listenThesesForMentor(mentorRole, uid, {
-            onData: (records) => {
+        const unsubscribe = listenThesesForMentor(uid, {
+            onData: (records: ThesisRecord[]) => {
                 setAssignments(records);
                 setAssignmentsLoading(false);
             },
-            onError: (listenerError) => {
+            onError: (listenerError: Error) => {
                 console.error('Failed to listen for mentor assignments:', listenerError);
                 setAssignments([]);
                 setAssignmentsLoading(false);
@@ -189,7 +191,7 @@ export default function MentorProfileViewPage() {
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(Array.from(memberIds));
+                const profiles = await findUsersByIds(Array.from(memberIds));
                 if (cancelled) return;
                 const next = new Map<string, UserProfile>();
                 profiles.forEach((entry) => next.set(entry.uid, entry));
@@ -460,9 +462,8 @@ export default function MentorProfileViewPage() {
 
         setRequestSubmitting(true);
         try {
-            await createMentorRequest({
-                groupId: targetGroup.id,
-                mentorUid: profile.uid,
+            await createMentorRequestByGroup(targetGroup.id, {
+                expertUid: profile.uid,
                 role: mentorRole,
                 requestedBy: viewerUid,
                 message: requestMessage.trim() || undefined,

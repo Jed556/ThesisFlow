@@ -24,7 +24,7 @@ import {
     setThesisById, createThesisForGroupById, computeThesisProgressRatio, type ThesisRecord,
 } from '../../../utils/firebase/firestore/thesis';
 import { getAllGroups, findGroupById, updateGroupById } from '../../../utils/firebase/firestore/groups';
-import { getUserById, getUsersByIds, listenUsersByFilter } from '../../../utils/firebase/firestore/user';
+import { findUserById, findUsersByIds, listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { importThesesFromCsv, exportThesesToCsv } from '../../../utils/csv/thesis';
 import { formatProfileLabel } from '../../../utils/userUtils';
 import { formatDateShort, fromDateInputString, toDateInputString } from '../../../utils/dateUtils';
@@ -257,14 +257,14 @@ export default function AdminThesisManagementPage() {
         const missingProfiles = Array.from(uids).filter((uid) => !profileCache.has(uid));
         if (missingProfiles.length > 0) {
             try {
-                const fetchedProfiles = await getUsersByIds(missingProfiles);
+                const fetchedProfiles = await findUsersByIds(missingProfiles);
                 fetchedProfiles.forEach((profile) => {
                     profileCache.set(profile.uid, profile);
                 });
 
                 const unresolved = missingProfiles.filter((uid) => !profileCache.has(uid));
                 if (unresolved.length > 0) {
-                    const fallbackProfiles = await Promise.all(unresolved.map(async (uid) => getUserById(uid)));
+                    const fallbackProfiles = await Promise.all(unresolved.map(async (uid) => findUserById(uid)));
                     fallbackProfiles.forEach((profile) => {
                         if (profile) {
                             profileCache.set(profile.uid, profile);
@@ -577,13 +577,17 @@ export default function AdminThesisManagementPage() {
     const handleExport = React.useCallback((selected: AdminThesisRow[]) => {
         try {
             const source = selected.length > 0 ? selected : rows;
+            const formatDateStr = (value?: string | Date): string => {
+                if (!value) return '';
+                return value instanceof Date ? value.toISOString() : value;
+            };
             const csv = exportThesesToCsv(source.map((row) => ({
                 title: row.title,
                 groupId: row.groupId ?? '',
-                submissionDate: row.submissionDate,
-                lastUpdated: row.lastUpdated,
-                overallStatus: row.overallStatus,
-                chapters: row.chapters,
+                submissionDate: formatDateStr(row.submissionDate),
+                lastUpdated: formatDateStr(row.lastUpdated),
+                overallStatus: row.overallStatus ?? 'not_submitted',
+                chapters: row.chapters ?? [],
                 leader: row.leaderUid,
                 members: row.memberUids,
                 adviser: row.adviserUid ?? '',

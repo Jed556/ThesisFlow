@@ -15,7 +15,7 @@ import { TopicProposalEntryCard } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordHeadDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -81,7 +81,7 @@ export default function HeadTopicProposalsPage() {
         setProfileLoading(true);
         setProfileError(null);
 
-        void getUserById(headUid)
+        void findUserById(headUid)
             .then((userProfile) => {
                 if (!cancelled) {
                     setProfile(userProfile ?? null);

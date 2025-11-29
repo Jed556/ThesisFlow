@@ -276,26 +276,6 @@ export async function getChapterConfigsByDepartment(department: string): Promise
 }
 
 /**
- * @deprecated Kept for backward compatibility, use getChapterConfigsByDepartment
- */
-export async function getChapterConfigsByDepartmentLegacy(department: string): Promise<ThesisChapterConfig[]> {
-    const sanitizedDept = sanitizeForFirestore(department);
-    const deptRef = collection(
-        firebaseFirestore,
-        CONFIGURATION_ROOT,
-        sanitizedDept,
-        COURSES_SUBCOLLECTION
-    );
-    const snap = await getDocs(deptRef);
-
-    return snap.docs.map((d) => {
-        const data = d.data() as Omit<ThesisChapterConfig, 'id'>;
-        const id = generateChapterConfigId(department, data.course);
-        return { id, ...data } as ThesisChapterConfig;
-    });
-}
-
-/**
  * Create or update a chapter configuration
  * Also ensures department and course documents exist with name fields
  * @param data - Chapter configuration data

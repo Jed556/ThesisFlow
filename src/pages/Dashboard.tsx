@@ -21,8 +21,9 @@ import type { ScheduleEvent } from '../types/schedule';
 import type { GroupNotificationDoc, GroupNotificationEntry } from '../types/notification';
 import { listenTheses } from '../utils/firebase/firestore/thesis';
 import { getGroupDepartments, findGroupById } from '../utils/firebase/firestore/groups';
+import type { ThesisGroup } from '../types/group';
 import { THESIS_STAGE_METADATA, chapterHasStage } from '../utils/thesisStageUtils';
-import { getUsersByIds, onUserProfile } from '../utils/firebase/firestore/user';
+import { findUsersByIds, onUserProfile } from '../utils/firebase/firestore/user';
 import { listenEventsByThesisIds } from '../utils/firebase/firestore/events';
 import { ensureGroupNotificationDocument, listenGroupNotifications } from '../utils/firebase/firestore/groupNotifications';
 
@@ -122,13 +123,13 @@ function DashboardPage(): React.ReactElement {
 
     React.useEffect(() => {
         setLoadingTheses(true);
-        const unsubscribe = listenTheses(undefined, {
-            onData: (records) => {
+        const unsubscribe = listenTheses({
+            onData: (records: ThesisRecord[]) => {
                 setTheses(records);
                 setLoadingTheses(false);
                 setThesisError(null);
             },
-            onError: (error) => {
+            onError: (error: Error) => {
                 console.error('Failed to load theses for dashboard:', error);
                 setThesisError('Unable to load thesis data right now. Please try again later.');
                 setLoadingTheses(false);
@@ -181,7 +182,7 @@ function DashboardPage(): React.ReactElement {
         let cancelled = false;
         void (async () => {
             try {
-                const profiles = await getUsersByIds(Array.from(new Set(leaderIds)));
+                const profiles = await findUsersByIds(Array.from(new Set(leaderIds)));
                 if (cancelled) {
                     return;
                 }
@@ -231,7 +232,7 @@ function DashboardPage(): React.ReactElement {
 
     React.useEffect(() => {
         // hydrate group map for theses so we can resolve department from groupId
-        const groupIds = Array.from(new Set(theses.map((t) => t.groupId).filter(Boolean)));
+        const groupIds = Array.from(new Set(theses.map((t) => t.groupId).filter((id): id is string => Boolean(id))));
         if (groupIds.length === 0) {
             setGroupMap({});
             return;
@@ -248,9 +249,9 @@ function DashboardPage(): React.ReactElement {
                     }
                 }));
                 if (cancelled) return;
-                const map: Record<string, any> = {};
+                const map: Record<string, ThesisGroup | null> = {};
                 entries.forEach(([gid, group]) => {
-                    if (group) {
+                    if (group && gid) {
                         map[gid] = group;
                     }
                 });
@@ -531,7 +532,7 @@ function DashboardPage(): React.ReactElement {
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                 <Chip label={userThesis.overallStatus} color="primary" size="small" />
                                 <Typography variant="body2" color="text.secondary">
-                                    Last updated: {formatDateTime(userThesis.lastUpdated)}
+                                    Last updated: {formatDateTime(typeof userThesis.lastUpdated === 'string' ? userThesis.lastUpdated : userThesis.lastUpdated?.toISOString())}
                                 </Typography>
                             </Stack>
                             <Grid container spacing={1.5}>

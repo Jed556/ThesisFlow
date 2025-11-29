@@ -13,7 +13,7 @@ import type { ThesisChapterConfig, ChapterConfigFormData, ChapterFormErrorKey } 
 import type { UserProfile } from '../../../../types/profile';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
 import {
-    getAllChapterConfigs, getChapterConfigsByDepartment, getAllUsers, setChapterConfig
+    getAllChapterConfigs, getChapterConfigsByDepartment, findAllUsers, setChapterConfig
 } from '../../../../utils/firebase/firestore';
 import { normalizeChapterOrder } from '../../../../utils/chapterUtils';
 
@@ -99,7 +99,7 @@ export default function AdminChapterManagementPage() {
 
     const loadUsers = React.useCallback(async () => {
         try {
-            const allUsers = await getAllUsers();
+            const allUsers = await findAllUsers();
             setUsers(allUsers);
         } catch (error) {
             console.error('Error loading users:', error);

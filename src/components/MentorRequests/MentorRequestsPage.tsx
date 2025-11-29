@@ -16,7 +16,7 @@ import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
 import { listenMentorRequestsByMentor } from '../../utils/firebase/firestore/mentorRequests';
 import { listenThesesForMentor, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
-import { getUsersByIds, onUserProfile, updateUserProfile } from '../../utils/firebase/firestore/user';
+import { findUsersByIds, onUserProfile, updateUserProfile } from '../../utils/firebase/firestore/user';
 import MentorRequestCard from './MentorRequestCard';
 import { filterActiveMentorTheses } from '../../utils/mentorProfileUtils';
 
@@ -101,7 +101,7 @@ function useMentorRequestViewModels(requests: ExpertRequest[]): MentorRequestVie
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(ids);
+                const profiles = await findUsersByIds(ids);
                 if (!cancelled) {
                     setProfilesByUid(new Map(profiles.map((profile) => [profile.uid, profile])));
                 }

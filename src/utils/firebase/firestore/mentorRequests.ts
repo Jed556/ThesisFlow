@@ -35,6 +35,7 @@ import {
     buildExpertRequestDocPath,
     EXPERT_REQUESTS_SUBCOLLECTION,
     GROUPS_SUBCOLLECTION,
+    extractPathParams,
 } from '../../../config/firestore';
 
 // ============================================================================
@@ -74,6 +75,7 @@ type ExpertRequestSnapshot = QueryDocumentSnapshot<DocumentData> | DocumentSnaps
 
 /**
  * Convert Firestore document data to ExpertRequestRecord
+ * Extracts groupId from document path for collectionGroup queries
  */
 function docToExpertRequest(docSnap: ExpertRequestSnapshot): ExpertRequestRecord | null {
     if (!docSnap.exists()) return null;
@@ -83,6 +85,10 @@ function docToExpertRequest(docSnap: ExpertRequestSnapshot): ExpertRequestRecord
     const rawStatus = data.status as string | undefined;
     const status: ExpertRequestStatus =
         rawStatus === 'approved' || rawStatus === 'rejected' ? rawStatus : 'pending';
+
+    // Extract groupId from path for collectionGroup queries
+    const pathParams = extractPathParams(docSnap.ref.path);
+    const groupId = pathParams.groupId;
 
     return {
         id: docSnap.id,
@@ -95,6 +101,7 @@ function docToExpertRequest(docSnap: ExpertRequestSnapshot): ExpertRequestRecord
         updatedAt: normalizeTimestamp(data.updatedAt) ?? new Date().toISOString(),
         respondedAt: normalizeTimestamp(data.respondedAt) ?? null,
         responseNote: typeof data.responseNote === 'string' ? data.responseNote : null,
+        groupId,
     };
 }
 
@@ -641,6 +648,53 @@ export async function respondToMentorRequest(
         respondedAt: decidedAt,
         updatedAt: decidedAt,
     });
+}
+
+/**
+ * Create a mentor/expert request by group ID (context-free version).
+ * Finds group context from groupId and creates the request.
+ *
+ * @param groupId The group document ID
+ * @param payload Request payload
+ * @returns Request ID
+ */
+export async function createMentorRequestByGroup(
+    groupId: string,
+    payload: CreateExpertRequestPayload
+): Promise<string> {
+    // Find group to get context
+    const groupsQuery = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
+    const q = query(groupsQuery, where('__name__', '==', groupId));
+    let snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+        // Fall back to searching by id field
+        const qById = query(
+            collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION),
+            where('id', '==', groupId)
+        );
+        snapshot = await getDocs(qById);
+    }
+
+    if (snapshot.empty) {
+        throw new Error(`Group not found: ${groupId}`);
+    }
+
+    const groupDoc = snapshot.docs[0];
+    const pathParams = extractPathParams(groupDoc.ref.path);
+
+    if (!pathParams.year || !pathParams.department || !pathParams.course) {
+        throw new Error(`Cannot determine context for group: ${groupId}`);
+    }
+
+    const ctx: ExpertRequestContext = {
+        year: pathParams.year,
+        department: pathParams.department,
+        course: pathParams.course,
+        groupId,
+    };
+
+    return createExpertRequest(ctx, payload);
 }
 
 /**

@@ -20,7 +20,7 @@ import {
     updatePanelCommentStudentFields, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
-import { getUsersByIds } from '../../utils/firebase/firestore/user';
+import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
     PANEL_COMMENT_STAGE_METADATA, canStudentAccessPanelStage, formatPanelistDisplayName, getPanelCommentStageLabel
@@ -197,7 +197,7 @@ export default function StudentPanelCommentsPage() {
                     return;
                 }
 
-                const profiles = await getUsersByIds(panelUids);
+                const profiles = await findUsersByIds(panelUids);
                 if (!isMounted) {
                     return;
                 }

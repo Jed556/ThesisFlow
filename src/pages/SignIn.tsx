@@ -10,7 +10,7 @@ import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
-import { getAllUsers, getUserById } from '../utils/firebase/firestore/user';
+import { findAllUsers, findUserById } from '../utils/firebase/firestore/user';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
@@ -271,7 +271,7 @@ export default function SignIn() {
         let active = true;
         (async () => {
             try {
-                const existing = await getAllUsers();
+                const existing = await findAllUsers();
                 if (!active) return;
                 setNoUsersState(existing.length === 0);
             } catch (error) {
@@ -374,7 +374,7 @@ export default function SignIn() {
                             }
 
                             if (result?.success && result?.user) {
-                                const profile = await getUserById(result.user.uid);
+                                const profile = await findUserById(result.user.uid);
 
                                 if (!profile) {
                                     showNotification('User profile not found. Contact an administrator.', 'error', 0);

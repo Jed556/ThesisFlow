@@ -5,7 +5,9 @@ import type { ThesisData } from '../types/thesis';
  * Re-exports for convenience from Firebase Firestore thesis module
  */
 
-export { getThesisTeamMembers, calculateThesisProgress } from './firebase/firestore/thesis';
+export {
+    getThesisTeamMembers, getThesisTeamMembersById, calculateThesisProgress,
+} from './firebase/firestore/thesis';
 
 const TOPIC_APPROVAL_KEYWORDS = ['approved', 'accepted', 'granted'] as const;
 

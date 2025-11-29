@@ -15,7 +15,7 @@ import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import { AnimatedList, AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
-import { getThesisTeamMembers, isTopicApproved } from '../../utils/thesisUtils';
+import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { normalizeDateInput } from '../../utils/dateUtils';
@@ -36,7 +36,7 @@ export const metadata: NavigationItem = {
 
 type ThesisRecord = ThesisData & { id: string };
 
-type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembers>> extends (infer Member)[]
+type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembersById>> extends (infer Member)[]
     ? Member
     : never;
 
@@ -320,7 +320,7 @@ function buildThesisWorkflowSteps(
     return applyPrerequisiteLocks(baseSteps);
 }
 
-function formatDateLabel(value?: string | null): string {
+function formatDateLabel(value?: string | Date | null): string {
     const date = normalizeDateInput(value ?? undefined);
     return date ? date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
 }
@@ -421,7 +421,7 @@ export default function ThesisPage() {
 
         const loadTeam = async () => {
             try {
-                const members = await getThesisTeamMembers(thesis.id);
+                const members = await getThesisTeamMembersById(thesis.id);
                 if (!cancelled) {
                     setTeamMembers(members);
                 }
