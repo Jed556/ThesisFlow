@@ -1,11 +1,11 @@
 import * as React from 'react';
 import {
-    TextField, Button, Link, Alert, Typography, FormControl, IconButton, InputAdornment,
-    InputLabel, OutlinedInput, Box, Chip, Stack, CircularProgress
+    TextField, Button, Link, Alert, Typography, FormControl, IconButton,
+    InputAdornment, InputLabel, OutlinedInput, Chip, Stack
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
-import { Navigate, useNavigate, useLocation } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
@@ -222,7 +222,8 @@ function ForgotPasswordLink() {
  * Sign-in page
  */
 export default function SignIn() {
-    const session = useSession<Session>();
+    // Session hook for potential future use (e.g., redirect if already signed in)
+    useSession<Session>();
     const authentication = React.useContext(AuthenticationContext) as ExtendedAuthentication | null;
     const { showNotification } = useSnackbar();
     const navigate = useNavigate();
@@ -351,12 +352,12 @@ export default function SignIn() {
                                                             },
                                                         };
                                                         authentication?.setSession?.(tmpSession);
-                                                        navigate('/dev-helper', { replace: true });
+                                                        navigate('/', { replace: true });
                                                         showNotification('Signed in as developer', 'success', 3000);
                                                         return {};
                                                     } catch (e) {
                                                         // navigation error: fall back to normal flow
-                                                        console.warn('dev-helper navigation failed', e);
+                                                        console.warn('dev navigation failed', e);
                                                     }
                                                 } else {
                                                     return { error: 'Invalid dev credentials' };

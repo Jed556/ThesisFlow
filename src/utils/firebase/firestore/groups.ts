@@ -414,6 +414,8 @@ export async function updateGroup(
     if (data.members !== undefined) updateData['members.members'] = data.members;
     if (data.adviser !== undefined) updateData['members.adviser'] = data.adviser;
     if (data.editor !== undefined) updateData['members.editor'] = data.editor;
+    if (data.statistician !== undefined) updateData['members.statistician'] = data.statistician;
+    if (data.panels !== undefined) updateData['members.panels'] = data.panels;
 
     await updateDoc(docRef, updateData);
 }
@@ -442,6 +444,52 @@ export async function updateGroupStatus(
     }
 
     await updateDoc(docRef, updateData);
+}
+
+/**
+ * Update a group by ID (context-free version).
+ * Finds the group context using collectionGroup query.
+ *
+ * @param groupId Group document ID
+ * @param data Partial update data
+ */
+export async function updateGroupById(
+    groupId: string,
+    data: Partial<ThesisGroupFormData>
+): Promise<void> {
+    const ctx = await getGroupContext(groupId);
+    if (!ctx) throw new Error('Cannot determine group context');
+
+    await updateGroup(ctx.year, ctx.department, ctx.course, groupId, data);
+}
+
+/**
+ * Set (create or overwrite) group data by ID (context-free version).
+ * For imports or cases where full context is unknown. Uses current academic year if creating new.
+ *
+ * @param groupId Group document ID
+ * @param data Group data (must include department and course)
+ */
+export async function setGroupById(
+    groupId: string,
+    data: Partial<ThesisGroup> & { department?: string; course?: string }
+): Promise<void> {
+    // Try to get existing context first
+    const existingCtx = await getGroupContext(groupId);
+
+    // If no existing context, build from data
+    if (!existingCtx) {
+        const year = new Date().getFullYear().toString();
+        const department = data.department;
+        const course = data.course;
+        if (!department || !course) {
+            throw new Error('Department and course required when creating new group');
+        }
+        await setGroup(year, department, course, groupId, data);
+        return;
+    }
+
+    await setGroup(existingCtx.year, existingCtx.department, existingCtx.course, groupId, data);
 }
 
 /**

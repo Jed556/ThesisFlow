@@ -629,12 +629,26 @@ function mapConfigSnapshot(
 }
 
 /**
- * Get a global terminal requirement config by ID
+ * Get a global terminal requirement config by ID or by department/course
+ * @param configIdOrDepartment Config ID, or department name if course is provided
+ * @param course Optional course name (if provided, first param is treated as department)
  */
 export async function getTerminalRequirementConfig(
-    configId: string,
+    configIdOrDepartment: string,
+    course?: string,
 ): Promise<TerminalRequirementConfigDocument | null> {
-    if (!configId) return null;
+    if (!configIdOrDepartment) return null;
+
+    let configId: string;
+    if (course) {
+        // Generate ID from department-course pattern
+        const dept = configIdOrDepartment.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const courseKey = course.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        configId = `${dept}-${courseKey}`;
+    } else {
+        configId = configIdOrDepartment;
+    }
+
     const ref = getConfigRef(configId);
     const snapshot = await getDoc(ref);
     if (!snapshot.exists()) return null;
@@ -658,8 +672,12 @@ export async function getAllTerminalRequirementConfigs(): Promise<
 
 export interface SaveTerminalRequirementConfigPayload {
     id?: string;
-    name: string;
+    name?: string;
     description?: string;
+    /** @deprecated Use name instead - will auto-generate ID from department/course */
+    department?: string;
+    /** @deprecated Use name instead - will auto-generate ID from department/course */
+    course?: string;
     requirements: TerminalRequirementConfigEntry[];
 }
 
@@ -669,13 +687,25 @@ export interface SaveTerminalRequirementConfigPayload {
 export async function setTerminalRequirementConfig(
     payload: SaveTerminalRequirementConfigPayload,
 ): Promise<string> {
-    const name = payload.name?.trim();
-    if (!name) {
-        throw new Error('Config name is required.');
+    // Support legacy department/course pattern
+    let configId = payload.id?.trim();
+    let name = payload.name?.trim();
+
+    if (!configId && payload.department && payload.course) {
+        // Generate ID from department-course pattern
+        const dept = payload.department.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const course = payload.course.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        configId = `${dept}-${course}`;
+        name = name || `${payload.department} - ${payload.course}`;
     }
 
-    const configId = payload.id?.trim() ||
-        name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    if (!configId && name) {
+        configId = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    }
+
+    if (!configId) {
+        throw new Error('Config ID, name, or department/course is required.');
+    }
 
     const ref = getConfigRef(configId);
     const snapshot = await getDoc(ref);
@@ -685,8 +715,10 @@ export async function setTerminalRequirementConfig(
         : null;
 
     const documentPayload: Omit<TerminalRequirementConfigDocument, 'id'> = {
-        name,
+        name: name || configId,
         description: payload.description?.trim(),
+        department: payload.department?.trim(),
+        course: payload.course?.trim(),
         requirements: normalizeConfigEntries(payload.requirements),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
@@ -706,6 +738,34 @@ export async function deleteTerminalRequirementConfig(configId: string): Promise
     }
     const ref = getConfigRef(configId);
     await deleteDoc(ref);
+}
+
+/**
+ * Get unique departments from all terminal requirement configs
+ * @deprecated Terminal requirements are now global
+ */
+export async function getTerminalRequirementDepartments(): Promise<string[]> {
+    const configs = await getAllTerminalRequirementConfigs();
+    const departments = new Set<string>();
+    configs.forEach((config) => {
+        if (config.department) {
+            departments.add(config.department.trim());
+        }
+    });
+    return Array.from(departments).sort();
+}
+
+/**
+ * Get terminal requirement configs by department
+ * @deprecated Terminal requirements are now global
+ */
+export async function getTerminalRequirementConfigsByDepartment(
+    department: string
+): Promise<TerminalRequirementConfigDocument[]> {
+    const configs = await getAllTerminalRequirementConfigs();
+    return configs.filter(
+        (config) => config.department?.toLowerCase() === department.toLowerCase()
+    );
 }
 
 /**

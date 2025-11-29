@@ -82,7 +82,7 @@ export default function MentorRequestDecisionActions({ request, group, role, rol
                     showNotification('This group already has a mentor for this role.', 'warning');
                     return;
                 }
-                await assignMentorToGroup(request.groupId, role, mentorUid);
+                await assignMentorToGroup(group.id, mentorUid!, role);
                 await respondToMentorRequest(request.id, 'approved', { responseNote: note });
                 showNotification('Request approved successfully.', 'success');
                 onCompleted?.('approved');

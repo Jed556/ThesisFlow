@@ -133,18 +133,18 @@ export function TerminalRequirementCard({
                     </>
                 )}
 
-                {requirement.templateFileUrl && (
+                {requirement.templateFile?.url && (
                     <Button
                         variant="text"
                         startIcon={<DownloadIcon />}
                         component="a"
-                        href={requirement.templateFileUrl}
+                        href={requirement.templateFile.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         sx={{ alignSelf: 'flex-start' }}
                     >
-                        {requirement.templateFileName
-                            ? `Download ${requirement.templateFileName}`
+                        {requirement.templateFile?.name
+                            ? `Download ${requirement.templateFile.name}`
                             : 'Download template'}
                     </Button>
                 )}

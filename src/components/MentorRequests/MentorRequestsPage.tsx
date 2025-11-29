@@ -43,7 +43,9 @@ function useMentorRequestViewModels(requests: ExpertRequest[]): MentorRequestVie
 
     React.useEffect(() => {
         let cancelled = false;
-        const uniqueGroupIds = Array.from(new Set(requests.map((req) => req.groupId)));
+        const uniqueGroupIds = Array.from(
+            new Set(requests.map((req) => req.groupId).filter((id): id is string => !!id))
+        );
         if (uniqueGroupIds.length === 0) {
             setGroupsById(new Map());
             return () => { /* no-op */ };
@@ -117,7 +119,7 @@ function useMentorRequestViewModels(requests: ExpertRequest[]): MentorRequestVie
 
     return React.useMemo(() => (
         requests.map((request) => {
-            const group = groupsById.get(request.groupId) ?? null;
+            const group = request.groupId ? groupsById.get(request.groupId) ?? null : null;
             const requester = profilesByUid.get(request.requestedBy) ?? null;
             const usersByUid = new Map<string, UserProfile>();
             if (requester) {
@@ -190,7 +192,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
 
         setLoading(true);
         setError(null);
-        const unsubscribe = listenMentorRequestsByMentor(role, mentorUid, {
+        const unsubscribe = listenMentorRequestsByMentor(mentorUid, role, {
             onData: (records) => {
                 setRequests(records);
                 setLoading(false);

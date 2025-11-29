@@ -16,14 +16,14 @@ import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
 import type { NavigationItem } from '../../../types/navigation';
 import type { Session } from '../../../types/session';
-import type { ThesisData, ThesisChapter } from '../../../types/thesis';
+import type { ThesisData, ThesisChapter, ThesisStatus } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
 import type { ThesisGroup, ThesisGroupMembers } from '../../../types/group';
 import {
-    bulkDeleteTheses, deleteThesis, getAllTheses, listenTheses,
-    setThesis, createThesisForGroup, computeThesisProgressRatio, type ThesisRecord,
+    bulkDeleteThesesByIds, deleteThesisById, getAllTheses, listenTheses,
+    setThesisById, createThesisForGroupById, computeThesisProgressRatio, type ThesisRecord,
 } from '../../../utils/firebase/firestore/thesis';
-import { getAllGroups, findGroupById, updateGroup } from '../../../utils/firebase/firestore/groups';
+import { getAllGroups, findGroupById, updateGroupById } from '../../../utils/firebase/firestore/groups';
 import { getUserById, getUsersByIds, listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { importThesesFromCsv, exportThesesToCsv } from '../../../utils/csv/thesis';
 import { formatProfileLabel } from '../../../utils/userUtils';
@@ -131,7 +131,10 @@ function parseChapters(input: string): ThesisChapter[] {
             submissionDate: typeof candidate.submissionDate === 'string' ? candidate.submissionDate : null,
             lastModified: typeof candidate.lastModified === 'string' ? candidate.lastModified : null,
             submissions: Array.isArray(candidate.submissions)
-                ? candidate.submissions.map((value) => String(value))
+                ? candidate.submissions.map((value) => ({
+                    id: typeof value === 'string' ? value : (value as { id?: string }).id ?? crypto.randomUUID(),
+                    status: 'under_review' as const,
+                }))
                 : [],
             comments: Array.isArray(candidate.comments)
                 ? candidate.comments as ThesisChapter['comments']
@@ -377,8 +380,8 @@ export default function AdminThesisManagementPage() {
             return undefined;
         }
 
-        const unsubscribe = listenTheses(undefined, {
-            onData: (records) => {
+        const unsubscribe = listenTheses({
+            onData: (records: ThesisRecord[]) => {
                 latestRecordsRef.current = records;
                 void (async () => {
                     try {
@@ -399,7 +402,7 @@ export default function AdminThesisManagementPage() {
                     }
                 })();
             },
-            onError: (error) => {
+            onError: (error: Error) => {
                 console.error('Thesis listener error:', error);
                 showNotification('Realtime thesis updates failed. Trying a manual refresh might help.', 'error');
                 if (isMountedRef.current) {
@@ -527,7 +530,7 @@ export default function AdminThesisManagementPage() {
         setSelectedThesis(thesis);
         setFormState({
             title: thesis.title,
-            groupId: thesis.groupId,
+            groupId: thesis.groupId ?? '',
             leader: thesis.leaderUid,
             members: thesis.memberUids ?? [],
             adviser: thesis.adviserUid ?? '',
@@ -549,7 +552,7 @@ export default function AdminThesisManagementPage() {
     const handleDelete = React.useCallback(async () => {
         if (!selectedThesis) return;
         try {
-            await deleteThesis(selectedThesis.id);
+            await deleteThesisById(selectedThesis.id);
             showNotification(`Thesis "${selectedThesis.title}" deleted successfully`, 'success');
         } catch (error) {
             console.error('Failed to delete thesis:', error);
@@ -562,7 +565,7 @@ export default function AdminThesisManagementPage() {
     const handleMultiDelete = React.useCallback(async (thesesToDelete: AdminThesisRow[]) => {
         if (thesesToDelete.length === 0) return;
         try {
-            await bulkDeleteTheses(thesesToDelete.map((row) => row.id));
+            await bulkDeleteThesesByIds(thesesToDelete.map((row) => row.id));
             showNotification(`Deleted ${thesesToDelete.length} thesis record(s)`, 'success');
         } catch (error) {
             console.error('Failed to delete multiple theses:', error);
@@ -576,7 +579,7 @@ export default function AdminThesisManagementPage() {
             const source = selected.length > 0 ? selected : rows;
             const csv = exportThesesToCsv(source.map((row) => ({
                 title: row.title,
-                groupId: row.groupId,
+                groupId: row.groupId ?? '',
                 submissionDate: row.submissionDate,
                 lastUpdated: row.lastUpdated,
                 overallStatus: row.overallStatus,
@@ -655,20 +658,18 @@ export default function AdminThesisManagementPage() {
                             editor: thesis.editor,
                             submissionDate: thesis.submissionDate || new Date().toISOString(),
                             lastUpdated: thesis.lastUpdated || new Date().toISOString(),
-                            overallStatus: thesis.overallStatus || 'not_submitted',
+                            overallStatus: (thesis.overallStatus || 'draft') as ThesisStatus,
                             chapters: thesis.chapters ?? [],
+                            stages: [],
                         };
 
-                        await createThesisForGroup(thesis.groupId, thesisPayload as ThesisData);
+                        await createThesisForGroupById(thesis.groupId, thesisPayload as ThesisData);
 
-                        await updateGroup(thesis.groupId, {
-                            members: {
-                                leader: thesis.leader,
-                                members: uniqueMembers,
-                                adviser: thesis.adviser || undefined,
-                                editor: thesis.editor || undefined,
-                                panels: group.members.panels,
-                            },
+                        await updateGroupById(thesis.groupId, {
+                            leader: thesis.leader,
+                            members: uniqueMembers,
+                            adviser: thesis.adviser || undefined,
+                            editor: thesis.editor || undefined,
                         });
 
                         const updatedGroup: ThesisGroup = {
@@ -752,8 +753,9 @@ export default function AdminThesisManagementPage() {
             editor: formState.editor,
             submissionDate: fromDateInputString(formState.submissionDate),
             lastUpdated: fromDateInputString(formState.lastUpdated),
-            overallStatus: formState.overallStatus || 'In Progress',
+            overallStatus: (formState.overallStatus || 'draft') as ThesisStatus,
             chapters,
+            stages: [],
         };
 
         const memberSnapshot: ThesisGroupMembers = {
@@ -775,20 +777,16 @@ export default function AdminThesisManagementPage() {
         setSaving(true);
         try {
             if (editMode && selectedThesis) {
-                await setThesis(selectedThesis.id, thesisPayload as ThesisData);
+                await setThesisById(selectedThesis.id, thesisPayload as ThesisData);
             } else {
-                await createThesisForGroup(formState.groupId, thesisPayload as ThesisData);
+                await createThesisForGroupById(formState.groupId, thesisPayload as ThesisData);
             }
 
-            const panels = targetGroup?.members.panels;
-            await updateGroup(formState.groupId, {
-                members: {
-                    leader: memberSnapshot.leader,
-                    members: memberSnapshot.members,
-                    adviser: memberSnapshot.adviser ?? undefined,
-                    editor: memberSnapshot.editor ?? undefined,
-                    panels,
-                },
+            await updateGroupById(formState.groupId, {
+                leader: memberSnapshot.leader,
+                members: memberSnapshot.members,
+                adviser: memberSnapshot.adviser ?? undefined,
+                editor: memberSnapshot.editor ?? undefined,
             });
 
             const updatedGroup: ThesisGroup = {
@@ -798,7 +796,7 @@ export default function AdminThesisManagementPage() {
                     members: memberSnapshot.members,
                     adviser: memberSnapshot.adviser,
                     editor: memberSnapshot.editor,
-                    panels,
+                    panels: targetGroup.members.panels,
                 },
                 updatedAt: new Date().toISOString(),
             };

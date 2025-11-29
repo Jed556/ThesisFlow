@@ -28,13 +28,13 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { createTimestamp, normalizeTimestamp } from '../../dateUtils';
-import type { ExpertRequest } from '../../../types/expertRequest';
+import type { ExpertRequest, ExpertRequestStatus } from '../../../types/expertRequest';
 import type { UserRole } from '../../../types/profile';
-import type { ThesisStatus } from '../../../types/thesis';
 import {
     buildExpertRequestsCollectionPath,
     buildExpertRequestDocPath,
     EXPERT_REQUESTS_SUBCOLLECTION,
+    GROUPS_SUBCOLLECTION,
 } from '../../../config/firestore';
 
 // ============================================================================
@@ -79,13 +79,18 @@ function docToExpertRequest(docSnap: ExpertRequestSnapshot): ExpertRequestRecord
     if (!docSnap.exists()) return null;
     const data = docSnap.data() ?? {};
 
+    // Validate status is a valid ExpertRequestStatus
+    const rawStatus = data.status as string | undefined;
+    const status: ExpertRequestStatus =
+        rawStatus === 'approved' || rawStatus === 'rejected' ? rawStatus : 'pending';
+
     return {
         id: docSnap.id,
         expertUid: typeof data.expertUid === 'string' ? data.expertUid : '',
         role: data.role as UserRole,
         requestedBy: typeof data.requestedBy === 'string' ? data.requestedBy : '',
         message: typeof data.message === 'string' ? data.message : undefined,
-        status: (data.status as ThesisStatus) || 'pending',
+        status,
         createdAt: normalizeTimestamp(data.createdAt) ?? new Date().toISOString(),
         updatedAt: normalizeTimestamp(data.updatedAt) ?? new Date().toISOString(),
         respondedAt: normalizeTimestamp(data.respondedAt) ?? null,
@@ -555,4 +560,121 @@ export async function createMentorRequest(
     payload: CreateExpertRequestPayload
 ): Promise<string> {
     return createExpertRequest(ctx, payload);
+}
+
+/**
+ * Listen to mentor/expert requests for a specific group by group ID.
+ * Uses collectionGroup query to find requests regardless of path.
+ *
+ * @param groupId The group's document ID
+ * @param options Callbacks for data and errors
+ * @returns Unsubscribe function
+ */
+export function listenMentorRequestsByGroup(
+    groupId: string,
+    options: ExpertRequestListenerOptions
+): () => void {
+    if (!groupId) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+
+    // We need to listen to expertRequests where the parent group ID matches
+    // Since the groupId is encoded in the path, we search via collectionGroup
+    // and extract based on the document path
+    const requestsQuery = collectionGroup(firebaseFirestore, EXPERT_REQUESTS_SUBCOLLECTION);
+
+    return onSnapshot(
+        requestsQuery,
+        (snapshot) => {
+            const requests = snapshot.docs
+                .filter((docSnap) => {
+                    // Check if the parent path contains the groupId
+                    const pathParts = docSnap.ref.path.split('/');
+                    const groupsIndex = pathParts.indexOf(GROUPS_SUBCOLLECTION);
+                    return groupsIndex >= 0 && pathParts[groupsIndex + 1] === groupId;
+                })
+                .map((docSnap) => docToExpertRequest(docSnap))
+                .filter((r): r is ExpertRequestRecord => r !== null)
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+            options.onData(requests);
+        },
+        (error) => {
+            if (options.onError) options.onError(error);
+            else console.error('Mentor request by group listener error:', error);
+        }
+    );
+}
+
+/**
+ * Respond to a mentor/expert request by request ID.
+ * Finds the request via collectionGroup and updates it.
+ *
+ * @param requestId The request document ID
+ * @param status The decision status
+ * @param options Optional response note
+ */
+export async function respondToMentorRequest(
+    requestId: string,
+    status: 'approved' | 'rejected',
+    options?: RespondToExpertRequestOptions
+): Promise<void> {
+    if (!requestId) {
+        throw new Error('Request ID is required.');
+    }
+
+    // Find the request document via collectionGroup
+    const requestsQuery = collectionGroup(firebaseFirestore, EXPERT_REQUESTS_SUBCOLLECTION);
+    const q = query(requestsQuery, where('__name__', '==', requestId), limit(1));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+        throw new Error('Request not found.');
+    }
+
+    const docRef = snapshot.docs[0].ref;
+    const decidedAt = createTimestamp();
+
+    await updateDoc(docRef, {
+        status,
+        responseNote: options?.responseNote ?? null,
+        respondedAt: decidedAt,
+        updatedAt: decidedAt,
+    });
+}
+
+/**
+ * Get pending mentor request by group ID, expert UID and role (context-free version).
+ * Uses collectionGroup to search across all groups.
+ *
+ * @param groupId The group document ID
+ * @param expertUid The expert's user ID
+ * @param role The role requested
+ * @returns The pending request or null if not found
+ */
+export async function getPendingMentorRequest(
+    groupId: string,
+    expertUid: string,
+    role: UserRole
+): Promise<ExpertRequestRecord | null> {
+    if (!groupId || !expertUid || !role) return null;
+
+    const requestsQuery = collectionGroup(firebaseFirestore, EXPERT_REQUESTS_SUBCOLLECTION);
+    const q = query(
+        requestsQuery,
+        where('expertUid', '==', expertUid),
+        where('role', '==', role),
+        where('status', '==', 'pending')
+    );
+
+    const snapshot = await getDocs(q);
+
+    // Filter to find the one matching the groupId in the path
+    const matchingDoc = snapshot.docs.find((docSnap) => {
+        const pathParts = docSnap.ref.path.split('/');
+        const groupsIndex = pathParts.indexOf(GROUPS_SUBCOLLECTION);
+        return groupsIndex >= 0 && pathParts[groupsIndex + 1] === groupId;
+    });
+
+    return matchingDoc ? docToExpertRequest(matchingDoc) : null;
 }

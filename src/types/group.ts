@@ -55,6 +55,8 @@ export interface ThesisGroupFormData {
     members: string[];
     adviser?: string;
     editor?: string;
+    statistician?: string;
+    panels?: string[];
     thesis?: ThesisData;
     status: GroupStatus;
     department?: string;

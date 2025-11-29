@@ -30,6 +30,8 @@ export interface PanelCommentEntry {
     updatedBy?: string;
     /** Status of compliance recorded by the student. */
     studentStatus?: string;
+    /** Page number recorded by the student for compliance tracking. */
+    studentPage?: string;
     /** ISO timestamp for the latest student update. */
     studentUpdatedAt?: string;
     /** Firebase uid of the student who last updated page/status fields. */

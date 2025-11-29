@@ -18,13 +18,13 @@ import {
     createTopicProposalSet, listenTopicProposalSetsByGroup, markProposalAsThesis,
     submitTopicProposalSet, updateTopicProposalDraftEntries,
 } from '../../utils/firebase/firestore/topicProposals';
-import { getGroupsByLeader, getGroupsByMember, updateGroup } from '../../utils/firebase/firestore/groups';
+import { getGroupsByLeader, getGroupsByMember, updateGroupById } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
 import {
     areAllProposalsRejected, canEditProposalSet, getProposalSetMeta, pickActiveProposalSet
 } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
-import { getThesisById } from '../../utils/firebase/firestore/thesis';
+import { findThesisById } from '../../utils/firebase/firestore/thesis';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -111,11 +111,11 @@ async function ensureGroupThesisReference(group: ThesisGroup): Promise<ThesisGro
     }
 
     try {
-        const thesis = await getThesisById(group.thesis.id);
+        const thesis = await findThesisById(group.thesis.id);
         if (thesis) {
             return group;
         }
-        await updateGroup(group.id, { thesis: undefined });
+        await updateGroupById(group.id, { thesis: undefined });
         return { ...group, thesis: undefined };
     } catch (error) {
         console.error('Failed to verify thesis reference for group:', error);
@@ -281,7 +281,7 @@ export default function StudentTopicProposalsPage() {
         [proposalSets, activeSet?.id]
     );
 
-    const groupThesisId = group?.thesisId ?? undefined;
+    const groupThesisId = group?.thesis?.id ?? undefined;
     const activeThesisEntryId = React.useMemo(() => {
         if (!groupThesisId || !activeSet) return undefined;
         return activeSet.entries.some((entry) => entry.id === groupThesisId) ? groupThesisId : undefined;
@@ -659,18 +659,25 @@ export default function StudentTopicProposalsPage() {
                                 );
                             }
 
-                            const footer = entry.moderatorDecision || entry.headDecision ? (
+                            // Get decision info from the proposal set audits
+                            const entryAudits = activeSet?.audits?.filter(
+                                audit => audit.proposalId === entry.id
+                            ) || [];
+                            const moderatorAudit = entryAudits.find(a => a.stage === 'moderator');
+                            const headAudit = entryAudits.find(a => a.stage === 'head');
+
+                            const footer = moderatorAudit || headAudit ? (
                                 <Stack spacing={1}>
-                                    {entry.moderatorDecision && (
+                                    {moderatorAudit && (
                                         <Typography variant="caption" color="text.secondary">
-                                            Moderator: {entry.moderatorDecision.decision}
-                                            {entry.moderatorDecision.notes ? ` – ${entry.moderatorDecision.notes}` : ''}
+                                            Moderator: {moderatorAudit.status}
+                                            {moderatorAudit.notes ? ` – ${moderatorAudit.notes}` : ''}
                                         </Typography>
                                     )}
-                                    {entry.headDecision && (
+                                    {headAudit && (
                                         <Typography variant="caption" color="text.secondary">
-                                            Head: {entry.headDecision.decision}
-                                            {entry.headDecision.notes ? ` – ${entry.headDecision.notes}` : ''}
+                                            Head: {headAudit.status}
+                                            {headAudit.notes ? ` – ${headAudit.notes}` : ''}
                                         </Typography>
                                     )}
                                 </Stack>

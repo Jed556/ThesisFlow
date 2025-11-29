@@ -32,7 +32,7 @@ import {
     getTerminalRequirementConfigsByDepartment,
     getTerminalRequirementDepartments,
     setTerminalRequirementConfig,
-} from '../../utils/firebase/firestore/terminalRequirementConfigs';
+} from '../../utils/firebase/firestore/terminalRequirements';
 import {
     uploadTerminalRequirementTemplate,
     deleteTerminalRequirementTemplate,

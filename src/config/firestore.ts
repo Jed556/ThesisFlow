@@ -69,6 +69,9 @@ export const CHATS_SUBCOLLECTION = 'chats';
 /** Audits subcollection under group */
 export const AUDITS_SUBCOLLECTION = 'audits';
 
+/** Panel comments subcollection under group */
+export const PANEL_COMMENTS_SUBCOLLECTION = 'panelComments';
+
 /** Terminal requirements subcollection under stage */
 export const TERMINAL_SUBCOLLECTION = 'terminal';
 
@@ -363,6 +366,46 @@ export function buildAuditDocPath(
 }
 
 // ============================================================================
+// Panel Comments Path Builders
+// ============================================================================
+
+/**
+ * Build path to panel comments collection under a group
+ */
+export function buildPanelCommentsCollectionPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildGroupDocPath(year, department, course, groupId)}/${PANEL_COMMENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific panel comment document (group-level release state)
+ */
+export function buildPanelCommentDocPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildPanelCommentsCollectionPath(year, department, course, groupId)}/release`;
+}
+
+/**
+ * Build path to panel comment entries collection under a group
+ */
+export function buildPanelCommentEntriesCollectionPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildPanelCommentsCollectionPath(year, department, course, groupId)}/entries`;
+}
+
+/**
+ * Build path to a specific panel comment entry document
+ */
+export function buildPanelCommentEntryDocPath(
+    year: string, department: string, course: string, groupId: string, entryId: string
+): string {
+    return `${buildPanelCommentEntriesCollectionPath(year, department, course, groupId)}/${entryId}`;
+}
+
+// ============================================================================
 // User Path Builders
 // ============================================================================
 
@@ -559,43 +602,3 @@ export type ThesisStageSlug = typeof THESIS_STAGE_SLUGS[keyof typeof THESIS_STAG
 
 export const FIRESTORE_IN_QUERY_LIMIT = 10;
 export const FIRESTORE_BATCH_WRITE_LIMIT = 400;
-
-// ============================================================================
-// Legacy Compatibility Constants (Deprecated - use hierarchical paths)
-// ============================================================================
-
-/** @deprecated Use hierarchical path with GROUPS_SUBCOLLECTION */
-export const GROUPS_COLLECTION = 'groups';
-
-/** @deprecated Use hierarchical path with THESIS_SUBCOLLECTION */
-export const THESES_COLLECTION = 'theses';
-
-/** @deprecated Use hierarchical path */
-export const PANEL_COMMENTS_COLLECTION = 'panelComments';
-
-/** @deprecated Use buildTerminalRequirementsPath() */
-export const TERMINAL_REQUIREMENT_CONFIGS_COLLECTION = 'configuration/terminalRequirements';
-
-/** @deprecated Use hierarchical path with TERMINAL_SUBCOLLECTION */
-export const TERMINAL_REQUIREMENT_SUBMISSIONS_COLLECTION = 'terminalRequirementSubmissions';
-
-/** @deprecated Use hierarchical path with PROPOSALS_SUBCOLLECTION */
-export const TOPIC_PROPOSALS_COLLECTION = 'topicProposals';
-
-/** @deprecated Use global users collection */
-export const USERS_COLLECTION = 'users';
-
-/** @deprecated Use file subcollections */
-export const FILES_COLLECTION = 'files';
-
-/** @deprecated Use calendars */
-export const CALENDARS_COLLECTION = 'calendars';
-
-/** @deprecated Use events */
-export const EVENTS_COLLECTION = 'events';
-
-/** @deprecated Use hierarchical path with EXPERT_REQUESTS_SUBCOLLECTION */
-export const MENTOR_REQUESTS_COLLECTION = 'mentorRequests';
-
-/** @deprecated Use hierarchical path with CHAPTERS_SUBCOLLECTION */
-export const CHAPTERS_COLLECTION = 'chapters';

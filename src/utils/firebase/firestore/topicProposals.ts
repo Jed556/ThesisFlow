@@ -31,11 +31,12 @@ import type {
     TopicProposalSet,
     TopicProposalReviewEvent,
 } from '../../../types/proposal';
-import type { ThesisStatus } from '../../../types/thesis';
 import {
     buildProposalsCollectionPath,
     buildProposalDocPath,
     PROPOSALS_SUBCOLLECTION,
+    GROUPS_SUBCOLLECTION,
+    extractPathParams,
 } from '../../../config/firestore';
 
 // ============================================================================
@@ -99,6 +100,9 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
         description: typeof entry.description === 'string' ? entry.description : '',
         agenda: entry.agenda as TopicProposalEntry['agenda'],
         ESG: entry.ESG as TopicProposalEntry['ESG'],
+        problemStatement: typeof entry.problemStatement === 'string' ? entry.problemStatement : undefined,
+        expectedOutcome: typeof entry.expectedOutcome === 'string' ? entry.expectedOutcome : undefined,
+        keywords: Array.isArray(entry.keywords) ? entry.keywords as string[] : undefined,
         proposedBy: typeof entry.proposedBy === 'string' ? entry.proposedBy : '',
         createdAt: (entry.createdAt as Timestamp)?.toDate?.() || new Date(),
         updatedAt: (entry.updatedAt as Timestamp)?.toDate?.() || new Date(),
@@ -115,6 +119,10 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
         reviewedAt: (audit.reviewedAt as Timestamp)?.toDate?.() || new Date(),
     }));
 
+    // Compute awaiting flags
+    const awaitingModerator = entries.some((e) => e.status === 'submitted');
+    const awaitingHead = entries.some((e) => e.status === 'head_review');
+
     return {
         id: docSnap.id,
         createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
@@ -125,6 +133,9 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
         submittedAt: data.submittedAt?.toDate?.(),
         usedAsThesisAt: typeof data.usedAsThesisAt === 'string' ? data.usedAsThesisAt : undefined,
         audits,
+        set: typeof data.set === 'number' ? data.set : undefined,
+        awaitingHead,
+        awaitingModerator,
     };
 }
 
@@ -327,10 +338,7 @@ export async function submitProposalSet(
     const now = new Date();
     const updatedEntries = proposal.entries.map((entry) => ({
         ...entry,
-        status: {
-            moderator: 'pending' as ThesisStatus,
-            head: 'none' as ThesisStatus,
-        },
+        status: 'submitted' as TopicProposalEntry['status'],
         updatedAt: now,
     }));
 
@@ -347,9 +355,9 @@ export async function submitProposalSet(
 }
 
 /**
- * Record a moderator decision on a proposal entry
+ * Record a moderator decision on a proposal entry (context-required version)
  */
-export async function recordModeratorDecision(
+async function recordModeratorDecisionWithContext(
     ctx: ProposalContext,
     payload: ProposalDecisionPayload
 ): Promise<void> {
@@ -363,12 +371,14 @@ export async function recordModeratorDecision(
     const now = new Date();
 
     const updatedEntries = [...proposal.entries];
+    // Update status to string-based workflow state
+    const newStatus: TopicProposalEntry['status'] = payload.decision === 'approved'
+        ? 'head_review'
+        : 'moderator_rejected';
+
     updatedEntries[entryIndex] = {
         ...entry,
-        status: {
-            moderator: payload.decision as ThesisStatus,
-            head: payload.decision === 'approved' ? 'pending' as ThesisStatus : 'none' as ThesisStatus,
-        },
+        status: newStatus,
         updatedAt: now,
     };
 
@@ -392,9 +402,9 @@ export async function recordModeratorDecision(
 }
 
 /**
- * Record a head decision on a proposal entry
+ * Record a head decision on a proposal entry (context-required version)
  */
-export async function recordHeadDecision(
+async function recordHeadDecisionWithContext(
     ctx: ProposalContext,
     payload: ProposalDecisionPayload
 ): Promise<void> {
@@ -408,12 +418,14 @@ export async function recordHeadDecision(
     const now = new Date();
 
     const updatedEntries = [...proposal.entries];
+    // Update status to string-based workflow state
+    const newStatus: TopicProposalEntry['status'] = payload.decision === 'approved'
+        ? 'head_approved'
+        : 'head_rejected';
+
     updatedEntries[entryIndex] = {
         ...entry,
-        status: {
-            moderator: entry.status?.moderator || 'approved' as ThesisStatus,
-            head: payload.decision as ThesisStatus,
-        },
+        status: newStatus,
         updatedAt: now,
     };
 
@@ -448,7 +460,7 @@ export async function markProposalAsThesis(
 
     const entry = proposal.entries.find((e) => e.id === payload.entryId);
     if (!entry) throw new Error('Proposal entry not found.');
-    if (entry.status?.head !== 'approved') {
+    if (entry.status !== 'head_approved') {
         throw new Error('Only head-approved proposals can be used as thesis topic.');
     }
 
@@ -554,12 +566,11 @@ export function listenAllProposals(
 export function listenProposalsAwaitingModerator(
     options: TopicProposalListenerOptions
 ): () => void {
-    // This requires a custom field or query approach
-    // For now, we'll listen to all and filter client-side
+    // Filter for entries with 'submitted' status (awaiting moderator)
     return listenAllProposals(undefined, {
         onData: (proposals) => {
             const awaiting = proposals.filter((p) =>
-                p.entries.some((e) => e.status?.moderator === 'pending')
+                p.entries.some((e) => e.status === 'submitted')
             );
             options.onData(awaiting);
         },
@@ -576,9 +587,7 @@ export function listenProposalsAwaitingHead(
     return listenAllProposals(undefined, {
         onData: (proposals) => {
             const awaiting = proposals.filter((p) =>
-                p.entries.some((e) =>
-                    e.status?.moderator === 'approved' && e.status?.head === 'pending'
-                )
+                p.entries.some((e) => e.status === 'head_review')
             );
             options.onData(awaiting);
         },
@@ -602,4 +611,259 @@ export async function createTopicProposalSet(
     data: CreateTopicProposalSetPayload
 ): Promise<string> {
     return createProposalSet(ctx, data);
+}
+
+/**
+ * Listen to topic proposal sets for a specific group by group ID.
+ * Uses collectionGroup query to find proposals regardless of path.
+ *
+ * @param groupId The group's document ID
+ * @param options Callbacks for data and errors
+ * @returns Unsubscribe function
+ */
+export function listenTopicProposalSetsByGroup(
+    groupId: string,
+    options: TopicProposalListenerOptions
+): () => void {
+    if (!groupId) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+
+    const proposalsQuery = collectionGroup(firebaseFirestore, PROPOSALS_SUBCOLLECTION);
+
+    return onSnapshot(
+        proposalsQuery,
+        (snapshot) => {
+            const proposals = snapshot.docs
+                .filter((docSnap) => {
+                    // Check if the parent path contains the groupId
+                    const pathParts = docSnap.ref.path.split('/');
+                    const groupsIndex = pathParts.indexOf(GROUPS_SUBCOLLECTION);
+                    return groupsIndex >= 0 && pathParts[groupsIndex + 1] === groupId;
+                })
+                .map((docSnap) => docToProposalSet(docSnap))
+                .filter((p): p is TopicProposalSetRecord => p !== null)
+                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            options.onData(proposals);
+        },
+        (error) => {
+            if (options.onError) options.onError(error);
+            else console.error('Topic proposal by group listener error:', error);
+        }
+    );
+}
+
+/**
+ * Alias for submitProposalSet
+ */
+export async function submitTopicProposalSet(
+    ctx: ProposalContext,
+    proposalId: string,
+    payload: SubmitTopicProposalPayload
+): Promise<void> {
+    return submitProposalSet(ctx, proposalId, payload);
+}
+
+/**
+ * Alias for updateProposalEntries
+ */
+export async function updateTopicProposalDraftEntries(
+    ctx: ProposalContext,
+    proposalId: string,
+    entries: TopicProposalEntry[]
+): Promise<void> {
+    return updateProposalEntries(ctx, proposalId, entries);
+}
+
+/**
+ * Alias for markProposalAsThesis
+ */
+export async function markTopicProposalAsThesis(
+    ctx: ProposalContext,
+    payload: UseTopicPayload
+): Promise<void> {
+    return markProposalAsThesis(ctx, payload);
+}
+
+// ============================================================================
+// Context-Free Decision Functions
+// ============================================================================
+
+/**
+ * Payload for context-free decision recording (used by pages)
+ */
+export interface ContextFreeDecisionPayload {
+    /** The proposal set document ID */
+    setId: string;
+    /** The entry ID within the proposal set */
+    proposalId: string;
+    /** The reviewer's user ID */
+    reviewerUid: string;
+    /** The decision */
+    decision: 'approved' | 'rejected';
+    /** Optional notes */
+    notes?: string;
+}
+
+/**
+ * Find a proposal set by ID using collectionGroup and extract context from path.
+ * @param setId The proposal set document ID
+ * @returns The document snapshot and extracted context, or null if not found
+ */
+async function findProposalSetWithContext(
+    setId: string
+): Promise<{ docSnap: DocumentSnapshot<DocumentData>; ctx: ProposalContext } | null> {
+    const proposalsQuery = collectionGroup(firebaseFirestore, PROPOSALS_SUBCOLLECTION);
+    const snapshot = await getDocs(proposalsQuery);
+
+    const docSnap = snapshot.docs.find((d) => d.id === setId);
+    if (!docSnap) return null;
+
+    const pathParams = extractPathParams(docSnap.ref.path);
+    if (!pathParams.year || !pathParams.department || !pathParams.course || !pathParams.groupId) {
+        throw new Error('Could not extract full context from proposal path');
+    }
+
+    return {
+        docSnap,
+        ctx: {
+            year: pathParams.year,
+            department: pathParams.department,
+            course: pathParams.course,
+            groupId: pathParams.groupId,
+        },
+    };
+}
+
+/**
+ * Record a moderator decision on a proposal entry (context-free version).
+ * Finds the proposal by setId using collectionGroup and extracts context from path.
+ *
+ * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes
+ */
+export async function recordModeratorDecision(payload: ContextFreeDecisionPayload): Promise<void> {
+    const result = await findProposalSetWithContext(payload.setId);
+    if (!result) throw new Error('Proposal set not found.');
+
+    const { ctx } = result;
+    return recordModeratorDecisionWithContext(ctx, {
+        proposalId: payload.setId,
+        entryId: payload.proposalId,
+        reviewerUid: payload.reviewerUid,
+        decision: payload.decision,
+        notes: payload.notes,
+    });
+}
+
+/**
+ * Record a head decision on a proposal entry (context-free version).
+ * Finds the proposal by setId using collectionGroup and extracts context from path.
+ *
+ * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes
+ */
+export async function recordHeadDecision(payload: ContextFreeDecisionPayload): Promise<void> {
+    const result = await findProposalSetWithContext(payload.setId);
+    if (!result) throw new Error('Proposal set not found.');
+
+    const { ctx } = result;
+    return recordHeadDecisionWithContext(ctx, {
+        proposalId: payload.setId,
+        entryId: payload.proposalId,
+        reviewerUid: payload.reviewerUid,
+        decision: payload.decision,
+        notes: payload.notes,
+    });
+}
+
+// ============================================================================
+// More Context-Free Functions
+// ============================================================================
+
+/**
+ * Create a new topic proposal set (context-free version).
+ * Requires groupId to determine context.
+ *
+ * @param groupId Group document ID
+ * @param payload Creation payload
+ * @returns The new proposal set ID
+ */
+export async function createProposalSetByGroup(
+    groupId: string,
+    payload: CreateTopicProposalSetPayload
+): Promise<string> {
+    const ctx = await findContextByGroupId(groupId);
+    if (!ctx) throw new Error('Cannot determine group context');
+
+    return createProposalSet(ctx, payload);
+}
+
+/**
+ * Update proposal draft entries (context-free version).
+ * Finds context from the proposal set ID.
+ *
+ * @param setId Proposal set document ID
+ * @param entries Updated entries array
+ */
+export async function updateDraftEntriesBySetId(
+    setId: string,
+    entries: TopicProposalEntry[]
+): Promise<void> {
+    const result = await findProposalSetWithContext(setId);
+    if (!result) throw new Error('Proposal set not found.');
+
+    return updateProposalEntries(result.ctx, setId, entries);
+}
+
+/**
+ * Submit a topic proposal set (context-free version).
+ * Finds context from the proposal set ID.
+ *
+ * @param setId Proposal set document ID
+ * @param userUid Submitting user's ID
+ */
+export async function submitProposalSetBySetId(
+    setId: string,
+    userUid: string
+): Promise<void> {
+    const result = await findProposalSetWithContext(setId);
+    if (!result) throw new Error('Proposal set not found.');
+
+    return submitProposalSet(result.ctx, setId, { submittedBy: userUid });
+}
+
+/**
+ * Mark a proposal as used for thesis (context-free version).
+ * Finds context from the proposal set ID.
+ *
+ * @param payload Use topic payload with setId
+ */
+export async function markProposalAsThesisBySetId(
+    payload: UseTopicPayload
+): Promise<void> {
+    const result = await findProposalSetWithContext(payload.proposalId);
+    if (!result) throw new Error('Proposal set not found.');
+
+    return markProposalAsThesis(result.ctx, payload);
+}
+
+/**
+ * Helper to find context by group ID using collectionGroup.
+ */
+async function findContextByGroupId(groupId: string): Promise<ProposalContext | null> {
+    const groupsQuery = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
+    const snapshot = await getDocs(groupsQuery);
+
+    const groupDoc = snapshot.docs.find((d) => d.id === groupId);
+    if (!groupDoc) return null;
+
+    const pathParams = extractPathParams(groupDoc.ref.path);
+    if (!pathParams.year || !pathParams.department || !pathParams.course) return null;
+
+    return {
+        year: pathParams.year,
+        department: pathParams.department,
+        course: pathParams.course,
+        groupId,
+    };
 }

@@ -10,8 +10,9 @@ import { DEFAULT_CHAPTER_STAGE, normalizeChapterOrder } from '../../chapterUtils
 import { templatesToThesisChapters } from '../../thesisChapterTemplates';
 import { getGroupsInCourse } from './groups';
 import {
-    THESES_COLLECTION, FIRESTORE_IN_QUERY_LIMIT, FIRESTORE_BATCH_WRITE_LIMIT,
+    FIRESTORE_IN_QUERY_LIMIT, FIRESTORE_BATCH_WRITE_LIMIT,
     CONFIGURATION_ROOT, COURSES_SUBCOLLECTION, CHAPTERS_SUBCOLLECTION,
+    THESIS_SUBCOLLECTION,
     buildConfigDepartmentPath, buildConfigCoursePath, buildChapterConfigsPath,
     DEFAULT_YEAR,
 } from '../../../config/firestore';
@@ -105,6 +106,12 @@ function chunkArray<T>(items: T[], size: number): T[][] {
     return chunks;
 }
 
+/**
+ * Fetch thesis document snapshots for specified group IDs using hierarchical structure.
+ * Uses collectionGroup query on THESIS_SUBCOLLECTION to find theses matching groupIds.
+ * @param groupIds - Array of group IDs to fetch theses for
+ * @returns Array of Firestore document snapshots for matching theses
+ */
 async function fetchThesisSnapshotsForGroups(
     groupIds: string[]
 ): Promise<QueryDocumentSnapshot<DocumentData>[]> {
@@ -120,7 +127,7 @@ async function fetchThesisSnapshotsForGroups(
         return [];
     }
 
-    const thesisCollection = collection(firebaseFirestore, THESES_COLLECTION);
+    const thesisCollectionGroup = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
     const thesisSnapshots: QueryDocumentSnapshot<DocumentData>[] = [];
     const chunks = chunkArray(uniqueIds, FIRESTORE_IN_QUERY_LIMIT);
 
@@ -128,7 +135,7 @@ async function fetchThesisSnapshotsForGroups(
         if (chunk.length === 0) {
             continue;
         }
-        const thesisQuery = query(thesisCollection, where('groupId', 'in', chunk));
+        const thesisQuery = query(thesisCollectionGroup, where('groupId', 'in', chunk));
         const snapshot = await getDocs(thesisQuery);
         thesisSnapshots.push(...snapshot.docs);
     }

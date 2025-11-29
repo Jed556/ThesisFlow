@@ -7,7 +7,7 @@ import type { NavigationItem } from '../../../../types/navigation';
 import { AnimatedPage } from '../../../../components/Animate';
 import GroupView from '../../../../components/Group/GroupView';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
-import { findGroupById, updateGroup } from '../../../../utils/firebase/firestore/groups';
+import { findGroupById, updateGroupById } from '../../../../utils/firebase/firestore/groups';
 import { getUsersByFilter, getUsersByIds } from '../../../../utils/firebase/firestore/user';
 import type { ThesisGroup } from '../../../../types/group';
 import type { UserProfile } from '../../../../types/profile';
@@ -176,8 +176,8 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
                 ...(currentMembers ?? { leader: '', members: [] }),
                 panels: selectedPanelUids,
             };
-            await updateGroup(groupId, {
-                members: nextMembers,
+            await updateGroupById(groupId, {
+                panels: selectedPanelUids,
             });
             setInitialPanelUids(selectedPanelUids);
             setCurrentMembers(nextMembers);

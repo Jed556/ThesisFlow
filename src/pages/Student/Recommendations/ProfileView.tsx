@@ -315,7 +315,7 @@ export default function MentorProfileViewPage() {
         }
         for (const group of requestableGroups) {
             const requests = groupRequests.get(group.id) ?? [];
-            if (requests.some((request) => request.status === 'pending' && request.mentorUid === profile.uid)) {
+            if (requests.some((request) => request.status === 'pending' && request.expertUid === profile.uid)) {
                 return true;
             }
         }

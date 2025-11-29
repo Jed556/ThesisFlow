@@ -5,6 +5,7 @@ import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisData } from '../../types/thesis';
+import type { ThesisGroup } from '../../types/group';
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentEntry,
     type PanelCommentReleaseMap, type PanelCommentStage,
@@ -15,7 +16,8 @@ import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import {
-    listenPanelCommentEntries, listenPanelCommentRelease, updatePanelCommentStudentFields
+    listenPanelCommentEntries, listenPanelCommentRelease,
+    updatePanelCommentStudentFields, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
@@ -23,6 +25,7 @@ import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
     PANEL_COMMENT_STAGE_METADATA, canStudentAccessPanelStage, formatPanelistDisplayName, getPanelCommentStageLabel
 } from '../../utils/panelCommentUtils';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -74,6 +77,7 @@ export default function StudentPanelCommentsPage() {
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [thesisLoading, setThesisLoading] = React.useState(true);
     const [thesisError, setThesisError] = React.useState<string | null>(null);
+    const [group, setGroup] = React.useState<ThesisGroup | null>(null);
     const [activeStage, setActiveStage] = React.useState<PanelCommentStage>('proposal');
     const [entries, setEntries] = React.useState<PanelCommentEntry[]>([]);
     const [entriesLoading, setEntriesLoading] = React.useState(true);
@@ -84,6 +88,17 @@ export default function StudentPanelCommentsPage() {
     const [panelistsLoading, setPanelistsLoading] = React.useState(false);
     const [panelistsError, setPanelistsError] = React.useState<string | null>(null);
     const [activePanelUid, setActivePanelUid] = React.useState<string | null>(null);
+
+    /** Build panel comment context from group */
+    const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
+        if (!group) return null;
+        return {
+            year: DEFAULT_YEAR,
+            department: group.department ?? '',
+            course: group.course ?? '',
+            groupId: group.id,
+        };
+    }, [group]);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -115,26 +130,26 @@ export default function StudentPanelCommentsPage() {
     const groupId = thesis?.groupId ?? null;
 
     React.useEffect(() => {
-        if (!groupId) {
+        if (!panelCommentCtx) {
             setReleaseMap(createDefaultPanelCommentReleaseMap());
             return;
         }
-        const unsubscribe = listenPanelCommentRelease(groupId, {
+        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
             onData: (next) => setReleaseMap(next),
             onError: (error) => console.error('Panel comment release listener error:', error),
         });
         return () => unsubscribe();
-    }, [groupId]);
+    }, [panelCommentCtx]);
 
     React.useEffect(() => {
-        if (!groupId || !activePanelUid) {
+        if (!panelCommentCtx || !activePanelUid) {
             setEntries([]);
             setEntriesLoading(false);
             return;
         }
         setEntriesLoading(true);
         setEntriesError(null);
-        const unsubscribe = listenPanelCommentEntries(groupId, activeStage, {
+        const unsubscribe = listenPanelCommentEntries(panelCommentCtx, activeStage, {
             onData: (next) => {
                 setEntries(next);
                 setEntriesLoading(false);
@@ -147,13 +162,14 @@ export default function StudentPanelCommentsPage() {
             },
         }, activePanelUid);
         return () => unsubscribe();
-    }, [groupId, activeStage, activePanelUid]);
+    }, [panelCommentCtx, activeStage, activePanelUid]);
 
     React.useEffect(() => {
         let isMounted = true;
         async function loadPanelists() {
             if (!groupId) {
                 if (isMounted) {
+                    setGroup(null);
                     setPanelists([]);
                     setActivePanelUid(null);
                     setPanelistsLoading(false);
@@ -166,12 +182,13 @@ export default function StudentPanelCommentsPage() {
             setPanelistsError(null);
 
             try {
-                const group = await findGroupById(groupId);
-                const panelUids = group?.members?.panels ?? [];
+                const fetchedGroup = await findGroupById(groupId);
+                if (!isMounted) return;
 
-                if (!isMounted) {
-                    return;
-                }
+                // Store group for context
+                setGroup(fetchedGroup);
+
+                const panelUids = fetchedGroup?.members?.panels ?? [];
 
                 if (panelUids.length === 0) {
                     setPanelists([]);
@@ -258,15 +275,15 @@ export default function StudentPanelCommentsPage() {
         field: 'studentPage' | 'studentStatus',
         value: string,
     ) => {
-        if (!groupId || !userUid) {
+        if (!panelCommentCtx || !userUid) {
             showNotification('Sign in to update your notes.', 'error');
             return;
         }
         setStudentSavingIds((prev) => new Set(prev).add(entry.id));
         try {
-            await updatePanelCommentStudentFields(groupId, entry.id, {
+            await updatePanelCommentStudentFields(panelCommentCtx, entry.id, {
                 [field]: value,
-                updatedBy: userUid,
+                studentUpdatedBy: userUid,
             });
         } catch (error) {
             console.error('Failed to update student fields for panel comment:', error);
@@ -278,7 +295,7 @@ export default function StudentPanelCommentsPage() {
                 return next;
             });
         }
-    }, [groupId, userUid, showNotification]);
+    }, [panelCommentCtx, userUid, showNotification]);
 
     const renderTabs = () => (
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>

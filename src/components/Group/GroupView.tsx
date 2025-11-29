@@ -10,7 +10,7 @@ import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
 import { getUsersByIds } from '../../utils/firebase/firestore/user';
-import { getThesisById } from '../../utils/firebase/firestore/thesis';
+import { findThesisById } from '../../utils/firebase/firestore/thesis';
 import Avatar from '../Avatar';
 import { GROUP_STATUS_COLORS, formatGroupStatus } from './constants';
 
@@ -162,7 +162,7 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
             : Promise.resolve<UserProfile[]>([]),
         // Thesis is now embedded in group, but fetch fresh if id exists
         group.thesis?.id
-            ? getThesisById(group.thesis.id)
+            ? findThesisById(group.thesis.id)
                 .then((result) => (result ? { ...result, id: result.id ?? group.thesis?.id } : group.thesis ?? null))
                 .catch((error) => {
                     console.error(`Failed to load thesis ${group.thesis?.id} for group ${group.id}:`, error);

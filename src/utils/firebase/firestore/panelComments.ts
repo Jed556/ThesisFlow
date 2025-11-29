@@ -1,26 +1,34 @@
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    query,
-    serverTimestamp,
-    setDoc,
-    where,
-    type DocumentData,
-    type QueryConstraint,
-    type QueryDocumentSnapshot,
+    addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, where,
+    type DocumentData, type QueryConstraint, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
-import { PANEL_COMMENTS_COLLECTION } from './constants';
+import {
+    buildPanelCommentEntriesCollectionPath, buildPanelCommentEntryDocPath, buildPanelCommentDocPath
+} from '../../../config/firestore';
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentEntry, type PanelCommentEntryInput,
     type PanelCommentEntryUpdate, type PanelCommentReleaseMap, type PanelCommentStage, type PanelCommentStudentUpdate,
 } from '../../../types/panelComment';
 
-const ENTRIES_SUBCOLLECTION = 'entries';
+// ============================================================================
+// Context Interface for Hierarchical Paths
+// ============================================================================
+
+/**
+ * Context required to locate panel comments in the hierarchical structure
+ */
+export interface PanelCommentContext {
+    year: string;
+    department: string;
+    course: string;
+    groupId: string;
+}
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
 
 interface PanelCommentSnapshot {
     groupId: string;
@@ -108,12 +116,28 @@ function mapRelease(data: PanelCommentReleaseSnapshot | undefined): PanelComment
     };
 }
 
-function getEntriesCollection(groupId: string) {
-    return collection(firebaseFirestore, PANEL_COMMENTS_COLLECTION, groupId, ENTRIES_SUBCOLLECTION);
+/**
+ * Get collection reference for panel comment entries using hierarchical path
+ */
+function getEntriesCollection(ctx: PanelCommentContext) {
+    const path = buildPanelCommentEntriesCollectionPath(ctx.year, ctx.department, ctx.course, ctx.groupId);
+    return collection(firebaseFirestore, path);
 }
 
-function getEntryDoc(groupId: string, entryId: string) {
-    return doc(firebaseFirestore, PANEL_COMMENTS_COLLECTION, groupId, ENTRIES_SUBCOLLECTION, entryId);
+/**
+ * Get document reference for a specific panel comment entry using hierarchical path
+ */
+function getEntryDoc(ctx: PanelCommentContext, entryId: string) {
+    const path = buildPanelCommentEntryDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, entryId);
+    return doc(firebaseFirestore, path);
+}
+
+/**
+ * Get document reference for panel comment release state using hierarchical path
+ */
+function getReleaseDoc(ctx: PanelCommentContext) {
+    const path = buildPanelCommentDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId);
+    return doc(firebaseFirestore, path);
 }
 
 export interface PanelCommentListenerOptions {
@@ -123,14 +147,19 @@ export interface PanelCommentListenerOptions {
 
 /**
  * Listen to panel comment entries for a specific group and stage.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param stage - The panel comment stage to filter by
+ * @param options - Callback options for data and errors
+ * @param panelUid - Optional panel member UID to filter by
+ * @returns Unsubscribe function
  */
 export function listenPanelCommentEntries(
-    groupId: string | null | undefined,
+    ctx: PanelCommentContext | null | undefined,
     stage: PanelCommentStage,
     options: PanelCommentListenerOptions,
     panelUid?: string,
 ): () => void {
-    if (!groupId) {
+    if (!ctx?.groupId) {
         options.onData([]);
         return () => { /* no-op */ };
     }
@@ -140,7 +169,7 @@ export function listenPanelCommentEntries(
         filters.push(where('panelUid', '==', panelUid));
     }
 
-    const entriesQuery = query(getEntriesCollection(groupId), ...filters);
+    const entriesQuery = query(getEntriesCollection(ctx), ...filters);
 
     return onSnapshot(entriesQuery, (snapshot) => {
         const entries = snapshot.docs
@@ -163,17 +192,20 @@ export interface PanelCommentReleaseListenerOptions {
 
 /**
  * Listen to release toggles for a group so tabs update in real time.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param options - Callback options for data and errors
+ * @returns Unsubscribe function
  */
 export function listenPanelCommentRelease(
-    groupId: string | null | undefined,
+    ctx: PanelCommentContext | null | undefined,
     options: PanelCommentReleaseListenerOptions,
 ): () => void {
-    if (!groupId) {
+    if (!ctx?.groupId) {
         options.onData(createDefaultPanelCommentReleaseMap());
         return () => { /* no-op */ };
     }
 
-    const docRef = doc(firebaseFirestore, PANEL_COMMENTS_COLLECTION, groupId);
+    const docRef = getReleaseDoc(ctx);
     return onSnapshot(docRef, (snapshot) => {
         const releaseMap = mapRelease(snapshot.data() as PanelCommentReleaseSnapshot | undefined);
         options.onData(releaseMap);
@@ -188,13 +220,19 @@ export function listenPanelCommentRelease(
 
 /**
  * Create a new panel comment entry for the provided stage.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param payload - Panel comment entry data
+ * @returns The ID of the created entry
  */
-export async function addPanelCommentEntry(payload: PanelCommentEntryInput): Promise<string> {
-    if (!payload.groupId) {
+export async function addPanelCommentEntry(
+    ctx: PanelCommentContext,
+    payload: Omit<PanelCommentEntryInput, 'groupId'>,
+): Promise<string> {
+    if (!ctx.groupId) {
         throw new Error('Group ID is required to add panel comments.');
     }
-    const docRef = await addDoc(getEntriesCollection(payload.groupId), {
-        groupId: payload.groupId,
+    const docRef = await addDoc(getEntriesCollection(ctx), {
+        groupId: ctx.groupId,
         stage: payload.stage,
         comment: payload.comment,
         reference: payload.reference ?? null,
@@ -207,13 +245,16 @@ export async function addPanelCommentEntry(payload: PanelCommentEntryInput): Pro
 
 /**
  * Update panel-owned fields (comment/reference).
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param entryId - The entry ID to update
+ * @param update - The fields to update
  */
 export async function updatePanelCommentEntry(
-    groupId: string,
+    ctx: PanelCommentContext,
     entryId: string,
     update: PanelCommentEntryUpdate,
 ): Promise<void> {
-    if (!groupId || !entryId) {
+    if (!ctx.groupId || !entryId) {
         throw new Error('Group ID and entry ID are required to update panel comments.');
     }
 
@@ -230,34 +271,39 @@ export async function updatePanelCommentEntry(
         payload.reference = update.reference ?? null;
     }
 
-    await setDoc(getEntryDoc(groupId, entryId), payload, { merge: true });
+    await setDoc(getEntryDoc(ctx, entryId), payload, { merge: true });
 }
 
 /**
  * Remove an existing entry.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param entryId - The entry ID to delete
  */
-export async function deletePanelCommentEntry(groupId: string, entryId: string): Promise<void> {
-    if (!groupId || !entryId) {
+export async function deletePanelCommentEntry(ctx: PanelCommentContext, entryId: string): Promise<void> {
+    if (!ctx.groupId || !entryId) {
         throw new Error('Group ID and entry ID are required to delete panel comments.');
     }
-    await deleteDoc(getEntryDoc(groupId, entryId));
+    await deleteDoc(getEntryDoc(ctx, entryId));
 }
 
 /**
  * Update student-owned fields (page/status) for an entry.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param entryId - The entry ID to update
+ * @param update - The student fields to update
  */
 export async function updatePanelCommentStudentFields(
-    groupId: string,
+    ctx: PanelCommentContext,
     entryId: string,
     update: PanelCommentStudentUpdate,
 ): Promise<void> {
-    if (!groupId || !entryId) {
+    if (!ctx.groupId || !entryId) {
         throw new Error('Group ID and entry ID are required to update student fields.');
     }
 
     const payload: Record<string, unknown> = {
         studentUpdatedAt: serverTimestamp(),
-        studentUpdatedBy: update.updatedBy,
+        studentUpdatedBy: update.studentUpdatedBy,
     };
 
     if (update.studentPage !== undefined) {
@@ -268,24 +314,28 @@ export async function updatePanelCommentStudentFields(
         payload.studentStatus = update.studentStatus || null;
     }
 
-    await setDoc(getEntryDoc(groupId, entryId), payload, { merge: true });
+    await setDoc(getEntryDoc(ctx, entryId), payload, { merge: true });
 }
 
 /**
  * Toggle whether students can view a stage's comments.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param stage - The panel comment stage
+ * @param sent - Whether comments are released to students
+ * @param userUid - The user ID performing the action
  */
 export async function setPanelCommentReleaseState(
-    groupId: string,
+    ctx: PanelCommentContext,
     stage: PanelCommentStage,
     sent: boolean,
     userUid?: string | null,
 ): Promise<void> {
-    if (!groupId) {
+    if (!ctx.groupId) {
         throw new Error('Group ID is required to update release state.');
     }
-    const releaseDoc = doc(firebaseFirestore, PANEL_COMMENTS_COLLECTION, groupId);
-    await setDoc(releaseDoc, {
-        groupId,
+    const releaseDocRef = getReleaseDoc(ctx);
+    await setDoc(releaseDocRef, {
+        groupId: ctx.groupId,
         release: {
             [stage]: {
                 sent,

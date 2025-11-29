@@ -367,7 +367,9 @@ export default function ProfileView({
                                                                         Status: {thesis.overallStatus}
                                                                     </Typography>
                                                                     <Typography variant="body2" color="text.secondary">
-                                                                        Updated: {thesis.lastUpdated ?? 'TBD'}
+                                                                        Updated: {thesis.lastUpdated instanceof Date
+                                                                            ? thesis.lastUpdated.toLocaleDateString()
+                                                                            : thesis.lastUpdated ?? 'TBD'}
                                                                     </Typography>
                                                                 </Stack>
                                                             )}

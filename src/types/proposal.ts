@@ -11,6 +11,29 @@ export interface TopicProposalReviewerDecision {
 }
 
 /**
+ * Topic proposal entry status - workflow states
+ */
+export type TopicProposalEntryStatus =
+    | 'draft'
+    | 'submitted'
+    | 'moderator_rejected'
+    | 'head_review'
+    | 'head_approved'
+    | 'head_rejected';
+
+/**
+ * Array of all valid topic proposal entry statuses
+ */
+export const TOPIC_PROPOSAL_ENTRY_STATUSES: TopicProposalEntryStatus[] = [
+    'draft',
+    'submitted',
+    'moderator_rejected',
+    'head_review',
+    'head_approved',
+    'head_rejected',
+];
+
+/**
  * Represents a single topic proposal contributed by a student.
  */
 export interface TopicProposalEntry {
@@ -22,14 +45,18 @@ export interface TopicProposalEntry {
         subTheme: string;
     }
     ESG?: ESG;
+    /** Problem statement for the topic */
+    problemStatement?: string;
+    /** Expected outcome of the research */
+    expectedOutcome?: string;
+    /** Keywords for the topic */
+    keywords?: string[];
 
     proposedBy: string;
     createdAt: Date;
     updatedAt: Date;
-    status?: {
-        moderator: ThesisStatus;
-        head: ThesisStatus;
-    }
+    /** Entry status - single string workflow state */
+    status?: TopicProposalEntryStatus;
 }
 
 /**
@@ -57,4 +84,21 @@ export interface TopicProposalSet {
     submittedAt?: Date;
     usedAsThesisAt?: string;
     audits: TopicProposalReviewEvent[];
+    /** Set number for ordering multiple proposal sets */
+    set?: number;
+    /** Whether any entry is awaiting head review */
+    awaitingHead?: boolean;
+    /** Whether any entry is awaiting moderator review */
+    awaitingModerator?: boolean;
+    /** Group ID this proposal set belongs to (extracted from path) */
+    groupId?: string;
+    /** UID of user who marked this as used for thesis */
+    usedBy?: string;
+    /** Historical review events */
+    reviewHistory?: TopicProposalReviewEvent[];
 }
+
+/**
+ * TopicProposalSet with ID guaranteed
+ */
+export type TopicProposalSetRecord = TopicProposalSet & { id: string };

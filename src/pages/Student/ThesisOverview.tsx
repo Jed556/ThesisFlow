@@ -5,21 +5,25 @@ import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisData, ThesisStageName } from '../../types/thesis';
+import type { ThesisGroup } from '../../types/group';
 import type { ConversationParticipant } from '../../components/Conversation';
 import type { WorkspaceUploadPayload } from '../../types/workspace';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
-import { appendChapterSubmission } from '../../utils/firebase/firestore/chapterSubmissions';
+import {
+    listenThesesForParticipant, getThesisTeamMembers, type ThesisContext
+} from '../../utils/firebase/firestore/thesis';
+import { createSubmission, type SubmissionContext } from '../../utils/firebase/firestore/submissions';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
-import { getThesisTeamMembers } from '../../utils/thesisUtils';
 import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import type { PanelCommentReleaseMap } from '../../types/panelComment';
-import { listenPanelCommentRelease } from '../../utils/firebase/firestore/panelComments';
+import { listenPanelCommentRelease, type PanelCommentContext } from '../../utils/firebase/firestore/panelComments';
+import { findGroupById } from '../../utils/firebase/firestore/groups';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -47,6 +51,7 @@ export default function StudentThesisOverviewPage() {
     const userUid = session?.user?.uid ?? null;
 
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
+    const [group, setGroup] = React.useState<ThesisGroup | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
     const [participants, setParticipants] = React.useState<Record<string, ConversationParticipant>>();
@@ -54,6 +59,17 @@ export default function StudentThesisOverviewPage() {
         Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
     >({});
     const [panelRelease, setPanelRelease] = React.useState<PanelCommentReleaseMap | null>(null);
+
+    /** Build panel comment context from group */
+    const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
+        if (!group) return null;
+        return {
+            year: DEFAULT_YEAR,
+            department: group.department ?? '',
+            course: group.course ?? '',
+            groupId: group.id,
+        };
+    }, [group]);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -108,7 +124,17 @@ export default function StudentThesisOverviewPage() {
         let cancelled = false;
         void (async () => {
             try {
-                const members: TeamMember[] = await getThesisTeamMembers(thesis.id!);
+                // Need group context for getThesisTeamMembers - wait until group is loaded
+                if (!group) {
+                    return;
+                }
+                const thesisCtx: ThesisContext = {
+                    year: DEFAULT_YEAR,
+                    department: group.department ?? '',
+                    course: group.course ?? '',
+                    groupId: group.id,
+                };
+                const members: TeamMember[] = await getThesisTeamMembers(thesisCtx);
                 if (cancelled) {
                     return;
                 }
@@ -133,15 +159,42 @@ export default function StudentThesisOverviewPage() {
             cancelled = true;
             unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, [thesis?.id]);
+    }, [thesis?.id, group]);
 
+    // Fetch group for panel comment context
     React.useEffect(() => {
         if (!thesis?.groupId) {
+            setGroup(null);
+            return;
+        }
+
+        let cancelled = false;
+        void (async () => {
+            try {
+                const fetchedGroup = await findGroupById(thesis.groupId!);
+                if (!cancelled) {
+                    setGroup(fetchedGroup);
+                }
+            } catch (err) {
+                console.error('Failed to fetch group for panel context:', err);
+                if (!cancelled) {
+                    setGroup(null);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [thesis?.groupId]);
+
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
             setPanelRelease(null);
             return;
         }
 
-        const unsubscribe = listenPanelCommentRelease(thesis.groupId, {
+        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
             onData: (release) => setPanelRelease(release),
             onError: (listenerError) => {
                 console.error('Failed to listen for panel comment release states:', listenerError);
@@ -151,7 +204,7 @@ export default function StudentThesisOverviewPage() {
         return () => {
             unsubscribe();
         };
-    }, [thesis?.groupId]);
+    }, [panelCommentCtx]);
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
@@ -161,9 +214,14 @@ export default function StudentThesisOverviewPage() {
         }, {} as Record<ThesisStageName, boolean>);
     }, [terminalSubmissions]);
 
-    const handleUploadChapter = React.useCallback(async ({ thesisId, groupId, chapterId, chapterStage, file }: WorkspaceUploadPayload) => {
+    const handleUploadChapter = React.useCallback(async (
+        { thesisId, groupId, chapterId, chapterStage, file }: WorkspaceUploadPayload
+    ) => {
         if (!userUid) {
             throw new Error('You must be signed in to upload a chapter.');
+        }
+        if (!group) {
+            throw new Error('Group context is not available.');
         }
 
         const result = await uploadThesisFile({
@@ -182,13 +240,27 @@ export default function StudentThesisOverviewPage() {
             throw new Error('Upload failed to return a submission identifier.');
         }
 
-        await appendChapterSubmission({
+        // Build submission context for hierarchical storage
+        const submissionCtx: SubmissionContext = {
+            year: DEFAULT_YEAR,
+            department: group.department ?? '',
+            course: group.course ?? '',
+            groupId,
             thesisId,
-            chapterId,
-            submissionId,
-            submittedAt: result.fileAttachment.uploadDate,
+            stage: chapterStage,
+            chapterId: String(chapterId),
+        };
+
+        // Create submission record with file reference
+        await createSubmission(submissionCtx, {
+            status: 'under_review',
+            submittedAt: result.fileAttachment.uploadDate
+                ? new Date(result.fileAttachment.uploadDate)
+                : new Date(),
+            submittedBy: 'student',
+            files: [result.fileAttachment],
         });
-    }, [userUid]);
+    }, [userUid, group]);
 
     const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({
         chapters: {

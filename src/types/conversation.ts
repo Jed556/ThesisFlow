@@ -5,15 +5,41 @@ import type { FileAttachment } from './file';
 
 export type ChatMessageStatus = 'sent' | 'delivered' | 'read' | 'failed';
 
+/**
+ * Role of a participant in a conversation
+ */
+export type ChatParticipantRole = 'student' | 'adviser' | 'editor' | 'statistician' | 'panel' | 'admin';
+
+/**
+ * Metadata associated with a chat message
+ */
+export interface ChatMessageMetadata {
+    /** Whether the message is from the current user */
+    isFromMe?: boolean;
+    /** Additional context about the message */
+    context?: string;
+    /** Reference to related entity (e.g., thesis chapter) */
+    reference?: string;
+    /** Version number for edited messages or file versions */
+    version?: number;
+    /** Custom data attached to the message */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    custom?: Record<string, any>;
+}
+
 export interface ChatMessage {
     id: string;
     senderId: string;
+    /** Display name of the sender */
+    senderName?: string;
     content: string;
     timestamp: Date;
     attachments?: FileAttachment[];
     status?: ChatMessageStatus;
     isEdited?: boolean;
     replyTo?: string;
+    /** Additional message metadata */
+    metadata?: ChatMessageMetadata;
 }
 
 export interface ChatConversation {
