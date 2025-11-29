@@ -12,7 +12,7 @@ import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
 import { findUserById } from '../utils/firebase/firestore/user';
 
-import { resolveAdminApiBaseUrl } from '../utils/firebase/api';
+import { buildAdminApiHeaders, resolveAdminApiBaseUrl } from '../utils/firebase/api';
 import { encryptPassword } from '../utils/cryptoUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
@@ -183,7 +183,9 @@ function DevAccountFab({ onSignIn, showFab }: DevAccountFabProps) {
         setLoading(true);
         try {
             const apiBaseUrl = resolveAdminApiBaseUrl();
+            const headers = await buildAdminApiHeaders();
             const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET || '';
+
 
             if (!apiSecret) {
                 showNotification('API secret not configured', 'error');
@@ -197,10 +199,7 @@ function DevAccountFab({ onSignIn, showFab }: DevAccountFabProps) {
             // Create the developer account via serverless API
             const response = await fetch(`${apiBaseUrl}/user/create`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Secret': apiSecret,
-                },
+                headers,
                 body: JSON.stringify({
                     email: devEmail,
                     password: encryptedPassword,
@@ -323,7 +322,11 @@ export default function SignIn() {
             try {
                 // Use serverless API to check if admin users exist (avoids permission issues)
                 const apiBaseUrl = resolveAdminApiBaseUrl();
-                const response = await fetch(`${apiBaseUrl}/user/exists`);
+                const headers = await buildAdminApiHeaders();
+                const response = await fetch(`${apiBaseUrl}/user/exists`, {
+                    method: 'GET',
+                    headers,
+                });
 
                 if (!response.ok) {
                     throw new Error(`API returned ${response.status}`);
