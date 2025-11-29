@@ -3,6 +3,20 @@
     "fieldOverrides": [
         {
             "collectionGroup": "groups",
+            "fieldPath": "id",
+            "indexes": [
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                },
+                {
+                    "order": "DESCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "groups",
             "fieldPath": "__name__",
             "indexes": [
                 {
@@ -135,6 +149,20 @@
         },
         {
             "collectionGroup": "thesis",
+            "fieldPath": "id",
+            "indexes": [
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                },
+                {
+                    "order": "DESCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "thesis",
             "fieldPath": "__name__",
             "indexes": [
                 {
@@ -150,6 +178,20 @@
         {
             "collectionGroup": "thesis",
             "fieldPath": "groupId",
+            "indexes": [
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                },
+                {
+                    "order": "DESCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "expertRequests",
+            "fieldPath": "id",
             "indexes": [
                 {
                     "order": "ASCENDING",
