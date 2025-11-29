@@ -789,17 +789,11 @@ export async function bulkDeleteTheses(
  */
 export async function findThesisById(thesisId: string): Promise<ThesisWithGroupContext | null> {
     const thesisQuery = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
-    const q = query(thesisQuery, where('__name__', '==', thesisId));
-    const snapshot = await getDocs(q);
 
-    if (snapshot.empty) {
-        // Try to find by 'id' field as fallback
-        const qById = query(
-            collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION),
-            where('id', '==', thesisId)
-        );
-        const snapshotById = await getDocs(qById);
-        if (snapshotById.empty) return null;
+    // First try to find by 'id' field
+    const qById = query(thesisQuery, where('id', '==', thesisId));
+    const snapshotById = await getDocs(qById);
+    if (!snapshotById.empty) {
         const docSnap = snapshotById.docs[0];
         const data = docToThesisData(docSnap);
         if (!data) return null;
@@ -813,10 +807,15 @@ export async function findThesisById(thesisId: string): Promise<ThesisWithGroupC
         };
     }
 
-    const docSnap = snapshot.docs[0];
-    const data = docToThesisData(docSnap);
+    // Fall back to fetching all and filtering by document ID
+    console.warn(`Thesis with id '${thesisId}' not found via 'id' field. Falling back to document ID search.`);
+    const allSnapshot = await getDocs(thesisQuery);
+    const matchingDoc = allSnapshot.docs.find((docSnap) => docSnap.id === thesisId);
+    if (!matchingDoc) return null;
+
+    const data = docToThesisData(matchingDoc);
     if (!data) return null;
-    const params = extractPathParams(docSnap.ref.path);
+    const params = extractPathParams(matchingDoc.ref.path);
     return {
         ...data,
         groupId: params.groupId,

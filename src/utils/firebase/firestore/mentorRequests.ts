@@ -631,12 +631,20 @@ export async function respondToMentorRequest(
     }
 
     // Find the request document via collectionGroup
+    // Note: Cannot use `__name__` with collectionGroup, so we search by 'id' field first
     const requestsQuery = collectionGroup(firebaseFirestore, EXPERT_REQUESTS_SUBCOLLECTION);
-    const q = query(requestsQuery, where('__name__', '==', requestId), limit(1));
-    const snapshot = await getDocs(q);
+    const qById = query(requestsQuery, where('id', '==', requestId), limit(1));
+    let snapshot = await getDocs(qById);
 
     if (snapshot.empty) {
-        throw new Error('Request not found.');
+        // Fall back to fetching all and filtering by document ID
+        console.warn(`Falling back to full scan to find mentor request by ID: ${requestId}`);
+        const allSnapshot = await getDocs(requestsQuery);
+        const matchingDoc = allSnapshot.docs.find((docSnap) => docSnap.id === requestId);
+        if (!matchingDoc) {
+            throw new Error('Request not found.');
+        }
+        snapshot = { docs: [matchingDoc], empty: false } as typeof snapshot;
     }
 
     const docRef = snapshot.docs[0].ref;
@@ -663,17 +671,18 @@ export async function createMentorRequestByGroup(
     payload: CreateExpertRequestPayload
 ): Promise<string> {
     // Find group to get context
+    // Note: Cannot use `__name__` with collectionGroup, so we search by 'id' field first
     const groupsQuery = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
-    const q = query(groupsQuery, where('__name__', '==', groupId));
-    let snapshot = await getDocs(q);
+    const qById = query(groupsQuery, where('id', '==', groupId));
+    let snapshot = await getDocs(qById);
 
     if (snapshot.empty) {
-        // Fall back to searching by id field
-        const qById = query(
-            collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION),
-            where('id', '==', groupId)
-        );
-        snapshot = await getDocs(qById);
+        // Fall back to fetching all and filtering by document ID
+        const allSnapshot = await getDocs(groupsQuery);
+        const matchingDoc = allSnapshot.docs.find((docSnap) => docSnap.id === groupId);
+        if (matchingDoc) {
+            snapshot = { docs: [matchingDoc], empty: false } as typeof snapshot;
+        }
     }
 
     if (snapshot.empty) {

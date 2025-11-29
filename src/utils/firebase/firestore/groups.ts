@@ -5,33 +5,14 @@
  */
 
 import {
-    collection,
-    collectionGroup,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    where,
-    orderBy,
-    serverTimestamp,
-    writeBatch,
-    onSnapshot,
-    type QueryConstraint,
-    type DocumentReference,
-    type DocumentSnapshot,
+    collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy,
+    serverTimestamp, writeBatch, onSnapshot, type QueryConstraint, type DocumentReference, type DocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ThesisGroup, ThesisGroupFormData, GroupStatus } from '../../../types/group';
 import type { ThesisData } from '../../../types/thesis';
 import {
-    buildGroupsCollectionPath,
-    buildGroupDocPath,
-    GROUPS_SUBCOLLECTION,
-    extractPathParams,
-    DEFAULT_YEAR,
+    buildGroupsCollectionPath, buildGroupDocPath, GROUPS_SUBCOLLECTION, extractPathParams, DEFAULT_YEAR,
 } from '../../../config/firestore';
 
 // ============================================================================
@@ -976,20 +957,24 @@ export function listenGroupsByMentorRole(
  * @returns ThesisGroup if found, null otherwise
  */
 export async function findGroupById(groupId: string): Promise<ThesisGroup | null> {
+    // First try searching by 'id' field if stored on the document
     const groupsQuery = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
-    const q = query(groupsQuery, where('__name__', '==', groupId));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-        // Fall back to searching by id field
-        const qById = query(
-            collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION),
-            where('id', '==', groupId)
-        );
-        const snapshotById = await getDocs(qById);
-        if (snapshotById.empty) return null;
+    const qById = query(groupsQuery, where('id', '==', groupId));
+    const snapshotById = await getDocs(qById);
+    if (!snapshotById.empty) {
         return docToThesisGroup(snapshotById.docs[0]);
     }
-    return docToThesisGroup(snapshot.docs[0]);
+
+    // Fall back to fetching all groups and filtering by document ID
+    // This is less efficient but works when 'id' field is not stored
+    console.warn(`Falling back to full scan to find group by ID: ${groupId}`);
+    const allSnapshot = await getDocs(groupsQuery);
+    const matchingDoc = allSnapshot.docs.find((docSnap) => docSnap.id === groupId);
+    if (matchingDoc) {
+        return docToThesisGroup(matchingDoc);
+    }
+
+    return null;
 }
 
 // ============================================================================
@@ -1355,6 +1340,9 @@ export async function assignMentorToGroup(
 /**
  * Get the context (year, department, course) for a group by its ID.
  * Uses collectionGroup query to find the group.
+ * 
+ * Note: Cannot use `__name__` or `documentId()` with collectionGroup queries
+ * because they require full document paths, not just document IDs.
  *
  * @param groupId Group ID
  * @returns Context object or null if not found
@@ -1362,22 +1350,22 @@ export async function assignMentorToGroup(
 async function getGroupContext(
     groupId: string
 ): Promise<{ year: string; department: string; course: string } | null> {
+    // First try by id field
     const groupsQuery = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
-    const q = query(groupsQuery, where('__name__', '==', groupId));
-    const snapshot = await getDocs(q);
-
-    if (snapshot.empty) {
-        // Try by id field
-        const qById = query(
-            collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION),
-            where('id', '==', groupId)
-        );
-        const snapshotById = await getDocs(qById);
-        if (snapshotById.empty) return null;
+    const qById = query(groupsQuery, where('id', '==', groupId));
+    const snapshotById = await getDocs(qById);
+    if (!snapshotById.empty) {
         return extractGroupContext(snapshotById.docs[0].ref.path);
     }
 
-    return extractGroupContext(snapshot.docs[0].ref.path);
+    // Fall back to fetching all and filtering by document ID
+    const allSnapshot = await getDocs(groupsQuery);
+    const matchingDoc = allSnapshot.docs.find((docSnap) => docSnap.id === groupId);
+    if (matchingDoc) {
+        return extractGroupContext(matchingDoc.ref.path);
+    }
+
+    return null;
 }
 
 // ============================================================================
