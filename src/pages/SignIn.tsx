@@ -1,17 +1,20 @@
 import * as React from 'react';
 import {
     TextField, Button, Link, Alert, Typography, FormControl, IconButton,
-    InputAdornment, InputLabel, OutlinedInput, Chip, Stack
+    InputAdornment, InputLabel, OutlinedInput, Chip, Stack, Fab, CircularProgress,
+    Tooltip
 } from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Engineering as EngineeringIcon } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
 import { useNavigate, useLocation } from 'react-router';
 import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
-import { findAllUsers, findUserById } from '../utils/firebase/firestore/user';
+import { findUserById } from '../utils/firebase/firestore/user';
 import { isDevelopmentEnvironment } from '../utils/devUtils';
+import { resolveAdminApiBaseUrl } from '../utils/firebase/api';
+import { encryptPassword } from '../utils/cryptoUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
 import { AnimatedPage } from '../components/Animate';
@@ -219,6 +222,117 @@ function ForgotPasswordLink() {
 }
 
 /**
+ * Props for DevAccountFab component
+ */
+interface DevAccountFabProps {
+    onSignIn: (email: string, password: string) => Promise<void>;
+}
+
+/**
+ * Floating action button for creating/signing in developer account
+ * Only visible in development environment
+ */
+function DevAccountFab({ onSignIn }: DevAccountFabProps) {
+    const [loading, setLoading] = React.useState(false);
+    const { showNotification } = useSnackbar();
+
+    if (!isDevelopmentEnvironment() || !DEV_HELPER_EXISTS) {
+        return null;
+    }
+
+    const devEmail = DEV_HELPER_USERNAME + DEV_EMAIL_SUFFIX;
+    const devPassword = DEV_HELPER_PASSWORD;
+
+    const handleClick = async () => {
+        setLoading(true);
+        try {
+            const apiBaseUrl = resolveAdminApiBaseUrl();
+            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET || '';
+
+            if (!apiSecret) {
+                showNotification('API secret not configured', 'error');
+                setLoading(false);
+                return;
+            }
+
+            // Encrypt the password before sending to the API
+            const encryptedPassword = await encryptPassword(devPassword, apiSecret);
+
+            // Create the developer account via serverless API
+            const response = await fetch(`${apiBaseUrl}/user/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Secret': apiSecret,
+                },
+                body: JSON.stringify({
+                    email: devEmail,
+                    password: encryptedPassword,
+                    role: 'developer',
+                }),
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                // Account created or already exists
+                if (data.message?.includes('already exists')) {
+                    showNotification('Developer account exists, signing in...', 'info', 2000);
+                } else {
+                    showNotification('Developer account created, signing in...', 'success', 2000);
+                }
+            } else if (response.status === 409 || data.error?.includes('already exists')) {
+                // Account exists - this is acceptable
+                showNotification('Developer account exists, signing in...', 'info', 2000);
+            } else {
+                // Real error - show and abort
+                console.error('Dev account creation failed:', response.status, data);
+                showNotification(data.error || 'Failed to create developer account', 'error');
+                setLoading(false);
+                return;
+            }
+
+            // Small delay to ensure Firebase Auth has the user ready
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Sign in with Firebase Auth using the dev credentials
+            await onSignIn(devEmail, devPassword);
+        } catch (error) {
+            console.error('Dev account FAB error:', error);
+            showNotification(
+                error instanceof Error ? error.message : 'Failed to sign in as developer',
+                'error'
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Tooltip title="Quick Developer Sign In" placement="left">
+            <Fab
+                color="success"
+                onClick={handleClick}
+                disabled={loading}
+                sx={{
+                    position: 'fixed',
+                    bottom: 24,
+                    right: 24,
+                    zIndex: 1000,
+                }}
+                aria-label="developer sign in"
+            >
+                {loading ? (
+                    <CircularProgress size={24} color="inherit" />
+                ) : (
+                    <EngineeringIcon />
+                )}
+            </Fab>
+        </Tooltip>
+    );
+}
+
+/**
  * Sign-in page
  */
 export default function SignIn() {
@@ -271,18 +385,26 @@ export default function SignIn() {
         let active = true;
         (async () => {
             try {
-                const existing = await findAllUsers();
+                // Use serverless API to check if users exist (avoids permission issues)
+                const apiBaseUrl = resolveAdminApiBaseUrl();
+                const response = await fetch(`${apiBaseUrl}/user/exists`);
+
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}`);
+                }
+
+                const data = await response.json();
                 if (!active) return;
-                setNoUsersState(existing.length === 0);
+                setNoUsersState(!data.exists);
             } catch (error) {
                 console.warn('Error checking existing users:', error);
                 if (!active) return;
                 setNoUsersState(null);
-                showNotification('Unable to check existing users', 'warning');
+                // Don't show notification for this check - it's not critical
             }
         })();
         return () => { active = false; };
-    }, [showNotification]);
+    }, []);
 
     // if (session?.loading) {
     //     return (
@@ -310,6 +432,33 @@ export default function SignIn() {
         setPasswordValue,
         noUsersState,
     };
+
+    /**
+     * Handles developer account sign-in for the floating action button
+     * Uses real Firebase authentication - no fake sessions
+     */
+    const handleDevSignIn = React.useCallback(async (email: string, password: string) => {
+        // Use real Firebase sign-in (account must exist in Firebase Auth)
+        const result = await signInWithCredentials(email, password);
+        if (result?.success && result?.user) {
+            // For developer accounts, we may not have a Firestore profile
+            // Create session from Firebase Auth user data
+            const userSession: Session = {
+                user: {
+                    uid: result.user.uid,
+                    name: result.user.displayName || email.split('@')[0],
+                    email: result.user.email || email,
+                    image: result.user.photoURL || '',
+                    role: 'developer',
+                },
+            };
+            authentication?.setSession?.(userSession);
+            navigate('/', { replace: true });
+            showNotification('Signed in as developer', 'success', 3000);
+        } else {
+            throw new Error(result?.error || 'Sign in failed');
+        }
+    }, [authentication, navigate, showNotification]);
 
     return (
         <AnimatedPage variant='fade' duration='enteringScreen'>
@@ -418,6 +567,7 @@ export default function SignIn() {
                         forgotPasswordLink: ForgotPasswordLink,
                     }}
                 />
+                <DevAccountFab onSignIn={handleDevSignIn} />
             </FormContext.Provider>
         </AnimatedPage>
     );
