@@ -17,7 +17,7 @@ import {
     findAllUsers, findUserById, findUserByEmail, setUserProfile, updateUserProfile,
     deleteUserProfile, createPersonalCalendar,
 } from '../../../utils/firebase/firestore';
-import { getCurrentAcademicYear } from '../../../config/firestore';
+import { getAcademicYear } from '../../../config/firestore';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../../utils/csv/user';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../../utils/avatarUtils';
@@ -301,7 +301,7 @@ export default function AdminUsersPage() {
 
                 // Build context for hierarchical path
                 const userContext = {
-                    year: getCurrentAcademicYear(),
+                    year: getAcademicYear(),
                     department: newUser.department,
                     course: newUser.course,
                 };
@@ -385,7 +385,7 @@ export default function AdminUsersPage() {
                             await deleteUserProfile(selectedUser.uid);
                             // Use setUserProfile with context for new path after role change
                             const userContext = {
-                                year: getCurrentAcademicYear(),
+                                year: getAcademicYear(),
                                 department: updatedUser.department,
                                 course: updatedUser.course,
                             };
@@ -595,7 +595,7 @@ export default function AdminUsersPage() {
                         }
                         // Build context for hierarchical path
                         const importContext = {
-                            year: getCurrentAcademicYear(),
+                            year: getAcademicYear(),
                             department: profileWithUid.department,
                             course: profileWithUid.course,
                         };
@@ -712,7 +712,7 @@ export default function AdminUsersPage() {
 
                         // Build context for hierarchical path (using new role path if changed)
                         const inlineContext = {
-                            year: getCurrentAcademicYear(),
+                            year: getAcademicYear(),
                             department: updatedUser.department,
                             course: updatedUser.course,
                         };

@@ -23,7 +23,7 @@ import {
     setGroupById,
     findUsersByFilter,
 } from '../../../../utils/firebase/firestore';
-import { getCurrentAcademicYear } from '../../../../config/firestore';
+import { getAcademicYear } from '../../../../config/firestore';
 import { importGroupsFromCsv, exportGroupsToCsv } from '../../../../utils/csv/group';
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../../hooks/useBackgroundJobs';
 import GroupCard from '../../../../components/Group/GroupCard';
@@ -660,7 +660,7 @@ export default function AdminGroupManagementPage() {
             if (!editMode) {
                 // Create new group
                 // Save to Firestore
-                const year = getCurrentAcademicYear();
+                const year = getAcademicYear();
                 const createdGroupId = await createGroup(
                     year,
                     normalizedDepartment || '',

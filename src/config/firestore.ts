@@ -25,7 +25,24 @@
 // Default values
 // ============================================================================
 
-export const DEFAULT_YEAR = new Date().getFullYear().toString();
+/**
+ * Get the current academic year in the format "YYYY-YYYY" (e.g., "2025-2026").
+ * Academic year typically starts in June/August, so:
+ * - Jan-May: previous year to current year (e.g., 2024-2025)
+ * - Jun-Dec: current year to next year (e.g., 2025-2026)
+ */
+export function getAcademicYear(date: Date = new Date()): string {
+    const year = date.getFullYear();
+    const month = date.getMonth(); // 0-indexed (0 = January)
+    // If before June (month < 5), we're in the second half of the academic year
+    if (month < 5) {
+        return `${year - 1}-${year}`;
+    }
+    // June onwards, we're in the first half of a new academic year
+    return `${year}-${year + 1}`;
+}
+
+export const DEFAULT_YEAR = getAcademicYear();
 export const DEFAULT_DEPARTMENT_SEGMENT = 'general';
 export const DEFAULT_COURSE_SEGMENT = 'common';
 
@@ -122,17 +139,6 @@ export function sanitizePathSegment(value: string | null | undefined, fallback: 
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
     return normalized || fallback;
-}
-
-/**
- * Get current academic year (can be customized based on academic calendar)
- */
-export function getCurrentAcademicYear(): string {
-    const now = new Date();
-    const month = now.getMonth(); // 0-indexed
-    const year = now.getFullYear();
-    // If before August, use previous year as academic year start
-    return month < 7 ? `${year - 1}-${year}` : `${year}-${year + 1}`;
 }
 
 // ============================================================================

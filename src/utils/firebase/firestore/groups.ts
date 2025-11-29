@@ -13,6 +13,7 @@ import type { ThesisGroup, ThesisGroupFormData, GroupStatus } from '../../../typ
 import type { ThesisData } from '../../../types/thesis';
 import {
     buildGroupsCollectionPath, buildGroupDocPath, GROUPS_SUBCOLLECTION, extractPathParams, DEFAULT_YEAR,
+    getAcademicYear,
 } from '../../../config/firestore';
 
 // ============================================================================
@@ -460,7 +461,7 @@ export async function setGroupById(
 
     // If no existing context, build from data
     if (!existingCtx) {
-        const year = new Date().getFullYear().toString();
+        const year = getAcademicYear();
         const department = data.department;
         const course = data.course;
         if (!department || !course) {
@@ -1386,7 +1387,7 @@ export async function createGroupForUser(
     userCourse: string,
     data: ThesisGroupFormData
 ): Promise<string> {
-    const year = String(new Date().getFullYear());
+    const year = getAcademicYear();
     return createGroup(year, userDepartment, userCourse, data);
 }
 
