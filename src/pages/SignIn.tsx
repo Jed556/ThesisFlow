@@ -1,8 +1,7 @@
 import * as React from 'react';
 import {
     TextField, Button, Link, Alert, Typography, FormControl, IconButton,
-    InputAdornment, InputLabel, OutlinedInput, Chip, Stack, Fab, CircularProgress,
-    Tooltip
+    InputAdornment, InputLabel, OutlinedInput, Fab, CircularProgress, Tooltip
 } from '@mui/material';
 import { Visibility, VisibilityOff, Engineering as EngineeringIcon } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
@@ -12,7 +11,7 @@ import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
 import { findUserById } from '../utils/firebase/firestore/user';
-import { isDevelopmentEnvironment } from '../utils/devUtils';
+
 import { resolveAdminApiBaseUrl } from '../utils/firebase/api';
 import { encryptPassword } from '../utils/cryptoUtils';
 import type { NavigationItem } from '../types/navigation';
@@ -31,7 +30,6 @@ const DEV_HELPER_PASSWORD = import.meta.env.VITE_DEV_HELPER_PASSWORD || '';
 const DEV_EMAIL_DOMAIN = import.meta.env.VITE_DEV_EMAIL_DOMAIN || 'thesisflow.dev';
 const DEV_EMAIL_SUFFIX = DEV_EMAIL_DOMAIN.startsWith('@') ? DEV_EMAIL_DOMAIN : '@' + DEV_EMAIL_DOMAIN;
 const DEV_HELPER_EXISTS = DEV_HELPER_USERNAME !== '' && DEV_HELPER_PASSWORD !== '';
-const DEV_HELPER_ENABLED = (import.meta.env.VITE_DEV_HELPER_ENABLED === 'true') && DEV_HELPER_EXISTS;
 
 
 /**
@@ -46,81 +44,17 @@ const FormContext = React.createContext<{
 } | null>(null);
 
 /**
- * Info alert with test account buttons for development environment
+ * Alert shown when no admin accounts exist yet
  */
 function Alerts() {
     const formContext = React.useContext(FormContext);
-    const noUsersState = formContext?.noUsersState;
-
-    let testAccountsStack;
-
-    if (isDevelopmentEnvironment()) {
-        const testAccounts: { role: string; email: string; color: 'primary' | 'secondary' | 'info' | 'error' | 'success' }[] = [
-            { role: 'Student', email: 'student' + DEV_EMAIL_SUFFIX, color: 'primary' as const },
-            { role: 'Adviser', email: 'adviser' + DEV_EMAIL_SUFFIX, color: 'secondary' as const },
-            { role: 'Editor', email: 'editor' + DEV_EMAIL_SUFFIX, color: 'info' as const },
-            { role: 'Admin', email: 'admin' + DEV_EMAIL_SUFFIX, color: 'error' as const },
-        ];
-
-        if (DEV_HELPER_ENABLED) {
-            testAccounts.push({ role: 'Developer', email: DEV_HELPER_USERNAME + DEV_EMAIL_SUFFIX, color: 'success' as const });
-        }
-
-        const handleDevClick = (email: string) => {
-            if (formContext && isDevelopmentEnvironment()) {
-                formContext.setEmailValue(email);
-
-                if (DEV_HELPER_ENABLED)
-                    try {
-                        const emailPrefix = email.split('@')[0];
-                        if (emailPrefix === (DEV_HELPER_USERNAME) && DEV_HELPER_PASSWORD) {
-                            formContext.setPasswordValue(DEV_HELPER_PASSWORD);
-                            return;
-                        }
-                    } catch (error) {
-                        console.warn('DEV helper env parsing failed in handleDevClick', error);
-                    }
-
-                formContext.setPasswordValue('Password_123');
-            }
-        };
-
-        testAccountsStack = (
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                {testAccounts.map((account) => (
-                    <Chip
-                        key={account.email}
-                        label={account.role}
-                        color={account.color}
-                        variant="outlined"
-                        clickable
-                        size="small"
-                        onClick={() => handleDevClick(account.email)}
-                        sx={{
-                            cursor: 'pointer',
-                            '&:hover': {
-                                backgroundColor: `${account.color}.50`,
-                            }
-                        }}
-                    />
-                ))}
-            </Stack>
-        );
-    }
+    const noAdminState = formContext?.noUsersState;
 
     return (
         <>
-            {testAccountsStack && (
-                <Alert severity="info">
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                        Development Test Accounts
-                    </Typography>
-                    {testAccountsStack}
-                </Alert>
-            )}
-            {noUsersState === true && (
+            {noAdminState === true && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                    No user accounts exist yet. Sign in with the developer account first to initialize users.
+                    No admin accounts exist yet. Use the developer button to initialize the system.
                 </Alert>
             )}
         </>
@@ -226,17 +160,19 @@ function ForgotPasswordLink() {
  */
 interface DevAccountFabProps {
     onSignIn: (email: string, password: string) => Promise<void>;
+    showFab: boolean;
 }
 
 /**
  * Floating action button for creating/signing in developer account
- * Only visible in development environment
+ * Only visible when no admin accounts exist (excluding developer accounts)
  */
-function DevAccountFab({ onSignIn }: DevAccountFabProps) {
+function DevAccountFab({ onSignIn, showFab }: DevAccountFabProps) {
     const [loading, setLoading] = React.useState(false);
     const { showNotification } = useSnackbar();
 
-    if (!isDevelopmentEnvironment() || !DEV_HELPER_EXISTS) {
+    // Only show if DEV_HELPER is configured and no admin accounts exist
+    if (!DEV_HELPER_EXISTS || !showFab) {
         return null;
     }
 
@@ -385,7 +321,7 @@ export default function SignIn() {
         let active = true;
         (async () => {
             try {
-                // Use serverless API to check if users exist (avoids permission issues)
+                // Use serverless API to check if admin users exist (avoids permission issues)
                 const apiBaseUrl = resolveAdminApiBaseUrl();
                 const response = await fetch(`${apiBaseUrl}/user/exists`);
 
@@ -395,9 +331,10 @@ export default function SignIn() {
 
                 const data = await response.json();
                 if (!active) return;
-                setNoUsersState(!data.exists);
+                // noUsersState = true means NO admin accounts exist (show FAB)
+                setNoUsersState(!data.adminExists);
             } catch (error) {
-                console.warn('Error checking existing users:', error);
+                console.warn('Error checking existing admin users:', error);
                 if (!active) return;
                 setNoUsersState(null);
                 // Don't show notification for this check - it's not critical
@@ -481,7 +418,7 @@ export default function SignIn() {
 
 
                                 // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
-                                if ((DEV_HELPER_EXISTS && noUsersState) || DEV_HELPER_ENABLED)
+                                if ((DEV_HELPER_EXISTS && noUsersState))
                                     try {
                                         if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
                                             const name = email.split('@')[0];
@@ -567,7 +504,7 @@ export default function SignIn() {
                         forgotPasswordLink: ForgotPasswordLink,
                     }}
                 />
-                <DevAccountFab onSignIn={handleDevSignIn} />
+                <DevAccountFab onSignIn={handleDevSignIn} showFab={noUsersState === true} />
             </FormContext.Provider>
         </AnimatedPage>
     );

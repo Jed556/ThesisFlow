@@ -1,6 +1,6 @@
 /**
  * User existence check endpoint
- * Returns whether any users exist in the system
+ * Returns whether any admin users exist in the system (excluding developer accounts)
  * This endpoint is public and doesn't require authentication
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -8,20 +8,21 @@ import { handleCors, successResponse, errorResponse } from '../../utils/utils.js
 import { firestore } from '../../utils/firebase.js';
 
 /**
- * Check if any users exist in the Firestore database
- * Searches across all year/department/course paths for user documents
+ * Check if any admin users exist in the Firestore database (excluding developers)
+ * Searches across all year/department/course paths for admin user documents
  */
-async function checkUsersExist(): Promise<boolean> {
+async function checkAdminUsersExist(): Promise<boolean> {
     try {
-        // Use collection group query to check for any user document
-        const usersSnapshot = await firestore
+        // Use collection group query to check for any admin user (not developer)
+        const adminsSnapshot = await firestore
             .collectionGroup('users')
+            .where('role', '==', 'admin')
             .limit(1)
             .get();
 
-        return !usersSnapshot.empty;
+        return !adminsSnapshot.empty;
     } catch (error) {
-        console.error('Error checking users existence:', error);
+        console.error('Error checking admin users existence:', error);
         throw error;
     }
 }
@@ -36,10 +37,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const usersExist = await checkUsersExist();
+        const adminExists = await checkAdminUsersExist();
 
         return successResponse(res, {
-            exists: usersExist,
+            adminExists,
             timestamp: new Date().toISOString(),
         });
     } catch (error) {
