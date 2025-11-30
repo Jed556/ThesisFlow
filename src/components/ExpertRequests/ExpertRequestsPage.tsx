@@ -16,8 +16,8 @@ import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { findGroupById, listenGroupsByExpertRole } from '../../utils/firebase/firestore/groups';
 import { listenExpertRequestsByExpert } from '../../utils/firebase/firestore/expertRequests';
 import { findUsersByIds, onUserProfile, updateUserProfile } from '../../utils/firebase/firestore/user';
-import ExpertRequestCard from '../ExpertRequests/ExpertRequestCard';
-import { SlotRequestButton } from '../ExpertRequests/SlotRequestDialog';
+import ExpertRequestCard from './ExpertRequestCard';
+import { SlotRequestButton } from './SlotRequestDialog';
 
 interface ExpertRequestViewModel {
     request: ExpertRequest;
@@ -194,11 +194,11 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
         setLoading(true);
         setError(null);
         const unsubscribe = listenExpertRequestsByExpert(expertUid, role, {
-            onData: (records) => {
+            onData: (records: ExpertRequest[]) => {
                 setRequests(records);
                 setLoading(false);
             },
-            onError: (listenerError) => {
+            onError: (listenerError: Error) => {
                 console.error('Failed to load expert requests:', listenerError);
                 setError('Unable to load expert requests right now.');
                 setLoading(false);

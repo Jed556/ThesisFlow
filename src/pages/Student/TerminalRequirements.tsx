@@ -506,7 +506,7 @@ export default function TerminalRequirementsPage() {
     const canSubmit = allowFileActions && readyForSubmission && !submitLoading;
     const pendingRoleLabel = activeSubmission?.currentRole
         ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.currentRole]
-        : 'mentor';
+        : 'expert';
 
     const handleSubmitStage = React.useCallback(async () => {
         // FIX: Use groupMeta.id instead of thesis.groupId
@@ -549,7 +549,7 @@ export default function TerminalRequirementsPage() {
                     definition: requirement,
                 });
             }
-            showNotification('Submitted for mentor review.', 'success');
+            showNotification('Submitted for expert review.', 'success');
         } catch (submitError) {
             console.error('Failed to submit terminal requirements:', submitError);
             const message = submitError instanceof Error
@@ -587,7 +587,7 @@ export default function TerminalRequirementsPage() {
         if (activeSubmission.status === 'returned') {
             return (
                 <Alert severity="warning">
-                    {activeSubmission.returnNote ?? 'A mentor requested changes to your submission.'}
+                    {activeSubmission.returnNote ?? 'A expert requested changes to your submission.'}
                     {activeSubmission.returnedBy && (
                         <Typography variant="body2" sx={{ mt: 1 }}>
                             Returned by{' '}
@@ -714,11 +714,14 @@ export default function TerminalRequirementsPage() {
                 {renderTabs()}
 
                 {activeStageLocked ? (
-                    <UnauthorizedNotice
-                        title={`${stageTitle} requirements locked`}
-                        description={stageLockedDescription}
-                        variant="box"
-                    />
+                    <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+                        <UnauthorizedNotice
+                            title={`${stageTitle} requirements locked`}
+                            description={stageLockedDescription}
+                            variant="box"
+                            sx={{ minHeight: 'auto' }}
+                        />
+                    </Box>
                 ) : isConfigInitializing ? (
                     <Stack spacing={3}>
                         <Skeleton variant="rectangular" height={160} />

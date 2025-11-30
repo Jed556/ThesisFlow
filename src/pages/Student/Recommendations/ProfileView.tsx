@@ -9,12 +9,12 @@ import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage'
 import ProfileView from '../../../components/Profile/ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
 import { onUserProfile, findUsersByIds } from '../../../utils/firebase/firestore/user';
-import { getGroupsByLeader, listenGroupsByMentorRole } from '../../../utils/firebase/firestore/groups';
+import { getGroupsByLeader, listenGroupsByExpertRole } from '../../../utils/firebase/firestore/groups';
 import {
-    createMentorRequestByGroup, listenMentorRequestsByGroup,
-} from '../../../utils/firebase/firestore/mentorRequests';
-import { filterActiveGroups, deriveMentorThesisHistory } from '../../../utils/mentorProfileUtils';
-import { evaluateMentorCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
+    createExpertRequestByGroup, listenExpertRequestsByGroup,
+} from '../../../utils/firebase/firestore/expertRequests';
+import { filterActiveGroups, deriveExpertThesisHistory } from '../../../utils/expertProfileUtils';
+import { evaluateExpertCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../../types/navigation';
 import type { UserProfile, HistoricalThesisEntry, UserRole } from '../../../types/profile';
@@ -22,19 +22,19 @@ import type { ThesisGroup } from '../../../types/group';
 import type { Session } from '../../../types/session';
 import type { ExpertRequest } from '../../../types/expertRequest';
 
-type MentorRole = 'adviser' | 'editor' | 'statistician';
+type ExpertRole = 'adviser' | 'editor' | 'statistician';
 
 export const metadata: NavigationItem = {
-    title: 'Mentor Profile',
-    segment: 'mentor/:uid',
+    title: 'Expert Profile',
+    segment: 'expert/:uid',
     hidden: true,
 };
 
-function isMentorRole(role: UserRole | undefined): role is MentorRole {
+function isExpertRole(role: UserRole | undefined): role is ExpertRole {
     return role === 'adviser' || role === 'editor' || role === 'statistician';
 }
 
-export default function MentorProfileViewPage() {
+export default function ExpertProfileViewPage() {
     const navigate = useNavigate();
     const { uid = '' } = useParams<{ uid: string }>();
     const session = useSession<Session>();
@@ -69,7 +69,7 @@ export default function MentorProfileViewPage() {
             if (!profileData) {
                 setProfile(null);
                 setError('Profile not found');
-            } else if (!isMentorRole(profileData.role)) {
+            } else if (!isExpertRole(profileData.role)) {
                 setProfile(profileData);
                 setError('Only adviser or editor profiles can be viewed here.');
             } else {
@@ -84,25 +84,25 @@ export default function MentorProfileViewPage() {
         };
     }, [uid]);
 
-    const mentorRole = React.useMemo<MentorRole | null>(() => (
-        isMentorRole(profile?.role) ? profile.role : null
+    const expertRole = React.useMemo<ExpertRole | null>(() => (
+        isExpertRole(profile?.role) ? profile.role : null
     ), [profile?.role]);
 
     React.useEffect(() => {
-        if (!uid || !mentorRole) {
+        if (!uid || !expertRole) {
             setGroups([]);
             setGroupsLoading(false);
             return () => { /* no-op */ };
         }
 
         setGroupsLoading(true);
-        const unsubscribe = listenGroupsByMentorRole(mentorRole, uid, {
+        const unsubscribe = listenGroupsByExpertRole(expertRole, uid, {
             onData: (records) => {
                 setGroups(records);
                 setGroupsLoading(false);
             },
             onError: (listenerError) => {
-                console.error('Failed to load mentor groups:', listenerError);
+                console.error('Failed to load expert groups:', listenerError);
                 setGroups([]);
                 setGroupsLoading(false);
             },
@@ -111,7 +111,7 @@ export default function MentorProfileViewPage() {
         return () => {
             unsubscribe();
         };
-    }, [mentorRole, uid]);
+    }, [expertRole, uid]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -185,34 +185,34 @@ export default function MentorProfileViewPage() {
     );
 
     const history = React.useMemo<HistoricalThesisEntry[]>(() => {
-        if (!profile || !mentorRole) {
+        if (!profile || !expertRole) {
             return [];
         }
-        return deriveMentorThesisHistory(groups, profile.uid, mentorRole);
-    }, [groups, mentorRole, profile]);
+        return deriveExpertThesisHistory(groups, profile.uid, expertRole);
+    }, [groups, expertRole, profile]);
 
     const roleStats = React.useMemo<ThesisRoleStats>(() => {
-        if (!mentorRole) {
+        if (!expertRole) {
             return { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
         }
         const total = groups.length;
-        if (mentorRole === 'adviser') {
+        if (expertRole === 'adviser') {
             return { adviserCount: total, editorCount: 0, statisticianCount: 0 };
         }
-        if (mentorRole === 'editor') {
+        if (expertRole === 'editor') {
             return { adviserCount: 0, editorCount: total, statisticianCount: 0 };
         }
         return { adviserCount: 0, editorCount: 0, statisticianCount: total };
-    }, [groups.length, mentorRole]);
+    }, [groups.length, expertRole]);
 
-    const capacity = profile?.capacity ?? 0;
+    const capacity = profile?.slots ?? 0;
     const openSlots = capacity > 0 ? Math.max(capacity - activeAssignments.length, 0) : 0;
     const normalizedCapacity = Math.max(capacity, activeAssignments.length);
     const openSlotsDisplay = normalizedCapacity > 0
         ? `${openSlots}/${normalizedCapacity}`
         : `${openSlots}/0`;
-    const compatibility = profile && mentorRole
-        ? evaluateMentorCompatibility(profile, roleStats, mentorRole)
+    const compatibility = profile && expertRole
+        ? evaluateExpertCompatibility(profile, roleStats, expertRole)
         : null;
 
     const sortedGroups = React.useMemo(() => {
@@ -231,13 +231,13 @@ export default function MentorProfileViewPage() {
     const loading = profileLoading || groupsLoading;
     const skills = React.useMemo(() => profile?.skills ?? [], [profile?.skills]);
 
-    const roleLabel = mentorRole === 'adviser'
+    const roleLabel = expertRole === 'adviser'
         ? 'Adviser'
-        : mentorRole === 'editor'
+        : expertRole === 'editor'
             ? 'Editor'
-            : mentorRole === 'statistician'
+            : expertRole === 'statistician'
                 ? 'Statistician'
-                : 'Mentor';
+                : 'Expert';
     const roleLabelLower = roleLabel.toLowerCase();
     const roleArticle = /^[aeiou]/i.test(roleLabelLower) ? 'an' : 'a';
 
@@ -247,11 +247,11 @@ export default function MentorProfileViewPage() {
     );
 
     const requestableGroups = React.useMemo(() => {
-        if (!mentorRole) {
+        if (!expertRole) {
             return [];
         }
-        return leaderGroups.filter((group) => !group.members[mentorRole]);
-    }, [leaderGroups, mentorRole]);
+        return leaderGroups.filter((group) => !group.members[expertRole]);
+    }, [leaderGroups, expertRole]);
     const ownsAnyLeaderGroup = leaderGroups.length > 0;
     const noGroupMessage = 'Create and lead a thesis group before sending requests.';
     const allRolesFilledMessage = `All of your groups already have ${roleArticle} ${roleLabelLower} assigned.`;
@@ -263,7 +263,7 @@ export default function MentorProfileViewPage() {
         }
 
         const unsubscribes = requestableGroups.map((group) =>
-            listenMentorRequestsByGroup(group.id, {
+            listenExpertRequestsByGroup(group.id, {
                 onData: (requests) => {
                     setGroupRequests((previous) => {
                         const next = new Map(previous);
@@ -272,7 +272,7 @@ export default function MentorProfileViewPage() {
                     });
                 },
                 onError: (listenerError) => {
-                    console.error(`Failed to load mentor requests for group ${group.id}:`, listenerError);
+                    console.error(`Failed to load expert requests for group ${group.id}:`, listenerError);
                 },
             })
         );
@@ -296,13 +296,13 @@ export default function MentorProfileViewPage() {
     }, [groupRequests, profile, requestableGroups]);
 
     const slotsFull = capacity <= 0 || openSlots <= 0;
-    const canShowRequestButton = viewerRole === 'student' && Boolean(mentorRole);
+    const canShowRequestButton = viewerRole === 'student' && Boolean(expertRole);
 
     let requestDisabledReason: string | undefined;
     if (hasPendingRequest) {
-        requestDisabledReason = 'You already have a pending request for this mentor.';
+        requestDisabledReason = 'You already have a pending request for this expert.';
     } else if (slotsFull) {
-        requestDisabledReason = 'This mentor is not accepting requests right now.';
+        requestDisabledReason = 'This expert is not accepting requests right now.';
     } else if (!ownsAnyLeaderGroup) {
         requestDisabledReason = noGroupMessage;
     } else if (requestableGroups.length === 0) {
@@ -315,7 +315,7 @@ export default function MentorProfileViewPage() {
         : slotsFull
             ? 'Not accepting requests'
             : `Request as ${roleLabel}`;
-    const canSubmitMentorRequest = Boolean(
+    const canSubmitExpertRequest = Boolean(
         selectedGroupId && requestableGroups.length > 0 && !requestSubmitting && !hasPendingRequest
     );
     const dialogDisabled = requestableGroups.length === 0 || ownedGroupsLoading || hasPendingRequest;
@@ -341,7 +341,7 @@ export default function MentorProfileViewPage() {
     const summaryCard = profile ? (
         <Card variant="outlined">
             <CardContent>
-                <Typography variant="h6" gutterBottom>Mentor workload</Typography>
+                <Typography variant="h6" gutterBottom>Expert workload</Typography>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} useFlexGap>
                     {[
                         { label: 'Active Teams', value: activeAssignments.length },
@@ -396,12 +396,12 @@ export default function MentorProfileViewPage() {
 
     const handleOpenRequestDialog = React.useCallback(() => {
         if (hasPendingRequest) {
-            showNotification('A request for this mentor is already pending.', 'info');
+            showNotification('A request for this expert is already pending.', 'info');
             return;
         }
 
         if (requestableGroups.length === 0) {
-            showNotification('Create a thesis group first to send mentor requests.', 'info');
+            showNotification('Create a thesis group first to send expert requests.', 'info');
             return;
         }
 
@@ -420,8 +420,8 @@ export default function MentorProfileViewPage() {
         setRequestDialogOpen(false);
     }, []);
 
-    const handleSubmitMentorRequest = React.useCallback(async () => {
-        if (!profile || !mentorRole || !viewerUid) {
+    const handleSubmitExpertRequest = React.useCallback(async () => {
+        if (!profile || !expertRole || !viewerUid) {
             return;
         }
 
@@ -433,9 +433,9 @@ export default function MentorProfileViewPage() {
 
         setRequestSubmitting(true);
         try {
-            await createMentorRequestByGroup(targetGroup.id, {
+            await createExpertRequestByGroup(targetGroup.id, {
                 expertUid: profile.uid,
-                role: mentorRole,
+                role: expertRole,
                 requestedBy: viewerUid,
                 message: requestMessage.trim() || undefined,
             });
@@ -443,13 +443,13 @@ export default function MentorProfileViewPage() {
             setRequestDialogOpen(false);
             setRequestMessage('');
         } catch (err) {
-            console.error('Failed to send mentor request:', err);
+            console.error('Failed to send expert request:', err);
             const fallback = err instanceof Error ? err.message : 'Failed to send request.';
             showNotification(fallback, 'error');
         } finally {
             setRequestSubmitting(false);
         }
-    }, [mentorRole, profile, requestMessage, requestableGroups, selectedGroupId, showNotification, viewerUid]);
+    }, [expertRole, profile, requestMessage, requestableGroups, selectedGroupId, showNotification, viewerUid]);
 
     if (canShowRequestButton) {
         requestButton = (
@@ -488,12 +488,12 @@ export default function MentorProfileViewPage() {
         );
     }
 
-    if (error || !profile || !mentorRole) {
+    if (error || !profile || !expertRole) {
         return (
             <AnimatedPage variant="fade">
                 <Stack spacing={2} alignItems="flex-start">
                     <Alert severity="warning" sx={{ maxWidth: 480 }}>
-                        {error || 'Mentor profile not available.'}
+                        {error || 'Expert profile not available.'}
                     </Alert>
                     <Button onClick={handleBack}>Back</Button>
                 </Stack>
@@ -584,8 +584,8 @@ export default function MentorProfileViewPage() {
                     </Button>
                     <Button
                         variant="contained"
-                        onClick={handleSubmitMentorRequest}
-                        disabled={!canSubmitMentorRequest}
+                        onClick={handleSubmitExpertRequest}
+                        disabled={!canSubmitExpertRequest}
                     >
                         {requestSubmitting ? 'Sending…' : 'Send request'}
                     </Button>

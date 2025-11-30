@@ -9,10 +9,12 @@ import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
 import type { ThesisGroup } from '../types/group';
 import type { UserProfile, UserRole } from '../types/profile';
+import { DEFAULT_MAX_EXPERT_SLOTS } from '../types/slotRequest';
 import { AnimatedPage } from '../components/Animate';
+import { SlotRequestButton } from '../components/ExpertRequests/SlotRequestDialog';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { formatProfileLabel } from '../utils/userUtils';
-import { listenGroupsByMentorRole, approveGroup, rejectGroup } from '../utils/firebase/firestore/groups';
+import { listenGroupsByExpertRole, approveGroup, rejectGroup } from '../utils/firebase/firestore/groups';
 import { findUsersByIds, onUserProfile, updateUserProfile } from '../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
@@ -24,17 +26,17 @@ export const metadata: NavigationItem = {
     roles: ['adviser', 'editor'],
 };
 
-type MentorRole = 'adviser' | 'editor';
+type ExpertRole = 'adviser' | 'editor';
 
-function isMentorRole(role: UserRole | undefined): role is MentorRole {
+function isExpertRole(role: UserRole | undefined): role is ExpertRole {
     return role === 'adviser' || role === 'editor';
 }
 
-export default function MentorGroupsPage() {
+export default function ExpertGroupsPage() {
     const session = useSession<Session>();
-    const mentorUid = session?.user?.uid ?? null;
-    const mentorRole = session?.user?.role;
-    const role: MentorRole | null = isMentorRole(mentorRole) ? mentorRole : null;
+    const expertUid = session?.user?.uid ?? null;
+    const expertRole = session?.user?.role;
+    const role: ExpertRole | null = isExpertRole(expertRole) ? expertRole : null;
 
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
     const [groups, setGroups] = React.useState<ThesisGroup[]>([]);
@@ -48,27 +50,27 @@ export default function MentorGroupsPage() {
     const { showNotification } = useSnackbar();
 
     React.useEffect(() => {
-        if (!mentorUid || !role) {
+        if (!expertUid || !role) {
             setProfile(null);
             setCapacityDraft(0);
             return () => { /* no-op */ };
         }
 
-        const unsubscribe = onUserProfile(mentorUid, (data) => {
+        const unsubscribe = onUserProfile(expertUid, (data) => {
             setProfile(data);
             const nextCapacity = role === 'adviser'
-                ? data?.capacity ?? 0
-                : data?.capacity ?? 0;
+                ? data?.slots ?? 0
+                : data?.slots ?? 0;
             setCapacityDraft(nextCapacity);
         });
 
         return () => {
             unsubscribe();
         };
-    }, [mentorUid, role]);
+    }, [expertUid, role]);
 
     React.useEffect(() => {
-        if (!mentorUid || !role) {
+        if (!expertUid || !role) {
             setGroups([]);
             setLoading(false);
             return () => { /* no-op */ };
@@ -77,13 +79,13 @@ export default function MentorGroupsPage() {
         setLoading(true);
         setError(null);
 
-        const unsubscribe = listenGroupsByMentorRole(role, mentorUid, {
+        const unsubscribe = listenGroupsByExpertRole(role, expertUid, {
             onData: (records) => {
                 setGroups(records);
                 setLoading(false);
             },
             onError: (listenerError) => {
-                console.error('Failed to load mentor groups:', listenerError);
+                console.error('Failed to load expert groups:', listenerError);
                 setError('Unable to load groups right now. Please try again later.');
                 setLoading(false);
             },
@@ -92,7 +94,7 @@ export default function MentorGroupsPage() {
         return () => {
             unsubscribe();
         };
-    }, [mentorUid, role]);
+    }, [expertUid, role]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -133,7 +135,14 @@ export default function MentorGroupsPage() {
             return 0;
         }
 
-        return profile.capacity ?? 0;
+        return profile.slots ?? 0;
+    }, [profile, role]);
+
+    const maxSlotsValue = React.useMemo(() => {
+        if (!role || !profile) {
+            return DEFAULT_MAX_EXPERT_SLOTS;
+        }
+        return profile.maxSlots ?? DEFAULT_MAX_EXPERT_SLOTS;
     }, [profile, role]);
 
     const pendingRequests = React.useMemo(
@@ -201,11 +210,11 @@ export default function MentorGroupsPage() {
     }, [role, showNotification]);
 
     const handleSaveCapacity = React.useCallback(async () => {
-        if (!mentorUid || !role) return;
+        if (!expertUid || !role) return;
         setCapacitySaving(true);
         try {
 
-            await updateUserProfile(mentorUid, { capacity: capacityDraft });
+            await updateUserProfile(expertUid, { slots: capacityDraft });
             showNotification('Slot limit updated.', 'success');
             setEditingLimit(false);
         } catch (err) {
@@ -214,7 +223,7 @@ export default function MentorGroupsPage() {
         } finally {
             setCapacitySaving(false);
         }
-    }, [mentorUid, role, capacityDraft, showNotification]);
+    }, [expertUid, role, capacityDraft, showNotification]);
 
     const renderRequests = () => (
         <Paper sx={{ p: 3, mb: 3 }}>
@@ -374,7 +383,7 @@ export default function MentorGroupsPage() {
                         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                             <Box>
                                 <Typography variant="subtitle2" color="text.secondary">
-                                    Slots
+                                    Slots (Max: {maxSlotsValue})
                                 </Typography>
                                 {!editingLimit ? (
                                     <>
@@ -391,10 +400,16 @@ export default function MentorGroupsPage() {
                                             value={capacityDraft}
                                             onChange={(event) => {
                                                 const nextValue = Number(event.target.value);
-                                                setCapacityDraft(Number.isNaN(nextValue) ? 0 : Math.max(0, nextValue));
+                                                // Limit to maxSlotsValue
+                                                setCapacityDraft(
+                                                    Number.isNaN(nextValue)
+                                                        ? 0
+                                                        : Math.max(0, Math.min(nextValue, maxSlotsValue))
+                                                );
                                             }}
-                                            slotProps={{ input: { inputProps: { min: 0, max: 50 } } }}
+                                            slotProps={{ input: { inputProps: { min: 0, max: maxSlotsValue } } }}
                                             sx={{ maxWidth: 200 }}
+                                            helperText={capacityDraft >= maxSlotsValue ? 'At maximum limit' : undefined}
                                         />
                                         <Stack direction="row" spacing={1}>
                                             <Button
@@ -419,17 +434,28 @@ export default function MentorGroupsPage() {
                                     </Stack>
                                 )}
                             </Box>
-                            {!editingLimit && (
-                                <Button
-                                    size="small"
-                                    onClick={() => {
-                                        setCapacityDraft(capacityValue);
-                                        setEditingLimit(true);
-                                    }}
-                                >
-                                    Edit
-                                </Button>
-                            )}
+                            <Stack direction="column" spacing={0.5}>
+                                {!editingLimit && (
+                                    <Button
+                                        size="small"
+                                        onClick={() => {
+                                            setCapacityDraft(capacityValue);
+                                            setEditingLimit(true);
+                                        }}
+                                    >
+                                        Edit
+                                    </Button>
+                                )}
+                                {expertUid && role && (
+                                    <SlotRequestButton
+                                        expertUid={expertUid}
+                                        expertRole={role}
+                                        profile={profile}
+                                        currentMaxSlots={maxSlotsValue}
+                                        size="small"
+                                    />
+                                )}
+                            </Stack>
                         </Stack>
                     </CardContent>
                 </Card>

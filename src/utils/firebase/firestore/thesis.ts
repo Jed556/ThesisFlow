@@ -663,7 +663,7 @@ export function listenThesesForParticipant(
 }
 
 /**
- * Listen to theses where the user is a mentor (adviser, editor, statistician, or panel).
+ * Listen to theses where the user is a expert (adviser, editor, statistician, or panel).
  * 
  * Note: This listener avoids async operations inside onSnapshot to prevent
  * Firestore internal assertion errors. Instead, it filters groups synchronously
@@ -673,7 +673,7 @@ export function listenThesesForParticipant(
  * @param options - Callbacks for data and errors
  * @returns Unsubscribe function
  */
-export function listenThesesForMentor(
+export function listenThesesForExpert(
     userId: string,
     options: ThesisListenerOptions
 ): () => void {
@@ -710,7 +710,7 @@ export function listenThesesForMentor(
             options.onData(theses);
         } catch (error) {
             if (options.onError) options.onError(error as Error);
-            else console.error('Thesis mentor fetch error:', error);
+            else console.error('Thesis expert fetch error:', error);
         } finally {
             fetchInProgress = false;
         }
@@ -724,13 +724,13 @@ export function listenThesesForMentor(
 
             for (const groupDoc of snapshot.docs) {
                 const groupData = groupDoc.data();
-                const isMentor =
+                const isExpert =
                     groupData.members?.adviser === userId ||
                     groupData.members?.editor === userId ||
                     groupData.members?.statistician === userId ||
                     (groupData.members?.panels || []).includes(userId);
 
-                if (isMentor) {
+                if (isExpert) {
                     pendingGroupIds.push({
                         groupId: groupDoc.id,
                         params: extractPathParams(groupDoc.ref.path),
@@ -743,7 +743,7 @@ export function listenThesesForMentor(
         },
         (error) => {
             if (options.onError) options.onError(error);
-            else console.error('Thesis mentor listener error:', error);
+            else console.error('Thesis expert listener error:', error);
         }
     );
 }

@@ -1,13 +1,13 @@
 import type { ThesisGroup } from '../types/group';
 import type { UserProfile } from '../types/profile';
-import type { MentorRequestRole } from '../types/expertRequest';
+import type { ExpertRequestRole } from '../types/expertRequest';
 import { findUserById, findUsersByFilter } from './firebase/firestore/user';
 
 export {
     acceptInvite,
     acceptJoinRequest,
     approveGroup,
-    assignMentorToGroup,
+    assignExpertToGroup,
     cancelJoinRequest,
     createGroup,
     createGroupForUser,
@@ -27,7 +27,7 @@ export {
     inviteUserToGroup,
     listenAllGroups,
     listenGroups,
-    listenGroupsByMentorRole,
+    listenGroupsByExpertRole,
     listenGroupsByPanelist,
     rejectGroup,
     rejectJoinRequest,
@@ -85,11 +85,11 @@ export async function buildGroupProfileMap(groupData: ThesisGroup): Promise<Map<
 }
 
 /**
- * Resolves the mentor UID assigned to the requested role for the provided group.
+ * Resolves the expert UID assigned to the requested role for the provided group.
  */
-export function getGroupMentorByRole(
+export function getGroupExpertByRole(
     group: ThesisGroup | null | undefined,
-    role: MentorRequestRole,
+    role: ExpertRequestRole,
 ): string | undefined {
     if (!group) {
         return undefined;

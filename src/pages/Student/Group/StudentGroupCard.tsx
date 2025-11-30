@@ -170,8 +170,8 @@ export default function StudentGroupCard({
         { uid: group.members.leader, role: 'Lead Researcher' },
         ...group.members.members.map((uid) => ({ uid, role: 'Researcher' })),
     ];
-    // Combine advisers, editors and statisticians into a single 'Mentors' section
-    const mentorEntries = [
+    // Combine advisers, editors and statisticians into a single 'Experts' section
+    const expertEntries = [
         ...(group.members.adviser ? [{ uid: group.members.adviser, role: 'Adviser' }] : []),
         ...(group.members.editor ? [{ uid: group.members.editor, role: 'Editor' }] : []),
         ...(group.members.statistician ? [{ uid: group.members.statistician, role: 'Statistician' }] : []),
@@ -216,7 +216,7 @@ export default function StudentGroupCard({
             <Divider sx={{ my: 3 }} />
 
             {renderRoleSection('Researchers', researcherEntries)}
-            {renderRoleSection('Mentors', mentorEntries)}
+            {renderRoleSection('Experts', expertEntries)}
             {renderRoleSection('Panelists', panelEntries)}
 
             {isLeader && (

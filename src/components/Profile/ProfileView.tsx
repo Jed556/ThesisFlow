@@ -40,7 +40,7 @@ const DEFAULT_SECTIONS: ProfileViewSections = {
     timeline: true,
 };
 
-const MENTOR_ROLES = new Set<UserRole>(['adviser', 'editor', 'statistician']);
+const EXPERT_ROLES = new Set<UserRole>(['adviser', 'editor', 'statistician']);
 
 const ROLE_SECTION_OVERRIDES: Partial<Record<UserRole, Partial<ProfileViewSections>>> = {
     panel: { currentTheses: false, timeline: false },
@@ -121,8 +121,8 @@ export default function ProfileView({
         // Only advisers should show expertise by default
         defaults.expertise = profile.role === 'adviser';
 
-        // Show current theses + timeline for mentors and students
-        const showsTheses = MENTOR_ROLES.has(profile.role) || profile.role === 'student';
+        // Show current theses + timeline for experts and students
+        const showsTheses = EXPERT_ROLES.has(profile.role) || profile.role === 'student';
         defaults.currentTheses = showsTheses;
         defaults.timeline = showsTheses;
 

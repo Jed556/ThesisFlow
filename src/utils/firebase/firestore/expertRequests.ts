@@ -1,5 +1,5 @@
 /**
- * Firebase Firestore - Expert Requests (Mentor Requests)
+ * Firebase Firestore - Expert Requests (Expert Requests)
  * CRUD operations for Expert Request documents using hierarchical structure:
  * year/{year}/departments/{department}/courses/{course}/groups/{groupId}/expertRequests/{requestId}
  */
@@ -516,48 +516,18 @@ export function listenAllExpertRequests(
 }
 
 // ============================================================================
-// Alias Functions (Mentor Request terminology)
+// Alias Functions (Expert Request terminology)
 // ============================================================================
 
 /**
- * Alias for listenExpertRequestsByExpert - listens to mentor requests by mentor UID.
- *
- * @param mentorUid The mentor's user ID
- * @param role Optional role filter
- * @param options Callbacks for data and errors
- * @returns Unsubscribe function
- */
-export function listenMentorRequestsByMentor(
-    mentorUid: string,
-    role: UserRole | undefined,
-    options: ExpertRequestListenerOptions
-): () => void {
-    return listenExpertRequestsByExpert(mentorUid, role, options);
-}
-
-/**
- * Alias for createExpertRequest - creates a mentor request.
- *
- * @param ctx Expert request context
- * @param payload Request payload
- * @returns Request ID
- */
-export async function createMentorRequest(
-    ctx: ExpertRequestContext,
-    payload: CreateExpertRequestPayload
-): Promise<string> {
-    return createExpertRequest(ctx, payload);
-}
-
-/**
- * Listen to mentor/expert requests for a specific group by group ID.
+ * Listen to expert/expert requests for a specific group by group ID.
  * Uses collectionGroup query to find requests regardless of path.
  *
  * @param groupId The group's document ID
  * @param options Callbacks for data and errors
  * @returns Unsubscribe function
  */
-export function listenMentorRequestsByGroup(
+export function listenExpertRequestsByGroup(
     groupId: string,
     options: ExpertRequestListenerOptions
 ): () => void {
@@ -588,20 +558,20 @@ export function listenMentorRequestsByGroup(
         },
         (error) => {
             if (options.onError) options.onError(error);
-            else console.error('Mentor request by group listener error:', error);
+            else console.error('Expert request by group listener error:', error);
         }
     );
 }
 
 /**
- * Respond to a mentor/expert request by request ID.
+ * Respond to a expert/expert request by request ID (context-free version).
  * Finds the request via collectionGroup and updates it.
  *
  * @param requestId The request document ID
  * @param status The decision status
  * @param options Optional response note
  */
-export async function respondToMentorRequest(
+export async function respondToExpertRequestById(
     requestId: string,
     status: 'approved' | 'rejected',
     options?: RespondToExpertRequestOptions
@@ -618,7 +588,7 @@ export async function respondToMentorRequest(
 
     if (snapshot.empty) {
         // Fall back to fetching all and filtering by document ID
-        console.warn(`Falling back to full scan to find mentor request by ID: ${requestId}`);
+        console.warn(`Falling back to full scan to find expert request by ID: ${requestId}`);
         const allSnapshot = await getDocs(requestsQuery);
         const matchingDoc = allSnapshot.docs.find((docSnap) => docSnap.id === requestId);
         if (!matchingDoc) {
@@ -639,14 +609,14 @@ export async function respondToMentorRequest(
 }
 
 /**
- * Create a mentor/expert request by group ID (context-free version).
+ * Create a expert/expert request by group ID (context-free version).
  * Finds group context from groupId and creates the request.
  *
  * @param groupId The group document ID
  * @param payload Request payload
  * @returns Request ID
  */
-export async function createMentorRequestByGroup(
+export async function createExpertRequestByGroup(
     groupId: string,
     payload: CreateExpertRequestPayload
 ): Promise<string> {
@@ -687,7 +657,7 @@ export async function createMentorRequestByGroup(
 }
 
 /**
- * Get pending mentor request by group ID, expert UID and role (context-free version).
+ * Get pending expert request by group ID, expert UID and role (context-free version).
  * Uses collectionGroup to search across all groups.
  *
  * @param groupId The group document ID
@@ -695,7 +665,7 @@ export async function createMentorRequestByGroup(
  * @param role The role requested
  * @returns The pending request or null if not found
  */
-export async function getPendingMentorRequest(
+export async function getPendingExpertRequestByGroup(
     groupId: string,
     expertUid: string,
     role: UserRole

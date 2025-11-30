@@ -13,7 +13,7 @@ export interface ConversationAttachmentUploadOptions {
 }
 
 /**
- * Uploads conversation attachments (mentor/adviser feedback assets) to thesis storage.
+ * Uploads conversation attachments (expert/adviser feedback assets) to thesis storage.
  */
 export async function uploadConversationAttachments(
     files: File[],

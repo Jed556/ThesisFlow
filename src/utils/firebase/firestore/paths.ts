@@ -4,7 +4,7 @@ import {
     THESIS_SUBCOLLECTION, STAGES_SUBCOLLECTION, CHAPTERS_SUBCOLLECTION, SUBMISSIONS_SUBCOLLECTION,
     CHATS_SUBCOLLECTION, AUDITS_SUBCOLLECTION, PANEL_COMMENTS_SUBCOLLECTION, USERS_SUBCOLLECTION,
     TERMINAL_SUBCOLLECTION, CONFIGURATION_ROOT, TERMINAL_REQUIREMENTS_KEY, CHAPTER_TEMPLATES_KEY,
-    JOIN_SUBCOLLECTION, INVITES_DOC, REQUESTS_DOC,
+    JOIN_SUBCOLLECTION, INVITES_DOC, REQUESTS_DOC, SLOT_REQUESTS_SUBCOLLECTION,
 } from '../../../config/firestore';
 
 
@@ -518,4 +518,22 @@ export function extractPathParams(refPath: string): PathParams {
     }
 
     return params;
+}
+
+// ============================================================================
+// Slot Requests Path Builders
+// ============================================================================
+
+/**
+ * Build path to slot requests collection under a year
+ */
+export function buildSlotRequestsCollectionPath(year: string = DEFAULT_YEAR): string {
+    return `${buildYearPath(year)}/${SLOT_REQUESTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific slot request document
+ */
+export function buildSlotRequestDocPath(year: string, requestId: string): string {
+    return `${buildSlotRequestsCollectionPath(year)}/${requestId}`;
 }

@@ -333,7 +333,7 @@ export default function StatisticianThesisOverviewPage() {
                             ...chapter,
                             status: result.status,
                             lastModified: result.decidedAt,
-                            mentorApprovals: result.mentorApprovals,
+                            expertApprovals: result.expertApprovals,
                         }
                         : chapter
                 ),
@@ -382,7 +382,7 @@ export default function StatisticianThesisOverviewPage() {
                     allowCommenting
                     emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
                     onCreateComment={handleCreateComment}
-                    mentorRole="statistician"
+                    expertRole="statistician"
                     onChapterDecision={handleChapterDecision}
                     enforceTerminalRequirementSequence
                     terminalRequirementCompletionMap={terminalRequirementCompletionMap}

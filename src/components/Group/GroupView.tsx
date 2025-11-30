@@ -277,15 +277,15 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         label: `Member ${index + 1}`,
     }));
 
-    const mentorEntries: PersonEntry[] = [];
+    const expertEntries: PersonEntry[] = [];
     if (group.members.adviser) {
-        mentorEntries.push({ uid: group.members.adviser, label: 'Adviser' });
+        expertEntries.push({ uid: group.members.adviser, label: 'Adviser' });
     }
     if (group.members.editor) {
-        mentorEntries.push({ uid: group.members.editor, label: 'Editor' });
+        expertEntries.push({ uid: group.members.editor, label: 'Editor' });
     }
     if (group.members.statistician) {
-        mentorEntries.push({ uid: group.members.statistician, label: 'Statistician' });
+        expertEntries.push({ uid: group.members.statistician, label: 'Statistician' });
     }
 
     const panelEntries: PersonEntry[] = (group.members.panels ?? []).map((uid, index) => ({
@@ -351,7 +351,7 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
                 <InfoList title="Metadata" entries={metadataItems} />
                 <MemberList title="Leader" entries={leaderEntry} profiles={profiles} />
                 <MemberList title="Members" entries={memberEntries} profiles={profiles} />
-                <MemberList title="Assigned Mentors" entries={mentorEntries} profiles={profiles} />
+                <MemberList title="Assigned Experts" entries={expertEntries} profiles={profiles} />
                 <MemberList title="Panel Members" entries={panelEntries} profiles={profiles} />
                 <MemberList title="Pending Invites" entries={inviteEntries} profiles={profiles} />
                 <MemberList title="Join Requests" entries={requestEntries} profiles={profiles} />

@@ -7,14 +7,14 @@ import type {
     WorkspaceFilterConfig, WorkspaceCommentPayload, WorkspaceEditPayload,
     WorkspaceUploadPayload, ChapterVersionMap, WorkspaceChapterDecisionPayload, WorkspaceChapterDecision,
 } from '../../types/workspace';
-import type { MentorRole, ThesisChapter, ThesisData, ThesisStageName } from '../../types/thesis';
+import type { ExpertRole, ThesisChapter, ThesisData, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import { ConversationPanel, type ConversationParticipant } from '../Conversation';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
 import { getChapterSubmissions } from '../../utils/fileUtils';
 import { getFilesByIds } from '../../utils/firebase/firestore/file';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
-import { getAssignedMentorRoles, resolveChapterMentorApprovals } from '../../utils/mentorUtils';
+import { getAssignedExpertRoles, resolveChapterExpertApprovals } from '../../utils/expertUtils';
 import { extractSubmissionId, normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import ChapterRail, { buildVersionOptions, formatChapterLabel } from './ChapterRail';
 import {
@@ -34,7 +34,7 @@ interface ThesisWorkspaceProps {
     thesis?: ThesisData | null;
     participants?: Record<string, ConversationParticipant>;
     currentUserId?: string;
-    mentorRole?: MentorRole;
+    expertRole?: ExpertRole;
     filters?: WorkspaceFilterConfig[];
     isLoading?: boolean;
     allowCommenting?: boolean;
@@ -118,7 +118,7 @@ const WorkspaceFilters = ({ filters }: { filters?: WorkspaceFilterConfig[]; }) =
 };
 
 export default function ThesisWorkspace({
-    thesisId, thesis, participants, currentUserId, mentorRole, filters, isLoading,
+    thesisId, thesis, participants, currentUserId, expertRole, filters, isLoading,
     allowCommenting = true,
     emptyStateMessage = 'Select a group to inspect its thesis.',
     conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision,
@@ -154,7 +154,7 @@ export default function ThesisWorkspace({
         return thesis.chapters.map((chapter) => ({
             ...chapter,
             submissions: normalizeChapterSubmissions(chapter.submissions),
-            mentorApprovals: resolveChapterMentorApprovals(chapter, thesis),
+            expertApprovals: resolveChapterExpertApprovals(chapter, thesis),
         } satisfies ThesisChapter));
     }, [thesis]);
 
@@ -184,7 +184,7 @@ export default function ThesisWorkspace({
         [normalizedChapters, activeStage],
     );
 
-    const mentorRoles = React.useMemo(() => getAssignedMentorRoles(thesis), [
+    const expertRoles = React.useMemo(() => getAssignedExpertRoles(thesis), [
         thesis?.adviser,
         thesis?.editor,
         thesis?.statistician,
@@ -391,7 +391,7 @@ export default function ThesisWorkspace({
         activeChapter && (activeChapter.status === 'approved' || activeChapter.status === 'under_review')
     );
     const canUploadActiveChapter = Boolean(enableUploads && activeChapter && !activeChapterUploadsLocked);
-    const enableChapterDecisions = Boolean(onChapterDecision && thesisId && mentorRole);
+    const enableChapterDecisions = Boolean(onChapterDecision && thesisId && expertRole);
     const composerDisabled = !hasChapterSelection
         || !hasVersionSelection
         || !hasAvailableVersions
@@ -555,12 +555,12 @@ export default function ThesisWorkspace({
     }, [onEditComment, thesisId, activeChapter, activeVersionIndex]);
 
     const handleRequestDecision = React.useCallback((chapterId: number, decision: WorkspaceChapterDecision) => {
-        if (!enableChapterDecisions || !mentorRole || chapterDecisionHelperText || pendingDecision || isSubmittingDecision) {
+        if (!enableChapterDecisions || !expertRole || chapterDecisionHelperText || pendingDecision || isSubmittingDecision) {
             return;
         }
         setPendingDecision({ chapterId, decision });
         setDecisionError(null);
-    }, [enableChapterDecisions, mentorRole, chapterDecisionHelperText, pendingDecision, isSubmittingDecision]);
+    }, [enableChapterDecisions, expertRole, chapterDecisionHelperText, pendingDecision, isSubmittingDecision]);
 
     const handleCloseDecisionDialog = React.useCallback(() => {
         if (isSubmittingDecision) {
@@ -571,7 +571,7 @@ export default function ThesisWorkspace({
     }, [isSubmittingDecision]);
 
     const handleConfirmDecision = React.useCallback(async () => {
-        if (!pendingDecision || !onChapterDecision || !thesisId || !mentorRole) {
+        if (!pendingDecision || !onChapterDecision || !thesisId || !expertRole) {
             return;
         }
 
@@ -583,7 +583,7 @@ export default function ThesisWorkspace({
                 thesisId,
                 chapterId: pendingDecision.chapterId,
                 decision: pendingDecision.decision,
-                role: mentorRole,
+                role: expertRole,
                 versionIndex: pendingDecision.chapterId === activeChapter?.id ? activeVersionIndex : undefined,
             });
             setPendingDecision(null);
@@ -593,7 +593,7 @@ export default function ThesisWorkspace({
         } finally {
             setIsSubmittingDecision(false);
         }
-    }, [pendingDecision, onChapterDecision, thesisId, mentorRole, activeChapter?.id, activeVersionIndex]);
+    }, [pendingDecision, onChapterDecision, thesisId, expertRole, activeChapter?.id, activeVersionIndex]);
 
     const panelHeight = conversationHeight ?? '100%';
     const uploadErrorBanner = uploadError ? (
@@ -724,8 +724,8 @@ export default function ThesisWorkspace({
                                             onUploadChapter={handleChapterUpload}
                                             uploadingChapterId={uploadingChapterId}
                                             enableUploads={enableUploads}
-                                            mentorRoles={mentorRoles}
-                                            currentMentorRole={mentorRole}
+                                            expertRoles={expertRoles}
+                                            currentExpertRole={expertRole}
                                             versionOptionsByChapter={versionOptionsByChapter}
                                             loadingChapterId={loadingChapterId}
                                             loadingMessage="Fetching submissions…"

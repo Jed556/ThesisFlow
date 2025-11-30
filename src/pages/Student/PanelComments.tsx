@@ -429,11 +429,14 @@ export default function StudentPanelCommentsPage() {
                 </Stack>
 
                 {!stageAccessible ? (
-                    <UnauthorizedNotice
-                        title={`${getPanelCommentStageLabel(activeStage)} tab locked`}
-                        description={lockedDescription}
-                        variant="box"
-                    />
+                    <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+                        <UnauthorizedNotice
+                            title={`${getPanelCommentStageLabel(activeStage)} tab locked`}
+                            description={lockedDescription}
+                            variant="box"
+                            sx={{ minHeight: 'auto' }}
+                        />
+                    </Box>
                 ) : !activePanelUid ? (
                     <Alert severity="info">
                         Select a panel sheet to review comments once your assignments become available.

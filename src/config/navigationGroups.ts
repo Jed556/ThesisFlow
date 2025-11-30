@@ -31,7 +31,7 @@ export const navigationGroups: NavigationGroup[] = [
         index: 4,
         header: true,
         divider: true,
-        title: 'Mentors',
-        segment: 'mentors',
+        title: 'Experts',
+        segment: 'experts',
     },
 ];

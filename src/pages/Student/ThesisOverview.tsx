@@ -294,7 +294,7 @@ export default function StudentThesisOverviewPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={2} sx={{ mb: 3 }}>
                 <Typography variant="body1" color="text.secondary">
-                    Upload new chapter versions and review mentor feedback organized per submission.
+                    Upload new chapter versions and review expert feedback organized per submission.
                 </Typography>
             </Stack>
 

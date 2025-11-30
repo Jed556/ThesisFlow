@@ -12,13 +12,13 @@ import {
 import {
     Upload as UploadIcon,
 } from '@mui/icons-material';
-import type { ChapterSubmissionStatus, MentorRole, ThesisChapter, ThesisStageName } from '../../types/thesis';
+import type { ChapterSubmissionStatus, ExpertRole, ThesisChapter, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../Conversation';
 import { FileCard } from '../File';
 import { formatFileSize } from '../../utils/fileUtils';
 import type { ChapterVersionMap, VersionOption } from '../../types/workspace';
-import { mentorRoleLabels } from '../../utils/mentorUtils';
+import { expertRoleLabels } from '../../utils/expertUtils';
 import { normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import { resolveChapterStage } from '../../utils/thesisStageUtils';
 
@@ -172,8 +172,8 @@ interface ChapterRailProps {
     onUploadChapter?: (chapterId: number, file: File) => void;
     uploadingChapterId?: number | null;
     enableUploads?: boolean;
-    mentorRoles?: MentorRole[];
-    currentMentorRole?: MentorRole;
+    expertRoles?: ExpertRole[];
+    currentExpertRole?: ExpertRole;
     versionOptionsByChapter: ChapterVersionMap;
     participants?: Record<string, ConversationParticipant>;
     loadingChapterId?: number | null;
@@ -197,8 +197,8 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
     onUploadChapter,
     uploadingChapterId,
     enableUploads,
-    mentorRoles,
-    currentMentorRole,
+    expertRoles,
+    currentExpertRole,
     versionOptionsByChapter,
     participants,
     loadingChapterId,
@@ -234,11 +234,11 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                         : 'Uploads are disabled while this chapter is under review.')
                     : undefined;
                 const reviewLockedByStatus = chapter.status === 'approved';
-                const resolveApprovalForRole = (role: MentorRole) => (
-                    reviewLockedByStatus ? true : Boolean(chapter.mentorApprovals?.[role])
+                const resolveApprovalForRole = (role: ExpertRole) => (
+                    reviewLockedByStatus ? true : Boolean(chapter.expertApprovals?.[role])
                 );
-                const alreadyApprovedByCurrent = currentMentorRole
-                    ? resolveApprovalForRole(currentMentorRole)
+                const alreadyApprovedByCurrent = currentExpertRole
+                    ? resolveApprovalForRole(currentExpertRole)
                     : reviewLockedByStatus;
                 const baseReviewDisabled = Boolean(reviewActions?.disabled) || isDecisionInFlight || reviewLockedByStatus;
                 const approveDisabled = baseReviewDisabled || alreadyApprovedByCurrent;
@@ -280,14 +280,14 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                                 </Stack>
                             </Stack>
 
-                            {mentorRoles && mentorRoles.length > 0 && (
+                            {expertRoles && expertRoles.length > 0 && (
                                 <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-                                    {mentorRoles.map((role) => {
+                                    {expertRoles.map((role) => {
                                         const approved = resolveApprovalForRole(role);
                                         return (
                                             <Chip
                                                 key={`${chapter.id}-${role}`}
-                                                label={`${mentorRoleLabels[role]} · ${approved ? 'Approved' : 'Pending'}`}
+                                                label={`${expertRoleLabels[role]} · ${approved ? 'Approved' : 'Pending'}`}
                                                 size="small"
                                                 color={approved ? 'success' : 'default'}
                                                 variant={approved ? 'filled' : 'outlined'}

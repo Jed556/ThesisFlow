@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { AssignmentInd as AssignmentIndIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../../types/navigation';
-import MentorRequestsPage from '../../../components/MentorRequests/MentorRequestsPage';
+import ExpertRequestsPage from '../../../components/ExpertRequests/ExpertRequestsPage';
 
 export const metadata: NavigationItem = {
-    group: 'mentors',
+    group: 'experts',
     index: 5,
-    title: 'Mentor Requests',
+    title: 'Expert Requests',
     segment: 'adviser-requests',
     icon: <AssignmentIndIcon />,
     roles: ['adviser'],
 };
 
-export default function AdviserMentorRequestsPage() {
-    return <MentorRequestsPage role="adviser" roleLabel="Adviser" />;
+export default function AdviserExpertRequestsPage() {
+    return <ExpertRequestsPage role="adviser" roleLabel="Adviser" />;
 }

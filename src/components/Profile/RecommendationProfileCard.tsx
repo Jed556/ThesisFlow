@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { Box } from '@mui/material';
 import ProfileCard, { type ProfileCardStat } from './ProfileCard';
-import type { MentorCardData } from '../../utils/recommendUtils';
+import type { ExpertCardData } from '../../utils/recommendUtils';
 import type { UserProfile } from '../../types/profile';
 
 export interface RecommendationProfileCardProps {
-    card: MentorCardData;
+    card: ExpertCardData;
     roleLabel: 'Adviser' | 'Editor' | 'Statistician';
     onSelect?: (profile: UserProfile) => void;
     showRoleLabel?: boolean;
@@ -13,7 +13,7 @@ export interface RecommendationProfileCardProps {
 }
 
 /**
- * Compact mentor card tailored for the recommendations grid.
+ * Compact expert card tailored for the recommendations grid.
  */
 export default function RecommendationProfileCard({
     card, roleLabel, onSelect,

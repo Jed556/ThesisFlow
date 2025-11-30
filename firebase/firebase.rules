@@ -132,9 +132,9 @@ service cloud.firestore {
         }
 
         /**
-         * Check if user is mentor (adviser, editor, or statistician)
+         * Check if user is expert (adviser, editor, or statistician)
          */
-        function isMentor() {
+        function isExpert() {
             return hasAnyRole(['adviser', 'editor', 'statistician']);
         }
 
@@ -283,9 +283,9 @@ service cloud.firestore {
                         }
 
                         /**
-                         * Check if user is assigned mentor for this group
+                         * Check if user is assigned expert for this group
                          */
-                        function isAssignedMentor() {
+                        function isAssignedExpert() {
                             return isGroupAdviser() || isGroupEditor() || isGroupStatistician();
                         }
 
@@ -293,7 +293,7 @@ service cloud.firestore {
                          * Check if user has access to the group
                          */
                         function hasGroupAccess() {
-                            return isGroupMember() || isAssignedMentor() || isGroupPanel() || isModeratorOrAbove();
+                            return isGroupMember() || isAssignedExpert() || isGroupPanel() || isModeratorOrAbove();
                         }
 
                         // Group documents - read by members, staff; write by adviser, admin, head
@@ -366,7 +366,7 @@ service cloud.firestore {
                             // Thesis documents
                             allow read: if isAuthenticated() && hasThesisAccess();
                             allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
-                            allow update: if isGroupMember() || isAssignedMentor() || isThesisReviewer() || isModeratorOrAbove();
+                            allow update: if isGroupMember() || isAssignedExpert() || isThesisReviewer() || isModeratorOrAbove();
                             allow delete: if isAdminOrDeveloper() || isHead();
 
                             // ================================
@@ -376,8 +376,8 @@ service cloud.firestore {
                             match /stages/{stage} {
                                 // Stages inherit thesis access
                                 allow read: if isAuthenticated() && hasThesisAccess();
-                                allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
-                                allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
+                                allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                 allow delete: if isAdminOrDeveloper() || isHead();
 
                                 // ================================
@@ -387,8 +387,8 @@ service cloud.firestore {
                                 match /chapters/{chapterId} {
                                     // Chapters inherit thesis access
                                     allow read: if isAuthenticated() && hasThesisAccess();
-                                    allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
-                                    allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                    allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
+                                    allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                     allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
 
                                     // ================================
@@ -399,9 +399,9 @@ service cloud.firestore {
                                         // Submissions - thesis members and reviewers can read
                                         allow read: if isAuthenticated() && hasThesisAccess();
                                         // Group members can create submissions
-                                        allow create: if isGroupMember() || isAssignedMentor();
+                                        allow create: if isGroupMember() || isAssignedExpert();
                                         // Members and reviewers can update
-                                        allow update: if isGroupMember() || isAssignedMentor() || isThesisReviewer() || isModeratorOrAbove();
+                                        allow update: if isGroupMember() || isAssignedExpert() || isThesisReviewer() || isModeratorOrAbove();
                                         allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
 
                                         // ================================
@@ -428,8 +428,8 @@ service cloud.firestore {
 
                             match /terminal/{terminalId} {
                                 allow read: if isAuthenticated() && hasThesisAccess();
-                                allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
-                                allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
+                                allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                 allow delete: if isAdminOrDeveloper() || isHead();
                             }
                         }
@@ -568,9 +568,9 @@ service firebase.storage {
         }
 
         /**
-         * Check if user is mentor (adviser, editor, or statistician)
+         * Check if user is expert (adviser, editor, or statistician)
          */
-        function isMentor() {
+        function isExpert() {
             return hasAnyRole(['adviser', 'editor', 'statistician']);
         }
 

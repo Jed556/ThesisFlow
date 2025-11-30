@@ -9,4 +9,4 @@ export * from './thesis';
 export * from './topicProposals';
 export * from './panelComments';
 export * from './terminalRequirements';
-export * from './mentorRequests';
+export * from './expertRequests';

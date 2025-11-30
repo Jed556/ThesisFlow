@@ -831,9 +831,9 @@ export function isGroupMember(group: ThesisGroup, userId: string): boolean {
 }
 
 /**
- * Check if a user is a mentor of a group (adviser, editor, statistician, or panel)
+ * Check if a user is a expert of a group (adviser, editor, statistician, or panel)
  */
-export function isGroupMentor(group: ThesisGroup, userId: string): boolean {
+export function isGroupExpert(group: ThesisGroup, userId: string): boolean {
     return (
         group.members.adviser === userId ||
         group.members.editor === userId ||
@@ -846,7 +846,7 @@ export function isGroupMentor(group: ThesisGroup, userId: string): boolean {
  * Check if a user has any role in a group
  */
 export function hasGroupRole(group: ThesisGroup, userId: string): boolean {
-    return isGroupMember(group, userId) || isGroupMentor(group, userId);
+    return isGroupMember(group, userId) || isGroupExpert(group, userId);
 }
 
 /**
@@ -970,14 +970,14 @@ export function listenGroupsByPanelist(
 }
 
 /**
- * Listen to groups where the given user has a specific mentor role (collectionGroup).
+ * Listen to groups where the given user has a specific expert role (collectionGroup).
  *
  * @param role 'adviser' | 'editor' | 'statistician'
- * @param userId Mentor UID
+ * @param userId Expert UID
  * @param options Callbacks for data and errors
  * @returns Unsubscribe function
  */
-export function listenGroupsByMentorRole(
+export function listenGroupsByExpertRole(
     role: 'adviser' | 'editor' | 'statistician',
     userId: string,
     options: GroupListenerOptions
@@ -1346,15 +1346,15 @@ export async function rejectGroup(groupId: string, reason?: string): Promise<voi
 }
 
 /**
- * Assign a mentor to a group.
+ * Assign a expert to a group.
  *
  * @param groupId Group ID
- * @param mentorId Mentor user ID
- * @param role Mentor role ('adviser', 'editor', 'statistician')
+ * @param expertId Expert user ID
+ * @param role Expert role ('adviser', 'editor', 'statistician')
  */
-export async function assignMentorToGroup(
+export async function assignExpertToGroup(
     groupId: string,
-    mentorId: string,
+    expertId: string,
     role: 'adviser' | 'editor' | 'statistician'
 ): Promise<void> {
     const ctx = await getGroupContext(groupId);
@@ -1362,13 +1362,13 @@ export async function assignMentorToGroup(
 
     switch (role) {
         case 'adviser':
-            await setGroupAdviser(ctx.year, ctx.department, ctx.course, groupId, mentorId);
+            await setGroupAdviser(ctx.year, ctx.department, ctx.course, groupId, expertId);
             break;
         case 'editor':
-            await setGroupEditor(ctx.year, ctx.department, ctx.course, groupId, mentorId);
+            await setGroupEditor(ctx.year, ctx.department, ctx.course, groupId, expertId);
             break;
         case 'statistician':
-            await setGroupStatistician(ctx.year, ctx.department, ctx.course, groupId, mentorId);
+            await setGroupStatistician(ctx.year, ctx.department, ctx.course, groupId, expertId);
             break;
     }
 }

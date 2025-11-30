@@ -6,7 +6,7 @@ import type { UserProfile } from '../../types/profile';
 import { formatDateShort } from '../../utils/dateUtils';
 import GroupCard from '../Group/GroupCard';
 
-interface MentorRequestCardProps {
+export interface ExpertRequestCardProps {
     request: ExpertRequest;
     group: ThesisGroup;
     requester: UserProfile | null;
@@ -38,13 +38,13 @@ function resolveLeaderName(requester: UserProfile | null): string {
     return full || fallback;
 }
 
-export function MentorRequestCard({
+export function ExpertRequestCard({
     request,
     group,
     requester,
     usersByUid,
     onOpenGroup,
-}: MentorRequestCardProps) {
+}: ExpertRequestCardProps) {
     const statusMeta = STATUS_CONFIG[request.status];
     const leaderName = resolveLeaderName(requester);
     const requestedDate = formatDateShort(request.createdAt);
@@ -95,4 +95,4 @@ export function MentorRequestCard({
     );
 }
 
-export default MentorRequestCard;
+export default ExpertRequestCard;

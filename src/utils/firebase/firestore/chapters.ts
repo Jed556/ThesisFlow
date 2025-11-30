@@ -12,7 +12,7 @@ import {
     query, orderBy, serverTimestamp, writeBatch, onSnapshot, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type { ThesisChapter, ThesisData, ThesisStatus, MentorRole, MentorApprovalState } from '../../../types/thesis';
+import type { ThesisChapter, ThesisData, ThesisStatus, ExpertRole, ExpertApprovalState } from '../../../types/thesis';
 import type { WorkspaceChapterDecision } from '../../../types/workspace';
 import { CHAPTERS_SUBCOLLECTION } from '../../../config/firestore';
 import { buildChaptersCollectionPath, buildChapterDocPath, buildThesisDocPath } from './paths';
@@ -264,21 +264,21 @@ export interface UpdateChapterDecisionInput {
     ctx: ChapterDecisionContext;
     chapterId: number;
     decision: WorkspaceChapterDecision;
-    role: MentorRole;
+    role: ExpertRole;
 }
 
 /** Result from chapter decision update */
 export interface ChapterDecisionResult {
     status: ThesisStatus;
     decidedAt: string;
-    mentorApprovals: MentorApprovalState;
+    expertApprovals: ExpertApprovalState;
 }
 
 /**
- * Calculate overall chapter status from mentor approvals
+ * Calculate overall chapter status from expert approvals
  */
 function calculateOverallStatus(
-    mentorApprovals: MentorApprovalState,
+    expertApprovals: ExpertApprovalState,
     currentDecision: WorkspaceChapterDecision
 ): ThesisStatus {
     // If current decision is revision required, chapter needs revision
@@ -286,8 +286,8 @@ function calculateOverallStatus(
         return 'revision_required';
     }
 
-    // Check if all required mentors have approved
-    const approvalValues = Object.values(mentorApprovals);
+    // Check if all required experts have approved
+    const approvalValues = Object.values(expertApprovals);
     if (approvalValues.length > 0 && approvalValues.every(Boolean)) {
         return 'approved';
     }
@@ -330,21 +330,21 @@ export async function updateChapterDecision(
     const decidedAt = new Date().toISOString();
     const isApproved = decision === 'approved';
 
-    // Update mentor approvals
-    const mentorApprovals: MentorApprovalState = {
-        ...(chapter.mentorApprovals ?? {}),
+    // Update expert approvals
+    const expertApprovals: ExpertApprovalState = {
+        ...(chapter.expertApprovals ?? {}),
         [role]: isApproved,
     };
 
     // Calculate overall status
-    const status = calculateOverallStatus(mentorApprovals, decision);
+    const status = calculateOverallStatus(expertApprovals, decision);
 
     // Create updated chapter
     const updatedChapter: ThesisChapter = {
         ...chapter,
         status,
         lastModified: decidedAt,
-        mentorApprovals,
+        expertApprovals,
     };
 
     // Update the chapters array
@@ -360,6 +360,6 @@ export async function updateChapterDecision(
     return {
         status,
         decidedAt,
-        mentorApprovals,
+        expertApprovals,
     };
 }

@@ -21,9 +21,9 @@ export function filterActiveGroups(groups: ThesisGroup[]): ThesisGroup[] {
 }
 
 /**
- * Derive a chronological thesis history for a mentor across completed groups.
+ * Derive a chronological thesis history for a expert across completed groups.
  */
-export function deriveMentorThesisHistory(
+export function deriveExpertThesisHistory(
     allGroups: ThesisGroup[],
     userUid: string,
     role: 'adviser' | 'editor' | 'statistician'

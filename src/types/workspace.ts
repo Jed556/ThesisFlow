@@ -1,5 +1,5 @@
 import type { FileAttachment } from './file';
-import type { ChapterSubmissionStatus, MentorRole, ThesisStageName } from './thesis';
+import type { ChapterSubmissionStatus, ExpertRole, ThesisStageName } from './thesis';
 
 export interface WorkspaceFilterOption {
     label: string;
@@ -49,7 +49,7 @@ export interface WorkspaceChapterDecisionPayload {
     chapterId: number;
     versionIndex?: number | null;
     decision: WorkspaceChapterDecision;
-    role?: MentorRole;
+    role?: ExpertRole;
 }
 
 export interface VersionOption {

@@ -114,9 +114,9 @@ service cloud.firestore {
         }
 
         /**
-         * Check if user is mentor (adviser, editor, or statistician)
+         * Check if user is expert (adviser, editor, or statistician)
          */
-        function isMentor() {
+        function isExpert() {
             return hasAnyRole(['adviser', 'editor', 'statistician']);
         }
 
@@ -251,6 +251,26 @@ service cloud.firestore {
             }
 
             // ================================
+            // SLOT REQUESTS
+            // ================================
+
+            match /slotRequests/{requestId} {
+                // Slot requests - experts can read their own, admins can read all
+                allow read: if isAuthenticated() && (
+                    isAdminOrDeveloper() || 
+                    resource.data.expertUid == request.auth.uid
+                );
+                // Experts can create their own requests
+                allow create: if isAuthenticated() && 
+                    isExpert() && 
+                    request.resource.data.expertUid == request.auth.uid;
+                // Only admins can approve/reject (update status)
+                allow update: if isAdminOrDeveloper();
+                // Only admins can delete
+                allow delete: if isAdminOrDeveloper();
+            }
+
+            // ================================
             // DEPARTMENTS
             // ================================
 
@@ -339,9 +359,9 @@ service cloud.firestore {
                         }
 
                         /**
-                         * Check if user is assigned mentor for this group
+                         * Check if user is assigned expert for this group
                          */
-                        function isAssignedMentor() {
+                        function isAssignedExpert() {
                             return isGroupAdviser() || isGroupEditor() || isGroupStatistician();
                         }
 
@@ -349,15 +369,15 @@ service cloud.firestore {
                          * Check if user has access to the group
                          */
                         function hasGroupAccess() {
-                            return isGroupMember() || isAssignedMentor() || isGroupPanel() || isModeratorOrAbove();
+                            return isGroupMember() || isAssignedExpert() || isGroupPanel() || isModeratorOrAbove();
                         }
 
                         /**
-                         * Check if user is a mentor role (adviser, editor, statistician)
+                         * Check if user is a expert role (adviser, editor, statistician)
                          * and is updating to assign themselves to the group
                          */
-                        function isMentorSelfAssigning() {
-                            return isMentor() && (
+                        function isExpertSelfAssigning() {
+                            return isExpert() && (
                                 // Adviser assigning themselves
                                 (isAdviser() && request.resource.data.members.adviser == request.auth.uid) ||
                                 // Editor assigning themselves
@@ -370,7 +390,7 @@ service cloud.firestore {
                         // Group documents - read by members, staff; write by adviser, admin, head, moderator
                         allow read: if isAuthenticated() && hasGroupAccess();
                         allow create: if isAdminOrDeveloper() || isHead() || isAdviser() || isStudent();
-                        allow update: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader() || isModerator() || isMentorSelfAssigning();
+                        allow update: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader() || isModerator() || isExpertSelfAssigning();
                         allow delete: if isAdminOrDeveloper() || isHead();
 
                         // ================================
@@ -446,7 +466,7 @@ service cloud.firestore {
                             // Thesis documents
                             allow read: if isAuthenticated() && hasThesisAccess();
                             allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
-                            allow update: if isGroupMember() || isAssignedMentor() || isThesisReviewer() || isModeratorOrAbove();
+                            allow update: if isGroupMember() || isAssignedExpert() || isThesisReviewer() || isModeratorOrAbove();
                             allow delete: if isAdminOrDeveloper() || isHead();
 
                             // ================================
@@ -456,8 +476,8 @@ service cloud.firestore {
                             match /stages/{stage} {
                                 // Stages inherit thesis access
                                 allow read: if isAuthenticated() && hasThesisAccess();
-                                allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
-                                allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
+                                allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                 allow delete: if isAdminOrDeveloper() || isHead();
 
                                 // ================================
@@ -467,8 +487,8 @@ service cloud.firestore {
                                 match /chapters/{chapterId} {
                                     // Chapters inherit thesis access
                                     allow read: if isAuthenticated() && hasThesisAccess();
-                                    allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
-                                    allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                    allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
+                                    allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                     allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
 
                                     // ================================
@@ -479,9 +499,9 @@ service cloud.firestore {
                                         // Submissions - thesis members and reviewers can read
                                         allow read: if isAuthenticated() && hasThesisAccess();
                                         // Group members can create submissions
-                                        allow create: if isGroupMember() || isAssignedMentor();
+                                        allow create: if isGroupMember() || isAssignedExpert();
                                         // Members and reviewers can update
-                                        allow update: if isGroupMember() || isAssignedMentor() || isThesisReviewer() || isModeratorOrAbove();
+                                        allow update: if isGroupMember() || isAssignedExpert() || isThesisReviewer() || isModeratorOrAbove();
                                         allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
 
                                         // ================================
@@ -508,8 +528,8 @@ service cloud.firestore {
 
                             match /terminal/{terminalId} {
                                 allow read: if isAuthenticated() && hasThesisAccess();
-                                allow create: if isGroupMember() || isAssignedMentor() || isAdminOrDeveloper();
-                                allow update: if isGroupMember() || isAssignedMentor() || isModeratorOrAbove();
+                                allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
+                                allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                 allow delete: if isAdminOrDeveloper() || isHead();
                             }
                         }

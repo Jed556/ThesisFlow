@@ -96,6 +96,9 @@ export const TERMINAL_SUBCOLLECTION = 'terminal';
 /** Users subcollection */
 export const USERS_SUBCOLLECTION = 'users';
 
+/** Slot requests subcollection under year */
+export const SLOT_REQUESTS_SUBCOLLECTION = 'slotRequests';
+
 // ============================================================================
 // Configuration Collection (Global settings)
 // ============================================================================

@@ -20,14 +20,14 @@ export type ThesisStatus =
     | 'revision_required';
 
 /**
- * Mentor role types for thesis mentoring
+ * Expert role types for thesis experting
  */
-export type MentorRole = 'adviser' | 'editor' | 'statistician';
+export type ExpertRole = 'adviser' | 'editor' | 'statistician';
 
 /**
- * State of mentor approvals (maps mentor role to approval status)
+ * State of expert approvals (maps expert role to approval status)
  */
-export type MentorApprovalState = Partial<Record<MentorRole, boolean>>;
+export type ExpertApprovalState = Partial<Record<ExpertRole, boolean>>;
 
 /**
  * Thesis role for access control
@@ -73,7 +73,7 @@ export interface ChapterSubmissionEntry {
     id: string;
     status: ChapterSubmissionStatus;
     decidedAt?: string;
-    decidedBy?: MentorRole | 'system';
+    decidedBy?: ExpertRole | 'system';
 }
 
 /**
@@ -88,7 +88,7 @@ export interface ChapterSubmission {
     /** Decision timestamp */
     decidedAt?: string;
     /** Who made the decision */
-    decidedBy?: MentorRole | 'system';
+    decidedBy?: ExpertRole | 'system';
 }
 
 /**
@@ -125,7 +125,7 @@ export interface ThesisChapter {
     comments: ThesisComment[];
     stage?: ThesisStageName[];
     approvalStatus?: ThesisStatus;
-    mentorApprovals?: MentorApprovalState;
+    expertApprovals?: ExpertApprovalState;
 }
 
 /**

@@ -1,7 +1,7 @@
 import type {
     ChapterSubmissionEntry,
     ChapterSubmissionStatus,
-    MentorRole,
+    ExpertRole,
     ThesisChapter,
 } from '../types/thesis';
 
@@ -62,7 +62,7 @@ export const setSubmissionStatusAt = (
     submissions: ThesisChapter['submissions'],
     index: number,
     status: ChapterSubmissionStatus,
-    meta?: { decidedAt?: string; decidedBy?: MentorRole | 'system' },
+    meta?: { decidedAt?: string; decidedBy?: ExpertRole | 'system' },
 ): ChapterSubmissionEntry[] => {
     const normalized = normalizeChapterSubmissions(submissions);
     if (!Number.isInteger(index) || index < 0 || index >= normalized.length) {

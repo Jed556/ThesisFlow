@@ -148,7 +148,7 @@ export function TerminalRequirementApprovalWorkspace({
                     })));
                 }
             } catch (error) {
-                console.error('Failed to load mentor assignments:', error);
+                console.error('Failed to load expert assignments:', error);
                 if (!cancelled) {
                     setAssignmentOptions([]);
                 }
@@ -249,7 +249,7 @@ export function TerminalRequirementApprovalWorkspace({
                     setThesisError('Unable to load thesis details.');
                 }
             } catch (error) {
-                console.error('Failed to load thesis record for mentor approvals:', error);
+                console.error('Failed to load thesis record for expert approvals:', error);
                 if (!cancelled) {
                     setThesisError('Unable to load thesis details.');
                 }
@@ -330,7 +330,7 @@ export function TerminalRequirementApprovalWorkspace({
             const files = await fetchTerminalRequirementFiles(thesis.id, requirementId);
             setFilesByRequirement((prev) => ({ ...prev, [requirementId]: files }));
         } catch (error) {
-            console.error('Failed to load requirement files for mentor view:', error);
+            console.error('Failed to load requirement files for expert view:', error);
         } finally {
             setFileLoading((prev) => ({ ...prev, [requirementId]: false }));
         }
@@ -477,7 +477,7 @@ export function TerminalRequirementApprovalWorkspace({
         if (activeSubmission.status === 'returned') {
             const returnedByLabel = activeSubmission.returnedBy
                 ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.returnedBy]
-                : 'a mentor';
+                : 'a expert';
             return (
                 <Alert severity="warning">
                     Returned to students by {returnedByLabel} on{' '}

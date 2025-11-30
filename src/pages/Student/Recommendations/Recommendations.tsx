@@ -10,7 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { AnimatedPage } from '../../../components/Animate';
 import { useSession } from '@toolpad/core';
-import { MentorRecommendationCard } from '../../../components/Profile';
+import { ExpertRecommendationCard } from '../../../components/Profile';
 import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
@@ -18,7 +18,7 @@ import {
     listenTheses, listenThesesForParticipant, type ThesisRecord,
 } from '../../../utils/firebase/firestore/thesis';
 import { findGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
-import { aggregateThesisStats, computeMentorCards, type MentorCardData } from '../../../utils/recommendUtils';
+import { aggregateThesisStats, computeExpertCards, type ExpertCardData } from '../../../utils/recommendUtils';
 import { isTopicApproved } from '../../../utils/thesisUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { ThesisData } from '../../../types/thesis';
@@ -26,7 +26,7 @@ import type { Session } from '../../../types/session';
 import type { ThesisGroup } from '../../../types/group';
 
 export const metadata: NavigationItem = {
-    group: 'mentors',
+    group: 'experts',
     index: 0,
     title: 'Pool of Experts',
     segment: 'recommendation',
@@ -272,7 +272,7 @@ export default function AdviserEditorRecommendationsPage() {
                 setAllGroups(groups);
             },
             onError: (err) => {
-                console.error('Failed to load groups for mentor workloads:', err);
+                console.error('Failed to load groups for expert workloads:', err);
             },
         });
 
@@ -294,15 +294,15 @@ export default function AdviserEditorRecommendationsPage() {
     }, [adviserProfiles, studentGroup?.department]);
 
     const adviserCards = React.useMemo(
-        () => computeMentorCards(filteredAdviserProfiles, 'adviser', thesisStats),
+        () => computeExpertCards(filteredAdviserProfiles, 'adviser', thesisStats),
         [filteredAdviserProfiles, thesisStats]
     );
     const editorCards = React.useMemo(
-        () => computeMentorCards(editorProfiles, 'editor', thesisStats),
+        () => computeExpertCards(editorProfiles, 'editor', thesisStats),
         [editorProfiles, thesisStats]
     );
     const statisticianCards = React.useMemo(
-        () => computeMentorCards(statisticianProfiles, 'statistician', thesisStats),
+        () => computeExpertCards(statisticianProfiles, 'statistician', thesisStats),
         [statisticianProfiles, thesisStats]
     );
 
@@ -325,13 +325,13 @@ export default function AdviserEditorRecommendationsPage() {
     }, []);
 
     const handleOpenProfile = React.useCallback((profile: UserProfile) => {
-        navigate(`/mentor/${profile.uid}`);
+        navigate(`/expert/${profile.uid}`);
     }, [navigate]);
 
-    const renderMentorCard = React.useCallback((model: MentorCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => {
+    const renderExpertCard = React.useCallback((model: ExpertCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => {
         const slotsFull = model.capacity > 0 && model.openSlots === 0;
         return (
-            <MentorRecommendationCard
+            <ExpertRecommendationCard
                 card={model}
                 roleLabel={roleLabel}
                 onSelect={handleOpenProfile}
@@ -413,7 +413,7 @@ export default function AdviserEditorRecommendationsPage() {
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2, position: 'relative' }}>
-                <Tabs value={activeTab} onChange={handleTabChange} aria-label="mentor recommendations tabs">
+                <Tabs value={activeTab} onChange={handleTabChange} aria-label="expert recommendations tabs">
                     <Tab label={`Advisers (${adviserCards.length})`} icon={<SchoolIcon />} iconPosition="start" />
                     <Tab label={`Editors (${editorCards.length})`} icon={<EditNoteIcon />} iconPosition="start" />
                     <Tab label={`Statisticians (${statisticianCards.length})`} icon={<StarRateIcon />} iconPosition="start" />
@@ -455,7 +455,7 @@ export default function AdviserEditorRecommendationsPage() {
                     <Grid container spacing={2}>
                         {adviserCards.map((card) => (
                             <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
-                                {renderMentorCard(card, 'Adviser')}
+                                {renderExpertCard(card, 'Adviser')}
                             </Grid>
                         ))}
                         {adviserCards.length === 0 && (
@@ -489,7 +489,7 @@ export default function AdviserEditorRecommendationsPage() {
                     <Grid container spacing={2}>
                         {editorCards.map((card) => (
                             <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
-                                {renderMentorCard(card, 'Editor')}
+                                {renderExpertCard(card, 'Editor')}
                             </Grid>
                         ))}
                         {editorCards.length === 0 && (
@@ -521,7 +521,7 @@ export default function AdviserEditorRecommendationsPage() {
                     <Grid container spacing={2}>
                         {statisticianCards.map((card) => (
                             <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
-                                {renderMentorCard(card, 'Statistician')}
+                                {renderExpertCard(card, 'Statistician')}
                             </Grid>
                         ))}
                         {statisticianCards.length === 0 && (
@@ -558,7 +558,7 @@ export default function AdviserEditorRecommendationsPage() {
                                 primary="Profile insights"
                                 secondary={(
                                     <Typography variant="body2" color="text.secondary">
-                                        Tap into curated data about a mentor's expertise, departmental affiliation,
+                                        Tap into curated data about a expert's expertise, departmental affiliation,
                                         and current engagements.
                                     </Typography>
                                 )}
@@ -572,7 +572,7 @@ export default function AdviserEditorRecommendationsPage() {
                             </ListItemAvatar>
                             <ListItemText
                                 primary="Balanced workloads"
-                                secondary="We highlight how many active theses each mentor currently handles to match availability."
+                                secondary="We highlight how many active theses each expert currently handles to match availability."
                             />
                         </ListItem>
                         <ListItem>
@@ -583,7 +583,7 @@ export default function AdviserEditorRecommendationsPage() {
                             </ListItemAvatar>
                             <ListItemText
                                 primary="One-click profile access"
-                                secondary="Select a mentor to review their detailed profile, thesis history, and send a request."
+                                secondary="Select a expert to review their detailed profile, thesis history, and send a request."
                             />
                         </ListItem>
                     </List>

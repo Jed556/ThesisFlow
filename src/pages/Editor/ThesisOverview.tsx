@@ -292,7 +292,7 @@ export default function EditorThesisOverviewPage() {
                             ...chapter,
                             status: result.status,
                             lastModified: result.decidedAt,
-                            mentorApprovals: result.mentorApprovals,
+                            expertApprovals: result.expertApprovals,
                         }
                         : chapter
                 ),
@@ -341,7 +341,7 @@ export default function EditorThesisOverviewPage() {
                     allowCommenting
                     emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
                     onCreateComment={handleCreateComment}
-                    mentorRole="editor"
+                    expertRole="editor"
                     onChapterDecision={handleChapterDecision}
                 />
             )}

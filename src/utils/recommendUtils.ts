@@ -1,9 +1,9 @@
 import type { UserProfile } from '../types/profile';
 import { normalizeDateInput } from './dateUtils';
-import { isCompletedGroupStatus } from './mentorProfileUtils';
+import { isCompletedGroupStatus } from './expertProfileUtils';
 import type { ThesisGroup } from '../types/group';
 
-type ThesisMentorRole = 'adviser' | 'editor' | 'statistician';
+type ThesisExpertRole = 'adviser' | 'editor' | 'statistician';
 
 export interface ThesisRoleStats {
     adviserCount: number;
@@ -11,7 +11,7 @@ export interface ThesisRoleStats {
     statisticianCount: number;
 }
 
-export interface MentorCardData {
+export interface ExpertCardData {
     profile: UserProfile;
     stats: ThesisRoleStats;
     compatibility: number;
@@ -41,7 +41,7 @@ export function aggregateThesisStats(
 
     const registerAssignment = (
         uid: string | null | undefined,
-        role: ThesisMentorRole,
+        role: ThesisExpertRole,
         referenceId: string | null | undefined
     ) => {
         if (!uid) {
@@ -79,20 +79,20 @@ export function aggregateThesisStats(
 }
 
 /**
- * Computes mentor recommendation cards sorted by compatibility, capacity, and expertise.
- * @param profiles List of user profiles to evaluate as mentors
+ * Computes expert recommendation cards sorted by compatibility, capacity, and expertise.
+ * @param profiles List of user profiles to evaluate as experts
  * @param role Role to consider ('adviser', 'editor', or 'statistician')
  * @param statsMap Precomputed thesis role statistics for users
- * @return List of MentorCardData sorted by rank
+ * @return List of ExpertCardData sorted by rank
  */
-export function computeMentorCards(
+export function computeExpertCards(
     profiles: UserProfile[],
     role: 'adviser' | 'editor' | 'statistician',
     statsMap: Map<string, ThesisRoleStats>,
-): MentorCardData[] {
+): ExpertCardData[] {
     const scored = profiles.map((profile) => {
         const stats = statsMap.get(profile.uid) ?? { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
-        const capacity = profile.capacity ?? 0;
+        const capacity = profile.slots ?? 0;
         const active = role === 'adviser'
             ? stats.adviserCount
             : role === 'editor'
@@ -127,9 +127,9 @@ export function computeMentorCards(
 }
 
 /**
- * Reusable compatibility evaluator for mentor detail views.
+ * Reusable compatibility evaluator for expert detail views.
  */
-export function evaluateMentorCompatibility(
+export function evaluateExpertCompatibility(
     profile: UserProfile,
     stats: ThesisRoleStats,
     role: 'adviser' | 'editor' | 'statistician'
@@ -138,7 +138,7 @@ export function evaluateMentorCompatibility(
 }
 
 /**
- * Generates a recency score that weights mentors who were active recently.
+ * Generates a recency score that weights experts who were active recently.
  */
 function computeRecencyScore(date: Date | null): number {
     if (!date) return 0;
@@ -153,14 +153,14 @@ function computeRecencyScore(date: Date | null): number {
 }
 
 /**
- * Calculates mentor compatibility using availability, skills coverage, and activity recency.
+ * Calculates expert compatibility using availability, skills coverage, and activity recency.
  */
 function computeCompatibility(
     profile: UserProfile,
     stats: ThesisRoleStats,
     role: 'adviser' | 'editor' | 'statistician'
 ): number {
-    const capacity = profile.capacity ?? 0;
+    const capacity = profile.slots ?? 0;
     const active = role === 'adviser'
         ? stats.adviserCount
         : role === 'editor'
@@ -279,34 +279,34 @@ export interface ResearchMatch {
 /**
  * Computes research-fit recommendations using a TF-IDF + cosine similarity pipeline.
  * @param studentText - Combined research title/abstract or similar student submission text
- * @param mentors - Array of mentor documents with textual metadata to compare against
- * @returns Mentor matches sorted by similarity in descending order
+ * @param experts - Array of expert documents with textual metadata to compare against
+ * @returns Expert matches sorted by similarity in descending order
  */
-export function rankMentorsByResearchFit(studentText: string, mentors: ResearchDocument[]): ResearchMatch[] {
+export function rankExpertsByResearchFit(studentText: string, experts: ResearchDocument[]): ResearchMatch[] {
     const sanitizedStudentText = studentText ?? '';
-    const mentorTexts = mentors.map((document) => document.text ?? '');
+    const expertTexts = experts.map((document) => document.text ?? '');
 
     // Tokenization
     const studentTokens = tokenize(sanitizedStudentText);
-    const mentorTokens = mentorTexts.map((text) => tokenize(text));
+    const expertTokens = expertTexts.map((text) => tokenize(text));
 
     // Term Frequency (TF)
     const studentTf = computeTermFrequency(studentTokens);
-    const mentorTf = mentorTokens.map((tokens) => computeTermFrequency(tokens));
+    const expertTf = expertTokens.map((tokens) => computeTermFrequency(tokens));
 
     // Inverse Document Frequency (IDF)
-    const idf = computeInverseDocumentFrequency([studentTokens, ...mentorTokens]);
+    const idf = computeInverseDocumentFrequency([studentTokens, ...expertTokens]);
 
     // TF-IDF Vectorization
     const studentVector = buildTfidfVector(studentTf, idf);
-    const mentorVectors = mentorTf.map((tf) => buildTfidfVector(tf, idf));
+    const expertVectors = expertTf.map((tf) => buildTfidfVector(tf, idf));
 
     // Similarity Scoring
-    const matches = mentors.map((mentor, index) => {
-        const similarity = cosineSimilarity(studentVector, mentorVectors[index]);
+    const matches = experts.map((expert, index) => {
+        const similarity = cosineSimilarity(studentVector, expertVectors[index]);
         return {
-            uid: mentor.uid,
-            profile: mentor.profile,
+            uid: expert.uid,
+            profile: expert.profile,
             similarity,
         } satisfies ResearchMatch;
     });

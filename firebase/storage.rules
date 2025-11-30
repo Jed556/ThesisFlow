@@ -64,9 +64,9 @@ service firebase.storage {
         }
 
         /**
-         * Check if user is mentor (adviser, editor, or statistician)
+         * Check if user is expert (adviser, editor, or statistician)
          */
-        function isMentor() {
+        function isExpert() {
             return hasAnyRole(['adviser', 'editor', 'statistician']);
         }
 
