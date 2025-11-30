@@ -139,21 +139,6 @@ export interface ThesisData {
     lastUpdated: Date | string;
     stages: ThesisStage[];
     proposals?: TopicProposalSet;
-    /** Overall thesis status */
-    overallStatus?: ThesisStatus;
-    /** Group ID this thesis belongs to */
-    groupId?: string;
-    /** Assigned adviser UID */
-    adviser?: string;
-    /** Assigned editor UID */
-    editor?: string;
-    /** Assigned statistician UID */
-    statistician?: string;
-    /** Group leader UID */
-    leader?: string;
-    /** Group member UIDs */
-    members?: string[];
-    /** List of chapters */
     chapters?: ThesisChapter[];
 }
 

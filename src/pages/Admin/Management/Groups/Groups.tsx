@@ -16,12 +16,7 @@ import type { ThesisGroup, ThesisGroupFormData } from '../../../../types/group';
 import type { Session } from '../../../../types/session';
 import type { UserProfile } from '../../../../types/profile';
 import {
-    findAllUsers,
-    getAllGroups,
-    createGroup,
-    updateGroupById,
-    setGroupById,
-    findUsersByFilter,
+    findAllUsers, getAllGroups, createGroup, updateGroupById, setGroupById, findUsersByFilter,
 } from '../../../../utils/firebase/firestore';
 import { getAcademicYear } from '../../../../config/firestore';
 import { importGroupsFromCsv, exportGroupsToCsv } from '../../../../utils/csv/group';

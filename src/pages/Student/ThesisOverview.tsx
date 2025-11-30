@@ -22,7 +22,7 @@ import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRe
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import type { PanelCommentReleaseMap } from '../../types/panelComment';
 import { listenPanelCommentRelease, type PanelCommentContext } from '../../utils/firebase/firestore/panelComments';
-import { findGroupById } from '../../utils/firebase/firestore/groups';
+import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
@@ -83,7 +83,8 @@ export default function StudentThesisOverviewPage() {
 
         const unsubscribe = listenThesesForParticipant(userUid, {
             onData: (records) => {
-                const preferred = records.find((record) => record.leader === userUid) ?? records[0] ?? null;
+                // Select first thesis record (user is already filtered as participant)
+                const preferred = records[0] ?? null;
                 setThesis(preferred ?? null);
                 setIsLoading(false);
             },
@@ -161,9 +162,9 @@ export default function StudentThesisOverviewPage() {
         };
     }, [thesis?.id, group]);
 
-    // Fetch group for panel comment context
+    // Fetch group for panel comment context - load user's groups directly
     React.useEffect(() => {
-        if (!thesis?.groupId) {
+        if (!userUid) {
             setGroup(null);
             return;
         }
@@ -171,10 +172,32 @@ export default function StudentThesisOverviewPage() {
         let cancelled = false;
         void (async () => {
             try {
-                const fetchedGroup = await findGroupById(thesis.groupId!);
-                if (!cancelled) {
-                    setGroup(fetchedGroup);
-                }
+                const [leaderGroups, memberGroups] = await Promise.all([
+                    getGroupsByLeader(userUid),
+                    getGroupsByMember(userUid),
+                ]);
+
+                if (cancelled) return;
+
+                const combined = [...leaderGroups, ...memberGroups];
+                const unique = Array.from(
+                    new Map(combined.map((item) => [item.id, item])).values()
+                );
+
+                // Prioritize active groups, then review, then draft
+                const priority = ['active', 'review', 'draft'];
+                const sorted = unique.sort((a, b) => {
+                    const aScore = priority.indexOf(a.status);
+                    const bScore = priority.indexOf(b.status);
+                    if (aScore === -1 && bScore === -1) {
+                        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                    }
+                    if (aScore === -1) return 1;
+                    if (bScore === -1) return -1;
+                    return aScore - bScore;
+                });
+
+                setGroup(sorted[0] || null);
             } catch (err) {
                 console.error('Failed to fetch group for panel context:', err);
                 if (!cancelled) {
@@ -186,7 +209,7 @@ export default function StudentThesisOverviewPage() {
         return () => {
             cancelled = true;
         };
-    }, [thesis?.groupId]);
+    }, [userUid]);
 
     React.useEffect(() => {
         if (!panelCommentCtx) {
@@ -296,7 +319,7 @@ export default function StudentThesisOverviewPage() {
                         </Typography>
                     </CardContent>
                 </Card>
-            ) : !thesis.adviser ? (
+            ) : !group?.members?.adviser ? (
                 <UnauthorizedNotice
                     title="Assign a research adviser to continue"
                     description="Your thesis workspace unlocks after a research adviser accepts your request."

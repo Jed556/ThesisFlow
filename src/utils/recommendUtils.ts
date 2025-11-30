@@ -1,7 +1,6 @@
-import type { ThesisData } from '../types/thesis';
 import type { UserProfile } from '../types/profile';
 import { normalizeDateInput } from './dateUtils';
-import { isCompletedThesisStatus } from './mentorProfileUtils';
+import { isCompletedGroupStatus } from './mentorProfileUtils';
 import type { ThesisGroup } from '../types/group';
 
 type ThesisMentorRole = 'adviser' | 'editor' | 'statistician';
@@ -23,13 +22,12 @@ export interface MentorCardData {
 }
 
 /**
- * Aggregates counts of adviser and editor roles handled by each user across all theses.
- * \@param theses List of theses to analyze
+ * Aggregates counts of adviser and editor roles handled by each user across all groups.
+ * @param groups List of groups to analyze
  * @return Map of user UIDs to their thesis role statistics
  */
 export function aggregateThesisStats(
-    theses: (ThesisData & { id: string })[],
-    groups: ThesisGroup[] = []
+    groups: ThesisGroup[]
 ): Map<string, ThesisRoleStats> {
     const stats = new Map<string, ThesisRoleStats>();
     const countedAssignments = new Set<string>();
@@ -64,18 +62,11 @@ export function aggregateThesisStats(
         }
     };
 
-    theses.forEach((thesis) => {
-        if (isCompletedThesisStatus(thesis.overallStatus)) {
-            return;
-        }
-        const reference = thesis.groupId ?? thesis.id;
-        registerAssignment(thesis.adviser, 'adviser', reference);
-        registerAssignment(thesis.editor, 'editor', reference);
-        registerAssignment(thesis.statistician, 'statistician', reference);
-    });
-
     const activeGroupStatuses: ThesisGroup['status'][] = ['draft', 'review', 'active'];
     groups.forEach((group) => {
+        if (isCompletedGroupStatus(group.status)) {
+            return;
+        }
         if (!activeGroupStatuses.includes(group.status)) {
             return;
         }

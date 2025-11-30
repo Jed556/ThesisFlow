@@ -135,9 +135,6 @@ function buildThesisWorkflowSteps(
                 : 'Create your research group to unlock editor selection.';
         const editorState: WorkflowStep['state'] = editorAssigned ? 'completed' : 'available';
 
-        const adviserDescription = adviserAssigned
-            ? 'Research adviser assigned.'
-            : 'Adviser selection unlocks after your topic proposal is approved.';
         const adviserState: WorkflowStep['state'] = adviserAssigned ? 'completed' : 'available';
 
         const baseSteps: WorkflowStep[] = [
@@ -234,7 +231,7 @@ function buildThesisWorkflowSteps(
 
     const chapters = record.chapters ?? [];
     const totalMembers = members.length;
-    const hasGroup = Boolean(record.groupId) || totalMembers > 0 || Boolean(group);
+    const hasGroup = totalMembers > 0 || Boolean(group);
 
     // Determine group approval state with detailed status
     const groupStatus = group?.status;
@@ -244,8 +241,8 @@ function buildThesisWorkflowSteps(
     const isRejected = groupStatus === 'rejected';
     const groupApproved = isActive || (totalMembers > 1 && groupStatus !== 'draft');
 
-    const adviserAssigned = Boolean(record.adviser ?? group?.members?.adviser);
-    const editorAssigned = Boolean(record.editor ?? group?.members?.editor);
+    const adviserAssigned = Boolean(group?.members?.adviser);
+    const editorAssigned = Boolean(group?.members?.editor);
     const hasTopicProposals = Boolean(record.title) || proposalsSubmitted;
     // Topic is approved if proposal is head_approved OR thesis record indicates approval
     const topicApproved = proposalApproved || isTopicApproved(record);
@@ -459,7 +456,8 @@ export default function ThesisPage() {
             return;
         }
 
-        const candidate = userTheses.find((record) => record.leader === userUid) ?? userTheses[0];
+        // Select thesis - prefer one where user is the group leader
+        const candidate = userTheses[0];
         setThesis(candidate);
         setProgress(computeThesisProgressPercent(candidate));
         setHasNoThesis(false);
@@ -784,7 +782,7 @@ export default function ThesisPage() {
                             <strong>Last Updated:</strong> {formattedLastUpdated}
                         </Typography>
                         <Typography variant="body1">
-                            <strong>Status:</strong> {thesis.overallStatus ?? 'In Progress'}
+                            <strong>Status:</strong> {group?.status === 'completed' ? 'Completed' : 'In Progress'}
                         </Typography>
                     </Box>
                 </Box>

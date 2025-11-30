@@ -121,6 +121,7 @@ function docToThesisData(docSnap: DocumentSnapshot): ThesisData | null {
         lastUpdated: data.lastUpdated?.toDate?.() || new Date(),
         stages: data.stages || [],
         proposals: data.proposals,
+        chapters: data.chapters,
     } as ThesisData;
 }
 
