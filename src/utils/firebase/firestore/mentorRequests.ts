@@ -139,6 +139,7 @@ export async function createExpertRequest(
 
     const now = createTimestamp();
     const requestData = {
+        id: newDocRef.id,
         expertUid,
         role,
         requestedBy,
@@ -167,6 +168,7 @@ export async function createExpertRequestWithId(
 
     const now = createTimestamp();
     const requestData = {
+        id: requestId,
         expertUid: payload.expertUid,
         role: payload.role,
         requestedBy: payload.requestedBy,

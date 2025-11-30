@@ -159,6 +159,7 @@ export async function createThesis(
 
     const cleanedData = cleanData({
         ...data,
+        id: newDocRef.id,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     }, 'create');
@@ -183,6 +184,7 @@ export async function createThesisWithId(
 
     const cleanedData = cleanData({
         ...data,
+        id: thesisId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     }, 'create');

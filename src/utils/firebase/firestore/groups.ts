@@ -76,6 +76,7 @@ export async function createGroup(
     const newDocRef = doc(groupsRef);
 
     const groupData = {
+        id: newDocRef.id,
         name: data.name,
         description: data.description || '',
         members: {
@@ -117,6 +118,7 @@ export async function createGroupWithId(
     const docRef = doc(firebaseFirestore, docPath);
 
     const groupData = {
+        id: groupId,
         name: data.name,
         description: data.description || '',
         members: {
