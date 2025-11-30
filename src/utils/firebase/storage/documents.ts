@@ -5,7 +5,6 @@
 
 import type { FileAttachment } from '../../../types/file';
 import { uploadFileToStorage, generateFilePath, generateUniqueFileId } from './common';
-import { setFileMetadata } from '../firestore/file';
 import { ALLOWED_MIME_TYPES, FILE_SIZE_LIMITS } from '../../../config/files';
 import { formatFileSize } from '../../fileUtils';
 import { getFileExtension } from '../../fileUtils';
@@ -103,8 +102,7 @@ export async function uploadDocument(
         ...(context?.commentId && { commentId: context.commentId })
     };
 
-    // Save to Firestore
-    await setFileMetadata(fileId, metadata, ownerUid);
+    // Note: File metadata is saved via createSubmission, not standalone setFileMetadata
 
     return { fileId, url: downloadURL, metadata };
 }

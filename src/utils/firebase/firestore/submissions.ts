@@ -9,8 +9,8 @@ import {
     query, orderBy, serverTimestamp, onSnapshot, type QueryConstraint
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type { ChapterSubmission } from '../../../types/thesis';
-import { SUBMISSIONS_SUBCOLLECTION } from '../../../config/firestore';
+import type { ChapterSubmission, ThesisStageName } from '../../../types/thesis';
+import { SUBMISSIONS_SUBCOLLECTION, THESIS_STAGE_SLUGS } from '../../../config/firestore';
 import { buildSubmissionDocPath, buildSubmissionsCollectionPath } from './paths';
 
 // ============================================================================
@@ -23,8 +23,49 @@ export interface SubmissionContext {
     course: string;
     groupId: string;
     thesisId: string;
-    stage: string;
+    stage: ThesisStageName | string;
     chapterId: string;
+}
+
+// ============================================================================
+// Path Helpers
+// ============================================================================
+
+function normalizeStageKey(stage: SubmissionContext['stage']): string {
+    const fallback = THESIS_STAGE_SLUGS['Pre-Proposal'];
+    if (typeof stage !== 'string' || stage.trim().length === 0) {
+        return fallback;
+    }
+    const normalized = THESIS_STAGE_SLUGS[stage as ThesisStageName] ?? stage
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return normalized || fallback;
+}
+
+function resolveSubmissionsCollectionPath(ctx: SubmissionContext): string {
+    return buildSubmissionsCollectionPath(
+        ctx.year,
+        ctx.department,
+        ctx.course,
+        ctx.groupId,
+        ctx.thesisId,
+        normalizeStageKey(ctx.stage),
+        String(ctx.chapterId),
+    );
+}
+
+function resolveSubmissionDocPath(ctx: SubmissionContext, submissionId: string): string {
+    return buildSubmissionDocPath(
+        ctx.year,
+        ctx.department,
+        ctx.course,
+        ctx.groupId,
+        ctx.thesisId,
+        normalizeStageKey(ctx.stage),
+        String(ctx.chapterId),
+        submissionId,
+    );
 }
 
 export interface SubmissionListenerOptions {
@@ -46,9 +87,7 @@ export async function createSubmission(
     ctx: SubmissionContext,
     submissionData: Omit<ChapterSubmission, 'id'>
 ): Promise<string> {
-    const collectionPath = buildSubmissionsCollectionPath(
-        ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, ctx.chapterId
-    );
+    const collectionPath = resolveSubmissionsCollectionPath(ctx);
     const submissionsRef = collection(firebaseFirestore, collectionPath);
     const newDocRef = doc(submissionsRef);
 
@@ -68,9 +107,7 @@ export async function createSubmission(
  * @returns Submission data or null if not found
  */
 export async function getSubmission(ctx: SubmissionContext, submissionId: string): Promise<ChapterSubmission | null> {
-    const docPath = buildSubmissionDocPath(
-        ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, ctx.chapterId, submissionId
-    );
+    const docPath = resolveSubmissionDocPath(ctx, submissionId);
     const docRef = doc(firebaseFirestore, docPath);
     const docSnap = await getDoc(docRef);
 
@@ -84,9 +121,7 @@ export async function getSubmission(ctx: SubmissionContext, submissionId: string
  * @returns Array of submissions ordered by creation time (descending)
  */
 export async function getSubmissionsForChapter(ctx: SubmissionContext): Promise<ChapterSubmission[]> {
-    const collectionPath = buildSubmissionsCollectionPath(
-        ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, ctx.chapterId
-    );
+    const collectionPath = resolveSubmissionsCollectionPath(ctx);
     const submissionsRef = collection(firebaseFirestore, collectionPath);
     const q = query(submissionsRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
@@ -126,9 +161,7 @@ export async function updateSubmission(
     submissionId: string,
     data: Partial<ChapterSubmission>
 ): Promise<void> {
-    const docPath = buildSubmissionDocPath(
-        ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, ctx.chapterId, submissionId
-    );
+    const docPath = resolveSubmissionDocPath(ctx, submissionId);
     const docRef = doc(firebaseFirestore, docPath);
 
     await updateDoc(docRef, {
@@ -143,9 +176,7 @@ export async function updateSubmission(
  * @param submissionId - Submission document ID
  */
 export async function deleteSubmission(ctx: SubmissionContext, submissionId: string): Promise<void> {
-    const docPath = buildSubmissionDocPath(
-        ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, ctx.chapterId, submissionId
-    );
+    const docPath = resolveSubmissionDocPath(ctx, submissionId);
     const docRef = doc(firebaseFirestore, docPath);
     await deleteDoc(docRef);
 }
@@ -164,9 +195,7 @@ export function listenSubmissionsForChapter(
     ctx: SubmissionContext,
     options: SubmissionListenerOptions
 ): () => void {
-    const collectionPath = buildSubmissionsCollectionPath(
-        ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, ctx.chapterId
-    );
+    const collectionPath = resolveSubmissionsCollectionPath(ctx);
     const submissionsRef = collection(firebaseFirestore, collectionPath);
     const q = query(submissionsRef, orderBy('createdAt', 'desc'));
 

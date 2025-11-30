@@ -9,7 +9,7 @@ import type { FileAttachment, FileCategory } from '../../../types/file';
 import type { ThesisStageName } from '../../../types/thesis';
 import { getError } from '../../../../utils/errorUtils';
 import { getFileCategory, getFileExtension, validateFile } from '../../fileUtils';
-import { getFilesByThesis } from '../firestore/file';
+import { getFilesForChapter, getLatestChapterFile, type FileQueryContext } from '../firestore/file';
 
 /**
  * Allowed file types for thesis submissions
@@ -402,18 +402,12 @@ export async function deleteThesisFile(
 
 /**
  * Lists all files for a specific chapter
- * @param thesisId - Thesis ID
- * @param chapterId - Chapter ID
+ * @param ctx - File query context with hierarchical path information
  * @returns Promise with array of file attachments
  */
-export async function listChapterFiles(
-    thesisId: string,
-    chapterId: number
-): Promise<FileAttachment[]> {
+export async function listChapterFiles(ctx: FileQueryContext): Promise<FileAttachment[]> {
     try {
-        // Get files from Firestore metadata
-        const files = await getFilesByThesis(thesisId, chapterId);
-        return files;
+        return await getFilesForChapter(ctx);
     } catch (error) {
         console.error('Error listing chapter files:', error);
         return [];
@@ -457,28 +451,12 @@ export async function listThesisFilesFromStorage(
 
 /**
  * Gets the latest submission for a chapter
- * @param thesisId - Thesis ID
- * @param chapterId - Chapter ID
+ * @param ctx - File query context with hierarchical path information
  * @returns Promise with the latest file attachment or null
  */
-export async function getLatestChapterSubmission(
-    thesisId: string,
-    chapterId: number
-): Promise<FileAttachment | null> {
+export async function getLatestChapterSubmission(ctx: FileQueryContext): Promise<FileAttachment | null> {
     try {
-        const files = await getFilesByThesis(thesisId, chapterId, 'submission');
-
-        // Filter submissions only
-        const submissions = files.filter((f: FileAttachment) => f.category === 'submission');
-
-        if (submissions.length === 0) return null;
-
-        // Sort by upload date descending
-        submissions.sort((a: FileAttachment, b: FileAttachment) =>
-            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-        );
-
-        return submissions[0];
+        return await getLatestChapterFile(ctx);
     } catch (error) {
         console.error('Error getting latest chapter submission:', error);
         return null;

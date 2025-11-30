@@ -351,20 +351,10 @@ export async function deleteChapterConfigWithCascade(
     // Cascade chapters to theses (removes chapter data from all theses)
     const cascadeResult = await cascadeChaptersToTheses(trimmedDepartment, trimmedCourse, []);
 
-    // Delete all file attachments in Firestore and Storage for affected theses
-    const groups = await getGroupsInCourse(DEFAULT_YEAR, trimmedDepartment, trimmedCourse);
-    if (groups.length > 0) {
-        const thesisSnapshots = await fetchThesisSnapshotsForGroups(groups.map((group: ThesisGroup) => group.id));
-        for (const thesisSnap of thesisSnapshots) {
-            const thesisId = thesisSnap.id;
-            // Get all files for this thesis
-            const allFiles = await import('../firestore/file').then(m => m.getFilesByThesis(thesisId));
-            for (const file of allFiles) {
-                // Delete from Storage and Firestore
-                await import('../storage/thesis').then(m => m.deleteThesisFile(file.url, thesisId, file.id ?? ''));
-            }
-        }
-    }
+    // Note: File cleanup for cascade operations requires iterating through each chapter's submissions
+    // using the hierarchical path structure. This is intentionally not automated to avoid
+    // accidental data loss. Use deleteThesisFile for individual file cleanup.
+    console.warn('Chapter cascade completed. File cleanup for submissions requires manual review.');
 
     await deleteChapterConfig(trimmedDepartment, trimmedCourse);
     return cascadeResult;

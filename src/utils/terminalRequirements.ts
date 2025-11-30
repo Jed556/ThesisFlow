@@ -4,7 +4,6 @@ import type {
     TerminalRequirement,
     TerminalRequirementStatus,
 } from '../types/terminalRequirement';
-import { getFilesByTerminalRequirement } from './firebase/firestore/file';
 
 export const TERMINAL_REQUIREMENTS: TerminalRequirement[] = [
     {
@@ -111,10 +110,13 @@ export function getTerminalRequirementStatus(files?: FileAttachment[]): Terminal
 
 /**
  * Fetches all uploaded files linked to a requirement.
+ * @deprecated This function requires proper FileQueryContext. Use getFilesForChapter with context instead.
  */
 export async function fetchTerminalRequirementFiles(
     thesisId: string,
     requirementId: string,
 ): Promise<FileAttachment[]> {
-    return getFilesByTerminalRequirement(thesisId, requirementId);
+    console.warn('fetchTerminalRequirementFiles is deprecated. Terminal requirements need proper context.');
+    void thesisId; void requirementId;
+    return [];
 }

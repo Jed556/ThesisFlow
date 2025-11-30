@@ -1,17 +1,251 @@
 /**
  * Firestore utilities for file metadata management
- * Files are stored within submission and chat documents following the hierarchical structure:
- * - Submissions: year/{year}/departments/{dept}/courses/{course}/groups/{group}/thesis/{thesis}/stages/{stage}/chapters/{chapter}/submissions/{submission}
- * - Chats: ...submissions/{submission}/chats/{chat}
+ * Files are stored within submission documents following the hierarchical structure:
+ * year/{year}/departments/{dept}/courses/{course}/groups/{group}/thesis/{thesis}/stages/{stage}/chapters/{chapter}/submissions/{submission}
  * 
- * File metadata is embedded in submission.files[] arrays, not in a separate root collection.
+ * Submission documents contain file metadata directly on the document (not in a files[] array).
  */
 
-import { collectionGroup, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, Timestamp } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { FileAttachment } from '../../../types/file';
-import type { ChapterSubmission, ThesisStageName } from '../../../types/thesis';
-import { SUBMISSIONS_SUBCOLLECTION } from '../../../config/firestore';
+import type { ThesisStageName } from '../../../types/thesis';
+import { THESIS_STAGE_SLUGS } from '../../../config/firestore';
+import { buildSubmissionsCollectionPath, buildSubmissionDocPath } from './paths';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/**
+ * Context required for file operations within the hierarchical structure
+ */
+export interface FileQueryContext {
+    year: string;
+    department: string;
+    course: string;
+    groupId: string;
+    thesisId: string;
+    stage: ThesisStageName;
+    chapterId: string;
+}
+
+/**
+ * Options for file listener callbacks
+ */
+export interface FileListenerOptions {
+    onData: (files: FileAttachment[]) => void;
+    onError?: (error: Error) => void;
+}
+
+// ============================================================================
+// Path Helpers
+// ============================================================================
+
+/**
+ * Firestore stage documents use slugified IDs. Normalize incoming stage names
+ * so callers can provide human-readable ThesisStageName values.
+ */
+function normalizeStageKey(stage: ThesisStageName): string {
+    return THESIS_STAGE_SLUGS[stage] ?? stage
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+function resolveSubmissionsCollectionPath(ctx: FileQueryContext): string {
+    return buildSubmissionsCollectionPath(
+        ctx.year,
+        ctx.department,
+        ctx.course,
+        ctx.groupId,
+        ctx.thesisId,
+        normalizeStageKey(ctx.stage),
+        String(ctx.chapterId),
+    );
+}
+
+function resolveSubmissionDocPath(ctx: FileQueryContext, submissionId: string): string {
+    return buildSubmissionDocPath(
+        ctx.year,
+        ctx.department,
+        ctx.course,
+        ctx.groupId,
+        ctx.thesisId,
+        normalizeStageKey(ctx.stage),
+        String(ctx.chapterId),
+        submissionId,
+    );
+}
+
+// ============================================================================
+// Metadata Helpers
+// ============================================================================
+
+function coerceString(value: unknown): string | undefined {
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+    return undefined;
+}
+
+function deriveNameFromUrl(url: string, fallbackId: string): string {
+    try {
+        const parsed = new URL(url);
+        const pathname = decodeURIComponent(parsed.pathname);
+        const segments = pathname.split('/');
+        const last = segments.pop() ?? '';
+        if (last.includes('.')) {
+            return last.split('?')[0] || `submission-${fallbackId}`;
+        }
+    } catch {
+        // Ignore URL parsing errors and fall back to submission ID
+    }
+    const raw = url.split('?')[0];
+    const tail = raw.substring(raw.lastIndexOf('/') + 1);
+    return tail || `submission-${fallbackId}`;
+}
+
+function extractExtension(value?: string): string | undefined {
+    if (!value) {
+        return undefined;
+    }
+    const cleaned = value.split('?')[0];
+    const dotIndex = cleaned.lastIndexOf('.');
+    if (dotIndex === -1 || dotIndex === cleaned.length - 1) {
+        return undefined;
+    }
+    return cleaned.substring(dotIndex + 1).toLowerCase();
+}
+
+function guessMimeType(extension?: string): string | undefined {
+    switch (extension) {
+        case 'pdf':
+            return 'application/pdf';
+        case 'doc':
+            return 'application/msword';
+        case 'docx':
+            return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        case 'ppt':
+            return 'application/vnd.ms-powerpoint';
+        case 'pptx':
+            return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        case 'xls':
+            return 'application/vnd.ms-excel';
+        case 'xlsx':
+            return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        default:
+            return undefined;
+    }
+}
+
+function normalizeTimestampValue(value: unknown): string | undefined {
+    if (!value) {
+        return undefined;
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return new Date(value).toISOString();
+    }
+    if (value instanceof Timestamp) {
+        return value.toDate().toISOString();
+    }
+    if (typeof value === 'object' && 'toDate' in (value as { toDate?: () => Date })) {
+        try {
+            return (value as { toDate?: () => Date }).toDate?.()?.toISOString();
+        } catch {
+            return undefined;
+        }
+    }
+    return undefined;
+}
+
+function parseChapterId(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return undefined;
+}
+
+function buildFileAttachment(
+    primary: Record<string, unknown>,
+    fallback: Record<string, unknown>,
+    submissionId: string
+): FileAttachment | null {
+    const url = coerceString(primary.url) ?? coerceString(fallback.url);
+    if (!url) {
+        return null;
+    }
+
+    const explicitName = coerceString(primary.name)
+        ?? coerceString(primary.fileName)
+        ?? coerceString(fallback.name)
+        ?? coerceString(fallback.fileName);
+    const name = explicitName ?? deriveNameFromUrl(url, submissionId);
+
+    const extension = extractExtension(name) ?? extractExtension(url);
+    const type = coerceString(primary.type)
+        ?? coerceString(fallback.type)
+        ?? extension
+        ?? 'document';
+    const mimeType = coerceString(primary.mimeType)
+        ?? coerceString(fallback.mimeType)
+        ?? guessMimeType(extension);
+
+    const rawSize = primary.size ?? fallback.size;
+    const size = typeof rawSize === 'number'
+        ? rawSize.toString()
+        : coerceString(rawSize) ?? '0';
+
+    const uploadDate = normalizeTimestampValue(primary.uploadDate)
+        ?? normalizeTimestampValue(fallback.uploadDate)
+        ?? normalizeTimestampValue(fallback.submittedAt)
+        ?? normalizeTimestampValue(fallback.createdAt)
+        ?? new Date().toISOString();
+
+    const author = coerceString(primary.author)
+        ?? coerceString(fallback.author)
+        ?? coerceString(fallback.submittedBy)
+        ?? '';
+
+    const thesisId = coerceString(primary.thesisId) ?? coerceString(fallback.thesisId);
+    const groupId = coerceString(primary.groupId) ?? coerceString(fallback.groupId);
+    const chapterId = parseChapterId(primary.chapterId ?? fallback.chapterId);
+    const chapterStage = (primary.chapterStage ?? fallback.chapterStage) as ThesisStageName | undefined;
+    const category = (primary.category ?? fallback.category ?? 'submission') as FileAttachment['category'];
+
+    // Always use the Firestore submission doc ID to ensure matching with ChapterSubmissionEntry
+    return {
+        id: submissionId,
+        name,
+        url,
+        mimeType,
+        type,
+        size,
+        category,
+        uploadDate,
+        thesisId: thesisId ?? undefined,
+        groupId: groupId ?? undefined,
+        chapterId,
+        chapterStage,
+        author,
+        metadata: (primary.metadata ?? fallback.metadata) as FileAttachment['metadata'],
+    };
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
 /**
  * Generate a unique file ID
@@ -21,344 +255,184 @@ export function generateFileId(uid: string, timestamp: number = Date.now()): str
 }
 
 /**
- * Get file by ID from submissions across all paths
- * Searches through all submissions to find a file with the given ID
- * @param fileId - File identifier
- * @returns File metadata or null if not found
+ * Extract FileAttachment from a submission document.
+ * Submission documents store file metadata directly on the document root.
+ * @param submissionId - The submission document ID
+ * @param data - The submission document data
+ * @returns FileAttachment or null if no file data present
  */
-export async function getFileById(fileId: string): Promise<FileAttachment | null> {
-    if (!fileId) return null;
+function extractFileFromSubmission(submissionId: string, data: Record<string, unknown>): FileAttachment | null {
+    if (Array.isArray(data.files) && data.files.length > 0) {
+        const fileData = data.files[0] as Record<string, unknown>;
+        const attachment = buildFileAttachment(fileData, data, submissionId);
+        if (attachment) {
+            return attachment;
+        }
+    }
+    return buildFileAttachment(data, data, submissionId);
+}
 
+// ============================================================================
+// File Query Operations
+// ============================================================================
+
+/**
+ * Get all submission files for a specific chapter
+ * @param ctx - File query context with path information
+ * @returns Array of file attachments sorted by upload date (newest first)
+ */
+export async function getFilesForChapter(ctx: FileQueryContext): Promise<FileAttachment[]> {
     try {
-        // Query all submissions using collectionGroup
-        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
-        const snapshot = await getDocs(submissionsQuery);
-
+        const collectionPath = resolveSubmissionsCollectionPath(ctx);
+        // console.log('[getFilesForChapter] Querying path:', collectionPath);
+        const submissionsRef = collection(firebaseFirestore, collectionPath);
+        // Try without orderBy first to avoid index issues, then sort in memory
+        const snapshot = await getDocs(submissionsRef);
+        // console.log('[getFilesForChapter] Found', snapshot.size, 'documents');
+        const files: FileAttachment[] = [];
         for (const docSnap of snapshot.docs) {
-            const submission = docSnap.data() as ChapterSubmission;
-            const file = submission.files?.find((f) => f.id === fileId);
+            const rawData = docSnap.data() as Record<string, unknown>;
+            // console.log('[getFilesForChapter] Doc', docSnap.id, 'data:', JSON.stringify(rawData, null, 2));
+            const file = extractFileFromSubmission(docSnap.id, rawData);
             if (file) {
-                return file;
+                // console.log('[getFilesForChapter] Extracted file:', file.id, file.name, file.url?.substring(0, 50));
+                files.push(file);
+            } else {
+                // console.log('[getFilesForChapter] No file extracted from doc', docSnap.id);
             }
         }
 
-        return null;
-    } catch (error) {
-        console.error('Error getting file by ID:', error);
-        return null;
-    }
-}
-
-/**
- * Get multiple files by their IDs from submissions
- * @param fileIds - Array of file identifiers
- * @returns Array of file attachments
- */
-export async function getFilesByIds(fileIds: string[]): Promise<FileAttachment[]> {
-    if (!fileIds || fileIds.length === 0) return [];
-
-    try {
-        // Query all submissions using collectionGroup
-        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
-        const snapshot = await getDocs(submissionsQuery);
-
-        const files: FileAttachment[] = [];
-        const fileIdSet = new Set(fileIds);
-
-        for (const docSnap of snapshot.docs) {
-            const submission = docSnap.data() as ChapterSubmission;
-            const matchingFiles = (submission.files ?? []).filter((f) => f.id && fileIdSet.has(f.id));
-            files.push(...matchingFiles);
-        }
+        // Sort by uploadDate descending
+        files.sort((a, b) => {
+            const aTime = new Date(a.uploadDate ?? '').getTime();
+            const bTime = new Date(b.uploadDate ?? '').getTime();
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
+            return bTime - aTime;
+        });
 
         return files;
     } catch (error) {
-        console.error('Error getting files by IDs:', error);
+        console.error('Error getting files for chapter:', error);
         return [];
     }
 }
 
 /**
- * Get files by thesis context from submissions
- * @param thesisId - Thesis ID
- * @param chapterId - Optional chapter ID
- * @param category - Optional file category
- * @param stage - Optional thesis stage
- * @returns Array of file attachments
+ * Get a specific submission file by ID
+ * @param ctx - File query context with path information
+ * @param submissionId - The submission document ID
+ * @returns FileAttachment or null if not found
  */
-export async function getFilesByThesis(
-    thesisId: string,
-    chapterId?: number,
-    category?: 'submission' | 'attachment',
-    stage?: ThesisStageName,
-): Promise<FileAttachment[]> {
-    try {
-        // Query all submissions using collectionGroup
-        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
-        const snapshot = await getDocs(submissionsQuery);
-
-        const files: FileAttachment[] = [];
-
-        for (const docSnap of snapshot.docs) {
-            const submission = docSnap.data() as ChapterSubmission;
-            const submissionFiles = submission.files ?? [];
-
-            for (const file of submissionFiles) {
-                // Filter by thesisId
-                if (file.thesisId !== thesisId) continue;
-
-                // Filter by chapterId if specified
-                if (chapterId !== undefined && file.chapterId !== chapterId) continue;
-
-                // Filter by category if specified
-                if (category && file.category !== category) continue;
-
-                // Filter by stage if specified
-                if (stage && file.chapterStage !== stage) continue;
-
-                files.push(file);
-            }
-        }
-
-        // Sort by uploadDate descending
-        return files.sort((a, b) => {
-            const aTime = new Date(a.uploadDate ?? '').getTime();
-            const bTime = new Date(b.uploadDate ?? '').getTime();
-            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
-            return bTime - aTime;
-        });
-    } catch (error) {
-        console.error('Error getting files by thesis:', error);
-        return [];
-    }
-}
-
-/**
- * Get files uploaded for a specific terminal requirement.
- * @param thesisId - Thesis document identifier
- * @param requirementId - Terminal requirement identifier
- */
-export async function getFilesByTerminalRequirement(
-    thesisId: string,
-    requirementId: string,
-): Promise<FileAttachment[]> {
-    try {
-        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
-        const snapshot = await getDocs(submissionsQuery);
-
-        const files: FileAttachment[] = [];
-
-        for (const docSnap of snapshot.docs) {
-            const submission = docSnap.data() as ChapterSubmission;
-            const matchingFiles = (submission.files ?? []).filter(
-                (f) => f.thesisId === thesisId && f.terminalRequirementId === requirementId
-            );
-            files.push(...matchingFiles);
-        }
-
-        // Sort by uploadDate descending
-        return files.sort((a, b) => {
-            const aTime = new Date(a.uploadDate ?? '').getTime();
-            const bTime = new Date(b.uploadDate ?? '').getTime();
-            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
-            return bTime - aTime;
-        });
-    } catch (error) {
-        console.error('Error getting files by terminal requirement:', error);
-        return [];
-    }
-}
-
-/**
- * Get files by comment ID (from chat attachments)
- * @param commentId - Comment/Chat ID
- * @returns Array of file attachments
- */
-export async function getFilesByComment(commentId: string): Promise<FileAttachment[]> {
-    try {
-        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
-        const snapshot = await getDocs(submissionsQuery);
-
-        const files: FileAttachment[] = [];
-
-        for (const docSnap of snapshot.docs) {
-            const submission = docSnap.data() as ChapterSubmission;
-            const matchingFiles = (submission.files ?? []).filter((f) => f.commentId === commentId);
-            files.push(...matchingFiles);
-        }
-
-        // Sort by uploadDate descending
-        return files.sort((a, b) => {
-            const aTime = new Date(a.uploadDate ?? '').getTime();
-            const bTime = new Date(b.uploadDate ?? '').getTime();
-            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
-            return bTime - aTime;
-        });
-    } catch (error) {
-        console.error('Error getting files by comment:', error);
-        return [];
-    }
-}
-
-/**
- * Get files by author UID from submissions
- * @param authorUid - Author's UID
- * @param thesisId - Optional thesis ID to filter
- * @returns Array of file attachments
- */
-export async function getFilesByAuthor(
-    authorUid: string,
-    thesisId?: string
-): Promise<FileAttachment[]> {
-    try {
-        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
-        const snapshot = await getDocs(submissionsQuery);
-
-        const files: FileAttachment[] = [];
-
-        for (const docSnap of snapshot.docs) {
-            const submission = docSnap.data() as ChapterSubmission;
-            const matchingFiles = (submission.files ?? []).filter((f) => {
-                if (f.author !== authorUid) return false;
-                if (thesisId && f.thesisId !== thesisId) return false;
-                return true;
-            });
-            files.push(...matchingFiles);
-        }
-
-        // Sort by uploadDate descending
-        return files.sort((a, b) => {
-            const aTime = new Date(a.uploadDate ?? '').getTime();
-            const bTime = new Date(b.uploadDate ?? '').getTime();
-            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
-            return bTime - aTime;
-        });
-    } catch (error) {
-        console.error('Error getting files by author:', error);
-        return [];
-    }
-}
-
-/**
- * Get all files owned by a user
- * @param ownerUid - Owner's UID
- * @param limitCount - Maximum number of files to return
- * @returns Array of file attachments
- */
-export async function getFilesByOwner(
-    ownerUid: string,
-    limitCount?: number
-): Promise<FileAttachment[]> {
-    const files = await getFilesByAuthor(ownerUid);
-    return limitCount ? files.slice(0, limitCount) : files;
-}
-
-/**
- * Delete file metadata - Note: This is a no-op as files are embedded in submissions
- * To delete a file, update the submission document to remove it from the files array
- * @param fileId - File identifier (unused)
- * @deprecated Files are embedded in submissions, use updateSubmission to remove files
- */
-export async function deleteFileMetadata(fileId: string): Promise<void> {
-    void fileId; // Suppress unused parameter warning
-    console.warn('deleteFileMetadata is deprecated. Files are embedded in submissions. Use updateSubmission to remove files.');
-    // This is kept for backward compatibility but does nothing
-    // The actual deletion should be done by updating the submission document
-}
-
-/**
- * Delete multiple file records by their IDs
- * @param fileIds - Array of file IDs to delete (unused)
- * @deprecated Files are embedded in submissions, use updateSubmission to remove files
- */
-export async function bulkDeleteFileMetadata(fileIds: string[]): Promise<void> {
-    void fileIds; // Suppress unused parameter warning
-    console.warn('bulkDeleteFileMetadata is deprecated. Files are embedded in submissions. Use updateSubmission to remove files.');
-    // This is kept for backward compatibility but does nothing
-}
-
-/**
- * Get the latest submission for a thesis chapter
- * @param thesisId - Thesis ID
- * @param chapterId - Chapter ID
- * @returns Latest submission file or null
- */
-export async function getLatestChapterSubmission(
-    thesisId: string,
-    chapterId: number
+export async function getFileBySubmissionId(
+    ctx: FileQueryContext,
+    submissionId: string
 ): Promise<FileAttachment | null> {
     try {
-        const files = await getFilesByThesis(thesisId, chapterId, 'submission');
-        if (files.length === 0) return null;
-        // Already sorted by uploadDate desc, return first
-        return files[0];
+        const docPath = resolveSubmissionDocPath(ctx, submissionId);
+        const docRef = doc(firebaseFirestore, docPath);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) return null;
+        return extractFileFromSubmission(docSnap.id, docSnap.data() as Record<string, unknown>);
     } catch (error) {
-        console.error('Error getting latest chapter submission:', error);
+        console.error('Error getting file by submission ID:', error);
         return null;
     }
 }
 
 /**
- * Get all files (admin function, use with caution)
- * @param limitCount - Maximum number of files to return
- * @returns Array of file attachments with IDs
+ * Get multiple submission files by their IDs
+ * @param ctx - File query context with path information  
+ * @param submissionIds - Array of submission document IDs
+ * @returns Array of file attachments
  */
-export async function getAllFiles(limitCount: number = 100): Promise<(FileAttachment & { id: string })[]> {
+export async function getFilesBySubmissionIds(
+    ctx: FileQueryContext,
+    submissionIds: string[]
+): Promise<FileAttachment[]> {
+    if (!submissionIds || submissionIds.length === 0) return [];
+
     try {
-        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
-        const snapshot = await getDocs(submissionsQuery);
+        const files: FileAttachment[] = [];
 
-        const files: (FileAttachment & { id: string })[] = [];
+        // Fetch each submission document
+        await Promise.all(
+            submissionIds.map(async (submissionId) => {
+                const file = await getFileBySubmissionId(ctx, submissionId);
+                if (file) {
+                    files.push(file);
+                }
+            })
+        );
 
-        for (const docSnap of snapshot.docs) {
-            const submission = docSnap.data() as ChapterSubmission;
-            const submissionFiles = (submission.files ?? [])
-                .filter((f): f is FileAttachment & { id: string } => Boolean(f.id));
-            files.push(...submissionFiles);
+        // Sort by uploadDate descending
+        return files.sort((a, b) => {
+            const aTime = new Date(a.uploadDate ?? '').getTime();
+            const bTime = new Date(b.uploadDate ?? '').getTime();
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
+            return bTime - aTime;
+        });
+    } catch (error) {
+        console.error('Error getting files by submission IDs:', error);
+        return [];
+    }
+}
 
-            if (files.length >= limitCount) break;
-        }
+/**
+ * Get the latest submission file for a chapter
+ * @param ctx - File query context with path information
+ * @returns Latest file attachment or null
+ */
+export async function getLatestChapterFile(ctx: FileQueryContext): Promise<FileAttachment | null> {
+    const files = await getFilesForChapter(ctx);
+    return files[0] ?? null;
+}
 
-        // Sort by createdAt/uploadDate descending and limit
-        return files
-            .sort((a, b) => {
+// ============================================================================
+// Real-time Listeners
+// ============================================================================
+
+/**
+ * Listen to submission files for a specific chapter in real-time
+ * @param ctx - File query context with path information
+ * @param options - Callbacks for data and errors
+ * @returns Unsubscribe function
+ */
+export function listenFilesForChapter(
+    ctx: FileQueryContext,
+    options: FileListenerOptions
+): () => void {
+    const collectionPath = resolveSubmissionsCollectionPath(ctx);
+    const submissionsRef = collection(firebaseFirestore, collectionPath);
+
+    return onSnapshot(
+        submissionsRef,
+        (snapshot) => {
+            const files: FileAttachment[] = [];
+            for (const docSnap of snapshot.docs) {
+                const rawData = docSnap.data() as Record<string, unknown>;
+                const file = extractFileFromSubmission(docSnap.id, rawData);
+                if (file) {
+                    files.push(file);
+                }
+            }
+
+            // Sort by uploadDate descending
+            files.sort((a, b) => {
                 const aTime = new Date(a.uploadDate ?? '').getTime();
                 const bTime = new Date(b.uploadDate ?? '').getTime();
                 if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
                 return bTime - aTime;
-            })
-            .slice(0, limitCount);
-    } catch (error) {
-        console.error('Error getting all files:', error);
-        return [];
-    }
-}
+            });
 
-// ============================================================================
-// Legacy exports - kept for backward compatibility but deprecated
-// ============================================================================
-
-/**
- * @deprecated Use submission documents directly. Files are embedded in submissions.
- */
-export async function setFileMetadata(
-    fileId: string,
-    fileInfo: FileAttachment,
-    ownerUid: string
-): Promise<void> {
-    void fileId; void fileInfo; void ownerUid; // Suppress unused parameter warnings
-    console.warn('setFileMetadata is deprecated. Files should be embedded in submission documents via createSubmission.');
-    // No-op - files are now stored in submission documents
-}
-
-/**
- * @deprecated Use submission documents directly. Files are embedded in submissions.
- */
-export async function updateFileMetadata(
-    fileId: string,
-    updates: Partial<FileAttachment>
-): Promise<void> {
-    void fileId; void updates; // Suppress unused parameter warnings
-    console.warn('updateFileMetadata is deprecated. Update the submission document directly to modify file metadata.');
-    // No-op - files are now stored in submission documents
+            options.onData(files);
+        },
+        (error) => {
+            if (options.onError) {
+                options.onError(error);
+            } else {
+                console.error('File listener error:', error);
+            }
+        }
+    );
 }
