@@ -1,5 +1,46 @@
 {
-    "indexes": [],
+    "indexes": [
+        {
+            "collectionGroup": "expertRequests",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "expertUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "role",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "expertRequests",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "expertUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "role",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
+                }
+            ]
+        }
+    ],
     "fieldOverrides": [
         {
             "collectionGroup": "groups",

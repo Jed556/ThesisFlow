@@ -157,7 +157,8 @@ service cloud.firestore {
         // Collection group: users - allows querying and managing users across all hierarchical paths
         match /{path=**}/users/{userId} {
             allow read: if isAuthenticated();
-            allow write: if isAdminOrDeveloper();
+            // Users can update their own profile, admins/developers can update any
+            allow write: if isAdminOrDeveloper() || isOwner(userId);
         }
 
         // Collection group: groups - allows querying and managing groups across all paths
@@ -351,10 +352,25 @@ service cloud.firestore {
                             return isGroupMember() || isAssignedMentor() || isGroupPanel() || isModeratorOrAbove();
                         }
 
-                        // Group documents - read by members, staff; write by adviser, admin, head
+                        /**
+                         * Check if user is a mentor role (adviser, editor, statistician)
+                         * and is updating to assign themselves to the group
+                         */
+                        function isMentorSelfAssigning() {
+                            return isMentor() && (
+                                // Adviser assigning themselves
+                                (isAdviser() && request.resource.data.members.adviser == request.auth.uid) ||
+                                // Editor assigning themselves
+                                (isEditor() && request.resource.data.members.editor == request.auth.uid) ||
+                                // Statistician assigning themselves
+                                (isStatistician() && request.resource.data.members.statistician == request.auth.uid)
+                            );
+                        }
+
+                        // Group documents - read by members, staff; write by adviser, admin, head, moderator
                         allow read: if isAuthenticated() && hasGroupAccess();
                         allow create: if isAdminOrDeveloper() || isHead() || isAdviser() || isStudent();
-                        allow update: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader();
+                        allow update: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader() || isModerator() || isMentorSelfAssigning();
                         allow delete: if isAdminOrDeveloper() || isHead();
 
                         // ================================
@@ -362,11 +378,20 @@ service cloud.firestore {
                         // ================================
 
                         match /expertRequests/{requestId} {
+                            /**
+                             * Check if the current user is the requested expert for this request
+                             */
+                            function isRequestedExpert() {
+                                let req = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId)/expertRequests/$(requestId));
+                                return req.data.expertUid == request.auth.uid;
+                            }
+
                             // Expert requests - group members and staff can read
                             allow read: if isAuthenticated() && hasGroupAccess();
                             // Members can create, adviser/admin can manage
                             allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
-                            allow update: if isGroupAdviser() || isAdminOrDeveloper() || isHead();
+                            // The requested expert can respond, adviser/admin/head can also manage
+                            allow update: if isRequestedExpert() || isGroupAdviser() || isAdminOrDeveloper() || isHead();
                             allow delete: if isAdminOrDeveloper() || isHead();
                         }
 
