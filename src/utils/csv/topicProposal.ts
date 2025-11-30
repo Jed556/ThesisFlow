@@ -5,11 +5,26 @@
 import type {
     TopicProposalEntry, TopicProposalEntryStatus, TopicProposalReviewEvent,
     TopicProposalReviewerDecision, TopicProposalSetRecord
-} from '../../types/topicProposal';
-import { TOPIC_PROPOSAL_ENTRY_STATUSES } from '../../types/topicProposal';
+} from '../../types/proposal';
+import { TOPIC_PROPOSAL_ENTRY_STATUSES } from '../../types/proposal';
 import { parseCsvText, normalizeHeader, mapHeaderIndexes, parseBoolean, generateCsvText } from './parser';
 
-const nowIso = () => new Date().toISOString();
+/** Create a new Date object (now) */
+const nowDate = () => new Date();
+
+/** Parse a date string to Date object, or return current date */
+const parseDate = (value?: string): Date => {
+    if (!value) return nowDate();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? nowDate() : parsed;
+};
+
+/** Parse optional date string to Date or undefined */
+const parseOptionalDate = (value?: string): Date | undefined => {
+    if (!value) return undefined;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
 
 const coerceEntryStatus = (value?: string): TopicProposalEntryStatus => {
     if (!value) return 'draft';
@@ -43,16 +58,16 @@ const mapDecision = (raw: unknown): TopicProposalReviewerDecision | undefined =>
     }
     const candidate = raw as Partial<TopicProposalReviewerDecision> & Record<string, unknown>;
     const decision = typeof candidate.decision === 'string' && ['approved', 'rejected'].includes(candidate.decision)
-        ? candidate.decision
+        ? candidate.decision as 'approved' | 'rejected'
         : undefined;
-    const reviewerUid = typeof candidate.reviewerUid === 'string' ? candidate.reviewerUid : undefined;
-    if (!decision || !reviewerUid) {
+    const reviewer = typeof candidate.reviewer === 'string' ? candidate.reviewer : undefined;
+    if (!decision || !reviewer) {
         return undefined;
     }
     return {
-        reviewerUid,
+        reviewer,
         decision,
-        decidedAt: typeof candidate.decidedAt === 'string' && candidate.decidedAt ? candidate.decidedAt : nowIso(),
+        decidedAt: parseDate(typeof candidate.decidedAt === 'string' ? candidate.decidedAt : undefined),
         notes: typeof candidate.notes === 'string' ? candidate.notes : undefined,
     } satisfies TopicProposalReviewerDecision;
 };
@@ -69,8 +84,10 @@ const normalizeEntries = (raw: unknown, fallbackAuthor: string): TopicProposalEn
             return;
         }
         const e = entry as Partial<TopicProposalEntry> & Record<string, unknown>;
-        const createdAt = typeof e.createdAt === 'string' && e.createdAt ? e.createdAt : nowIso();
-        const updatedAt = typeof e.updatedAt === 'string' && e.updatedAt ? e.updatedAt : createdAt;
+        const createdAtStr = typeof e.createdAt === 'string' && e.createdAt ? e.createdAt : undefined;
+        const updatedAtStr = typeof e.updatedAt === 'string' && e.updatedAt ? e.updatedAt : createdAtStr;
+        const createdAt = parseDate(createdAtStr);
+        const updatedAt = parseDate(updatedAtStr);
         const proposedBy = typeof e.proposedBy === 'string' && e.proposedBy ? e.proposedBy : fallbackAuthor;
         const description = typeof e.description === 'string' && e.description
             ? e.description
@@ -89,8 +106,6 @@ const normalizeEntries = (raw: unknown, fallbackAuthor: string): TopicProposalEn
             createdAt,
             updatedAt,
             status: coerceEntryStatus(typeof e.status === 'string' ? e.status : undefined),
-            moderatorDecision: mapDecision(e.moderatorDecision),
-            headDecision: mapDecision(e.headDecision),
         });
     });
 
@@ -112,8 +127,8 @@ const normalizeReviewHistory = (raw: unknown): TopicProposalReviewEvent[] => {
         const stage = typeof e.stage === 'string' && (e.stage === 'moderator' || e.stage === 'head')
             ? e.stage
             : 'moderator';
-        const decision = typeof e.decision === 'string' && (e.decision === 'approved' || e.decision === 'rejected')
-            ? e.decision
+        const status = typeof e.status === 'string' && (e.status === 'approved' || e.status === 'rejected')
+            ? e.status
             : 'approved';
         const reviewerUid = typeof e.reviewerUid === 'string' ? e.reviewerUid : '';
         if (!reviewerUid) {
@@ -123,11 +138,11 @@ const normalizeReviewHistory = (raw: unknown): TopicProposalReviewEvent[] => {
 
         history.push({
             stage,
-            decision,
+            status,
             reviewerUid,
             proposalId,
             notes: typeof e.notes === 'string' ? e.notes : undefined,
-            reviewedAt: typeof e.reviewedAt === 'string' && e.reviewedAt ? e.reviewedAt : nowIso(),
+            reviewedAt: parseDate(typeof e.reviewedAt === 'string' ? e.reviewedAt : undefined),
         });
     });
 
@@ -166,14 +181,18 @@ export function importTopicProposalsFromCsv(csvText: string): { parsed: TopicPro
         }
 
         const createdBy = getCell(row, 'createdBy') || getCell(row, 'created_by');
-        const createdAt = getCell(row, 'createdAt') || getCell(row, 'created_at') || nowIso();
-        const updatedAt = getCell(row, 'updatedAt') || getCell(row, 'updated_at') || createdAt;
+        const createdAtStr = getCell(row, 'createdAt') || getCell(row, 'created_at') || undefined;
+        const updatedAtStr = getCell(row, 'updatedAt') || getCell(row, 'updated_at') || createdAtStr;
+        const createdAt = parseDate(createdAtStr);
+        const updatedAt = parseDate(updatedAtStr);
         const setValueRaw = getCell(row, 'set') || getCell(row, 'cycle'); // legacy CSVs used "cycle"
         const setNumber = parseNumberField(setValueRaw, 1);
         const awaitingModerator = parseBoolean(getCell(row, 'awaitingModerator'));
         const awaitingHead = parseBoolean(getCell(row, 'awaitingHead'));
-        const submittedBy = getCell(row, 'submittedBy') || getCell(row, 'submitted_by') || undefined;
-        const submittedAt = getCell(row, 'submittedAt') || getCell(row, 'submitted_at') || undefined;
+        const submittedByStr = getCell(row, 'submittedBy') || getCell(row, 'submitted_by') || undefined;
+        const submittedBy = submittedByStr ? parseDate(submittedByStr) : undefined;
+        const submittedAtStr = getCell(row, 'submittedAt') || getCell(row, 'submitted_at') || undefined;
+        const submittedAt = submittedAtStr ? parseDate(submittedAtStr) : undefined;
         const usedBy = getCell(row, 'usedBy') || getCell(row, 'used_by') || undefined;
         const usedAsThesisAt = getCell(row, 'usedAsThesisAt') || getCell(row, 'used_as_thesis_at') || undefined;
 
@@ -181,6 +200,8 @@ export function importTopicProposalsFromCsv(csvText: string): { parsed: TopicPro
         const entries = normalizeEntries(entriesRaw, createdBy);
         const reviewHistoryRaw = parseJsonField(getCell(row, 'reviewHistory'));
         const reviewHistory = normalizeReviewHistory(reviewHistoryRaw);
+        // Map audits from reviewHistory
+        const audits = reviewHistory;
 
         const record: TopicProposalSetRecord = {
             id,
@@ -197,6 +218,7 @@ export function importTopicProposalsFromCsv(csvText: string): { parsed: TopicPro
             usedBy,
             usedAsThesisAt,
             reviewHistory,
+            audits,
         };
 
         parsed.push(record);
@@ -226,17 +248,22 @@ export function exportTopicProposalsToCsv(records: TopicProposalSetRecord[]): st
         'reviewHistory',
     ];
 
+    const formatDate = (value?: Date | string): string => {
+        if (!value) return '';
+        return value instanceof Date ? value.toISOString() : value;
+    };
+
     const rows = records.map(record => [
         record.id,
-        record.groupId,
+        record.groupId ?? '',
         record.createdBy,
-        record.createdAt,
-        record.updatedAt,
-        record.set.toString(),
+        formatDate(record.createdAt),
+        formatDate(record.updatedAt),
+        (record.set ?? 1).toString(),
         record.awaitingModerator ? 'true' : 'false',
         record.awaitingHead ? 'true' : 'false',
-        record.submittedBy ?? '',
-        record.submittedAt ?? '',
+        formatDate(record.submittedBy),
+        formatDate(record.submittedAt),
         // approvedEntryId removed: rely on per-entry status instead
         record.usedBy ?? '',
         record.usedAsThesisAt ?? '',

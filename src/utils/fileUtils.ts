@@ -1,5 +1,5 @@
 import type { FileType, FileCategory, FileTypeInfo, FileUploadProgress, MediaMetadata, FileAttachment } from '../types/file';
-import type { ThesisStage } from '../types/thesis';
+import type { ThesisStageName } from '../types/thesis';
 
 /**
  * File utilities for handling file encoding, processing, and database upload preparation
@@ -516,23 +516,6 @@ export async function batchUploadFiles(
 import { getFileById, getFilesByIds, getFilesByThesis } from './firebase/firestore/file';
 
 /**
- * Get file by hash from Firestore
- * @param hash - File ID/hash
- * @param thesisId - Optional thesis ID (legacy parameter, not used)
- * @returns File attachment or undefined if not found
- * @deprecated Use getFileById from firebase/firestore/file instead
- */
-export async function getFileByHash(hash: string, thesisId?: string): Promise<FileAttachment | undefined> {
-    try {
-        const file = await getFileById(hash);
-        return file || undefined;
-    } catch (error) {
-        console.error('Error fetching file from Firestore:', error);
-        return undefined;
-    }
-}
-
-/**
  * Get all submission files for a specific chapter
  * @param chapterId - Chapter ID
  * @param thesisId - Thesis ID (required for Firebase)
@@ -541,7 +524,7 @@ export async function getFileByHash(hash: string, thesisId?: string): Promise<Fi
 export async function getChapterSubmissions(
     chapterId: number,
     thesisId?: string,
-    stage?: ThesisStage,
+    stage?: ThesisStageName,
 ): Promise<FileAttachment[]> {
     if (!thesisId) {
         console.warn('thesisId is required for Firebase integration');

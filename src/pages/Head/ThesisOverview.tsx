@@ -11,8 +11,8 @@ import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceFilterConfig } from '../../types/workspace';
-import { getThesisByGroupId } from '../../utils/firebase/firestore/thesis';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { getDisplayName } from '../../utils/userUtils';
 
@@ -89,7 +89,7 @@ export default function HeadThesisOverviewPage() {
         setProfileLoading(true);
         setError(null);
 
-        void getUserById(headUid)
+        void findUserById(headUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;
@@ -199,7 +199,7 @@ export default function HeadThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const record = await getThesisByGroupId(selectedGroupId);
+                const record = await findThesisByGroupId(selectedGroupId);
                 if (!cancelled) {
                     setSelectedThesisId(record?.id ?? '');
                     setThesis(record ?? null);

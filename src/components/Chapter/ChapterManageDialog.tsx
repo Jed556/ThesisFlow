@@ -8,7 +8,7 @@ import {
     ArrowDownward as ArrowDownwardIcon, Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { ChapterConfigFormData, ChapterFormErrorKey, ChapterTemplate } from '../../types/chapter';
-import type { ThesisStage } from '../../types/thesis';
+import type { ThesisStageName } from '../../types/thesis';
 import { GrowTransition } from '../Animate';
 import {
     DEFAULT_CHAPTER_STAGE,
@@ -272,8 +272,8 @@ export default function ChapterManageDialog({
                                                     onChange={(event) => {
                                                         const value = event.target.value;
                                                         const nextStages = Array.isArray(value)
-                                                            ? (value as ThesisStage[])
-                                                            : [(value as ThesisStage)];
+                                                            ? (value as ThesisStageName[])
+                                                            : [(value as ThesisStageName)];
                                                         const normalizedStages = nextStages.length > 0
                                                             ? nextStages
                                                             : [DEFAULT_CHAPTER_STAGE];

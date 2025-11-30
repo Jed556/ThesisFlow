@@ -3,7 +3,7 @@ import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/ma
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
-import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
+import type { ExpertRequest, MentorRequestRole } from '../../types/expertRequest';
 import type { Session } from '../../types/session';
 import MentorRequestDecisionActions from './MentorRequestDecisionActions';
 import GroupView from '../Group/GroupView';
@@ -13,7 +13,7 @@ import { AnimatedPage } from '../Animate';
 import { getPendingMentorRequest } from '../../utils/firebase/firestore/mentorRequests';
 
 interface MentorRequestRouteState {
-    mentorRequest?: MentorRequest;
+    mentorRequest?: ExpertRequest;
 }
 
 export interface MentorRequestGroupViewProps {
@@ -36,7 +36,7 @@ export default function MentorRequestGroupView({ groupId, role, roleLabel, hint 
     const routeState = location.state as MentorRequestRouteState | null;
     const routeRequest = routeState?.mentorRequest ?? null;
 
-    const [request, setRequest] = React.useState<MentorRequest | null>(routeRequest);
+    const [request, setRequest] = React.useState<ExpertRequest | null>(routeRequest);
     const [requestLoading, setRequestLoading] = React.useState(!routeRequest);
     const [requestError, setRequestError] = React.useState<string | null>(null);
 

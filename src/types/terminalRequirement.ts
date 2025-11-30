@@ -1,4 +1,5 @@
-import type { ThesisStage } from './thesis';
+import type { FileAttachment } from './file';
+import type { ThesisStageName } from './thesis';
 
 /**
  * Lifecycle states for a terminal requirement document.
@@ -8,17 +9,15 @@ export type TerminalRequirementStatus = 'pending' | 'submitted';
 /**
  * Static definition describing a required document for a thesis stage.
  */
-export interface TerminalRequirementDefinition {
+export interface TerminalRequirement {
     id: string;
-    stage: ThesisStage;
+    stage: ThesisStageName;
     title: string;
     description: string;
     instructions?: string;
     optional?: boolean;
     tags?: string[];
-    templateFileName?: string;
-    templateFileUrl?: string;
-    templateFileId?: string;
+    templateFile?: FileAttachment;
 }
 
 /**
@@ -26,7 +25,7 @@ export interface TerminalRequirementDefinition {
  */
 export interface TerminalRequirementProgress {
     requirementId: string;
-    stage: ThesisStage;
+    stage: ThesisStageName;
     status: TerminalRequirementStatus;
     fileCount: number;
     updatedAt?: string;

@@ -11,9 +11,11 @@ import { PanelCommentTable, PanelCommentEditorDialog } from '../../components/Pa
 import { useSnackbar } from '../../components/Snackbar';
 import { listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
 import {
-    addPanelCommentEntry, deletePanelCommentEntry, listenPanelCommentEntries, updatePanelCommentEntry,
+    addPanelCommentEntry, deletePanelCommentEntry, listenPanelCommentEntries,
+    updatePanelCommentEntry, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel } from '../../utils/panelCommentUtils';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -47,6 +49,17 @@ export default function PanelPanelCommentsPage() {
         [groups, selectedGroupId]
     );
 
+    /** Build panel comment context from selected group */
+    const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
+        if (!selectedGroup) return null;
+        return {
+            year: DEFAULT_YEAR,
+            department: selectedGroup.department ?? '',
+            course: selectedGroup.course ?? '',
+            groupId: selectedGroup.id,
+        };
+    }, [selectedGroup]);
+
     React.useEffect(() => {
         if (!userUid) {
             setGroups([]);
@@ -73,14 +86,14 @@ export default function PanelPanelCommentsPage() {
     }, [userUid, selectedGroupId]);
 
     React.useEffect(() => {
-        if (!selectedGroupId || !userUid) {
+        if (!panelCommentCtx || !userUid) {
             setEntries([]);
             setEntriesLoading(false);
             return;
         }
         setEntriesLoading(true);
         setEntriesError(null);
-        const unsubscribe = listenPanelCommentEntries(selectedGroupId, activeStage, {
+        const unsubscribe = listenPanelCommentEntries(panelCommentCtx, activeStage, {
             onData: (next) => {
                 setEntries(next);
                 setEntriesLoading(false);
@@ -93,7 +106,7 @@ export default function PanelPanelCommentsPage() {
             },
         }, userUid);
         return () => unsubscribe();
-    }, [selectedGroupId, activeStage, userUid]);
+    }, [panelCommentCtx, activeStage, userUid]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
@@ -115,15 +128,14 @@ export default function PanelPanelCommentsPage() {
     }, [saving]);
 
     const handleSubmitEditor = React.useCallback(async (values: { comment: string; reference?: string }) => {
-        if (!selectedGroupId || !userUid) {
+        if (!panelCommentCtx || !userUid) {
             showNotification('Select a group before adding comments.', 'error');
             return;
         }
         setSaving(true);
         try {
             if (dialogMode === 'create') {
-                await addPanelCommentEntry({
-                    groupId: selectedGroupId,
+                await addPanelCommentEntry(panelCommentCtx, {
                     stage: activeStage,
                     comment: values.comment,
                     reference: values.reference,
@@ -132,7 +144,7 @@ export default function PanelPanelCommentsPage() {
                 });
                 showNotification('Comment added.', 'success');
             } else if (editingEntry) {
-                await updatePanelCommentEntry(selectedGroupId, editingEntry.id, {
+                await updatePanelCommentEntry(panelCommentCtx, editingEntry.id, {
                     comment: values.comment,
                     reference: values.reference,
                     updatedBy: userUid,
@@ -146,22 +158,22 @@ export default function PanelPanelCommentsPage() {
         } finally {
             setSaving(false);
         }
-    }, [selectedGroupId, userUid, dialogMode, editingEntry, activeStage, showNotification]);
+    }, [panelCommentCtx, userUid, dialogMode, editingEntry, activeStage, showNotification]);
 
     const handleDeleteEntry = React.useCallback(async (entry: PanelCommentEntry) => {
-        if (!selectedGroupId) return;
+        if (!panelCommentCtx) return;
         const confirmed = window.confirm('Delete this comment? This action cannot be undone.');
         if (!confirmed) {
             return;
         }
         try {
-            await deletePanelCommentEntry(selectedGroupId, entry.id);
+            await deletePanelCommentEntry(panelCommentCtx, entry.id);
             showNotification('Comment removed.', 'success');
         } catch (error) {
             console.error('Failed to delete panel comment:', error);
             showNotification('Unable to delete the comment. Please try again.', 'error');
         }
-    }, [selectedGroupId, showNotification]);
+    }, [panelCommentCtx, showNotification]);
 
     if (session?.loading) {
         return (

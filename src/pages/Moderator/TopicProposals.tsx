@@ -9,14 +9,14 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord } from '../../types/topicProposal';
+import type { TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 
 function splitSectionList(value?: string | null): string[] {
     if (!value) {
@@ -98,7 +98,7 @@ export default function ModeratorTopicProposalsPage() {
         setProfileLoading(true);
         setProfileError(null);
 
-        void getUserById(moderatorUid)
+        void findUserById(moderatorUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;
@@ -375,7 +375,9 @@ export default function ModeratorTopicProposalsPage() {
                                 {record && entries.length > 0 && (
                                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
                                         {entries.map((entry) => {
-                                            const statusButton = getModeratorStatusButtonConfig(entry.status);
+                                            const statusButton = getModeratorStatusButtonConfig(
+                                                entry.status ?? 'draft'
+                                            );
                                             const actions = entry.status === 'submitted'
                                                 ? [
                                                     <Button

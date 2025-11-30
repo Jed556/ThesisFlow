@@ -1,10 +1,10 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText,
-    DialogTitle, List, ListItem, ListItemText, Paper, Skeleton, Stack, TextField, Typography,
+    Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, IconButton,
+    DialogTitle, Paper, Skeleton, Stack, TextField, Typography, InputAdornment,
 } from '@mui/material';
 import {
-    Group as GroupIcon, Check as CheckIcon, Close as CloseIcon,
+    Group as GroupIcon, Check as CheckIcon, Close as CloseIcon, Add as AddIcon, Search as SearchIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
@@ -20,10 +20,13 @@ import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
 import StudentGroupCard from './StudentGroupCard';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import {
-    acceptInvite, acceptJoinRequest, buildGroupProfileMap, createGroup, deleteGroup, getGroupById,
-    getGroupsByCourse, getGroupsByLeader, getGroupsByMember, getUserById, getUsersByFilter, inviteUserToGroup,
-    rejectJoinRequest, removeInviteFromGroup, submitGroupForReview,
+    acceptInvite, acceptJoinRequest, buildGroupProfileMap, createGroupForUser, deleteGroupById,
+    findGroupById, getGroupsByCourse, getGroupsByLeader, getGroupsByMember, findUserById,
+    findUsersByFilter, inviteUserToGroup, rejectJoinRequest, removeInviteFromGroup, submitGroupForReview,
 } from '../../../utils/groupUtils';
+import {
+    getGroupInvites, getGroupJoinRequests, getGroupsWithInviteFor,
+} from '../../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -51,12 +54,15 @@ export default function StudentGroupPage() {
     // My group state
     const [myGroup, setMyGroup] = React.useState<ThesisGroup | null>(null);
     const [isLeader, setIsLeader] = React.useState(false);
+    // Invites and requests for my group (fetched from join subcollection)
+    const [myGroupInvites, setMyGroupInvites] = React.useState<string[]>([]);
+    const [myGroupRequests, setMyGroupRequests] = React.useState<string[]>([]);
 
     // Available groups (same course)
     const [availableGroups, setAvailableGroups] = React.useState<GroupWithInvites[]>([]);
 
-    // My invites
-    const [myInvites, setMyInvites] = React.useState<GroupWithInvites[]>([]);
+    // My invites (groups that have invited me)
+    const [myInvites, setMyInvites] = React.useState<ThesisGroup[]>([]);
 
     // Users map for GroupCard
     const [usersByUid, setUsersByUid] = React.useState<Map<string, UserProfile>>(new Map());
@@ -70,8 +76,6 @@ export default function StudentGroupPage() {
     // Dialog states
     const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
     const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
-    const [searchDialogOpen, setSearchDialogOpen] = React.useState(false);
-    const [previewDialogOpen, setPreviewDialogOpen] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
     // Form states for GroupManageDialog
@@ -83,7 +87,6 @@ export default function StudentGroupPage() {
         adviser: '',
         editor: '',
         status: 'draft',
-        thesisTitle: '',
         department: '',
         course: '',
     });
@@ -96,9 +99,34 @@ export default function StudentGroupPage() {
 
     // Simple dialog states
     const [inviteUid, setInviteUid] = React.useState('');
-    const [searchGroupId, setSearchGroupId] = React.useState('');
-    const [previewGroup, setPreviewGroup] = React.useState<ThesisGroup | null>(null);
-    const [previewMembers, setPreviewMembers] = React.useState<Map<string, UserProfile>>(new Map());
+    const [searchInput, setSearchInput] = React.useState('');
+    const [appliedSearchTerm, setAppliedSearchTerm] = React.useState('');
+
+    React.useEffect(() => {
+        if (!searchInput.trim() && appliedSearchTerm) {
+            setAppliedSearchTerm('');
+        }
+    }, [searchInput, appliedSearchTerm]);
+
+    const normalizedSearchTerm = appliedSearchTerm.toLowerCase();
+
+    const filteredInvites = React.useMemo(() => {
+        if (!normalizedSearchTerm) {
+            return myInvites;
+        }
+        return myInvites.filter((group) =>
+            group.name?.toLowerCase().includes(normalizedSearchTerm)
+        );
+    }, [myInvites, normalizedSearchTerm]);
+
+    const filteredAvailableGroups = React.useMemo(() => {
+        if (!normalizedSearchTerm) {
+            return availableGroups;
+        }
+        return availableGroups.filter((group) =>
+            group.name?.toLowerCase().includes(normalizedSearchTerm)
+        );
+    }, [availableGroups, normalizedSearchTerm]);
 
     const { showNotification } = useSnackbar();
     const isInviteLocked = (status?: ThesisGroup['status']) => status === 'review' || status === 'active';
@@ -113,7 +141,7 @@ export default function StudentGroupPage() {
 
         const loadProfile = async () => {
             try {
-                const profile = await getUserById(userUid);
+                const profile = await findUserById(userUid);
                 if (!cancelled && profile) {
                     setUserProfile(profile);
                 }
@@ -167,14 +195,23 @@ export default function StudentGroupPage() {
                         setMyGroup(group);
                         setIsLeader(group.members.leader === userUid);
 
-                        const profileMap = await buildGroupProfileMap(group);
+                        // Fetch profiles and invites/requests in parallel
+                        const [profileMap, invites, requests] = await Promise.all([
+                            buildGroupProfileMap(group),
+                            getGroupInvites(group.year, group.department, group.course, group.id),
+                            getGroupJoinRequests(group.year, group.department, group.course, group.id),
+                        ]);
                         if (!cancelled) {
                             setMyGroupProfiles(profileMap);
+                            setMyGroupInvites(invites);
+                            setMyGroupRequests(requests);
                         }
                     } else {
                         setMyGroup(null);
                         setIsLeader(false);
                         setMyGroupProfiles(new Map());
+                        setMyGroupInvites([]);
+                        setMyGroupRequests([]);
                     }
 
                     // Get all groups in my course
@@ -205,7 +242,7 @@ export default function StudentGroupPage() {
                     const usersMap = new Map<string, UserProfile>();
                     await Promise.all(
                         Array.from(allMemberUids).map(async (uid) => {
-                            const profile = await getUserById(uid);
+                            const profile = await findUserById(uid);
                             if (profile) {
                                 usersMap.set(uid, profile);
                             }
@@ -216,11 +253,20 @@ export default function StudentGroupPage() {
                         setUsersByUid(usersMap);
                     }
 
-                    // Separate groups where I have invites
-                    const invites = available.filter(g => g.invites?.includes(userUid));
-                    const others = available.filter(g => !g.invites?.includes(userUid));
+                    // Get groups where I have pending invites (from subcollection)
+                    const inviteGroups = await getGroupsWithInviteFor(userUid);
+                    // Filter invite groups to only those in same department/course
+                    const filteredInviteGroups = inviteGroups.filter(g =>
+                        g.department === userProfile.department &&
+                        g.course === userProfile.course &&
+                        g.id !== uniqueGroups[0]?.id
+                    );
 
-                    setMyInvites(invites);
+                    // Filter out invite groups from available
+                    const inviteGroupIds = new Set(filteredInviteGroups.map(g => g.id));
+                    const others = available.filter(g => !inviteGroupIds.has(g.id));
+
+                    setMyInvites(filteredInviteGroups);
                     setAvailableGroups(others);
                 }
             } catch (err) {
@@ -254,7 +300,6 @@ export default function StudentGroupPage() {
             adviser: '',
             editor: '',
             status: 'draft',
-            thesisTitle: '',
             department: userProfile.department || '',
             course: userProfile.course || '',
         });
@@ -302,7 +347,7 @@ export default function StudentGroupPage() {
             // Load students from same course
             try {
                 setStudentOptionsLoading(true);
-                const students = await getUsersByFilter({
+                const students = await findUsersByFilter({
                     role: 'student',
                     course: userProfile.course,
                 });
@@ -417,20 +462,23 @@ export default function StudentGroupPage() {
 
         setSaving(true);
         try {
-            const newGroupData: Omit<ThesisGroup, 'id' | 'createdAt' | 'updatedAt'> = {
+            const newGroupData: ThesisGroupFormData = {
                 name: formData.name.trim(),
                 description: formData.description?.trim(),
-                members: {
-                    leader: userUid,
-                    members: formData.members,
-                },
+                leader: userUid,
+                members: formData.members,
                 status: 'draft',
                 course: userProfile.course || '',
                 department: userProfile.department || '',
-                thesisTitle: formData.thesisTitle?.trim(),
             };
 
-            const createdGroup = await createGroup(newGroupData);
+            const createdGroupId = await createGroupForUser(
+                userProfile.department || '',
+                userProfile.course || '',
+                newGroupData
+            );
+            const createdGroup = await findGroupById(createdGroupId);
+            if (!createdGroup) throw new Error('Failed to find created group');
             setMyGroup(createdGroup);
             setIsLeader(true);
             const profileMap = await buildGroupProfileMap(createdGroup);
@@ -447,7 +495,6 @@ export default function StudentGroupPage() {
                 adviser: '',
                 editor: '',
                 status: 'draft',
-                thesisTitle: '',
                 department: userProfile.department || '',
                 course: userProfile.course || '',
             });
@@ -470,7 +517,6 @@ export default function StudentGroupPage() {
             adviser: '',
             editor: '',
             status: 'draft',
-            thesisTitle: '',
             department: '',
             course: '',
         });
@@ -483,7 +529,7 @@ export default function StudentGroupPage() {
         if (!myGroup) return;
 
         try {
-            await deleteGroup(myGroup.id);
+            await deleteGroupById(myGroup.id);
             setMyGroup(null);
             setIsLeader(false);
             setDeleteDialogOpen(false);
@@ -508,7 +554,7 @@ export default function StudentGroupPage() {
             setInviteUid('');
 
             // Reload my group
-            const updated = await getGroupById(myGroup.id);
+            const updated = await findGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
                 const profileMap = await buildGroupProfileMap(updated);
@@ -520,45 +566,9 @@ export default function StudentGroupPage() {
         }
     };
 
-    const handleSearchGroup = async () => {
-        if (!searchGroupId.trim()) return;
-
-        try {
-            const group = await getGroupById(searchGroupId.trim());
-            if (!group) {
-                setError('Group not found.');
-                return;
-            }
-
-            if (group.course !== userProfile?.course) {
-                setError('This group is not in your course.');
-                return;
-            }
-
-            // Load preview members
-            const memberUids = [
-                group.members.leader,
-                ...group.members.members,
-            ].filter(Boolean);
-
-            const membersMap = new Map<string, UserProfile>();
-            await Promise.all(
-                memberUids.map(async (uid) => {
-                    const profile = await getUserById(uid);
-                    if (profile) {
-                        membersMap.set(uid, profile);
-                    }
-                })
-            ); setPreviewGroup(group);
-            setPreviewMembers(membersMap);
-            setSearchDialogOpen(false);
-            setPreviewDialogOpen(true);
-            setSearchGroupId('');
-        } catch (err) {
-            console.error('Failed to search group:', err);
-            setError('Failed to find group. Please check the group ID and try again.');
-        }
-    };
+    const handleSearchGroup = React.useCallback(() => {
+        setAppliedSearchTerm(searchInput.trim());
+    }, [searchInput]);
 
     const handleAcceptInvite = async (groupId: string) => {
         if (!userUid) return;
@@ -567,7 +577,7 @@ export default function StudentGroupPage() {
             await acceptInvite(groupId, userUid);
 
             // Reload my group
-            const updated = await getGroupById(groupId);
+            const updated = await findGroupById(groupId);
             if (updated) {
                 setMyGroup(updated);
                 setIsLeader(updated.members.leader === userUid);
@@ -604,7 +614,7 @@ export default function StudentGroupPage() {
             await submitGroupForReview(myGroup.id);
 
             // Reload my group
-            const updated = await getGroupById(myGroup.id);
+            const updated = await findGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
                 const profileMap = await buildGroupProfileMap(updated);
@@ -623,7 +633,7 @@ export default function StudentGroupPage() {
             await acceptJoinRequest(myGroup.id, requesterUid);
 
             // Reload my group
-            const updated = await getGroupById(myGroup.id);
+            const updated = await findGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
                 const profileMap = await buildGroupProfileMap(updated);
@@ -642,7 +652,7 @@ export default function StudentGroupPage() {
             await rejectJoinRequest(myGroup.id, requesterUid);
 
             // Reload my group
-            const updated = await getGroupById(myGroup.id);
+            const updated = await findGroupById(myGroup.id);
             if (updated) {
                 setMyGroup(updated);
                 const profileMap = await buildGroupProfileMap(updated);
@@ -682,15 +692,48 @@ export default function StudentGroupPage() {
                 </Alert>
             )}
 
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                <Button startIcon={<AddIcon />} variant="contained" onClick={handleOpenCreateDialog}>
+                    Create Group
+                </Button>
+                <TextField
+                    label="Group Name"
+                    placeholder="Search groups by name"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' ? void handleSearchGroup() : undefined}
+                    variant="outlined"
+                    slotProps={{
+                        input: {
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleSearchGroup}
+                                        disabled={!searchInput.trim()}
+                                        aria-label="Apply group name filter"
+                                    >
+                                        <SearchIcon fontSize="small" />
+                                    </IconButton>
+                                </InputAdornment>
+                            ),
+                        }
+                    }}
+                    sx={{ minWidth: 260, flex: 1 }}
+                />
+            </Stack>
+
             <StudentGroupCard
                 loading={loading}
                 group={myGroup}
                 isLeader={isLeader}
                 profiles={myGroupProfiles}
+                invites={myGroupInvites}
+                requests={myGroupRequests}
                 formatLabel={formatParticipantLabel}
                 onOpenProfile={handleOpenProfilePage}
                 onOpenCreateDialog={handleOpenCreateDialog}
-                onOpenSearchDialog={() => setSearchDialogOpen(true)}
+                // Search UI moved to page toolbar — no dialog trigger
                 onOpenInviteDialog={() => setInviteDialogOpen(true)}
                 onSubmitForReview={handleSubmitForReview}
                 onDeleteGroup={() => setDeleteDialogOpen(true)}
@@ -716,37 +759,47 @@ export default function StudentGroupPage() {
                             gap: 2,
                         }}
                     >
-                        <AnimatedList variant="slideUp" staggerDelay={50}>
-                            {myInvites.map((group) => (
-                                <Stack key={group.id} spacing={1.5}>
-                                    <GroupCard
-                                        group={group}
-                                        usersByUid={usersByUid}
-                                        onClick={() => handleOpenGroupView(group.id)}
-                                    />
-                                    <Stack direction="row" spacing={1}>
-                                        <Button
-                                            size="small"
-                                            color="success"
-                                            startIcon={<CheckIcon />}
-                                            onClick={() => handleAcceptInvite(group.id)}
-                                            fullWidth
-                                        >
-                                            Accept
-                                        </Button>
-                                        <Button
-                                            size="small"
-                                            color="error"
-                                            startIcon={<CloseIcon />}
-                                            onClick={() => handleDeclineInvite(group.id)}
-                                            fullWidth
-                                        >
-                                            Decline
-                                        </Button>
+                        {filteredInvites.length > 0 ? (
+                            <AnimatedList variant="slideUp" staggerDelay={50}>
+                                {filteredInvites.map((group) => (
+                                    <Stack key={group.id} spacing={1.5}>
+                                        <GroupCard
+                                            group={group}
+                                            usersByUid={usersByUid}
+                                            onClick={() => handleOpenGroupView(group.id)}
+                                        />
+                                        <Stack direction="row" spacing={1}>
+                                            <Button
+                                                size="small"
+                                                color="success"
+                                                startIcon={<CheckIcon />}
+                                                onClick={() => handleAcceptInvite(group.id)}
+                                                fullWidth
+                                            >
+                                                Accept
+                                            </Button>
+                                            <Button
+                                                size="small"
+                                                color="error"
+                                                startIcon={<CloseIcon />}
+                                                onClick={() => handleDeclineInvite(group.id)}
+                                                fullWidth
+                                            >
+                                                Decline
+                                            </Button>
+                                        </Stack>
                                     </Stack>
-                                </Stack>
-                            ))}
-                        </AnimatedList>
+                                ))}
+                            </AnimatedList>
+                        ) : (
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ gridColumn: '1 / -1', textAlign: 'center' }}
+                            >
+                                No invites match your search.
+                            </Typography>
+                        )}
                     </Box>
                 </Box>
             )}
@@ -768,17 +821,27 @@ export default function StudentGroupPage() {
                             gap: 2,
                         }}
                     >
-                        <AnimatedList variant="slideUp" staggerDelay={50}>
-                            {availableGroups.map((group) => (
-                                <Box key={group.id}>
-                                    <GroupCard
-                                        group={group}
-                                        usersByUid={usersByUid}
-                                        onClick={() => handleOpenGroupView(group.id)}
-                                    />
-                                </Box>
-                            ))}
-                        </AnimatedList>
+                        {filteredAvailableGroups.length > 0 ? (
+                            <AnimatedList variant="slideUp" staggerDelay={50}>
+                                {filteredAvailableGroups.map((group) => (
+                                    <Box key={group.id}>
+                                        <GroupCard
+                                            group={group}
+                                            usersByUid={usersByUid}
+                                            onClick={() => handleOpenGroupView(group.id)}
+                                        />
+                                    </Box>
+                                ))}
+                            </AnimatedList>
+                        ) : (
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ gridColumn: '1 / -1', textAlign: 'center' }}
+                            >
+                                No groups match your search.
+                            </Typography>
+                        )}
                     </Box>
                 </Box>
             )}
@@ -839,101 +902,6 @@ export default function StudentGroupPage() {
                     >
                         Send Invite
                     </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Search Group Dialog */}
-            <Dialog open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)}>
-                <DialogTitle>Search Group by ID</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Enter the group ID to search for a specific group.
-                    </DialogContentText>
-                    <TextField
-                        autoFocus
-                        margin="dense"
-                        label="Group ID"
-                        fullWidth
-                        value={searchGroupId}
-                        onChange={(e) => setSearchGroupId(e.target.value)}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setSearchDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSearchGroup} variant="contained" disabled={!searchGroupId.trim()}>
-                        Search
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Preview Group Dialog */}
-            <Dialog open={previewDialogOpen} onClose={() => setPreviewDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Group Preview</DialogTitle>
-                <DialogContent>
-                    {previewGroup && (
-                        <>
-                            <Typography variant="h6" gutterBottom>
-                                {previewGroup.name}
-                            </Typography>
-                            {previewGroup.description && (
-                                <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    {previewGroup.description}
-                                </Typography>
-                            )}
-                            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                                ID: {previewGroup.id}
-                            </Typography>
-                            <Chip
-                                label={previewGroup.status.toUpperCase()}
-                                size="small"
-                                color={
-                                    previewGroup.status === 'active' ? 'success' :
-                                        previewGroup.status === 'review' ? 'warning' : 'default'
-                                }
-                                sx={{ mb: 2 }}
-                            />
-
-                            <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                                Members
-                            </Typography>
-                            <List dense>
-                                {[previewGroup.members.leader, ...previewGroup.members.members]
-                                    .filter(Boolean)
-                                    .map((uid, idx) => {
-                                        const member = previewMembers.get(uid);
-                                        const isLeaderMember = idx === 0;
-                                        return (
-                                            <ListItem key={uid}>
-                                                <ListItemText
-                                                    primary={
-                                                        member
-                                                            ? `${member.name.first} ${member.name.last}${isLeaderMember ?
-                                                                ' (Leader)' : ''
-                                                            }`
-                                                            : `${uid}${isLeaderMember ? ' (Leader)' : ''}`
-                                                    }
-                                                    secondary={member?.email}
-                                                />
-                                            </ListItem>
-                                        );
-                                    })}*
-                            </List>
-                        </>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setPreviewDialogOpen(false)}>Close</Button>
-                    {previewGroup && !myGroup && (
-                        <Button
-                            onClick={() => {
-                                handleOpenGroupView(previewGroup.id);
-                                setPreviewDialogOpen(false);
-                            }}
-                            variant="contained"
-                        >
-                            View Group
-                        </Button>
-                    )}
                 </DialogActions>
             </Dialog>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { getAvatarInitials } from '../../utils/avatarUtils';
-import { getProfile } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getDisplayName as getDisplayNameAsync } from '../../utils/userUtils';
 import type { UserProfile } from '../../types/profile';
 import MuiAvatar, { type AvatarProps as MuiAvatarProps } from '@mui/material/Avatar';
@@ -233,7 +233,7 @@ export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 
         async function fetchData() {
             setIsLoading(true);
             try {
-                const profile = await getProfile(uid);
+                const profile = await findUserById(uid);
                 if (isMounted && profile) {
                     setResolvedProfile(profile);
                     const name = await getDisplayNameAsync(uid);

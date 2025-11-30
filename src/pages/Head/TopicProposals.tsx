@@ -8,14 +8,14 @@ import type { NavigationItem } from '../../types/navigation';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/topicProposal';
+import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordHeadDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -81,7 +81,7 @@ export default function HeadTopicProposalsPage() {
         setProfileLoading(true);
         setProfileError(null);
 
-        void getUserById(headUid)
+        void findUserById(headUid)
             .then((userProfile) => {
                 if (!cancelled) {
                     setProfile(userProfile ?? null);

@@ -7,8 +7,8 @@ import type { NavigationItem } from '../../../../types/navigation';
 import { AnimatedPage } from '../../../../components/Animate';
 import GroupView from '../../../../components/Group/GroupView';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
-import { getGroupById, updateGroup } from '../../../../utils/firebase/firestore/groups';
-import { getUsersByFilter, getUsersByIds } from '../../../../utils/firebase/firestore/user';
+import { findGroupById, updateGroupById } from '../../../../utils/firebase/firestore/groups';
+import { findUsersByFilter, findUsersByIds } from '../../../../utils/firebase/firestore/user';
 import type { ThesisGroup } from '../../../../types/group';
 import type { UserProfile } from '../../../../types/profile';
 
@@ -76,7 +76,7 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
     const loadPanelOptions = React.useCallback(async () => {
         try {
             setLoadingOptions(true);
-            const panels = await getUsersByFilter({ role: 'panel' });
+            const panels = await findUsersByFilter({ role: 'panel' });
             setPanelOptions((prev) => {
                 const merged = new Map(prev.map((profile) => [profile.uid, profile]));
                 panels.forEach((profile) => {
@@ -111,7 +111,7 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
     const loadAssignments = React.useCallback(async () => {
         setLoadingAssignments(true);
         try {
-            const group = await getGroupById(groupId);
+            const group = await findGroupById(groupId);
             if (!group) {
                 setError('Group not found.');
                 setSelectedPanelUids([]);
@@ -127,7 +127,7 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
             setError(null);
 
             if (panels.length > 0) {
-                const panelProfiles = await getUsersByIds(panels);
+                const panelProfiles = await findUsersByIds(panels);
                 mergeProfiles(panelProfiles);
             }
         } catch (assignmentError) {
@@ -176,8 +176,8 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
                 ...(currentMembers ?? { leader: '', members: [] }),
                 panels: selectedPanelUids,
             };
-            await updateGroup(groupId, {
-                members: nextMembers,
+            await updateGroupById(groupId, {
+                panels: selectedPanelUids,
             });
             setInitialPanelUids(selectedPanelUids);
             setCurrentMembers(nextMembers);

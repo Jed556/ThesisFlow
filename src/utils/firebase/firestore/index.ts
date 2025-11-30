@@ -1,6 +1,5 @@
 export * from './calendars';
 export * from './chapter';
-export * from './chapterSubmissions';
 export * from './events';
 export * from './file';
 export * from './firestore';
@@ -9,5 +8,5 @@ export * from './user';
 export * from './thesis';
 export * from './topicProposals';
 export * from './panelComments';
-export * from './terminalRequirementConfigs';
-export * from './terminalRequirementSubmissions';
+export * from './terminalRequirements';
+export * from './mentorRequests';

@@ -52,7 +52,7 @@ export default function GroupManageDialog({
     const [localFormDetails, setLocalFormDetails] = React.useState({
         name: formData.name,
         description: formData.description || '',
-        thesisTitle: formData.thesisTitle || '',
+        thesisTitle: formData.thesis?.title || '',
         department: formData.department || '',
         status: formData.status,
     });
@@ -63,12 +63,12 @@ export default function GroupManageDialog({
             setLocalFormDetails({
                 name: formData.name,
                 description: formData.description || '',
-                thesisTitle: formData.thesisTitle || '',
+                thesisTitle: formData.thesis?.title || '',
                 department: formData.department || '',
                 status: formData.status,
             });
         }
-    }, [open, formData.name, formData.description, formData.thesisTitle, formData.department, formData.status]);
+    }, [open, formData.name, formData.description, formData.thesis?.title, formData.department, formData.status]);
 
     const handleNext = React.useCallback(() => {
         let pendingChanges: Partial<ThesisGroupFormData> | undefined;
@@ -77,7 +77,12 @@ export default function GroupManageDialog({
             pendingChanges = {
                 name: localFormDetails.name,
                 description: localFormDetails.description,
-                thesisTitle: localFormDetails.thesisTitle,
+                thesis: formData.thesis ? {
+                    ...formData.thesis,
+                    title: localFormDetails.thesisTitle,
+                } : localFormDetails.thesisTitle ? {
+                    title: localFormDetails.thesisTitle,
+                } as ThesisGroupFormData['thesis'] : undefined,
                 department: localFormDetails.department,
                 status: localFormDetails.status,
             };
@@ -86,7 +91,7 @@ export default function GroupManageDialog({
         }
 
         void onNext(pendingChanges);
-    }, [activeStep, localFormDetails, onFieldChange, onNext]);
+    }, [activeStep, localFormDetails, formData.thesis, onFieldChange, onNext]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slots={{ transition: GrowTransition }}>
@@ -287,7 +292,7 @@ export default function GroupManageDialog({
                                         <strong>Description:</strong> {formData.description || '—'}
                                     </Typography>
                                     <Typography>
-                                        <strong>Thesis Title:</strong> {formData.thesisTitle || '—'}
+                                        <strong>Thesis Title:</strong> {formData.thesis?.title || '—'}
                                     </Typography>
                                     {isAdmin && (
                                         <Typography>

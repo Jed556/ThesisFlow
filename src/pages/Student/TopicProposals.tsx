@@ -8,23 +8,23 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/topicProposal';
+import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard, TopicProposalFormDialog, type TopicProposalFormValues } from '../../components/TopicProposals';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import {
-    createTopicProposalSet, listenTopicProposalSetsByGroup, markProposalAsThesis,
-    submitTopicProposalSet, updateTopicProposalDraftEntries,
+    createProposalSetByGroup, listenTopicProposalSetsByGroup, markProposalAsThesisBySetId,
+    submitProposalSetBySetId, updateDraftEntriesBySetId,
 } from '../../utils/firebase/firestore/topicProposals';
-import { getGroupsByLeader, getGroupsByMember, updateGroup } from '../../utils/firebase/firestore/groups';
-import { getUsersByIds } from '../../utils/firebase/firestore/user';
+import { getGroupsByLeader, getGroupsByMember, updateGroupById } from '../../utils/firebase/firestore/groups';
+import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import {
     areAllProposalsRejected, canEditProposalSet, getProposalSetMeta, pickActiveProposalSet
 } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
-import { getThesisById } from '../../utils/firebase/firestore/thesis';
+import { findThesisById } from '../../utils/firebase/firestore/thesis';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -106,17 +106,17 @@ function computeNextTopicSequence(groupId: string | undefined, sets: TopicPropos
 }
 
 async function ensureGroupThesisReference(group: ThesisGroup): Promise<ThesisGroup> {
-    if (!group.thesisId) {
+    if (!group.thesis?.id) {
         return group;
     }
 
     try {
-        const thesis = await getThesisById(group.thesisId);
+        const thesis = await findThesisById(group.thesis.id);
         if (thesis) {
             return group;
         }
-        await updateGroup(group.id, { thesisId: undefined, thesisTitle: undefined });
-        return { ...group, thesisId: undefined, thesisTitle: undefined };
+        await updateGroupById(group.id, { thesis: undefined });
+        return { ...group, thesis: undefined };
     } catch (error) {
         console.error('Failed to verify thesis reference for group:', error);
         return group;
@@ -219,7 +219,7 @@ export default function StudentTopicProposalsPage() {
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(Array.from(memberIds));
+                const profiles = await findUsersByIds(Array.from(memberIds));
                 const profileMap = new Map<string, UserProfile>();
                 profiles.forEach((profile) => {
                     profileMap.set(profile.uid, profile);
@@ -281,7 +281,7 @@ export default function StudentTopicProposalsPage() {
         [proposalSets, activeSet?.id]
     );
 
-    const groupThesisId = group?.thesisId ?? undefined;
+    const groupThesisId = group?.thesis?.id ?? undefined;
     const activeThesisEntryId = React.useMemo(() => {
         if (!groupThesisId || !activeSet) return undefined;
         return activeSet.entries.some((entry) => entry.id === groupThesisId) ? groupThesisId : undefined;
@@ -346,7 +346,7 @@ export default function StudentTopicProposalsPage() {
             setNextTopicSequence((prev) => prev + 1);
         }
         try {
-            const now = new Date().toISOString();
+            const now = new Date();
             const nextEntries = editingEntryId
                 ? activeSet.entries.map((entry) =>
                     entry.id === entryId
@@ -376,7 +376,7 @@ export default function StudentTopicProposalsPage() {
                         status: 'draft',
                     } satisfies TopicProposalEntry,
                 ];
-            await updateTopicProposalDraftEntries(activeSet.id, nextEntries);
+            await updateDraftEntriesBySetId(activeSet.id, nextEntries);
             showNotification('Draft saved', 'success');
             setFormOpen(false);
         } catch (error) {
@@ -396,7 +396,7 @@ export default function StudentTopicProposalsPage() {
         }
         try {
             const remaining = activeSet.entries.filter((entry) => entry.id !== deleteDialog.id);
-            await updateTopicProposalDraftEntries(activeSet.id, remaining);
+            await updateDraftEntriesBySetId(activeSet.id, remaining);
             showNotification('Proposal removed from draft', 'success');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to remove proposal';
@@ -412,7 +412,7 @@ export default function StudentTopicProposalsPage() {
         }
         setSubmissionLoading(true);
         try {
-            await submitTopicProposalSet({ setId: activeSet.id, submittedBy: userUid });
+            await submitProposalSetBySetId(activeSet.id, userUid);
             showNotification('Topic proposals submitted for review', 'success');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit proposals';
@@ -428,8 +428,8 @@ export default function StudentTopicProposalsPage() {
         }
         setCreateSetLoading(true);
         try {
-            const nextSetNumber = proposalSets.reduce((acc, set) => Math.max(acc, set.set), 0) + 1;
-            await createTopicProposalSet({ groupId: group.id, createdBy: userUid, set: nextSetNumber });
+            const nextSetNumber = proposalSets.reduce((acc, set) => Math.max(acc, set.set ?? 0), 0) + 1;
+            await createProposalSetByGroup(group.id, { createdBy: userUid, set: nextSetNumber });
             showNotification('New topic proposal cycle started', 'success');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to start proposal cycle';
@@ -445,10 +445,9 @@ export default function StudentTopicProposalsPage() {
         }
         setUseTopicLoading(true);
         try {
-            await markProposalAsThesis({
-                setId: activeSet.id,
-                proposalId: useTopicDialog.id,
-                groupId: group.id,
+            await markProposalAsThesisBySetId({
+                proposalId: activeSet.id,
+                entryId: useTopicDialog.id,
                 requestedBy: userUid,
             });
             showNotification('Thesis created from your selected topic. Chapters are now unlocked.', 'success');
@@ -659,18 +658,25 @@ export default function StudentTopicProposalsPage() {
                                 );
                             }
 
-                            const footer = entry.moderatorDecision || entry.headDecision ? (
+                            // Get decision info from the proposal set audits
+                            const entryAudits = activeSet?.audits?.filter(
+                                audit => audit.proposalId === entry.id
+                            ) || [];
+                            const moderatorAudit = entryAudits.find(a => a.stage === 'moderator');
+                            const headAudit = entryAudits.find(a => a.stage === 'head');
+
+                            const footer = moderatorAudit || headAudit ? (
                                 <Stack spacing={1}>
-                                    {entry.moderatorDecision && (
+                                    {moderatorAudit && (
                                         <Typography variant="caption" color="text.secondary">
-                                            Moderator: {entry.moderatorDecision.decision}
-                                            {entry.moderatorDecision.notes ? ` – ${entry.moderatorDecision.notes}` : ''}
+                                            Moderator: {moderatorAudit.status}
+                                            {moderatorAudit.notes ? ` – ${moderatorAudit.notes}` : ''}
                                         </Typography>
                                     )}
-                                    {entry.headDecision && (
+                                    {headAudit && (
                                         <Typography variant="caption" color="text.secondary">
-                                            Head: {entry.headDecision.decision}
-                                            {entry.headDecision.notes ? ` – ${entry.headDecision.notes}` : ''}
+                                            Head: {headAudit.status}
+                                            {headAudit.notes ? ` – ${headAudit.notes}` : ''}
                                         </Typography>
                                     )}
                                 </Stack>

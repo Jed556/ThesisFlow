@@ -5,23 +5,21 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
-import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
+import type { ExpertRequest, MentorRequestRole } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
-import type { ThesisData } from '../../types/thesis';
 import type { Session } from '../../types/session';
 import type { UserProfile, UserRole } from '../../types/profile';
 import { AnimatedPage } from '../Animate';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
-import { getGroupById } from '../../utils/firebase/firestore/groups';
+import { findGroupById, listenGroupsByMentorRole } from '../../utils/firebase/firestore/groups';
 import { listenMentorRequestsByMentor } from '../../utils/firebase/firestore/mentorRequests';
-import { listenThesesForMentor } from '../../utils/firebase/firestore/thesis';
-import { getUsersByIds, onUserProfile, setUserProfile } from '../../utils/firebase/firestore/user';
+import { findUsersByIds, onUserProfile, updateUserProfile } from '../../utils/firebase/firestore/user';
 import MentorRequestCard from './MentorRequestCard';
-import { filterActiveMentorTheses } from '../../utils/mentorProfileUtils';
+import { filterActiveGroups } from '../../utils/mentorProfileUtils';
 
 interface MentorRequestViewModel {
-    request: MentorRequest;
+    request: ExpertRequest;
     group: ThesisGroup | null;
     requester: UserProfile | null;
     usersByUid: Map<string, UserProfile>;
@@ -37,13 +35,15 @@ export interface MentorRequestsPageProps {
     allowedRoles?: UserRole[];
 }
 
-function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestViewModel[] {
+function useMentorRequestViewModels(requests: ExpertRequest[]): MentorRequestViewModel[] {
     const [groupsById, setGroupsById] = React.useState<Map<string, ThesisGroup | null>>(new Map());
     const [profilesByUid, setProfilesByUid] = React.useState<Map<string, UserProfile>>(new Map());
 
     React.useEffect(() => {
         let cancelled = false;
-        const uniqueGroupIds = Array.from(new Set(requests.map((req) => req.groupId)));
+        const uniqueGroupIds = Array.from(
+            new Set(requests.map((req) => req.groupId).filter((id): id is string => !!id))
+        );
         if (uniqueGroupIds.length === 0) {
             setGroupsById(new Map());
             return () => { /* no-op */ };
@@ -54,7 +54,7 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
                 const resolved = await Promise.all(
                     uniqueGroupIds.map(async (groupId) => {
                         try {
-                            const record = await getGroupById(groupId);
+                            const record = await findGroupById(groupId);
                             return [groupId, record] as const;
                         } catch (err) {
                             console.error(`Failed to resolve group ${groupId}:`, err);
@@ -99,7 +99,7 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(ids);
+                const profiles = await findUsersByIds(ids);
                 if (!cancelled) {
                     setProfilesByUid(new Map(profiles.map((profile) => [profile.uid, profile])));
                 }
@@ -117,7 +117,7 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
 
     return React.useMemo(() => (
         requests.map((request) => {
-            const group = groupsById.get(request.groupId) ?? null;
+            const group = request.groupId ? groupsById.get(request.groupId) ?? null : null;
             const requester = profilesByUid.get(request.requestedBy) ?? null;
             const usersByUid = new Map<string, UserProfile>();
             if (requester) {
@@ -151,7 +151,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     const { showNotification } = useSnackbar();
     const navigate = useNavigate();
 
-    const [requests, setRequests] = React.useState<MentorRequest[]>([]);
+    const [requests, setRequests] = React.useState<ExpertRequest[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
@@ -161,11 +161,11 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     const [capacityError, setCapacityError] = React.useState<string | null>(null);
     const [capacitySaving, setCapacitySaving] = React.useState(false);
     const [editingCapacity, setEditingCapacity] = React.useState(false);
-    const [assignments, setAssignments] = React.useState<(ThesisData & { id: string })[]>([]);
+    const [assignments, setAssignments] = React.useState<ThesisGroup[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(false);
 
     const activeAssignments = React.useMemo(
-        () => filterActiveMentorTheses(assignments),
+        () => filterActiveGroups(assignments),
         [assignments]
     );
     const minimumCapacity = activeAssignments.length;
@@ -190,7 +190,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
 
         setLoading(true);
         setError(null);
-        const unsubscribe = listenMentorRequestsByMentor(role, mentorUid, {
+        const unsubscribe = listenMentorRequestsByMentor(mentorUid, role, {
             onData: (records) => {
                 setRequests(records);
                 setLoading(false);
@@ -246,12 +246,12 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
         }
 
         setAssignmentsLoading(true);
-        const unsubscribe = listenThesesForMentor(role, mentorUid, {
-            onData: (records) => {
-                setAssignments(records);
+        const unsubscribe = listenGroupsByMentorRole(role, mentorUid, {
+            onData: (groups: ThesisGroup[]) => {
+                setAssignments(groups);
                 setAssignmentsLoading(false);
             },
-            onError: (listenerError) => {
+            onError: (listenerError: Error) => {
                 console.error('Failed to load mentor assignments for capacity view:', listenerError);
                 setAssignments([]);
                 setAssignmentsLoading(false);
@@ -334,7 +334,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
 
         setCapacitySaving(true);
         try {
-            await setUserProfile(mentorUid, { capacity: parsed });
+            await updateUserProfile(mentorUid, { capacity: parsed });
             showNotification('Updated your available slots.', 'success');
             setEditingCapacity(false);
             setCapacityError(null);
@@ -365,7 +365,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
 
 
 
-    const handleOpenGroupView = React.useCallback((requestToOpen: MentorRequest) => {
+    const handleOpenGroupView = React.useCallback((requestToOpen: ExpertRequest) => {
         const basePath = role === 'adviser'
             ? '/adviser-requests'
             : role === 'editor'

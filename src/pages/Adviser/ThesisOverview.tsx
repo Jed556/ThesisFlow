@@ -4,18 +4,17 @@ import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ReviewerAssignment } from '../../types/reviewer';
-import type { ThesisData } from '../../types/thesis';
+import type { ReviewerAssignment, ThesisWithGroupContext } from '../../utils/firebase/firestore/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceFilterConfig, WorkspaceChapterDecisionPayload, WorkspaceCommentPayload } from '../../types/workspace';
-import { getReviewerAssignmentsForUser, getThesisById } from '../../utils/firebase/firestore/thesis';
-import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
+import { getReviewerAssignmentsForUser, findThesisById } from '../../utils/firebase/firestore/thesis';
+import { appendChapterComment } from '../../utils/firebase/firestore/chat';
+import { updateChapterDecision } from '../../utils/firebase/firestore/chapters';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
-import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDecisions';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -33,7 +32,7 @@ export default function AdviserThesisOverviewPage() {
     const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
     const [selectedThesisId, setSelectedThesisId] = React.useState<string>('');
-    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesis, setThesis] = React.useState<ThesisWithGroupContext | null>(null);
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
     const [error, setError] = React.useState<string | null>(null);
@@ -124,7 +123,7 @@ export default function AdviserThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const data = await getThesisById(selectedThesisId);
+                const data = await findThesisById(selectedThesisId);
                 if (!cancelled) {
                     setThesis(data);
                     await hydrateDisplayNames([
@@ -206,7 +205,8 @@ export default function AdviserThesisOverviewPage() {
         content,
         files,
     }: WorkspaceCommentPayload) => {
-        if (!adviserUid || !selectedThesisId || !thesis?.groupId) {
+        if (!adviserUid || !selectedThesisId || !thesis?.groupId || !thesis.year ||
+            !thesis.department || !thesis.course) {
             throw new Error('Missing adviser context.');
         }
 
@@ -222,7 +222,13 @@ export default function AdviserThesisOverviewPage() {
         }
 
         const savedComment = await appendChapterComment({
-            thesisId: selectedThesisId,
+            ctx: {
+                year: thesis.year,
+                department: thesis.department,
+                course: thesis.course,
+                groupId: thesis.groupId,
+                thesisId: selectedThesisId,
+            },
             chapterId,
             comment: {
                 author: adviserUid,
@@ -238,34 +244,42 @@ export default function AdviserThesisOverviewPage() {
             }
             return {
                 ...prev,
-                chapters: prev.chapters.map((chapter) =>
+                chapters: (prev.chapters ?? []).map((chapter) =>
                     chapter.id === chapterId
                         ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
                         : chapter
                 ),
             };
         });
-    }, [adviserUid, selectedThesisId, thesis?.groupId]);
+    }, [adviserUid, selectedThesisId, thesis]);
 
     const handleChapterDecision = React.useCallback(async ({
         thesisId: targetThesisId,
         chapterId,
         decision,
     }: WorkspaceChapterDecisionPayload) => {
-        if (!targetThesisId) {
+        if (!targetThesisId || !thesis?.year || !thesis.department ||
+            !thesis.course || !thesis.groupId) {
             throw new Error('Missing thesis context for decision.');
         }
 
+        // Only handle decisions for the currently selected thesis
+        if (targetThesisId !== selectedThesisId) {
+            throw new Error('Cannot make decisions for a different thesis.');
+        }
+
         const result = await updateChapterDecision({
-            thesisId: targetThesisId,
+            ctx: {
+                year: thesis.year,
+                department: thesis.department,
+                course: thesis.course,
+                groupId: thesis.groupId,
+                thesisId: targetThesisId,
+            },
             chapterId,
             decision,
             role: 'adviser',
         });
-
-        if (targetThesisId !== selectedThesisId) {
-            return;
-        }
 
         setThesis((prev) => {
             if (!prev) {
@@ -274,7 +288,7 @@ export default function AdviserThesisOverviewPage() {
             return {
                 ...prev,
                 lastUpdated: result.decidedAt,
-                chapters: prev.chapters.map((chapter) =>
+                chapters: (prev.chapters ?? []).map((chapter) =>
                     chapter.id === chapterId
                         ? {
                             ...chapter,
@@ -286,7 +300,7 @@ export default function AdviserThesisOverviewPage() {
                 ),
             };
         });
-    }, [selectedThesisId]);
+    }, [selectedThesisId, thesis]);
 
     const isLoading = assignmentsLoading || thesisLoading;
     const noAssignments = !assignmentsLoading && assignments.length === 0;

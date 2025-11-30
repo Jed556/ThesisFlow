@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "3.15.0",
+    "version": "4.0.4",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -13,11 +13,11 @@
         "@material/material-color-utilities": "^0.3.0",
         "@mui/icons-material": "^7.3.5",
         "@mui/material": "^7.3.5",
-        "@mui/x-charts": "^8.19.0",
-        "@mui/x-data-grid": "^8.19.0",
+        "@mui/x-charts": "^8.20.0",
+        "@mui/x-data-grid": "^8.20.0",
         "@mui/x-date-pickers": "^8.19.0",
         "@toolpad/core": "^0.16.0",
-        "@vercel/node": "^5.5.12",
+        "@vercel/node": "^5.5.13",
         "@vercel/speed-insights": "^1.2.0",
         "date-fns": "^4.1.0",
         "firebase": "^12.6.0",

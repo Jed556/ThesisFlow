@@ -14,7 +14,7 @@ import type { UserProfile } from '../../../types/profile';
 import { AnimatedList, AnimatedPage } from '../../../components/Animate';
 import { Avatar, Name } from '../../../components/Avatar';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
-import { getUserById } from '../../../utils/firebase/firestore/user';
+import { findUserById } from '../../../utils/firebase/firestore/user';
 import { getGroupsByCourse, approveGroup, rejectGroup } from '../../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
@@ -67,7 +67,7 @@ export default function ModeratorGroupApprovalsPage() {
         setProfileLoading(true);
         setProfileError(null);
 
-        void getUserById(moderatorUid)
+        void findUserById(moderatorUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;
@@ -312,7 +312,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
 
         const loadProfiles = async () => {
             try {
-                const leader = await getUserById(group.members.leader);
+                const leader = await findUserById(group.members.leader);
                 if (!cancelled && leader) {
                     setLeaderProfile(leader);
                 }
@@ -320,7 +320,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                 const membersMap = new Map<string, UserProfile>();
                 await Promise.all(
                     group.members.members.map(async (uid) => {
-                        const profile = await getUserById(uid);
+                        const profile = await findUserById(uid);
                         if (profile) {
                             membersMap.set(uid, profile);
                         }

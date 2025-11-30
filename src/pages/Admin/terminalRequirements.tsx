@@ -1,19 +1,7 @@
 import * as React from 'react';
 import {
-    Alert,
-    Autocomplete,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    CircularProgress,
-    Grid,
-    Stack,
-    Switch,
-    Tab,
-    Tabs,
-    TextField,
-    Typography,
+    Alert, Autocomplete, Box, Button, Card, CardContent, CircularProgress, Grid,
+    Stack, Switch, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import { FactCheck as FactCheckIcon, Upload as UploadIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
@@ -22,17 +10,16 @@ import { useSnackbar } from '../../components/Snackbar';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ThesisStage } from '../../types/thesis';
-import type { TerminalRequirementDefinition } from '../../types/terminalRequirement';
+import type { ThesisStageName } from '../../types/thesis';
+import type { TerminalRequirement } from '../../types/terminalRequirement';
 import type { TerminalRequirementConfigEntry, TerminalRequirementTemplateMetadata } from '../../types/terminalRequirementConfig';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment, getGroupDepartments } from '../../utils/firebase/firestore/groups';
 import {
+    getAllTerminalRequirementConfigs,
     getTerminalRequirementConfig,
-    getTerminalRequirementConfigsByDepartment,
-    getTerminalRequirementDepartments,
     setTerminalRequirementConfig,
-} from '../../utils/firebase/firestore/terminalRequirementConfigs';
+} from '../../utils/firebase/firestore/terminalRequirements';
 import {
     uploadTerminalRequirementTemplate,
     deleteTerminalRequirementTemplate,
@@ -116,7 +103,7 @@ function areRequirementStatesEqual(a: RequirementStateMap, b: RequirementStateMa
 }
 
 interface RequirementRow {
-    definition: TerminalRequirementDefinition;
+    definition: TerminalRequirement;
     entry: TerminalRequirementConfigEntry;
 }
 
@@ -150,13 +137,13 @@ export default function AdminTerminalRequirementsPage() {
     const [requirementState, setRequirementState] = React.useState<RequirementStateMap>(() => createDefaultRequirementState());
     const syncedStateRef = React.useRef<RequirementStateMap>(createDefaultRequirementState());
 
-    const [activeStage, setActiveStage] = React.useState<ThesisStage>(THESIS_STAGE_METADATA[0].value);
+    const [activeStage, setActiveStage] = React.useState<ThesisStageName>(THESIS_STAGE_METADATA[0].value);
     const [saving, setSaving] = React.useState(false);
     const [uploadingMap, setUploadingMap] = React.useState<Record<string, boolean>>({});
     const [removingMap, setRemovingMap] = React.useState<Record<string, boolean>>({});
 
-    const definitionById = React.useMemo<Record<string, TerminalRequirementDefinition>>(() => {
-        return TERMINAL_REQUIREMENTS.reduce<Record<string, TerminalRequirementDefinition>>((acc, definition) => {
+    const definitionById = React.useMemo<Record<string, TerminalRequirement>>(() => {
+        return TERMINAL_REQUIREMENTS.reduce<Record<string, TerminalRequirement>>((acc, definition) => {
             acc[definition.id] = definition;
             return acc;
         }, {});
@@ -180,9 +167,9 @@ export default function AdminTerminalRequirementsPage() {
 
         const loadDepartments = async () => {
             try {
-                const [profile, knownDepartments, groupDepartments] = await Promise.all([
-                    getUserById(userUid),
-                    getTerminalRequirementDepartments().catch(() => []),
+                const [profile, allConfigs, groupDepartments] = await Promise.all([
+                    findUserById(userUid),
+                    getAllTerminalRequirementConfigs().catch(() => []),
                     getGroupDepartments().catch(() => []),
                 ]);
 
@@ -194,16 +181,22 @@ export default function AdminTerminalRequirementsPage() {
                     ?? (profile?.department ? [profile.department] : []);
 
                 const normalizedManaged = managedDepartments
-                    .map((dept) => dept.trim())
-                    .filter((dept): dept is string => Boolean(dept));
-                normalizedManaged.sort((a, b) => a.localeCompare(b));
-                const normalizedKnown = knownDepartments
-                    .map((dept) => dept.trim())
-                    .filter((dept): dept is string => Boolean(dept));
+                    .map((dept: string) => dept.trim())
+                    .filter((dept: string): dept is string => Boolean(dept));
+                normalizedManaged.sort((a: string, b: string) => a.localeCompare(b));
+
+                // Extract departments from all terminal requirement configs
+                const knownDepartments = new Set<string>();
+                allConfigs.forEach((config) => {
+                    if (config.department) {
+                        knownDepartments.add(config.department.trim());
+                    }
+                });
+                const normalizedKnown = Array.from(knownDepartments);
 
                 const normalizedFromGroups = groupDepartments
-                    .map((dept) => dept.trim())
-                    .filter((dept): dept is string => Boolean(dept));
+                    .map((dept: string) => dept.trim())
+                    .filter((dept: string): dept is string => Boolean(dept));
 
                 const unique = new Set<string>([...normalizedKnown, ...normalizedManaged, ...normalizedFromGroups]);
                 const sortedDepartments = Array.from(unique).sort((a, b) => a.localeCompare(b));
@@ -254,20 +247,25 @@ export default function AdminTerminalRequirementsPage() {
 
         const loadCourses = async () => {
             try {
-                const [groups, configs] = await Promise.all([
+                const [groups, allConfigs] = await Promise.all([
                     getGroupsByDepartment(selectedDepartment),
-                    getTerminalRequirementConfigsByDepartment(selectedDepartment).catch(() => []),
+                    getAllTerminalRequirementConfigs().catch(() => []),
                 ]);
 
                 if (cancelled) {
                     return;
                 }
 
+                // Filter configs by department
+                const filteredConfigs = allConfigs.filter(
+                    (config) => config.department?.toLowerCase() === selectedDepartment.toLowerCase()
+                );
+
                 const fromGroups = groups
                     .map((group) => group.course?.trim())
                     .filter((course): course is string => Boolean(course));
 
-                const fromConfigs = configs
+                const fromConfigs = filteredConfigs
                     .map((config) => config.course?.trim())
                     .filter((course): course is string => Boolean(course));
 
@@ -392,7 +390,7 @@ export default function AdminTerminalRequirementsPage() {
         });
     }, []);
 
-    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStage) => {
+    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStageName) => {
         setActiveStage(nextStage);
     }, []);
 

@@ -1,3 +1,10 @@
+import type { ThesisData } from './thesis';
+
+/**
+ * Group-specific status values
+ */
+export type GroupStatus = 'draft' | 'review' | 'active' | 'inactive' | 'rejected' | 'completed' | 'archived';
+
 /**
  * Thesis group represents a team working on a thesis project
  */
@@ -8,15 +15,10 @@ export interface ThesisGroup {
     members: ThesisGroupMembers;
     createdAt: string;
     updatedAt: string;
-    status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
-    thesisId?: string;
-    thesisTitle?: string;
+    status: GroupStatus;
+    thesis?: ThesisData;
     department?: string;
     course?: string;
-    /** Pending invites to other students (array of UIDs) */
-    invites?: string[];
-    /** Incoming join requests from students (array of UIDs) */
-    requests?: string[];
     /** Rejection reason (only populated when status is 'rejected') */
     rejectionReason?: string;
 }
@@ -44,9 +46,10 @@ export interface ThesisGroupFormData {
     members: string[];
     adviser?: string;
     editor?: string;
-    thesisId?: string;
-    status: 'draft' | 'review' | 'active' | 'rejected' | 'inactive' | 'completed' | 'archived';
-    thesisTitle?: string;
+    statistician?: string;
+    panels?: string[];
+    thesis?: ThesisData;
+    status: GroupStatus;
     department?: string;
     course?: string;
 }

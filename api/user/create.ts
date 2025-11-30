@@ -1,12 +1,17 @@
 /**
  * Create user endpoint
  * Creates a new Firebase user with email and password
+ * Supports encrypted password transmission for security
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { handleCors, errorResponse, successResponse } from '../../utils/utils.js';
 import { getError } from '../../utils/errorUtils.js';
 import { authenticate } from '../../utils/auth.js';
 import { auth } from '../../utils/firebase.js';
+import { decryptPassword } from '../../utils/cryptoUtils.js';
+
+// Shared secret for password encryption (must match client-side)
+const CRYPTO_SECRET = process.env.VITE_ADMIN_API_SECRET || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Handle CORS
@@ -26,10 +31,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { email, password, role, uid: customUid } = req.body ?? {};
 
     const normalizedEmail = typeof email === 'string' ? email.trim() : '';
-    const normalizedPassword = typeof password === 'string' ? password : '';
+    let normalizedPassword = typeof password === 'string' ? password : '';
 
     if (!normalizedEmail || !normalizedPassword) {
         return errorResponse(res, 'Email and password are required', 400);
+    }
+
+    // Decrypt the encrypted password
+    if (!CRYPTO_SECRET) {
+        console.error('CRYPTO_SECRET not configured');
+        return errorResponse(res, 'Server configuration error', 500);
+    }
+
+    try {
+        normalizedPassword = decryptPassword(normalizedPassword, CRYPTO_SECRET);
+    } catch (decryptError) {
+        console.error('Failed to decrypt password:', decryptError);
+        return errorResponse(res, 'Password must be encrypted', 400);
     }
 
     const isValidEmailShape = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);

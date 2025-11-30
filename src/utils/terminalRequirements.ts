@@ -1,12 +1,12 @@
 import type { FileAttachment } from '../types/file';
-import type { ThesisStage } from '../types/thesis';
+import type { ThesisStageName } from '../types/thesis';
 import type {
-    TerminalRequirementDefinition,
+    TerminalRequirement,
     TerminalRequirementStatus,
 } from '../types/terminalRequirement';
 import { getFilesByTerminalRequirement } from './firebase/firestore/file';
 
-export const TERMINAL_REQUIREMENTS: TerminalRequirementDefinition[] = [
+export const TERMINAL_REQUIREMENTS: TerminalRequirement[] = [
     {
         id: 'preproposal-clearance-form',
         stage: 'Pre-Proposal',
@@ -98,7 +98,7 @@ export const TERMINAL_REQUIREMENTS: TerminalRequirementDefinition[] = [
 /**
  * Returns all requirement definitions for a given stage.
  */
-export function getTerminalRequirementsByStage(stage: ThesisStage): TerminalRequirementDefinition[] {
+export function getTerminalRequirementsByStage(stage: ThesisStageName): TerminalRequirement[] {
     return TERMINAL_REQUIREMENTS.filter((requirement) => requirement.stage === stage);
 }
 

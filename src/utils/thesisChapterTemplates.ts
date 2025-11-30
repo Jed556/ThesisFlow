@@ -1,5 +1,5 @@
 import type { ChapterTemplate } from '../types/chapter';
-import type { ThesisChapter, ThesisStage } from '../types/thesis';
+import type { ThesisChapter, ThesisStageName } from '../types/thesis';
 import { DEFAULT_CHAPTER_STAGE, normalizeChapterOrder } from './chapterUtils';
 import { THESIS_STAGE_METADATA } from './thesisStageUtils';
 
@@ -13,7 +13,7 @@ const DEFAULT_CHAPTER_TITLES = [
 
 const STAGE_SEQUENCE = THESIS_STAGE_METADATA.map((stage) => stage.value);
 
-function resolveDefaultStage(index: number): ThesisStage {
+function resolveDefaultStage(index: number): ThesisStageName {
     if (STAGE_SEQUENCE.length === 0) {
         return DEFAULT_CHAPTER_STAGE;
     }
@@ -36,16 +36,21 @@ export function buildDefaultChapterTemplates(): ChapterTemplate[] {
 
 export function templatesToThesisChapters(templates: ChapterTemplate[]): ThesisChapter[] {
     const normalized = normalizeChapterOrder(templates);
-    return normalized.map((template, index) => ({
-        id: template.id ?? index + 1,
-        title: template.title || `Chapter ${index + 1}`,
-        status: 'not_submitted',
-        submissionDate: null,
-        lastModified: null,
-        submissions: [],
-        comments: [],
-        stage: template.stage ?? DEFAULT_CHAPTER_STAGE,
-    }));
+    return normalized.map((template, index) => {
+        // Normalize stage to always be an array
+        const templateStage = template.stage ?? DEFAULT_CHAPTER_STAGE;
+        const stage = Array.isArray(templateStage) ? templateStage : [templateStage];
+        return {
+            id: template.id ?? index + 1,
+            title: template.title || `Chapter ${index + 1}`,
+            status: 'not_submitted',
+            submissionDate: null,
+            lastModified: null,
+            submissions: [],
+            comments: [],
+            stage,
+        };
+    });
 }
 
 export function buildDefaultThesisChapters(): ThesisChapter[] {

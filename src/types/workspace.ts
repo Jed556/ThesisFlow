@@ -1,5 +1,5 @@
 import type { FileAttachment } from './file';
-import type { ChapterSubmissionStatus, MentorRole, ThesisStage } from './thesis';
+import type { ChapterSubmissionStatus, MentorRole, ThesisStageName } from './thesis';
 
 export interface WorkspaceFilterOption {
     label: string;
@@ -23,7 +23,7 @@ export interface WorkspaceFilterConfig {
 export interface WorkspaceCommentPayload {
     thesisId: string;
     chapterId: number;
-    chapterStage: ThesisStage;
+    chapterStage: ThesisStageName;
     versionIndex: number | null;
     content: string;
     files: File[];
@@ -38,7 +38,7 @@ export interface WorkspaceUploadPayload {
     thesisId: string;
     groupId: string;
     chapterId: number;
-    chapterStage: ThesisStage;
+    chapterStage: ThesisStageName;
     file: File;
 }
 

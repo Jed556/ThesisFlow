@@ -1,4 +1,4 @@
-import type { ThesisStage } from './thesis';
+import type { ThesisStageName } from './thesis';
 
 export interface TerminalRequirementTemplateMetadata {
     fileId: string;
@@ -9,18 +9,35 @@ export interface TerminalRequirementTemplateMetadata {
 }
 
 export interface TerminalRequirementConfigEntry {
-    stage: ThesisStage;
+    stage: ThesisStageName;
     requirementId: string;
     active: boolean;
     requireAttachment?: boolean;
     template?: TerminalRequirementTemplateMetadata;
 }
 
+/**
+ * Terminal Requirement Configuration Document
+ * 
+ * Terminal requirements are now global (same for all departments/courses).
+ * The `name` field is the display name for the configuration.
+ * The `department` and `course` fields are optional metadata for organization.
+ */
 export interface TerminalRequirementConfigDocument {
+    /** Document ID */
     id: string;
-    department: string;
-    course: string;
+    /** Display name for the configuration */
+    name: string;
+    /** Optional description */
+    description?: string;
+    /** Optional department for organization/filtering */
+    department?: string;
+    /** Optional course for organization/filtering */
+    course?: string;
+    /** Requirement entries */
     requirements: TerminalRequirementConfigEntry[];
+    /** Creation timestamp (ISO string) */
     createdAt: string;
+    /** Last update timestamp (ISO string) */
     updatedAt: string;
 }

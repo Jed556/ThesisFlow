@@ -59,7 +59,7 @@ const FIRESTORE_WIPE_CONFIG: Record<Exclude<WipeCategory, 'user'>, { collection:
         successMessage: 'All groups wiped successfully',
     },
     thesis: {
-        collection: 'theses',
+        collection: 'thesis',
         successMessage: 'All theses wiped successfully',
     },
 };
@@ -87,6 +87,36 @@ async function wipeFirestoreCollection(
 
     while (true) {
         const snapshot = await firestore.collection(collectionName).limit(batchSize).get();
+        if (snapshot.empty) {
+            break;
+        }
+
+        const batch = firestore.batch();
+        snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
+        await batch.commit();
+
+        deleted += snapshot.size;
+        batches += 1;
+    }
+
+    return { deleted, batches };
+}
+
+/**
+ * Delete every document from a collectionGroup (subcollections with the same name)
+ * using batched deletes. Used for hierarchical data like users/groups/thesis.
+ * @param subcollectionName Name of the subcollection to wipe across all paths.
+ * @param batchSize Maximum number of documents to delete per batch commit.
+ */
+async function wipeFirestoreCollectionGroup(
+    subcollectionName: string,
+    batchSize: number = FIRESTORE_BATCH_LIMIT,
+): Promise<FirestoreWipeResult> {
+    let deleted = 0;
+    let batches = 0;
+
+    while (true) {
+        const snapshot = await firestore.collectionGroup(subcollectionName).limit(batchSize).get();
         if (snapshot.empty) {
             break;
         }
@@ -141,7 +171,11 @@ async function wipeAuthUsers(batchSize: number = AUTH_BATCH_LIMIT): Promise<Auth
  */
 async function handleCategoryWipe(category: WipeCategory): Promise<CategoryOutcome> {
     if (category === 'user') {
-        const firestoreResult = await wipeFirestoreCollection('users');
+        // Use collectionGroup to wipe users across all hierarchical paths
+        // Path: year/{year}/departments/{dept}/courses/{course}/users/{user}
+        // Path: year/{year}/departments/{dept}/users/{user}
+        // Path: year/{year}/users/{user}
+        const firestoreResult = await wipeFirestoreCollectionGroup('users');
         const authResult = await wipeAuthUsers();
 
         return {
@@ -153,6 +187,30 @@ async function handleCategoryWipe(category: WipeCategory): Promise<CategoryOutco
                 authErrors: authResult.errors,
             },
             message: USER_SUCCESS_MESSAGE,
+        };
+    }
+
+    if (category === 'group') {
+        // Use collectionGroup to wipe groups across all hierarchical paths
+        const result = await wipeFirestoreCollectionGroup('groups');
+        return {
+            data: {
+                deleted: result.deleted,
+                batches: result.batches,
+            },
+            message: FIRESTORE_WIPE_CONFIG[category].successMessage,
+        };
+    }
+
+    if (category === 'thesis') {
+        // Use collectionGroup to wipe thesis across all hierarchical paths
+        const result = await wipeFirestoreCollectionGroup('thesis');
+        return {
+            data: {
+                deleted: result.deleted,
+                batches: result.batches,
+            },
+            message: FIRESTORE_WIPE_CONFIG[category].successMessage,
         };
     }
 

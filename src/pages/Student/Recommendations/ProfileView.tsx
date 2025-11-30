@@ -8,19 +8,19 @@ import { useSession } from '@toolpad/core';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../../components/Profile/ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
-import { onUserProfile, getUsersByIds } from '../../../utils/firebase/firestore/user';
-import { listenThesesForMentor } from '../../../utils/firebase/firestore/thesis';
+import { onUserProfile, findUsersByIds } from '../../../utils/firebase/firestore/user';
 import { getGroupsByLeader, listenGroupsByMentorRole } from '../../../utils/firebase/firestore/groups';
-import { createMentorRequest, listenMentorRequestsByGroup } from '../../../utils/firebase/firestore/mentorRequests';
-import { filterActiveMentorTheses, deriveMentorThesisHistory } from '../../../utils/mentorProfileUtils';
+import {
+    createMentorRequestByGroup, listenMentorRequestsByGroup,
+} from '../../../utils/firebase/firestore/mentorRequests';
+import { filterActiveGroups, deriveMentorThesisHistory } from '../../../utils/mentorProfileUtils';
 import { evaluateMentorCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../../types/navigation';
-import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile, HistoricalThesisEntry, UserRole } from '../../../types/profile';
 import type { ThesisGroup } from '../../../types/group';
 import type { Session } from '../../../types/session';
-import type { MentorRequest } from '../../../types/mentorRequest';
+import type { ExpertRequest } from '../../../types/expertRequest';
 
 type MentorRole = 'adviser' | 'editor' | 'statistician';
 
@@ -43,11 +43,9 @@ export default function MentorProfileViewPage() {
     const { showNotification } = useSnackbar();
 
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
-    const [assignments, setAssignments] = React.useState<(ThesisData & { id: string })[]>([]);
     const [groups, setGroups] = React.useState<ThesisGroup[]>([]);
     const [membersByUid, setMembersByUid] = React.useState<Map<string, UserProfile>>(new Map());
     const [profileLoading, setProfileLoading] = React.useState(true);
-    const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
     const [groupsLoading, setGroupsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
     const [ownedGroups, setOwnedGroups] = React.useState<ThesisGroup[]>([]);
@@ -56,7 +54,7 @@ export default function MentorProfileViewPage() {
     const [selectedGroupId, setSelectedGroupId] = React.useState('');
     const [requestMessage, setRequestMessage] = React.useState('');
     const [requestSubmitting, setRequestSubmitting] = React.useState(false);
-    const [groupRequests, setGroupRequests] = React.useState<Map<string, MentorRequest[]>>(new Map());
+    const [groupRequests, setGroupRequests] = React.useState<Map<string, ExpertRequest[]>>(new Map());
 
     React.useEffect(() => {
         if (!uid) {
@@ -89,31 +87,6 @@ export default function MentorProfileViewPage() {
     const mentorRole = React.useMemo<MentorRole | null>(() => (
         isMentorRole(profile?.role) ? profile.role : null
     ), [profile?.role]);
-
-    React.useEffect(() => {
-        if (!uid || !mentorRole) {
-            setAssignments([]);
-            setAssignmentsLoading(false);
-            return () => { /* no-op */ };
-        }
-
-        setAssignmentsLoading(true);
-        const unsubscribe = listenThesesForMentor(mentorRole, uid, {
-            onData: (records) => {
-                setAssignments(records);
-                setAssignmentsLoading(false);
-            },
-            onError: (listenerError) => {
-                console.error('Failed to listen for mentor assignments:', listenerError);
-                setAssignments([]);
-                setAssignmentsLoading(false);
-            },
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [mentorRole, uid]);
 
     React.useEffect(() => {
         if (!uid || !mentorRole) {
@@ -189,7 +162,7 @@ export default function MentorProfileViewPage() {
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(Array.from(memberIds));
+                const profiles = await findUsersByIds(Array.from(memberIds));
                 if (cancelled) return;
                 const next = new Map<string, UserProfile>();
                 profiles.forEach((entry) => next.set(entry.uid, entry));
@@ -206,23 +179,23 @@ export default function MentorProfileViewPage() {
         };
     }, [groups]);
 
-    const activeAssignments = React.useMemo<ThesisData[]>(
-        () => filterActiveMentorTheses(assignments),
-        [assignments]
+    const activeAssignments = React.useMemo<ThesisGroup[]>(
+        () => filterActiveGroups(groups),
+        [groups]
     );
 
     const history = React.useMemo<HistoricalThesisEntry[]>(() => {
         if (!profile || !mentorRole) {
             return [];
         }
-        return deriveMentorThesisHistory(assignments, profile.uid, mentorRole);
-    }, [assignments, mentorRole, profile]);
+        return deriveMentorThesisHistory(groups, profile.uid, mentorRole);
+    }, [groups, mentorRole, profile]);
 
     const roleStats = React.useMemo<ThesisRoleStats>(() => {
         if (!mentorRole) {
             return { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
         }
-        const total = assignments.length;
+        const total = groups.length;
         if (mentorRole === 'adviser') {
             return { adviserCount: total, editorCount: 0, statisticianCount: 0 };
         }
@@ -230,7 +203,7 @@ export default function MentorProfileViewPage() {
             return { adviserCount: 0, editorCount: total, statisticianCount: 0 };
         }
         return { adviserCount: 0, editorCount: 0, statisticianCount: total };
-    }, [assignments.length, mentorRole]);
+    }, [groups.length, mentorRole]);
 
     const capacity = profile?.capacity ?? 0;
     const openSlots = capacity > 0 ? Math.max(capacity - activeAssignments.length, 0) : 0;
@@ -255,7 +228,7 @@ export default function MentorProfileViewPage() {
         return [...groups].sort((a, b) => priority[a.status] - priority[b.status]);
     }, [groups]);
 
-    const loading = profileLoading || assignmentsLoading;
+    const loading = profileLoading || groupsLoading;
     const skills = React.useMemo(() => profile?.skills ?? [], [profile?.skills]);
 
     const roleLabel = mentorRole === 'adviser'
@@ -315,7 +288,7 @@ export default function MentorProfileViewPage() {
         }
         for (const group of requestableGroups) {
             const requests = groupRequests.get(group.id) ?? [];
-            if (requests.some((request) => request.status === 'pending' && request.mentorUid === profile.uid)) {
+            if (requests.some((request) => request.status === 'pending' && request.expertUid === profile.uid)) {
                 return true;
             }
         }
@@ -372,7 +345,7 @@ export default function MentorProfileViewPage() {
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} useFlexGap>
                     {[
                         { label: 'Active Teams', value: activeAssignments.length },
-                        { label: 'Total Assignments', value: assignments.length },
+                        { label: 'Total Assignments', value: groups.length },
                         { label: 'Open Slots', value: openSlotsDisplay },
                         { label: 'Compatibility', value: compatibility != null ? `${compatibility}%` : '—' },
                     ].map((stat) => (
@@ -460,9 +433,8 @@ export default function MentorProfileViewPage() {
 
         setRequestSubmitting(true);
         try {
-            await createMentorRequest({
-                groupId: targetGroup.id,
-                mentorUid: profile.uid,
+            await createMentorRequestByGroup(targetGroup.id, {
+                expertUid: profile.uid,
                 role: mentorRole,
                 requestedBy: viewerUid,
                 message: requestMessage.trim() || undefined,
@@ -533,7 +505,7 @@ export default function MentorProfileViewPage() {
         <AnimatedPage variant="slideUp">
             <ProfileView
                 profile={profile}
-                currentTheses={activeAssignments}
+                currentGroups={activeAssignments}
                 skills={skills}
                 skillRatings={profile.skillRatings}
                 timeline={history}

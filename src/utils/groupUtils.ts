@@ -1,26 +1,45 @@
 import type { ThesisGroup } from '../types/group';
 import type { UserProfile } from '../types/profile';
-import type { MentorRequestRole } from '../types/mentorRequest';
-import { getUserById } from './firebase/firestore/user';
+import type { MentorRequestRole } from '../types/expertRequest';
+import { findUserById, findUsersByFilter } from './firebase/firestore/user';
 
 export {
     acceptInvite,
     acceptJoinRequest,
+    approveGroup,
+    assignMentorToGroup,
     cancelJoinRequest,
     createGroup,
+    createGroupForUser,
     deleteGroup,
-    getGroupById,
+    deleteGroupById,
+    findGroupById,
+    getAllGroups,
+    getAllProposalsFromGroups,
+    getAllThesesFromGroups,
+    getGroupDepartments,
     getGroupsByCourse,
+    getGroupsByDepartment,
     getGroupsByLeader,
     getGroupsByMember,
+    getGroupsByStatus,
+    getGroupsInDepartmentCourse,
     inviteUserToGroup,
+    listenAllGroups,
+    listenGroups,
+    listenGroupsByMentorRole,
+    listenGroupsByPanelist,
+    rejectGroup,
     rejectJoinRequest,
     removeInviteFromGroup,
     requestToJoinGroup,
+    setGroup,
     submitGroupForReview,
+    updateGroup,
 } from './firebase/firestore/groups';
 
-export { getUserById, getUsersByFilter } from './firebase/firestore/user';
+// Re-export user lookup functions for convenience
+export { findUserById, findUsersByFilter } from './firebase/firestore/user';
 
 /**
  * Collects all relevant participant UIDs from a thesis group ensuring uniqueness.
@@ -56,7 +75,7 @@ export async function buildGroupProfileMap(groupData: ThesisGroup): Promise<Map<
     const profileMap = new Map<string, UserProfile>();
     await Promise.all(
         ids.map(async (uid) => {
-            const profile = await getUserById(uid);
+            const profile = await findUserById(uid);
             if (profile) {
                 profileMap.set(uid, profile);
             }

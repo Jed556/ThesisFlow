@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { authSignOut, signInWithGoogle, onAuthStateChanged } from './utils/firebase/auth/client';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { getUserById } from './utils/firebase/firestore/user';
+import { findUserById } from './utils/firebase/firestore/user';
 import { setCurrentAppTheme } from './utils/devUtils';
 import { buildNavigation } from './utils/navBuilder';
 import { getUserRole } from './utils/roleUtils';
@@ -93,7 +93,7 @@ function AppContent() {
                     let userRole = await getUserRole(true); // Force refresh to get latest claims
 
                     // Fetch user profile for additional data
-                    const profile = await getUserById(user.uid);
+                    const profile = await findUserById(user.uid);
 
                     // Prefer Firestore role if Auth claims don't exist (backwards compatibility)
                     if (profile && profile.role && !userRole) {

@@ -4,7 +4,7 @@ import {
     DialogContentText, DialogTitle, TextField, Tooltip,
 } from '@mui/material';
 import { CheckCircle as ApproveIcon, Close as RejectIcon } from '@mui/icons-material';
-import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
+import type { ExpertRequest, MentorRequestRole } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
 import { assignMentorToGroup } from '../../utils/firebase/firestore/groups';
 import { respondToMentorRequest } from '../../utils/firebase/firestore/mentorRequests';
@@ -12,7 +12,7 @@ import { getGroupMentorByRole } from '../../utils/groupUtils';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 
 export interface MentorRequestDecisionActionsProps {
-    request: MentorRequest | null;
+    request: ExpertRequest | null;
     group: ThesisGroup | null;
     role: MentorRequestRole;
     roleLabel: string;
@@ -82,7 +82,7 @@ export default function MentorRequestDecisionActions({ request, group, role, rol
                     showNotification('This group already has a mentor for this role.', 'warning');
                     return;
                 }
-                await assignMentorToGroup(request.groupId, role, mentorUid);
+                await assignMentorToGroup(group.id, mentorUid!, role);
                 await respondToMentorRequest(request.id, 'approved', { responseNote: note });
                 showNotification('Request approved successfully.', 'success');
                 onCompleted?.('approved');
