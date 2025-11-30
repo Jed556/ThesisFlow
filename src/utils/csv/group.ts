@@ -53,9 +53,7 @@ export function importGroupsFromCsv(csvText: string): { parsed: ThesisGroup[]; e
             status: (['draft', 'review', 'active', 'inactive', 'rejected', 'completed', 'archived'].includes(statusRaw) ? statusRaw : 'active') as ThesisGroup['status'],
             createdAt: get('createdAt') || get('created_at') || new Date().toISOString(),
             updatedAt: get('updatedAt') || get('updated_at') || new Date().toISOString(),
-            thesis: (get('thesisTitle') || get('thesis_title')) ? {
-                title: get('thesisTitle') || get('thesis_title'),
-            } as ThesisGroup['thesis'] : undefined,
+            // Note: thesis is now a subcollection, not a field - thesis data should be imported separately
             department: get('department') || undefined,
             course: normalizedCourse,
         };
@@ -82,7 +80,7 @@ export function exportGroupsToCsv(groups: ThesisGroup[]): string {
         'status',
         'createdAt',
         'updatedAt',
-        'thesisTitle',
+        // Note: thesisTitle removed - thesis is now a subcollection
         'department',
         'course',
     ];
@@ -99,7 +97,7 @@ export function exportGroupsToCsv(groups: ThesisGroup[]): string {
         group.status,
         group.createdAt,
         group.updatedAt,
-        group.thesis?.title || '',
+        // Note: thesis data should be exported separately from thesis subcollection
         group.department || '',
         group.course || '',
     ]);

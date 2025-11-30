@@ -1,45 +1,10 @@
 import type { ThesisGroup } from '../types/group';
 import type { UserProfile } from '../types/profile';
 import type { ExpertRequestRole } from '../types/expertRequest';
-import { findUserById, findUsersByFilter } from './firebase/firestore/user';
-
-export {
-    acceptInvite,
-    acceptJoinRequest,
-    approveGroup,
-    assignExpertToGroup,
-    cancelJoinRequest,
-    createGroup,
-    createGroupForUser,
-    deleteGroup,
-    deleteGroupById,
-    findGroupById,
-    getAllGroups,
-    getAllProposalsFromGroups,
-    getAllThesesFromGroups,
-    getGroupDepartments,
-    getGroupsByCourse,
-    getGroupsByDepartment,
-    getGroupsByLeader,
-    getGroupsByMember,
-    getGroupsByStatus,
-    getGroupsInDepartmentCourse,
-    inviteUserToGroup,
-    listenAllGroups,
-    listenGroups,
-    listenGroupsByExpertRole,
-    listenGroupsByPanelist,
-    rejectGroup,
-    rejectJoinRequest,
-    removeInviteFromGroup,
-    requestToJoinGroup,
-    setGroup,
-    submitGroupForReview,
-    updateGroup,
-} from './firebase/firestore/groups';
+import { findUserById } from './firebase/firestore/user';
 
 // Re-export user lookup functions for convenience
-export { findUserById, findUsersByFilter } from './firebase/firestore/user';
+export { findUserById } from './firebase/firestore/user';
 
 /**
  * Collects all relevant participant UIDs from a thesis group ensuring uniqueness.

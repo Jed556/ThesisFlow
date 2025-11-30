@@ -19,14 +19,15 @@ import GroupManageDialog from '../../../components/Group/GroupManageDialog';
 import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
 import StudentGroupCard from './StudentGroupCard';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
+import { buildGroupProfileMap } from '../../../utils/groupUtils';
+import { getAcademicYear } from '../../../utils/dateUtils';
 import {
-    acceptInvite, acceptJoinRequest, buildGroupProfileMap, createGroupForUser, deleteGroupById,
-    findGroupById, getGroupsByCourse, getGroupsByLeader, getGroupsByMember, findUserById,
-    findUsersByFilter, inviteUserToGroup, rejectJoinRequest, removeInviteFromGroup, submitGroupForReview,
-} from '../../../utils/groupUtils';
-import {
-    getGroupInvites, getGroupJoinRequests, getGroupsWithInviteFor,
+    acceptInvite, acceptJoinRequest, createGroupForUser, deleteGroupById, findGroupById,
+    getGroupsByCourse, getGroupsByLeader, getGroupsByMember, getGroupInvites,
+    getGroupJoinRequests, getGroupsWithInviteFor, inviteUserToGroup, rejectJoinRequest,
+    removeInviteFromGroup, submitGroupForReview,
 } from '../../../utils/firebase/firestore/groups';
+import { findUserById, findUsersByFilter } from '../../../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -130,6 +131,13 @@ export default function StudentGroupPage() {
 
     const { showNotification } = useSnackbar();
     const isInviteLocked = (status?: ThesisGroup['status']) => status === 'review' || status === 'active';
+
+    // Check if user has an established group (review, active, or completed) that prevents joining/creating another
+    const hasEstablishedGroup = React.useMemo(() => {
+        if (!myGroup) return false;
+        return myGroup.status === 'review' || myGroup.status === 'active' || myGroup.status === 'completed';
+    }, [myGroup]);
+
     // Load user profile
     React.useEffect(() => {
         if (!userUid) {
@@ -196,10 +204,11 @@ export default function StudentGroupPage() {
                         setIsLeader(group.members.leader === userUid);
 
                         // Fetch profiles and invites/requests in parallel
+                        const year = getAcademicYear();
                         const [profileMap, invites, requests] = await Promise.all([
                             buildGroupProfileMap(group),
-                            getGroupInvites(group.year, group.department, group.course, group.id),
-                            getGroupJoinRequests(group.year, group.department, group.course, group.id),
+                            getGroupInvites(year, group.department ?? '', group.course ?? '', group.id),
+                            getGroupJoinRequests(year, group.department ?? '', group.course ?? '', group.id),
                         ]);
                         if (!cancelled) {
                             setMyGroupProfiles(profileMap);
@@ -692,36 +701,39 @@ export default function StudentGroupPage() {
                 </Alert>
             )}
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" sx={{ mb: 3 }}>
-                <Button startIcon={<AddIcon />} variant="contained" onClick={handleOpenCreateDialog}>
-                    Create Group
-                </Button>
-                <TextField
-                    label="Group Name"
-                    placeholder="Search groups by name"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' ? void handleSearchGroup() : undefined}
-                    variant="outlined"
-                    slotProps={{
-                        input: {
-                            endAdornment: (
-                                <InputAdornment position="end">
-                                    <IconButton
-                                        size="small"
-                                        onClick={handleSearchGroup}
-                                        disabled={!searchInput.trim()}
-                                        aria-label="Apply group name filter"
-                                    >
-                                        <SearchIcon fontSize="small" />
-                                    </IconButton>
-                                </InputAdornment>
-                            ),
-                        }
-                    }}
-                    sx={{ minWidth: 260, flex: 1 }}
-                />
-            </Stack>
+            {/* Hide create/search controls when user has an established group */}
+            {!hasEstablishedGroup && (
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                    <Button startIcon={<AddIcon />} variant="contained" onClick={handleOpenCreateDialog}>
+                        Create Group
+                    </Button>
+                    <TextField
+                        label="Group Name"
+                        placeholder="Search groups by name"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' ? void handleSearchGroup() : undefined}
+                        variant="outlined"
+                        slotProps={{
+                            input: {
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleSearchGroup}
+                                            disabled={!searchInput.trim()}
+                                            aria-label="Apply group name filter"
+                                        >
+                                            <SearchIcon fontSize="small" />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }
+                        }}
+                        sx={{ minWidth: 260, flex: 1 }}
+                    />
+                </Stack>
+            )}
 
             <StudentGroupCard
                 loading={loading}
@@ -742,8 +754,8 @@ export default function StudentGroupPage() {
                 inviteActionsDisabled={myGroup ? isInviteLocked(myGroup.status) : false}
             />
 
-            {/* My Invites */}
-            {!loading && myInvites.length > 0 && (
+            {/* My Invites - hidden when user has an established group */}
+            {!loading && !hasEstablishedGroup && myInvites.length > 0 && (
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         Group Invites
@@ -804,8 +816,8 @@ export default function StudentGroupPage() {
                 </Box>
             )}
 
-            {/* Available Groups */}
-            {!loading && !myGroup && availableGroups.length > 0 && (
+            {/* Available Groups - only shown when user has no group */}
+            {!loading && !myGroup && !hasEstablishedGroup && availableGroups.length > 0 && (
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         Groups in Your Department & Course

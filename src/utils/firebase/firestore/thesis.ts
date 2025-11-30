@@ -996,12 +996,33 @@ export async function findThesisByGroupId(
         if (params.groupId === groupId) {
             const data = docToThesisData(docSnap);
             if (data) {
+                // Fetch group to get member information
+                let groupMembers: Pick<ThesisWithGroupContext, 'leader' | 'members' | 'adviser' | 'editor' | 'statistician' | 'panels'> = {};
+                if (params.year && params.department && params.course && params.groupId) {
+                    try {
+                        const group = await getGroup(params.year, params.department, params.course, params.groupId);
+                        if (group) {
+                            groupMembers = {
+                                leader: group.members.leader,
+                                members: group.members.members,
+                                adviser: group.members.adviser,
+                                editor: group.members.editor,
+                                statistician: group.members.statistician,
+                                panels: group.members.panels,
+                            };
+                        }
+                    } catch (err) {
+                        console.warn(`Failed to fetch group ${params.groupId} for thesis:`, err);
+                    }
+                }
+
                 return {
                     ...data,
                     groupId: params.groupId,
                     year: params.year,
                     department: params.department,
                     course: params.course,
+                    ...groupMembers,
                 };
             }
         }

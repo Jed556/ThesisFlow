@@ -1,16 +1,17 @@
 /**
  * Firestore utilities for file metadata management
- * Unified file metadata storage with support for various contexts (thesis, user, etc.)
+ * Files are stored within submission and chat documents following the hierarchical structure:
+ * - Submissions: year/{year}/departments/{dept}/courses/{course}/groups/{group}/thesis/{thesis}/stages/{stage}/chapters/{chapter}/submissions/{submission}
+ * - Chats: ...submissions/{submission}/chats/{chat}
+ * 
+ * File metadata is embedded in submission.files[] arrays, not in a separate root collection.
  */
 
-import { doc, setDoc, collection, getDocs, getDoc, deleteDoc, query, where, orderBy, limit, writeBatch } from 'firebase/firestore';
+import { collectionGroup, getDocs } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import { cleanData } from './firestore';
 import type { FileAttachment } from '../../../types/file';
-import type { ThesisStageName } from '../../../types/thesis';
-
-/** Firestore collection name for file metadata */
-const FILES_COLLECTION = 'files';
+import type { ChapterSubmission, ThesisStageName } from '../../../types/thesis';
+import { SUBMISSIONS_SUBCOLLECTION } from '../../../config/firestore';
 
 /**
  * Generate a unique file ID
@@ -20,103 +21,69 @@ export function generateFileId(uid: string, timestamp: number = Date.now()): str
 }
 
 /**
- * Store or update file metadata in Firestore
- * @param fileId - Unique file identifier
- * @param fileInfo - File attachment metadata
- * @param ownerUid - UID of the file owner
- */
-export async function setFileMetadata(
-    fileId: string,
-    fileInfo: FileAttachment,
-    ownerUid: string
-): Promise<void> {
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-
-    const metadata = {
-        ...fileInfo,
-        id: fileId,
-        owner: ownerUid,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    };
-
-    // Clean the data to remove undefined, null, and empty values (create mode)
-    const cleanedData = cleanData(metadata, 'create');
-
-    await setDoc(ref, cleanedData, { merge: true });
-}
-
-/**
- * Get file metadata by ID
+ * Get file by ID from submissions across all paths
+ * Searches through all submissions to find a file with the given ID
  * @param fileId - File identifier
  * @returns File metadata or null if not found
  */
 export async function getFileById(fileId: string): Promise<FileAttachment | null> {
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    return snap.data() as FileAttachment;
+    if (!fileId) return null;
+
+    try {
+        // Query all submissions using collectionGroup
+        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
+        const snapshot = await getDocs(submissionsQuery);
+
+        for (const docSnap of snapshot.docs) {
+            const submission = docSnap.data() as ChapterSubmission;
+            const file = submission.files?.find((f) => f.id === fileId);
+            if (file) {
+                return file;
+            }
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error getting file by ID:', error);
+        return null;
+    }
 }
 
 /**
- * Get multiple files by their IDs
+ * Get multiple files by their IDs from submissions
  * @param fileIds - Array of file identifiers
  * @returns Array of file attachments
  */
 export async function getFilesByIds(fileIds: string[]): Promise<FileAttachment[]> {
     if (!fileIds || fileIds.length === 0) return [];
 
-    const files: FileAttachment[] = [];
-
-    // Firestore 'in' queries are limited to 10 items
-    const batchSize = 10;
-    for (let i = 0; i < fileIds.length; i += batchSize) {
-        const batch = fileIds.slice(i, i + batchSize);
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-        const q = query(filesRef, where('id', 'in', batch));
-
-        const querySnapshot = await getDocs(q);
-        files.push(...querySnapshot.docs.map(doc => doc.data() as FileAttachment));
-    }
-
-    return files;
-}
-
-/**
- * Get all files owned by a user
- * @param ownerUid - Owner's UID
- * @param limitCount - Maximum number of files to return
- * @returns Array of file attachments
- */
-export async function getFilesByOwner(
-    ownerUid: string,
-    limitCount?: number
-): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-        let q = query(
-            filesRef,
-            where('owner', '==', ownerUid),
-            orderBy('createdAt', 'desc')
-        );
+        // Query all submissions using collectionGroup
+        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
+        const snapshot = await getDocs(submissionsQuery);
 
-        if (limitCount) {
-            q = query(q, limit(limitCount));
+        const files: FileAttachment[] = [];
+        const fileIdSet = new Set(fileIds);
+
+        for (const docSnap of snapshot.docs) {
+            const submission = docSnap.data() as ChapterSubmission;
+            const matchingFiles = (submission.files ?? []).filter((f) => f.id && fileIdSet.has(f.id));
+            files.push(...matchingFiles);
         }
 
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
+        return files;
     } catch (error) {
-        console.error('Error getting files by owner:', error);
+        console.error('Error getting files by IDs:', error);
         return [];
     }
 }
 
 /**
- * Get files by thesis context
+ * Get files by thesis context from submissions
  * @param thesisId - Thesis ID
  * @param chapterId - Optional chapter ID
  * @param category - Optional file category
+ * @param stage - Optional thesis stage
  * @returns Array of file attachments
  */
 export async function getFilesByThesis(
@@ -126,17 +93,40 @@ export async function getFilesByThesis(
     stage?: ThesisStageName,
 ): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-        const constraints = [
-            where('thesisId', '==', thesisId),
-            ...(chapterId !== undefined ? [where('chapterId', '==', chapterId)] : []),
-            ...(category ? [where('category', '==', category)] : []),
-            ...(stage ? [where('chapterStage', '==', stage)] : []),
-            orderBy('uploadDate', 'desc'),
-        ];
-        const q = query(filesRef, ...constraints);
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
+        // Query all submissions using collectionGroup
+        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
+        const snapshot = await getDocs(submissionsQuery);
+
+        const files: FileAttachment[] = [];
+
+        for (const docSnap of snapshot.docs) {
+            const submission = docSnap.data() as ChapterSubmission;
+            const submissionFiles = submission.files ?? [];
+
+            for (const file of submissionFiles) {
+                // Filter by thesisId
+                if (file.thesisId !== thesisId) continue;
+
+                // Filter by chapterId if specified
+                if (chapterId !== undefined && file.chapterId !== chapterId) continue;
+
+                // Filter by category if specified
+                if (category && file.category !== category) continue;
+
+                // Filter by stage if specified
+                if (stage && file.chapterStage !== stage) continue;
+
+                files.push(file);
+            }
+        }
+
+        // Sort by uploadDate descending
+        return files.sort((a, b) => {
+            const aTime = new Date(a.uploadDate ?? '').getTime();
+            const bTime = new Date(b.uploadDate ?? '').getTime();
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
+            return bTime - aTime;
+        });
     } catch (error) {
         console.error('Error getting files by thesis:', error);
         return [];
@@ -153,21 +143,24 @@ export async function getFilesByTerminalRequirement(
     requirementId: string,
 ): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-        const q = query(
-            filesRef,
-            where('thesisId', '==', thesisId),
-            where('terminalRequirementId', '==', requirementId)
-        );
+        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
+        const snapshot = await getDocs(submissionsQuery);
 
-        const querySnapshot = await getDocs(q);
-        const files = querySnapshot.docs.map((doc) => doc.data() as FileAttachment);
+        const files: FileAttachment[] = [];
+
+        for (const docSnap of snapshot.docs) {
+            const submission = docSnap.data() as ChapterSubmission;
+            const matchingFiles = (submission.files ?? []).filter(
+                (f) => f.thesisId === thesisId && f.terminalRequirementId === requirementId
+            );
+            files.push(...matchingFiles);
+        }
+
+        // Sort by uploadDate descending
         return files.sort((a, b) => {
             const aTime = new Date(a.uploadDate ?? '').getTime();
             const bTime = new Date(b.uploadDate ?? '').getTime();
-            if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
-                return 0;
-            }
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
             return bTime - aTime;
         });
     } catch (error) {
@@ -177,21 +170,30 @@ export async function getFilesByTerminalRequirement(
 }
 
 /**
- * Get files by comment ID
- * @param commentId - Comment ID
+ * Get files by comment ID (from chat attachments)
+ * @param commentId - Comment/Chat ID
  * @returns Array of file attachments
  */
 export async function getFilesByComment(commentId: string): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-        const q = query(
-            filesRef,
-            where('commentId', '==', commentId),
-            orderBy('uploadDate', 'desc')
-        );
+        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
+        const snapshot = await getDocs(submissionsQuery);
 
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
+        const files: FileAttachment[] = [];
+
+        for (const docSnap of snapshot.docs) {
+            const submission = docSnap.data() as ChapterSubmission;
+            const matchingFiles = (submission.files ?? []).filter((f) => f.commentId === commentId);
+            files.push(...matchingFiles);
+        }
+
+        // Sort by uploadDate descending
+        return files.sort((a, b) => {
+            const aTime = new Date(a.uploadDate ?? '').getTime();
+            const bTime = new Date(b.uploadDate ?? '').getTime();
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
+            return bTime - aTime;
+        });
     } catch (error) {
         console.error('Error getting files by comment:', error);
         return [];
@@ -199,7 +201,7 @@ export async function getFilesByComment(commentId: string): Promise<FileAttachme
 }
 
 /**
- * Get files by author UID
+ * Get files by author UID from submissions
  * @param authorUid - Author's UID
  * @param thesisId - Optional thesis ID to filter
  * @returns Array of file attachments
@@ -209,23 +211,28 @@ export async function getFilesByAuthor(
     thesisId?: string
 ): Promise<FileAttachment[]> {
     try {
-        const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-        let constraints = [
-            where('author', '==', authorUid),
-            orderBy('uploadDate', 'desc')
-        ];
+        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
+        const snapshot = await getDocs(submissionsQuery);
 
-        if (thesisId) {
-            constraints = [
-                where('author', '==', authorUid),
-                where('thesisId', '==', thesisId),
-                orderBy('uploadDate', 'desc')
-            ];
+        const files: FileAttachment[] = [];
+
+        for (const docSnap of snapshot.docs) {
+            const submission = docSnap.data() as ChapterSubmission;
+            const matchingFiles = (submission.files ?? []).filter((f) => {
+                if (f.author !== authorUid) return false;
+                if (thesisId && f.thesisId !== thesisId) return false;
+                return true;
+            });
+            files.push(...matchingFiles);
         }
 
-        const q = query(filesRef, ...constraints);
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => doc.data() as FileAttachment);
+        // Sort by uploadDate descending
+        return files.sort((a, b) => {
+            const aTime = new Date(a.uploadDate ?? '').getTime();
+            const bTime = new Date(b.uploadDate ?? '').getTime();
+            if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
+            return bTime - aTime;
+        });
     } catch (error) {
         console.error('Error getting files by author:', error);
         return [];
@@ -233,60 +240,41 @@ export async function getFilesByAuthor(
 }
 
 /**
- * Delete file metadata from Firestore
- * @param fileId - File identifier
+ * Get all files owned by a user
+ * @param ownerUid - Owner's UID
+ * @param limitCount - Maximum number of files to return
+ * @returns Array of file attachments
+ */
+export async function getFilesByOwner(
+    ownerUid: string,
+    limitCount?: number
+): Promise<FileAttachment[]> {
+    const files = await getFilesByAuthor(ownerUid);
+    return limitCount ? files.slice(0, limitCount) : files;
+}
+
+/**
+ * Delete file metadata - Note: This is a no-op as files are embedded in submissions
+ * To delete a file, update the submission document to remove it from the files array
+ * @param fileId - File identifier (unused)
+ * @deprecated Files are embedded in submissions, use updateSubmission to remove files
  */
 export async function deleteFileMetadata(fileId: string): Promise<void> {
-    if (!fileId) throw new Error('File ID required');
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-    await deleteDoc(ref);
+    void fileId; // Suppress unused parameter warning
+    console.warn('deleteFileMetadata is deprecated. Files are embedded in submissions. Use updateSubmission to remove files.');
+    // This is kept for backward compatibility but does nothing
+    // The actual deletion should be done by updating the submission document
 }
 
 /**
  * Delete multiple file records by their IDs
- * @param fileIds - Array of file IDs to delete
+ * @param fileIds - Array of file IDs to delete (unused)
+ * @deprecated Files are embedded in submissions, use updateSubmission to remove files
  */
 export async function bulkDeleteFileMetadata(fileIds: string[]): Promise<void> {
-    if (!fileIds || fileIds.length === 0) throw new Error('File IDs required');
-    const batch = writeBatch(firebaseFirestore);
-
-    fileIds.forEach((fileId) => {
-        const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-        batch.delete(ref);
-    });
-
-    await batch.commit();
-}
-
-/**
- * Update file metadata
- * @param fileId - File identifier
- * @param updates - Partial file data to update
- */
-export async function updateFileMetadata(
-    fileId: string,
-    updates: Partial<FileAttachment>
-): Promise<void> {
-    const ref = doc(firebaseFirestore, FILES_COLLECTION, fileId);
-    // Clean data: remove undefined (keep null to delete fields in update mode)
-    const cleanedUpdates = cleanData({
-        ...updates,
-        updatedAt: new Date().toISOString()
-    }, 'update');
-
-    await setDoc(ref, cleanedUpdates, { merge: true });
-}
-
-/**
- * Get all files (admin function, use with caution)
- * @param limitCount - Maximum number of files to return
- * @returns Array of file attachments with IDs
- */
-export async function getAllFiles(limitCount: number = 100): Promise<(FileAttachment & { id: string })[]> {
-    const filesRef = collection(firebaseFirestore, FILES_COLLECTION);
-    const q = query(filesRef, orderBy('createdAt', 'desc'), limit(limitCount));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as FileAttachment & { id: string }));
+    void fileIds; // Suppress unused parameter warning
+    console.warn('bulkDeleteFileMetadata is deprecated. Files are embedded in submissions. Use updateSubmission to remove files.');
+    // This is kept for backward compatibility but does nothing
 }
 
 /**
@@ -301,13 +289,76 @@ export async function getLatestChapterSubmission(
 ): Promise<FileAttachment | null> {
     try {
         const files = await getFilesByThesis(thesisId, chapterId, 'submission');
-
         if (files.length === 0) return null;
-
         // Already sorted by uploadDate desc, return first
         return files[0];
     } catch (error) {
         console.error('Error getting latest chapter submission:', error);
         return null;
     }
+}
+
+/**
+ * Get all files (admin function, use with caution)
+ * @param limitCount - Maximum number of files to return
+ * @returns Array of file attachments with IDs
+ */
+export async function getAllFiles(limitCount: number = 100): Promise<(FileAttachment & { id: string })[]> {
+    try {
+        const submissionsQuery = collectionGroup(firebaseFirestore, SUBMISSIONS_SUBCOLLECTION);
+        const snapshot = await getDocs(submissionsQuery);
+
+        const files: (FileAttachment & { id: string })[] = [];
+
+        for (const docSnap of snapshot.docs) {
+            const submission = docSnap.data() as ChapterSubmission;
+            const submissionFiles = (submission.files ?? [])
+                .filter((f): f is FileAttachment & { id: string } => Boolean(f.id));
+            files.push(...submissionFiles);
+
+            if (files.length >= limitCount) break;
+        }
+
+        // Sort by createdAt/uploadDate descending and limit
+        return files
+            .sort((a, b) => {
+                const aTime = new Date(a.uploadDate ?? '').getTime();
+                const bTime = new Date(b.uploadDate ?? '').getTime();
+                if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
+                return bTime - aTime;
+            })
+            .slice(0, limitCount);
+    } catch (error) {
+        console.error('Error getting all files:', error);
+        return [];
+    }
+}
+
+// ============================================================================
+// Legacy exports - kept for backward compatibility but deprecated
+// ============================================================================
+
+/**
+ * @deprecated Use submission documents directly. Files are embedded in submissions.
+ */
+export async function setFileMetadata(
+    fileId: string,
+    fileInfo: FileAttachment,
+    ownerUid: string
+): Promise<void> {
+    void fileId; void fileInfo; void ownerUid; // Suppress unused parameter warnings
+    console.warn('setFileMetadata is deprecated. Files should be embedded in submission documents via createSubmission.');
+    // No-op - files are now stored in submission documents
+}
+
+/**
+ * @deprecated Use submission documents directly. Files are embedded in submissions.
+ */
+export async function updateFileMetadata(
+    fileId: string,
+    updates: Partial<FileAttachment>
+): Promise<void> {
+    void fileId; void updates; // Suppress unused parameter warnings
+    console.warn('updateFileMetadata is deprecated. Update the submission document directly to modify file metadata.');
+    // No-op - files are now stored in submission documents
 }

@@ -236,7 +236,7 @@ export default function StudentThesisOverviewPage() {
     }, [terminalSubmissions]);
 
     const handleUploadChapter = React.useCallback(async (
-        { thesisId, groupId, chapterId, chapterStage, file }: WorkspaceUploadPayload
+        { thesisId, groupId, chapterId, chapterStage, file, year, department, course }: WorkspaceUploadPayload
     ) => {
         if (!userUid) {
             throw new Error('You must be signed in to upload a chapter.');
@@ -254,6 +254,9 @@ export default function StudentThesisOverviewPage() {
             chapterStage,
             category: 'submission',
             metadata: { scope: 'student-workspace' },
+            year: year ?? DEFAULT_YEAR,
+            department: department ?? group.department ?? '',
+            course: course ?? group.course ?? '',
         });
 
         const submissionId = result.fileAttachment.id ?? result.fileAttachment.url;
@@ -324,6 +327,10 @@ export default function StudentThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={thesis.id}
+                    groupId={group?.id}
+                    year={DEFAULT_YEAR}
+                    department={group?.department}
+                    course={group?.course}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={userUid ?? undefined}

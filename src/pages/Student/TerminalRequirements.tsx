@@ -1,15 +1,10 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
+    Alert, Box, Button, Card, CardContent, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
-import UploadIcon from '@mui/icons-material/Upload';
-import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import { FactCheck as FactCheckIcon, TaskAlt as TaskAltIcon } from '@mui/icons-material';
 import { AnimatedPage } from '../../components/Animate';
-import {
-    SubmissionStatus,
-    TerminalRequirementCard,
-    TERMINAL_REQUIREMENT_ROLE_LABELS,
-} from '../../components/TerminalRequirements';
+import { SubmissionStatus, TerminalRequirementCard, TERMINAL_REQUIREMENT_ROLE_LABELS } from '../../components/TerminalRequirements';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
@@ -19,30 +14,20 @@ import type { TerminalRequirement } from '../../types/terminalRequirement';
 import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementConfig';
 import type { FileAttachment } from '../../types/file';
 import type {
-    TerminalRequirementApproverAssignments,
-    TerminalRequirementSubmissionRecord,
+    TerminalRequirementApproverAssignments, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import {
-    getTerminalRequirementConfig,
-    findAndListenTerminalRequirements,
-    submitTerminalRequirement,
-    type TerminalContext,
+    getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
 import { uploadThesisFile, deleteThesisFile } from '../../utils/firebase/storage/thesis';
 import {
-    THESIS_STAGE_METADATA,
-    buildStageCompletionMap,
-    buildInterleavedStageLockMap,
-    describeStageSequenceStep,
-    getPreviousSequenceStep,
+    THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap, describeStageSequenceStep, getPreviousSequenceStep,
 } from '../../utils/thesisStageUtils';
 import {
-    fetchTerminalRequirementFiles,
-    getTerminalRequirementStatus,
-    getTerminalRequirementsByStage,
+    fetchTerminalRequirementFiles, getTerminalRequirementStatus, getTerminalRequirementsByStage
 } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { DEFAULT_YEAR } from '../../config/firestore';
@@ -52,7 +37,7 @@ export const metadata: NavigationItem = {
     index: 2,
     title: 'Terminal Requirements',
     segment: 'terminal-requirements',
-    icon: <UploadIcon />,
+    icon: <FactCheckIcon />,
     roles: ['student'],
 };
 
@@ -61,12 +46,6 @@ export const metadata: NavigationItem = {
 type RequirementFilesMap = Record<string, FileAttachment[]>;
 type RequirementFlagMap = Record<string, boolean>;
 type RequirementMessageMap = Record<string, string | null>;
-
-interface StageStatusMeta {
-    label: string;
-    color: 'default' | 'success' | 'info' | 'warning' | 'error';
-    variant: 'filled' | 'outlined';
-}
 
 export default function TerminalRequirementsPage() {
     const session = useSession<Session>();
@@ -442,50 +421,6 @@ export default function TerminalRequirementsPage() {
         };
     }, [stageRequirements, requirementFiles]);
 
-    const stageStatusMetaMap = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, StageStatusMeta>>((acc, stageMeta) => {
-            const stageValue = stageMeta.value;
-            const unlocked = !(terminalStageLockMap[stageValue] ?? false);
-            const submission = submissionByStage[stageValue];
-            let label: string;
-            let color: StageStatusMeta['color'];
-            let variant: StageStatusMeta['variant'];
-
-            if (!unlocked) {
-                label = 'Locked';
-                color = 'default';
-                variant = 'outlined';
-            } else if (submission) {
-                if (submission.status === 'approved') {
-                    label = 'Approved';
-                    color = 'success';
-                    variant = 'filled';
-                } else if (submission.status === 'returned') {
-                    label = 'Needs updates';
-                    color = 'warning';
-                    variant = 'filled';
-                } else {
-                    label = 'Submitted';
-                    color = 'info';
-                    variant = 'filled';
-                }
-            } else {
-                const requirements = stageRequirementsByStage[stageValue] ?? [];
-                const submittedCount = requirements.filter((requirement) => (
-                    (requirementFiles[requirement.id]?.length ?? 0) > 0
-                )).length;
-                const completed = requirements.length > 0 && submittedCount === requirements.length;
-                const inProgress = submittedCount > 0 && !completed;
-                label = completed ? 'Ready to submit' : inProgress ? 'In progress' : 'Ready';
-                color = completed ? 'success' : inProgress ? 'info' : 'default';
-                variant = completed || inProgress ? 'filled' : 'outlined';
-            }
-
-            acc[stageValue] = { label, color, variant };
-            return acc;
-        }, {} as Record<ThesisStageName, StageStatusMeta>);
-    }, [terminalStageLockMap, submissionByStage, stageRequirementsByStage, requirementFiles]);
-
     const stageTitle = activeStageMeta?.label ?? activeStage;
     const stageLockedDescription = React.useMemo(() => {
         const previousStep = getPreviousSequenceStep(activeStage, 'terminal');
@@ -624,31 +559,13 @@ export default function TerminalRequirementsPage() {
                 scrollButtons
                 allowScrollButtonsMobile
             >
-                {THESIS_STAGE_METADATA.map((stageMeta) => {
-                    const unlocked = !(terminalStageLockMap[stageMeta.value] ?? false);
-                    const statusMeta = stageStatusMetaMap[stageMeta.value] ?? {
-                        label: unlocked ? 'Ready' : 'Locked',
-                        color: unlocked ? 'default' : 'default',
-                        variant: unlocked ? 'outlined' : 'outlined',
-                    };
-                    return (
-                        <Tab
-                            key={stageMeta.value}
-                            value={stageMeta.value}
-                            label={(
-                                <Stack spacing={0.5} alignItems="center">
-                                    <Typography variant="body2" fontWeight={600}>{stageMeta.label}</Typography>
-                                    <Chip
-                                        label={statusMeta.label}
-                                        size="small"
-                                        color={statusMeta.color}
-                                        variant={statusMeta.variant}
-                                    />
-                                </Stack>
-                            )}
-                        />
-                    );
-                })}
+                {THESIS_STAGE_METADATA.map((stageMeta) => (
+                    <Tab
+                        key={stageMeta.value}
+                        value={stageMeta.value}
+                        label={stageMeta.label}
+                    />
+                ))}
             </Tabs>
         </Card>
     );

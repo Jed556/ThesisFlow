@@ -1,5 +1,6 @@
+/* eslint-disable max-len */
 import * as React from 'react';
-import EditNoteIcon from '@mui/icons-material/EditNote';
+import { FactCheck as FactCheckIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import { AnimatedPage } from '../../components/Animate';
 import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalRequirements';
@@ -9,7 +10,7 @@ export const metadata: NavigationItem = {
     index: 3,
     title: 'Terminal Requirements',
     segment: 'editor-terminal-requirements',
-    icon: <EditNoteIcon />,
+    icon: <FactCheckIcon />,
     roles: ['editor'],
 };
 

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Alert, Box, Chip, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Box, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
@@ -14,7 +14,6 @@ import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable } from '../../components/PanelComments';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../components/Snackbar';
-import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import {
     listenPanelCommentEntries, listenPanelCommentRelease,
     updatePanelCommentStudentFields, type PanelCommentContext,
@@ -41,32 +40,6 @@ type ThesisRecord = ThesisData & { id: string };
 interface PanelistOption {
     uid: string;
     label: string;
-}
-
-type StageStatusChip = {
-    label: string;
-    color: 'default' | 'success' | 'warning' | 'info';
-};
-
-function resolveStageStatus(
-    stage: PanelCommentStage,
-    completionMap: ReturnType<typeof buildStageCompletionMap>,
-    releaseMap: PanelCommentReleaseMap,
-): StageStatusChip {
-    const meta = PANEL_COMMENT_STAGE_METADATA.find((item) => item.id === stage);
-    if (!meta) {
-        return { label: 'Unknown stage', color: 'default' };
-    }
-    const stageComplete = completionMap[meta.unlockStage] ?? false;
-    const released = releaseMap[stage]?.sent ?? false;
-
-    if (released) {
-        return { label: 'Released', color: 'success' };
-    }
-    if (!stageComplete) {
-        return { label: `Finish ${meta.unlockStage}`, color: 'warning' };
-    }
-    return { label: 'Waiting for release', color: 'info' };
 }
 
 export default function StudentPanelCommentsPage() {
@@ -267,7 +240,7 @@ export default function StudentPanelCommentsPage() {
             }
             const stageReady = stageCompletionMap[stageMeta.unlockStage] ?? false;
             if (!stageReady) {
-                return `Complete every chapter tagged ${stageMeta.unlockStage} and wait for the admin to release the comments.`;
+                return `Complete all ${stageMeta.unlockStage} chapters`;
             }
             return 'Waiting for the admin to release the panel comments for viewing.';
         }
@@ -318,23 +291,13 @@ export default function StudentPanelCommentsPage() {
                 scrollButtons="auto"
                 allowScrollButtonsMobile
             >
-                {PANEL_COMMENT_STAGE_METADATA.map((stage) => {
-                    const chip = resolveStageStatus(stage.id, stageCompletionMap, releaseMap);
-                    return (
-                        <Tab
-                            key={stage.id}
-                            value={stage.id}
-                            label={(
-                                <Stack spacing={0.5} alignItems="center">
-                                    <Typography variant="body2" fontWeight={600}>
-                                        {stage.studentLabel}
-                                    </Typography>
-                                    <Chip label={chip.label} size="small" color={chip.color} variant="outlined" />
-                                </Stack>
-                            )}
-                        />
-                    );
-                })}
+                {PANEL_COMMENT_STAGE_METADATA.map((stage) => (
+                    <Tab
+                        key={stage.id}
+                        value={stage.id}
+                        label={stage.studentLabel}
+                    />
+                ))}
             </Tabs>
         </Box>
     );
@@ -388,6 +351,18 @@ export default function StudentPanelCommentsPage() {
         );
     }
 
+    if (!panelistsLoading && panelists.length === 0) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <UnauthorizedNotice
+                    title="No panel assigned yet"
+                    description="Panel sheets will appear here once a panel is assigned to your group."
+                    variant="box"
+                />
+            </AnimatedPage>
+        );
+    }
+
     return (
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
@@ -407,10 +382,6 @@ export default function StudentPanelCommentsPage() {
                         <Skeleton variant="rectangular" height={48} />
                     ) : panelistsError ? (
                         <Alert severity="error">{panelistsError}</Alert>
-                    ) : panelists.length === 0 ? (
-                        <Alert severity="info">
-                            Panel assignments are still pending. Sheets will appear once a panel member is assigned.
-                        </Alert>
                     ) : (
                         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                             <Tabs
@@ -438,9 +409,12 @@ export default function StudentPanelCommentsPage() {
                         />
                     </Box>
                 ) : !activePanelUid ? (
-                    <Alert severity="info">
-                        Select a panel sheet to review comments once your assignments become available.
-                    </Alert>
+                    <UnauthorizedNotice
+                        title="No panel sheet selected"
+                        description="Select a panel sheet above to review comments."
+                        variant="box"
+                        sx={{ minHeight: 'auto' }}
+                    />
                 ) : (
                     <Stack spacing={2}>
                         <Alert severity="info">

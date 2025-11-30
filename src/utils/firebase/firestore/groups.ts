@@ -87,7 +87,6 @@ export async function createGroup(
         status: data.status || 'draft',
         department,
         course,
-        thesis: data.thesis || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
@@ -124,7 +123,6 @@ export async function createGroupWithId(
         status: data.status || 'draft',
         department,
         course,
-        thesis: data.thesis || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
@@ -448,7 +446,6 @@ export async function updateGroup(
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.thesis !== undefined) updateData.thesis = data.thesis;
     if (data.department !== undefined) updateData.department = data.department;
     if (data.course !== undefined) updateData.course = data.course;
 

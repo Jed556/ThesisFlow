@@ -222,6 +222,18 @@ service cloud.firestore {
             allow create: if isAdminOrDeveloper();
         }
 
+        // Collection group: panelComments
+        match /{path=**}/panelComments/{commentId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: join - for invite/request queries across all groups
+        match /{path=**}/join/{docId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
         // ====================================
         // GLOBAL USERS COLLECTION (legacy/lookup)
         // ====================================
@@ -394,6 +406,27 @@ service cloud.firestore {
                         allow delete: if isAdminOrDeveloper() || isHead();
 
                         // ================================
+                        // JOIN SUBCOLLECTION (invites/requests)
+                        // Path: join/invites - invite documents containing userIds array
+                        // Path: join/requests - join request documents containing userIds array
+                        // ================================
+
+                        match /join/{docId} {
+                            // Anyone authenticated can read join data to check their invites/requests
+                            allow read: if isAuthenticated();
+                            // Group leader and admins can manage invites
+                            allow create: if isAdminOrDeveloper() || isHead() || isGroupLeader();
+                            allow update: if isAdminOrDeveloper() || isHead() || isGroupLeader() || 
+                                // Users can remove themselves from invite lists (decline invite)
+                                (docId == 'invites' && request.auth.uid in resource.data.userIds) ||
+                                // Users can remove themselves from request lists (cancel request)
+                                (docId == 'requests' && request.auth.uid in resource.data.userIds) ||
+                                // Users can add themselves to request lists (request to join)
+                                (docId == 'requests' && request.auth.uid in request.resource.data.userIds);
+                            allow delete: if isAdminOrDeveloper() || isHead() || isGroupLeader();
+                        }
+
+                        // ================================
                         // EXPERT REQUESTS (under group)
                         // ================================
 
@@ -440,6 +473,29 @@ service cloud.firestore {
                             allow create: if isAuthenticated() && hasGroupAccess();
                             // Audits should not be modified or deleted (immutable)
                             allow update, delete: if false;
+                        }
+
+                        // ================================
+                        // PANEL COMMENTS (under group)
+                        // Path: panelComments/release - release state document
+                        // Path: panelComments/entries/{entryId} - individual comment entries
+                        // ================================
+
+                        match /panelComments/{docId} {
+                            // Panel comments - group members and panel can read
+                            allow read: if isAuthenticated() && hasGroupAccess();
+                            // Panel members and advisers can create/update
+                            allow create: if isGroupPanel() || isGroupAdviser() || isAdminOrDeveloper();
+                            allow update: if isGroupPanel() || isGroupAdviser() || isGroupMember() || isModeratorOrAbove();
+                            allow delete: if isAdminOrDeveloper() || isHead();
+
+                            // Entries subcollection under panelComments
+                            match /entries/{entryId} {
+                                allow read: if isAuthenticated() && hasGroupAccess();
+                                allow create: if isGroupPanel() || isGroupAdviser() || isAdminOrDeveloper();
+                                allow update: if isGroupPanel() || isGroupAdviser() || isGroupMember() || isModeratorOrAbove();
+                                allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
+                            }
                         }
 
                         // ================================

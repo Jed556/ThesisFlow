@@ -24,14 +24,15 @@ export const navigationGroups: NavigationGroup[] = [
         index: 3,
         header: true,
         divider: true,
-        title: 'Management',
-        segment: 'management',
+        title: 'Experts',
+        segment: 'experts',
     },
     {
         index: 4,
         header: true,
         divider: true,
-        title: 'Experts',
-        segment: 'experts',
+        title: 'Management',
+        segment: 'management',
     },
+
 ];

@@ -384,6 +384,10 @@ export default function ModeratorThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={selectedThesisId}
+                    groupId={selectedGroupId}
+                    year={thesis?.year}
+                    department={thesis?.department ?? groups.find(g => g.id === selectedGroupId)?.department}
+                    course={thesis?.course ?? selectedCourse}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={moderatorUid}

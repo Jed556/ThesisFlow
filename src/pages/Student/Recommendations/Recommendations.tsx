@@ -14,14 +14,10 @@ import { ExpertRecommendationCard } from '../../../components/Profile';
 import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
-import {
-    listenTheses, listenThesesForParticipant, type ThesisRecord,
-} from '../../../utils/firebase/firestore/thesis';
 import { findGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
 import { aggregateThesisStats, computeExpertCards, type ExpertCardData } from '../../../utils/recommendUtils';
 import { isTopicApproved } from '../../../utils/thesisUtils';
 import type { UserProfile } from '../../../types/profile';
-import type { ThesisData } from '../../../types/thesis';
 import type { Session } from '../../../types/session';
 import type { ThesisGroup } from '../../../types/group';
 
@@ -45,7 +41,6 @@ export default function AdviserEditorRecommendationsPage() {
     const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
     const [adviserProfiles, setAdviserProfiles] = React.useState<UserProfile[]>([]);
     const [editorProfiles, setEditorProfiles] = React.useState<UserProfile[]>([]);
-    const [theses, setTheses] = React.useState<(ThesisData & { id: string })[]>([]);
     const [statisticianProfiles, setStatisticianProfiles] = React.useState<UserProfile[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -53,43 +48,9 @@ export default function AdviserEditorRecommendationsPage() {
     const [studentGroup, setStudentGroup] = React.useState<ThesisGroup | null>(null);
     const [groupError, setGroupError] = React.useState<string | null>(null);
     const [allGroups, setAllGroups] = React.useState<ThesisGroup[]>([]);
-    const [studentThesis, setStudentThesis] = React.useState<(ThesisData & { id: string }) | null>(null);
 
-    React.useEffect(() => {
-        if (!studentUid) {
-            setStudentGroupId(null);
-            setStudentGroup(null);
-            setStudentThesis(null);
-            setGroupError(null);
-            return () => { /* no-op */ };
-        }
-
-        const unsubscribe = listenThesesForParticipant(studentUid, {
-            onData: (records) => {
-                if (records.length === 0) {
-                    setStudentGroupId(null);
-                    setStudentThesis(null);
-                    return;
-                }
-                const prioritized = [...records].sort((a, b) => (
-                    new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
-                ));
-                const primary = prioritized.find((record) => record.leader === studentUid) ?? prioritized[0];
-                setStudentGroupId(primary?.groupId ?? null);
-                setStudentThesis(primary ?? null);
-            },
-            onError: (listenerError) => {
-                console.error('Failed to resolve student group for recommendations:', listenerError);
-                setStudentGroupId(null);
-                setStudentThesis(null);
-                setGroupError('Unable to determine your thesis group right now.');
-            },
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [studentUid]);
+    // Track whether we've completed initial group resolution (prevents flicker on re-renders)
+    const [groupResolved, setGroupResolved] = React.useState(false);
 
     React.useEffect(() => {
         if (!studentGroupId) {
@@ -104,6 +65,7 @@ export default function AdviserEditorRecommendationsPage() {
             .then((groupRecord) => {
                 if (!cancelled) {
                     setStudentGroup(groupRecord ?? null);
+                    setGroupResolved(true);
                 }
             })
             .catch((err) => {
@@ -111,6 +73,7 @@ export default function AdviserEditorRecommendationsPage() {
                     console.error('Failed to load student group detail:', err);
                     setStudentGroup(null);
                     setGroupError('Unable to load your thesis group details.');
+                    setGroupResolved(true);
                 }
             });
 
@@ -120,7 +83,13 @@ export default function AdviserEditorRecommendationsPage() {
     }, [studentGroupId]);
 
     React.useEffect(() => {
-        if (!studentUid || studentGroupId) {
+        if (!studentUid) {
+            setGroupResolved(true);
+            return () => { /* no-op */ };
+        }
+
+        if (studentGroupId) {
+            // Group ID already known, skip fallback
             return () => { /* no-op */ };
         }
 
@@ -138,6 +107,8 @@ export default function AdviserEditorRecommendationsPage() {
 
                 const combined = [...leaderGroups, ...memberGroups];
                 if (combined.length === 0) {
+                    // No groups found - still mark as resolved
+                    setGroupResolved(true);
                     return;
                 }
 
@@ -147,9 +118,11 @@ export default function AdviserEditorRecommendationsPage() {
                 const primaryGroup = combined.find((groupRecord) => groupRecord.status !== 'archived') ?? combined[0];
                 setStudentGroup((previous) => previous ?? primaryGroup);
                 setStudentGroupId((previous) => previous ?? primaryGroup.id);
+                setGroupResolved(true);
             } catch (fallbackError) {
                 if (!cancelled) {
                     console.error('Failed to resolve thesis group fallback for recommendations:', fallbackError);
+                    setGroupResolved(true);
                 }
             }
         })();
@@ -159,24 +132,34 @@ export default function AdviserEditorRecommendationsPage() {
         };
     }, [studentUid, studentGroupId]);
 
+    // Derive the student's department from the group record (used for filtering experts)
+    const studentDepartment = studentGroup?.department?.trim() ?? null;
+
     React.useEffect(() => {
+        // Reset profiles when user logs out
         if (!studentUid) {
             setAdviserProfiles([]);
             setEditorProfiles([]);
             setStatisticianProfiles([]);
-            setTheses([]);
-            setStudentThesis(null);
             setLoading(false);
             setError(null);
             return () => { /* no-op */ };
         }
 
+        // Wait until group resolution is complete before querying experts by department
+        // This avoids fetching all users and filtering client-side, and prevents flicker
+        if (!groupResolved) {
+            // Still resolving the student group - keep loading state
+            setLoading(true);
+            return () => { /* no-op */ };
+        }
+
         let active = true;
-        const loaded = { advisers: false, editors: false, statisticians: false, theses: false };
+        const loaded = { advisers: false, editors: false, statisticians: false };
 
         const tryResolveLoading = () => {
             if (!active) return;
-            if (loaded.advisers && loaded.editors && loaded.statisticians && loaded.theses) {
+            if (loaded.advisers && loaded.editors && loaded.statisticians) {
                 setLoading(false);
             }
         };
@@ -184,8 +167,14 @@ export default function AdviserEditorRecommendationsPage() {
         setLoading(true);
         setError(null);
 
+        // Build filter for advisers: role + department (if available)
+        // Query by department to reduce Firestore reads and data transfer
+        const adviserFilter = studentDepartment
+            ? { role: 'adviser' as const, department: studentDepartment }
+            : { role: 'adviser' as const };
+
         const unsubscribeAdvisers = listenUsersByFilter(
-            { role: 'adviser' },
+            adviserFilter,
             {
                 onData: (profilesData) => {
                     if (!active) return;
@@ -241,30 +230,13 @@ export default function AdviserEditorRecommendationsPage() {
             }
         );
 
-        const unsubscribeTheses = listenTheses({
-            onData: (thesisData: ThesisRecord[]) => {
-                if (!active) return;
-                setError(null);
-                setTheses(thesisData);
-                loaded.theses = true;
-                tryResolveLoading();
-            },
-            onError: (err: Error) => {
-                if (!active) return;
-                console.error('Failed to load thesis data for recommendations:', err);
-                setError('Unable to load thesis data for recommendations.');
-                setLoading(false);
-            },
-        });
-
         return () => {
             active = false;
             unsubscribeAdvisers();
             unsubscribeEditors();
-            unsubscribeTheses();
             unsubscribeStatisticians();
         };
-    }, [studentUid]);
+    }, [studentUid, groupResolved, studentDepartment]);
 
     React.useEffect(() => {
         const unsubscribe = listenAllGroups({
@@ -282,20 +254,15 @@ export default function AdviserEditorRecommendationsPage() {
     }, []);
 
     const thesisStats = React.useMemo(
-        () => aggregateThesisStats(theses, allGroups),
-        [theses, allGroups]
+        () => aggregateThesisStats(allGroups),
+        [allGroups]
     );
-    const filteredAdviserProfiles = React.useMemo(() => {
-        const department = studentGroup?.department?.trim();
-        if (!department) {
-            return adviserProfiles;
-        }
-        return adviserProfiles.filter((profile) => profile.department?.trim().toLowerCase() === department.toLowerCase());
-    }, [adviserProfiles, studentGroup?.department]);
 
+    // Advisers are now already filtered by department at query level
+    // No additional client-side filtering needed
     const adviserCards = React.useMemo(
-        () => computeExpertCards(filteredAdviserProfiles, 'adviser', thesisStats),
-        [filteredAdviserProfiles, thesisStats]
+        () => computeExpertCards(adviserProfiles, 'adviser', thesisStats),
+        [adviserProfiles, thesisStats]
     );
     const editorCards = React.useMemo(
         () => computeExpertCards(editorProfiles, 'editor', thesisStats),
@@ -306,18 +273,20 @@ export default function AdviserEditorRecommendationsPage() {
         [statisticianProfiles, thesisStats]
     );
 
-    const topicApproved = React.useMemo(() => isTopicApproved(studentThesis), [studentThesis]);
+    const topicApproved = React.useMemo(
+        () => isTopicApproved(studentGroup?.thesis),
+        [studentGroup?.thesis]
+    );
 
     const hasThesisRecord = React.useMemo(() => (
-        Boolean(studentThesis?.id)
-        || Boolean(studentGroup?.thesis?.id)
+        Boolean(studentGroup?.thesis?.id)
         || Boolean(studentGroup?.thesis?.title)
-    ), [studentGroup?.thesis?.id, studentGroup?.thesis?.title, studentThesis?.id]);
+    ), [studentGroup?.thesis?.id, studentGroup?.thesis?.title]);
 
     const hasGroupRecord = Boolean(studentGroupId || studentGroup);
     const editorTabLocked = !hasGroupRecord;
     const adviserTabLocked = !(topicApproved || hasThesisRecord);
-    const adviserAssigned = Boolean(studentThesis?.adviser ?? studentGroup?.members?.adviser);
+    const adviserAssigned = Boolean(studentGroup?.members?.adviser);
     const statisticianTabLocked = !adviserAssigned;
 
     const handleTabChange = React.useCallback((_event: React.SyntheticEvent, newValue: number) => {

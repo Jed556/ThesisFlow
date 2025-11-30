@@ -122,7 +122,83 @@ service firebase.storage {
         }
 
         // ====================================
-        // THESIS CHAPTER FILES (hierarchical path)
+        // THESIS FILES (hierarchical path)
+        // Path structure: {year}/{department}/{course}/{group}/thesis/{thesis}
+        //   ├── {stage}/{chapter}/submissions/{filename}
+        //   ├── {stage}/{chapter}/chats/{filename}
+        //   ├── terminal/{stage}/{filename}
+        //   └── attachments/{category}/{filename}
+        // ====================================
+
+        // Chapter submissions
+        match /{year}/{department}/{course}/{groupId}/thesis/{thesisId}/{stage}/{chapterId}/submissions/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // Chapter chat attachments
+        match /{year}/{department}/{course}/{groupId}/thesis/{thesisId}/{stage}/{chapterId}/chats/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // Terminal requirements
+        match /{year}/{department}/{course}/{groupId}/thesis/{thesisId}/terminal/{stage}/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // General attachments
+        match /{year}/{department}/{course}/{groupId}/thesis/{thesisId}/attachments/{category}/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // Expert requests attachments
+        match /{year}/{department}/{course}/{groupId}/expertRequests/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // Proposals attachments
+        match /{year}/{department}/{course}/{groupId}/proposals/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // Panel comments attachments
+        match /{year}/{department}/{course}/{groupId}/panelComments/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // ====================================
+        // LEGACY: Simplified theses path (for backward compatibility)
+        // Path: theses/{groupId}/chapters/{stage}/{chapterId}/{category}/{filename}
+        // ====================================
+
+        match /theses/{groupId}/chapters/{stage}/{chapterId}/{category}/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        match /theses/{groupId}/terminal/{stage}/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        match /theses/{groupId}/chat/{stage}/{chapterId}/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        match /theses/{groupId}/attachments/{category}/{filename} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null;
+        }
+
+        // ====================================
+        // THESIS CHAPTER FILES (old hierarchical path - for backward compatibility)
         // Path: year/{year}/departments/{dept}/courses/{course}/groups/{groupId}/thesis/{thesisId}/stages/{stage}/chapters/{chapterId}/{filename}
         // ====================================
 
@@ -206,12 +282,12 @@ service firebase.storage {
         }
 
         // ====================================
-        // DEFAULT DENY
+        // DEFAULT DENY (temporarily disabled for debugging)
         // ====================================
 
         // Deny all other access
-        match /{allPaths=**} {
-            allow read, write: if false;
-        }
+        // match /{allPaths=**} {
+        //     allow read, write: if false;
+        // }
     }
 }

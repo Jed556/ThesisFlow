@@ -445,33 +445,37 @@ export async function markProposalAsThesis(
 
     // Import thesis utilities dynamically to avoid circular dependencies
     const { createThesisForGroup } = await import('./thesis');
-    const { updateGroup } = await import('./groups');
+    const { getChapterConfigByCourse } = await import('./chapter');
+    const { templatesToThesisChapters, buildDefaultThesisChapters } = await import('../../thesisChapterTemplates');
 
-    // Create thesis document
+    // Get chapter templates for this course or use defaults
+    let chapters;
+    try {
+        const chapterConfig = await getChapterConfigByCourse(ctx.department, ctx.course);
+        chapters = chapterConfig?.chapters
+            ? templatesToThesisChapters(chapterConfig.chapters)
+            : buildDefaultThesisChapters();
+    } catch (error) {
+        console.warn('Failed to load chapter templates, using defaults:', error);
+        chapters = buildDefaultThesisChapters();
+    }
+
+    // Create thesis document with chapters
     const thesisData = {
         title: entry.title,
         submissionDate: nowISO,
         lastUpdated: nowISO,
         stages: [],
+        chapters,
         groupId: ctx.groupId,
         overallStatus: 'draft' as const,
     };
 
-    const thesisId = await createThesisForGroup(
+    await createThesisForGroup(
         { year: ctx.year, department: ctx.department, course: ctx.course, groupId: ctx.groupId },
         thesisData
     );
 
-    // Update group with thesis reference
-    await updateGroup(ctx.year, ctx.department, ctx.course, ctx.groupId, {
-        thesis: {
-            id: thesisId,
-            title: entry.title,
-            submissionDate: nowISO,
-            lastUpdated: nowISO,
-            stages: [],
-        },
-    });
 
     // Update proposal set with usedAsThesisAt
     const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId);

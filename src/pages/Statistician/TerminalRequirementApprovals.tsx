@@ -1,5 +1,5 @@
 import * as React from 'react';
-import QueryStatsIcon from '@mui/icons-material/QueryStats';
+import { FactCheck as FactCheckIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import { AnimatedPage } from '../../components/Animate';
 import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalRequirements';
@@ -9,7 +9,7 @@ export const metadata: NavigationItem = {
     index: 2,
     title: 'Terminal Requirements',
     segment: 'statistician-terminal-requirements',
-    icon: <QueryStatsIcon />,
+    icon: <FactCheckIcon />,
     roles: ['statistician'],
 };
 

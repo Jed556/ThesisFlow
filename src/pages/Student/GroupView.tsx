@@ -9,7 +9,7 @@ import { AnimatedPage } from '../../components/Animate';
 import GroupView, { type GroupViewHeaderContext } from '../../components/Group/GroupView';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../../contexts/SnackbarContext';
-import { cancelJoinRequest, requestToJoinGroup } from '../../utils/groupUtils';
+import { cancelJoinRequest, requestToJoinGroup } from '../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     title: 'Group Details',

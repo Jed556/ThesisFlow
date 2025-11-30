@@ -31,6 +31,13 @@ import {
 
 interface ThesisWorkspaceProps {
     thesisId?: string;
+    groupId?: string;
+    /** Academic year for hierarchical storage path */
+    year?: string;
+    /** Department for hierarchical storage path */
+    department?: string;
+    /** Course for hierarchical storage path */
+    course?: string;
     thesis?: ThesisData | null;
     participants?: Record<string, ConversationParticipant>;
     currentUserId?: string;
@@ -118,7 +125,7 @@ const WorkspaceFilters = ({ filters }: { filters?: WorkspaceFilterConfig[]; }) =
 };
 
 export default function ThesisWorkspace({
-    thesisId, thesis, participants, currentUserId, expertRole, filters, isLoading,
+    thesisId, groupId, year, department, course, thesis, participants, currentUserId, expertRole, filters, isLoading,
     allowCommenting = true,
     emptyStateMessage = 'Select a group to inspect its thesis.',
     conversationHeight = '100%', onCreateComment, onEditComment, onUploadChapter, onChapterDecision,
@@ -184,10 +191,12 @@ export default function ThesisWorkspace({
         [normalizedChapters, activeStage],
     );
 
-    const expertRoles = React.useMemo(() => getAssignedExpertRoles(thesis), [
-        thesis?.adviser,
-        thesis?.editor,
-        thesis?.statistician,
+    // Note: thesis may be ThesisWithGroupContext which includes expert fields from the group
+    const thesisWithContext = thesis as unknown as Record<string, unknown> | null | undefined;
+    const expertRoles = React.useMemo(() => getAssignedExpertRoles(thesis as Parameters<typeof getAssignedExpertRoles>[0]), [
+        thesisWithContext?.adviser,
+        thesisWithContext?.editor,
+        thesisWithContext?.statistician,
     ]);
 
     const isStageLocked = stageLockMap[activeStage] ?? false;
@@ -256,7 +265,10 @@ export default function ThesisWorkspace({
             try {
                 await onUploadChapter({
                     thesisId, chapterId, chapterStage, file,
-                    groupId: ''
+                    groupId: groupId ?? '',
+                    year,
+                    department,
+                    course,
                 });
                 setChapterFiles((current) => {
                     const next = { ...current };
@@ -272,7 +284,7 @@ export default function ThesisWorkspace({
                 setUploadingChapterId((current) => (current === chapterId ? null : current));
             }
         })();
-    }, [onUploadChapter, thesisId, determineChapterStage]);
+    }, [onUploadChapter, thesisId, groupId, year, department, course, determineChapterStage]);
 
     React.useEffect(() => {
         if (isStageLocked || stageChapters.length === 0) {

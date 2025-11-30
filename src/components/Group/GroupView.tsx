@@ -4,7 +4,7 @@ import {
     ListItemText, Paper, Skeleton, Stack, Typography, type ChipProps,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
-import { formatDateShort } from '../../utils/dateUtils';
+import { formatDateShort, getAcademicYear } from '../../utils/dateUtils';
 import type { ThesisGroup } from '../../types/group';
 import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
@@ -161,9 +161,10 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
     }
 
     // Fetch invites and requests from join subcollection
+    const year = getAcademicYear();
     const [invites, requests] = await Promise.all([
-        getGroupInvites(group.year, group.department, group.course, group.id),
-        getGroupJoinRequests(group.year, group.department, group.course, group.id),
+        getGroupInvites(year, group.department ?? '', group.course ?? '', group.id),
+        getGroupJoinRequests(year, group.department ?? '', group.course ?? '', group.id),
     ]);
     if (signal.aborted) {
         return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
@@ -223,7 +224,10 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
                     return;
                 }
                 console.error('Failed to load group details:', error);
-                setState({ group: null, thesis: null, profiles: new Map(), loading: false, error: 'Unable to load group details.' });
+                setState({
+                    group: null, thesis: null, profiles: new Map(), invites: [], requests: [],
+                    loading: false, error: 'Unable to load group details.'
+                });
             });
         return () => abort.abort();
     }, [groupId, refreshToken]);

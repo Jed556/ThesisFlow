@@ -4,7 +4,7 @@
  *
  * Configuration Hierarchy:
  * configuration/
- *   └── departments/{department}/courses/{course}/chapters/{chapter} {document with chapter details}
+ *   ├── departments/{department}/courses/{course}/chapters/{chapter} {document with chapter details}
  *   └── terminal/{requirement} {document with requirement details}
  * 
  * Group Hierarchical Structure:
@@ -17,15 +17,26 @@
  *   │   └── requests (document with userIds array)
  *   ├── thesis/{thesis}
  *   │   └── stages/{stage}/chapters/{chapter}
- *   │       └── submissions/{submission}/chats/{chat}
+ *   │       └── submissions/{attachment}/chats/{chat}
+ *   │           └── attachments/{attachment}
  *   └── audits/{audit}
  * 
  * User Hierarchical Structure:
  * year/{year}
- *   └── users/{user}
+ *   ├── users/{user}
  *   └── departments/{department}
- *       └── users/{user}
+ *       ├── users/{user}
  *       └── /courses/{course}/users/{user}
+ * 
+ * * Firebase Storage Hierarchical Structure:
+ * * {year}/{department}/{course}/{group}
+ *   ├── expertRequests/{requestAttachments}
+ *   ├── proposals/{proposalAttachments}
+ *   ├── panelComments/{commentAttachments}
+ *   └── thesis/{thesis}
+ *       └── {stage}/{chapter}
+ *           └── submissions/{submissionAttachments}
+ *               └── chats/{chatAttachments}
  */
 
 import { getAcademicYear } from '../utils/dateUtils';

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import VerifiedIcon from '@mui/icons-material/Verified';
+import { FactCheck as FactCheckIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import { AnimatedPage } from '../../components/Animate';
 import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalRequirements';
@@ -9,7 +9,7 @@ export const metadata: NavigationItem = {
     index: 5,
     title: 'Terminal Requirements',
     segment: 'panel-terminal-requirements',
-    icon: <VerifiedIcon />,
+    icon: <FactCheckIcon />,
     roles: ['panel'],
 };
 

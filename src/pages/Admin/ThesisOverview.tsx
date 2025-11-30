@@ -5,12 +5,11 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { ThesisData } from '../../types/thesis';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceFilterConfig } from '../../types/workspace';
-import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
+import { findThesisByGroupId, type ThesisWithGroupContext } from '../../utils/firebase/firestore/thesis';
 import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { getDisplayName } from '../../utils/userUtils';
@@ -40,7 +39,7 @@ export default function AdminThesisOverviewPage() {
     const [selectedCourse, setSelectedCourse] = React.useState('');
     const [selectedGroupId, setSelectedGroupId] = React.useState('');
 
-    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesis, setThesis] = React.useState<ThesisWithGroupContext | null>(null);
     const [selectedThesisId, setSelectedThesisId] = React.useState('');
     const [thesisLoading, setThesisLoading] = React.useState(false);
 
@@ -347,6 +346,10 @@ export default function AdminThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={selectedThesisId}
+                    groupId={selectedGroupId}
+                    year={thesis?.year}
+                    department={thesis?.department ?? selectedDepartment}
+                    course={thesis?.course ?? selectedCourse}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={adminUid}

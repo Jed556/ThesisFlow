@@ -9,7 +9,7 @@ import type { FileAttachment, FileCategory } from '../../../types/file';
 import type { ThesisStageName } from '../../../types/thesis';
 import { getError } from '../../../../utils/errorUtils';
 import { getFileCategory, getFileExtension, validateFile } from '../../fileUtils';
-import { setFileMetadata, getFilesByThesis, deleteFileMetadata } from '../firestore/file';
+import { getFilesByThesis } from '../firestore/file';
 
 /**
  * Allowed file types for thesis submissions
@@ -51,6 +51,12 @@ interface UploadThesisFileOptions {
     metadata?: Record<string, string>;
     terminalStage?: ThesisStageName;
     terminalRequirementId?: string;
+    /** Academic year for hierarchical storage path */
+    year?: string;
+    /** Department for hierarchical storage path */
+    department?: string;
+    /** Course for hierarchical storage path */
+    course?: string;
 }
 
 interface UploadThesisFileResult {
@@ -129,6 +135,12 @@ interface GenerateFilePathParams {
     commentId?: string;
     category: string;
     terminalStage?: ThesisStageName;
+    /** Academic year for hierarchical storage path */
+    year?: string;
+    /** Department for hierarchical storage path */
+    department?: string;
+    /** Course for hierarchical storage path */
+    course?: string;
 }
 
 function sanitizePathSegment(value: string | number | undefined | null, fallback: string = 'general'): string {
@@ -143,7 +155,9 @@ function sanitizePathSegment(value: string | number | undefined | null, fallback
 }
 
 /**
- * Generates a unique file path for thesis uploads using UIDs with group/stage context.
+ * Generates a unique file path for thesis uploads using hierarchical structure.
+ * Path format: {year}/{department}/{course}/{group}/thesis/{thesis}/{stage}/{chapter}/submissions/{filename}
+ * Or chat: {year}/{department}/{course}/{group}/thesis/{thesis}/{stage}/{chapter}/chats/{filename}
  */
 function generateThesisFilePath(params: GenerateFilePathParams): string {
     const {
@@ -156,15 +170,28 @@ function generateThesisFilePath(params: GenerateFilePathParams): string {
         commentId,
         category,
         terminalStage,
+        year,
+        department,
+        course,
     } = params;
 
     const timestamp = Date.now();
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const sanitizedGroup = sanitizePathSegment(groupId, thesisId);
+
+    // Build hierarchical base path
+    const yearSegment = sanitizePathSegment(year, 'current');
+    const deptSegment = sanitizePathSegment(department, 'general');
+    const courseSegment = sanitizePathSegment(course, 'common');
+    const groupSegment = sanitizePathSegment(groupId, 'group');
+    const thesisSegment = sanitizePathSegment(thesisId, 'thesis');
+
+    // Base path: {year}/{department}/{course}/{group}/thesis/{thesis}
+    const basePath = `${yearSegment}/${deptSegment}/${courseSegment}/${groupSegment}/thesis/${thesisSegment}`;
 
     if (terminalStage) {
         const stageSegment = sanitizePathSegment(terminalStage);
-        return `theses/${sanitizedGroup}/terminal/${stageSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
+        // Terminal requirements path
+        return `${basePath}/terminal/${stageSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
     }
 
     if (chapterId !== undefined) {
@@ -175,13 +202,16 @@ function generateThesisFilePath(params: GenerateFilePathParams): string {
         const chapterSegment = sanitizePathSegment(chapterId, 'chapter');
 
         if (commentId) {
-            return `theses/${sanitizedGroup}/chat/${stageSegment}/${chapterSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
+            // Chat attachments path
+            return `${basePath}/${stageSegment}/${chapterSegment}/chats/${userUid}_${timestamp}_${sanitizedFileName}`;
         }
 
-        return `theses/${sanitizedGroup}/chapters/${stageSegment}/${chapterSegment}/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
+        // Chapter submissions path
+        return `${basePath}/${stageSegment}/${chapterSegment}/submissions/${userUid}_${timestamp}_${sanitizedFileName}`;
     }
 
-    return `theses/${sanitizedGroup}/attachments/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
+    // General attachments path
+    return `${basePath}/attachments/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
 }
 
 /**
@@ -211,6 +241,9 @@ export async function uploadThesisFile(
         metadata = {},
         terminalStage,
         terminalRequirementId,
+        year,
+        department,
+        course,
     } = options;
 
     try {
@@ -241,6 +274,9 @@ export async function uploadThesisFile(
             commentId,
             category,
             terminalStage,
+            year,
+            department,
+            course,
         });
 
         // Create storage reference
@@ -294,8 +330,8 @@ export async function uploadThesisFile(
             ...(terminalRequirementId && { terminalRequirementId })
         };
 
-        // Save metadata to Firestore
-        await setFileMetadata(fileHash, fileAttachment, userUid);
+        // File metadata is stored in submission/chat documents, not in a separate files collection
+        // The caller (e.g., handleUploadChapter) is responsible for creating the submission record
 
         return {
             url: downloadURL,
@@ -339,15 +375,11 @@ export async function uploadThesisFilesBatch(
 }
 
 /**
- * Deletes a thesis file from Storage and Firestore
+ * Deletes a thesis file from Storage
  * @param fileUrl - Download URL of the file to delete
- * @param thesisId - Thesis ID
- * @param fileHash - File hash for Firestore metadata
  */
 export async function deleteThesisFile(
     fileUrl: string,
-    thesisId: string,
-    fileHash: string
 ): Promise<void> {
     try {
         // Extract storage path from URL
@@ -362,9 +394,6 @@ export async function deleteThesisFile(
         // Delete from Storage
         const fileRef = ref(firebaseStorage, filePath);
         await deleteObject(fileRef);
-
-        // Delete metadata from Firestore
-        await deleteFileMetadata(fileHash);
     } catch (error) {
         const { message } = getError(error, 'Failed to delete thesis file');
         throw new Error(message);
@@ -405,8 +434,10 @@ export async function listThesisFilesFromStorage(
 ): Promise<string[]> {
     try {
         const sanitizedGroup = sanitizePathSegment(groupId ?? thesisId, thesisId);
+        const stageSegment = sanitizePathSegment(chapterStage ?? 'stage');
+        const chapterSegment = sanitizePathSegment(chapterId, 'chapter');
         const basePath = chapterId !== undefined
-            ? `theses/${sanitizedGroup}/chapters/${sanitizePathSegment(chapterStage ?? 'stage')}/${sanitizePathSegment(chapterId, 'chapter')}`
+            ? `theses/${sanitizedGroup}/chapters/${stageSegment}/${chapterSegment}`
             : `theses/${sanitizedGroup}`;
 
         const listRef = ref(firebaseStorage, basePath);

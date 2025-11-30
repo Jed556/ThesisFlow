@@ -137,6 +137,16 @@
             ]
         },
         {
+            "collectionGroup": "join",
+            "fieldPath": "userIds",
+            "indexes": [
+                {
+                    "arrayConfig": "CONTAINS",
+                    "queryScope": "COLLECTION_GROUP"
+                }
+            ]
+        },
+        {
             "collectionGroup": "groups",
             "fieldPath": "members.adviser",
             "indexes": [

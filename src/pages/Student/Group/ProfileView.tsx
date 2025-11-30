@@ -3,7 +3,7 @@ import { Alert, Box, Button, Skeleton, Stack } from '@mui/material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../../components/Profile/ProfileView';
-import { getGroupsByMember } from '../../../utils/groupUtils';
+import { getGroupsByMember } from '../../../utils/firebase/firestore/groups';
 import { buildGroupProfileMap } from '../../../utils/groupUtils';
 import type { ThesisGroup } from '../../../types/group';
 import type { NavigationItem } from '../../../types/navigation';

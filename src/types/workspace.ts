@@ -40,6 +40,12 @@ export interface WorkspaceUploadPayload {
     chapterId: number;
     chapterStage: ThesisStageName;
     file: File;
+    /** Academic year for hierarchical storage path */
+    year?: string;
+    /** Department for hierarchical storage path */
+    department?: string;
+    /** Course for hierarchical storage path */
+    course?: string;
 }
 
 export type WorkspaceChapterDecision = 'approved' | 'revision_required';

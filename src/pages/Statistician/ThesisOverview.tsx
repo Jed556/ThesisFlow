@@ -374,6 +374,10 @@ export default function StatisticianThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={selectedThesisId}
+                    groupId={thesis?.groupId}
+                    year={thesis?.year}
+                    department={thesis?.department}
+                    course={thesis?.course}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={statisticianUid}
