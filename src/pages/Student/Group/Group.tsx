@@ -24,6 +24,9 @@ import {
     findGroupById, getGroupsByCourse, getGroupsByLeader, getGroupsByMember, findUserById,
     findUsersByFilter, inviteUserToGroup, rejectJoinRequest, removeInviteFromGroup, submitGroupForReview,
 } from '../../../utils/groupUtils';
+import {
+    getGroupInvites, getGroupJoinRequests, getGroupsWithInviteFor,
+} from '../../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -51,12 +54,15 @@ export default function StudentGroupPage() {
     // My group state
     const [myGroup, setMyGroup] = React.useState<ThesisGroup | null>(null);
     const [isLeader, setIsLeader] = React.useState(false);
+    // Invites and requests for my group (fetched from join subcollection)
+    const [myGroupInvites, setMyGroupInvites] = React.useState<string[]>([]);
+    const [myGroupRequests, setMyGroupRequests] = React.useState<string[]>([]);
 
     // Available groups (same course)
     const [availableGroups, setAvailableGroups] = React.useState<GroupWithInvites[]>([]);
 
-    // My invites
-    const [myInvites, setMyInvites] = React.useState<GroupWithInvites[]>([]);
+    // My invites (groups that have invited me)
+    const [myInvites, setMyInvites] = React.useState<ThesisGroup[]>([]);
 
     // Users map for GroupCard
     const [usersByUid, setUsersByUid] = React.useState<Map<string, UserProfile>>(new Map());
@@ -189,14 +195,23 @@ export default function StudentGroupPage() {
                         setMyGroup(group);
                         setIsLeader(group.members.leader === userUid);
 
-                        const profileMap = await buildGroupProfileMap(group);
+                        // Fetch profiles and invites/requests in parallel
+                        const [profileMap, invites, requests] = await Promise.all([
+                            buildGroupProfileMap(group),
+                            getGroupInvites(group.year, group.department, group.course, group.id),
+                            getGroupJoinRequests(group.year, group.department, group.course, group.id),
+                        ]);
                         if (!cancelled) {
                             setMyGroupProfiles(profileMap);
+                            setMyGroupInvites(invites);
+                            setMyGroupRequests(requests);
                         }
                     } else {
                         setMyGroup(null);
                         setIsLeader(false);
                         setMyGroupProfiles(new Map());
+                        setMyGroupInvites([]);
+                        setMyGroupRequests([]);
                     }
 
                     // Get all groups in my course
@@ -238,11 +253,20 @@ export default function StudentGroupPage() {
                         setUsersByUid(usersMap);
                     }
 
-                    // Separate groups where I have invites
-                    const invites = available.filter(g => g.invites?.includes(userUid));
-                    const others = available.filter(g => !g.invites?.includes(userUid));
+                    // Get groups where I have pending invites (from subcollection)
+                    const inviteGroups = await getGroupsWithInviteFor(userUid);
+                    // Filter invite groups to only those in same department/course
+                    const filteredInviteGroups = inviteGroups.filter(g =>
+                        g.department === userProfile.department &&
+                        g.course === userProfile.course &&
+                        g.id !== uniqueGroups[0]?.id
+                    );
 
-                    setMyInvites(invites);
+                    // Filter out invite groups from available
+                    const inviteGroupIds = new Set(filteredInviteGroups.map(g => g.id));
+                    const others = available.filter(g => !inviteGroupIds.has(g.id));
+
+                    setMyInvites(filteredInviteGroups);
                     setAvailableGroups(others);
                 }
             } catch (err) {
@@ -704,6 +728,8 @@ export default function StudentGroupPage() {
                 group={myGroup}
                 isLeader={isLeader}
                 profiles={myGroupProfiles}
+                invites={myGroupInvites}
+                requests={myGroupRequests}
                 formatLabel={formatParticipantLabel}
                 onOpenProfile={handleOpenProfilePage}
                 onOpenCreateDialog={handleOpenCreateDialog}

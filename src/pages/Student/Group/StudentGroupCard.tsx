@@ -22,6 +22,10 @@ export interface StudentGroupCardProps {
     group: ThesisGroup | null;
     isLeader: boolean;
     profiles: Map<string, UserProfile>;
+    /** Pending invite user IDs fetched from join subcollection */
+    invites: string[];
+    /** Join request user IDs fetched from join subcollection */
+    requests: string[];
     formatLabel: LabelFormatter;
     onOpenProfile: UidCallback;
     onOpenCreateDialog: VoidCallback;
@@ -60,6 +64,8 @@ export default function StudentGroupCard({
     group,
     isLeader,
     profiles,
+    invites,
+    requests,
     formatLabel,
     onOpenProfile,
     onOpenCreateDialog,
@@ -215,26 +221,26 @@ export default function StudentGroupCard({
 
             {isLeader && (
                 <>
-                    {(group.invites ?? []).length > 0 && (
+                    {invites.length > 0 && (
                         <>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                                 Pending Invites
                             </Typography>
                             <Stack spacing={1} sx={{ mb: 2 }}>
-                                {group.invites!.map((uid) => (
+                                {invites.map((uid) => (
                                     <Chip key={uid} label={uid} size="small" variant="outlined" />
                                 ))}
                             </Stack>
                         </>
                     )}
 
-                    {(group.requests ?? []).length > 0 && (
+                    {requests.length > 0 && (
                         <>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                                 Join Requests
                             </Typography>
                             <Stack spacing={1} sx={{ mb: 2 }}>
-                                {group.requests!.map((uid) => (
+                                {requests.map((uid) => (
                                     <Stack key={uid} direction="row" spacing={1} alignItems="center">
                                         <Avatar
                                             uid={uid}

@@ -92,6 +92,18 @@ export interface ThesisWithGroupContext extends ThesisData {
     department?: string;
     /** Course extracted from the document path */
     course?: string;
+    /** Group leader UID */
+    leader?: string;
+    /** Group member UIDs (excluding leader) */
+    members?: string[];
+    /** Adviser UID */
+    adviser?: string;
+    /** Editor UID */
+    editor?: string;
+    /** Statistician UID */
+    statistician?: string;
+    /** Panel member UIDs */
+    panels?: string[];
 }
 
 export interface ThesisListenerOptions {
@@ -120,7 +132,6 @@ function docToThesisData(docSnap: DocumentSnapshot): ThesisData | null {
         submissionDate: data.submissionDate?.toDate?.() || new Date(),
         lastUpdated: data.lastUpdated?.toDate?.() || new Date(),
         stages: data.stages || [],
-        proposals: data.proposals,
         chapters: data.chapters,
     } as ThesisData;
 }
@@ -801,12 +812,34 @@ export async function findThesisById(thesisId: string): Promise<ThesisWithGroupC
         const data = docToThesisData(docSnap);
         if (!data) return null;
         const params = extractPathParams(docSnap.ref.path);
+
+        // Fetch group to get member information
+        let groupMembers: Pick<ThesisWithGroupContext, 'leader' | 'members' | 'adviser' | 'editor' | 'statistician' | 'panels'> = {};
+        if (params.year && params.department && params.course && params.groupId) {
+            try {
+                const group = await getGroup(params.year, params.department, params.course, params.groupId);
+                if (group) {
+                    groupMembers = {
+                        leader: group.members.leader,
+                        members: group.members.members,
+                        adviser: group.members.adviser,
+                        editor: group.members.editor,
+                        statistician: group.members.statistician,
+                        panels: group.members.panels,
+                    };
+                }
+            } catch (err) {
+                console.warn(`Failed to fetch group ${params.groupId} for thesis ${thesisId}:`, err);
+            }
+        }
+
         return {
             ...data,
             groupId: params.groupId,
             year: params.year,
             department: params.department,
             course: params.course,
+            ...groupMembers,
         };
     }
 
@@ -819,12 +852,34 @@ export async function findThesisById(thesisId: string): Promise<ThesisWithGroupC
     const data = docToThesisData(matchingDoc);
     if (!data) return null;
     const params = extractPathParams(matchingDoc.ref.path);
+
+    // Fetch group to get member information
+    let groupMembers: Pick<ThesisWithGroupContext, 'leader' | 'members' | 'adviser' | 'editor' | 'statistician' | 'panels'> = {};
+    if (params.year && params.department && params.course && params.groupId) {
+        try {
+            const group = await getGroup(params.year, params.department, params.course, params.groupId);
+            if (group) {
+                groupMembers = {
+                    leader: group.members.leader,
+                    members: group.members.members,
+                    adviser: group.members.adviser,
+                    editor: group.members.editor,
+                    statistician: group.members.statistician,
+                    panels: group.members.panels,
+                };
+            }
+        } catch (err) {
+            console.warn(`Failed to fetch group ${params.groupId} for thesis ${thesisId}:`, err);
+        }
+    }
+
     return {
         ...data,
         groupId: params.groupId,
         year: params.year,
         department: params.department,
         course: params.course,
+        ...groupMembers,
     };
 }
 

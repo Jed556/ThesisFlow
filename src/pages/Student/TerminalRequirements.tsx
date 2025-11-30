@@ -693,9 +693,11 @@ export default function TerminalRequirementsPage() {
     if (!thesis) {
         return (
             <AnimatedPage variant="slideUp">
-                <Alert severity="info">
-                    Your terminal requirements will appear here once your thesis record is available.
-                </Alert>
+                <UnauthorizedNotice
+                    title="No thesis record"
+                    description="Your terminal requirements will appear here once your thesis record is available."
+                    variant="box"
+                />
             </AnimatedPage>
         );
     }

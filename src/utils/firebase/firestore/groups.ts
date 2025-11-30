@@ -6,14 +6,14 @@
 
 import {
     collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy,
-    serverTimestamp, writeBatch, onSnapshot, type QueryConstraint, type DocumentReference, type DocumentSnapshot,
+    serverTimestamp, writeBatch, onSnapshot, arrayUnion, arrayRemove, type QueryConstraint, type DocumentReference, type DocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ThesisGroup, ThesisGroupFormData, GroupStatus } from '../../../types/group';
 import type { ThesisData } from '../../../types/thesis';
 import {
     buildGroupsCollectionPath, buildGroupDocPath, GROUPS_SUBCOLLECTION, extractPathParams, DEFAULT_YEAR,
-    getAcademicYear,
+    getAcademicYear, buildInvitesDocPath, buildRequestsDocPath, JOIN_SUBCOLLECTION,
 } from '../../../config/firestore';
 
 // ============================================================================
@@ -34,14 +34,9 @@ function docToThesisGroup(docSnap: DocumentSnapshot): ThesisGroup | null {
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
         updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
         status: data.status || 'draft',
-        expertRequests: data.expertRequests || [],
-        proposals: data.proposals || [],
         thesis: data.thesis,
-        panelComments: data.panelComments || [],
         department: data.department || '',
         course: data.course || '',
-        invites: data.invites || [],
-        requests: data.requests || [],
         rejectionReason: data.rejectionReason,
     } as ThesisGroup;
 }
@@ -91,11 +86,6 @@ export async function createGroup(
         department,
         course,
         thesis: data.thesis || null,
-        expertRequests: [],
-        proposals: [],
-        panelComments: [],
-        invites: [],
-        requests: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
@@ -133,11 +123,6 @@ export async function createGroupWithId(
         department,
         course,
         thesis: data.thesis || null,
-        expertRequests: [],
-        proposals: [],
-        panelComments: [],
-        invites: [],
-        requests: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
@@ -348,21 +333,93 @@ export async function getAllGroupsByPanelMember(panelId: string): Promise<Thesis
 }
 
 /**
- * Get groups with pending invites for a user
+ * Get groups with pending invites for a user.
+ * Queries the join/invites subcollection documents where userIds contains the userId.
  */
 export async function getGroupsWithInviteFor(userId: string): Promise<ThesisGroup[]> {
-    return getAllGroups([
-        where('invites', 'array-contains', userId),
-    ]);
+    // Query join subcollection across all groups using collectionGroup
+    const joinQuery = collectionGroup(firebaseFirestore, JOIN_SUBCOLLECTION);
+    const q = query(joinQuery, where('userIds', 'array-contains', userId));
+    const snapshot = await getDocs(q);
+
+    const groups: ThesisGroup[] = [];
+    for (const docSnap of snapshot.docs) {
+        // Check if this is an invites document
+        if (docSnap.id !== 'invites') continue;
+
+        // Extract group path from document path
+        const pathParams = extractPathParams(docSnap.ref.path);
+        if (!pathParams.groupId) continue;
+
+        // Fetch the parent group
+        const group = await findGroupById(pathParams.groupId);
+        if (group) {
+            groups.push(group);
+        }
+    }
+    return groups;
 }
 
 /**
- * Get groups with pending join requests from a user
+ * Get groups with pending join requests from a user.
+ * Queries the join/requests subcollection documents where userIds contains the userId.
  */
 export async function getGroupsWithRequestFrom(userId: string): Promise<ThesisGroup[]> {
-    return getAllGroups([
-        where('requests', 'array-contains', userId),
-    ]);
+    // Query join subcollection across all groups using collectionGroup
+    const joinQuery = collectionGroup(firebaseFirestore, JOIN_SUBCOLLECTION);
+    const q = query(joinQuery, where('userIds', 'array-contains', userId));
+    const snapshot = await getDocs(q);
+
+    const groups: ThesisGroup[] = [];
+    for (const docSnap of snapshot.docs) {
+        // Check if this is a requests document
+        if (docSnap.id !== 'requests') continue;
+
+        // Extract group path from document path
+        const pathParams = extractPathParams(docSnap.ref.path);
+        if (!pathParams.groupId) continue;
+
+        // Fetch the parent group
+        const group = await findGroupById(pathParams.groupId);
+        if (group) {
+            groups.push(group);
+        }
+    }
+    return groups;
+}
+
+/**
+ * Get invite user IDs for a group
+ */
+export async function getGroupInvites(
+    year: string,
+    department: string,
+    course: string,
+    groupId: string
+): Promise<string[]> {
+    const invitesPath = buildInvitesDocPath(year, department, course, groupId);
+    const invitesRef = doc(firebaseFirestore, invitesPath);
+    const docSnap = await getDoc(invitesRef);
+    if (!docSnap.exists()) return [];
+    const data = docSnap.data();
+    return Array.isArray(data.userIds) ? data.userIds : [];
+}
+
+/**
+ * Get join request user IDs for a group
+ */
+export async function getGroupJoinRequests(
+    year: string,
+    department: string,
+    course: string,
+    groupId: string
+): Promise<string[]> {
+    const requestsPath = buildRequestsDocPath(year, department, course, groupId);
+    const requestsRef = doc(firebaseFirestore, requestsPath);
+    const docSnap = await getDoc(requestsRef);
+    if (!docSnap.exists()) return [];
+    const data = docSnap.data();
+    return Array.isArray(data.userIds) ? data.userIds : [];
 }
 
 // ============================================================================
@@ -623,7 +680,7 @@ export async function removePanelMemberFromGroup(
 }
 
 /**
- * Add invite to group
+ * Add invite to group (uses join/invites subcollection document)
  */
 export async function addGroupInvite(
     year: string,
@@ -632,25 +689,23 @@ export async function addGroupInvite(
     groupId: string,
     userId: string
 ): Promise<void> {
-    const group = await getGroup(year, department, course, groupId);
-    if (!group) throw new Error('Group not found');
+    const invitesPath = buildInvitesDocPath(year, department, course, groupId);
+    const invitesRef = doc(firebaseFirestore, invitesPath);
 
-    const invites = [...(group.invites || [])];
-    if (!invites.includes(userId)) {
-        invites.push(userId);
-    }
-
-    const docPath = buildGroupDocPath(year, department, course, groupId);
-    const docRef = doc(firebaseFirestore, docPath);
-
-    await updateDoc(docRef, {
-        invites,
+    // Use setDoc with merge to create document if it doesn't exist
+    await setDoc(invitesRef, {
+        userIds: arrayUnion(userId),
         updatedAt: serverTimestamp(),
-    });
+    }, { merge: true });
+
+    // Also update the group's updatedAt
+    const groupPath = buildGroupDocPath(year, department, course, groupId);
+    const groupRef = doc(firebaseFirestore, groupPath);
+    await updateDoc(groupRef, { updatedAt: serverTimestamp() });
 }
 
 /**
- * Remove invite from group
+ * Remove invite from group (uses join/invites subcollection document)
  */
 export async function removeGroupInvite(
     year: string,
@@ -659,22 +714,22 @@ export async function removeGroupInvite(
     groupId: string,
     userId: string
 ): Promise<void> {
-    const group = await getGroup(year, department, course, groupId);
-    if (!group) throw new Error('Group not found');
+    const invitesPath = buildInvitesDocPath(year, department, course, groupId);
+    const invitesRef = doc(firebaseFirestore, invitesPath);
 
-    const invites = (group.invites || []).filter((i) => i !== userId);
-
-    const docPath = buildGroupDocPath(year, department, course, groupId);
-    const docRef = doc(firebaseFirestore, docPath);
-
-    await updateDoc(docRef, {
-        invites,
+    await updateDoc(invitesRef, {
+        userIds: arrayRemove(userId),
         updatedAt: serverTimestamp(),
     });
+
+    // Also update the group's updatedAt
+    const groupPath = buildGroupDocPath(year, department, course, groupId);
+    const groupRef = doc(firebaseFirestore, groupPath);
+    await updateDoc(groupRef, { updatedAt: serverTimestamp() });
 }
 
 /**
- * Add join request to group
+ * Add join request to group (uses join/requests subcollection document)
  */
 export async function addGroupJoinRequest(
     year: string,
@@ -683,25 +738,23 @@ export async function addGroupJoinRequest(
     groupId: string,
     userId: string
 ): Promise<void> {
-    const group = await getGroup(year, department, course, groupId);
-    if (!group) throw new Error('Group not found');
+    const requestsPath = buildRequestsDocPath(year, department, course, groupId);
+    const requestsRef = doc(firebaseFirestore, requestsPath);
 
-    const requests = [...(group.requests || [])];
-    if (!requests.includes(userId)) {
-        requests.push(userId);
-    }
-
-    const docPath = buildGroupDocPath(year, department, course, groupId);
-    const docRef = doc(firebaseFirestore, docPath);
-
-    await updateDoc(docRef, {
-        requests,
+    // Use setDoc with merge to create document if it doesn't exist
+    await setDoc(requestsRef, {
+        userIds: arrayUnion(userId),
         updatedAt: serverTimestamp(),
-    });
+    }, { merge: true });
+
+    // Also update the group's updatedAt
+    const groupPath = buildGroupDocPath(year, department, course, groupId);
+    const groupRef = doc(firebaseFirestore, groupPath);
+    await updateDoc(groupRef, { updatedAt: serverTimestamp() });
 }
 
 /**
- * Remove join request from group
+ * Remove join request from group (uses join/requests subcollection document)
  */
 export async function removeGroupJoinRequest(
     year: string,
@@ -710,18 +763,18 @@ export async function removeGroupJoinRequest(
     groupId: string,
     userId: string
 ): Promise<void> {
-    const group = await getGroup(year, department, course, groupId);
-    if (!group) throw new Error('Group not found');
+    const requestsPath = buildRequestsDocPath(year, department, course, groupId);
+    const requestsRef = doc(firebaseFirestore, requestsPath);
 
-    const requests = (group.requests || []).filter((r) => r !== userId);
-
-    const docPath = buildGroupDocPath(year, department, course, groupId);
-    const docRef = doc(firebaseFirestore, docPath);
-
-    await updateDoc(docRef, {
-        requests,
+    await updateDoc(requestsRef, {
+        userIds: arrayRemove(userId),
         updatedAt: serverTimestamp(),
     });
+
+    // Also update the group's updatedAt
+    const groupPath = buildGroupDocPath(year, department, course, groupId);
+    const groupRef = doc(firebaseFirestore, groupPath);
+    await updateDoc(groupRef, { updatedAt: serverTimestamp() });
 }
 
 // ============================================================================
@@ -1128,20 +1181,17 @@ export async function getGroupDepartments(): Promise<string[]> {
 
 /**
  * Get all proposals from all groups.
+ * NOTE: This function is deprecated. Use listenAllTopicProposals from topicProposals.ts instead
+ * as proposals are now stored in subcollections.
  *
- * @returns Array of all proposals with their group context
+ * @deprecated Use topicProposals.ts functions to query proposals subcollection
+ * @returns Empty array - proposals are now in subcollections
  */
 export async function getAllProposalsFromGroups(): Promise<
     { groupId: string; proposal: unknown }[]
 > {
-    const groups = await getAllGroups();
-    const proposals: { groupId: string; proposal: unknown }[] = [];
-    for (const group of groups) {
-        for (const proposal of group.proposals || []) {
-            proposals.push({ groupId: group.id, proposal });
-        }
-    }
-    return proposals;
+    console.warn('getAllProposalsFromGroups is deprecated. Proposals are now stored in subcollections. Use topicProposals.ts functions instead.');
+    return [];
 }
 
 /**

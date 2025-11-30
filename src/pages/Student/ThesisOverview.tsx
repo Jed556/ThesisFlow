@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Alert, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
+import { Alert, Skeleton, Stack, Typography } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
@@ -11,9 +11,7 @@ import type { WorkspaceUploadPayload } from '../../types/workspace';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
-import {
-    listenThesesForParticipant, getThesisTeamMembers, type ThesisContext
-} from '../../utils/firebase/firestore/thesis';
+import { listenThesesForParticipant, getThesisTeamMembers, type ThesisContext } from '../../utils/firebase/firestore/thesis';
 import { createSubmission, type SubmissionContext } from '../../utils/firebase/firestore/submissions';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
 import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
@@ -312,13 +310,11 @@ export default function StudentThesisOverviewPage() {
                     <Skeleton variant="rounded" height={420} />
                 </Stack>
             ) : !thesis ? (
-                <Card>
-                    <CardContent>
-                        <Typography variant="body2" color="text.secondary">
-                            Your thesis workspace will appear here once your research group is approved.
-                        </Typography>
-                    </CardContent>
-                </Card>
+                <UnauthorizedNotice
+                    title="Pending group approval"
+                    description="Your thesis workspace will appear here once your research group is approved."
+                    variant="box"
+                />
             ) : !group?.members?.adviser ? (
                 <UnauthorizedNotice
                     title="Assign a research adviser to continue"

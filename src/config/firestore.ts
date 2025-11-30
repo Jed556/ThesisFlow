@@ -10,6 +10,10 @@
  * year/{year}/departments/{department}/courses/{course}/groups/{group}
  *   ├── expertRequests/{request}
  *   ├── proposals/{proposal}
+ *   ├── panelComments/{comment}
+ *   ├── join/
+ *   │   ├── invites (document with userIds array)
+ *   │   └── requests (document with userIds array)
  *   ├── thesis/{thesis}
  *   │   └── stages/{stage}/chapters/{chapter}
  *   │       └── submissions/{submission}/chats/{chat}
@@ -88,6 +92,15 @@ export const AUDITS_SUBCOLLECTION = 'audits';
 
 /** Panel comments subcollection under group */
 export const PANEL_COMMENTS_SUBCOLLECTION = 'panelComments';
+
+/** Join subcollection under group (contains invites and requests documents) */
+export const JOIN_SUBCOLLECTION = 'join';
+
+/** Invites document ID under join subcollection */
+export const INVITES_DOC = 'invites';
+
+/** Requests document ID under join subcollection */
+export const REQUESTS_DOC = 'requests';
 
 /** Terminal requirements subcollection under stage */
 export const TERMINAL_SUBCOLLECTION = 'terminal';
@@ -207,6 +220,37 @@ export function buildExpertRequestDocPath(
     year: string, department: string, course: string, groupId: string, requestId: string
 ): string {
     return `${buildExpertRequestsCollectionPath(year, department, course, groupId)}/${requestId}`;
+}
+
+// ============================================================================
+// Join (Invites/Requests) Path Builders
+// ============================================================================
+
+/**
+ * Build path to join subcollection under a group
+ */
+export function buildJoinCollectionPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildGroupDocPath(year, department, course, groupId)}/${JOIN_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to invites document under join subcollection
+ */
+export function buildInvitesDocPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildJoinCollectionPath(year, department, course, groupId)}/${INVITES_DOC}`;
+}
+
+/**
+ * Build path to requests document under join subcollection
+ */
+export function buildRequestsDocPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildJoinCollectionPath(year, department, course, groupId)}/${REQUESTS_DOC}`;
 }
 
 // ============================================================================

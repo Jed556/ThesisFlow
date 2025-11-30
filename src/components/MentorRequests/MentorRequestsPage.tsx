@@ -7,18 +7,16 @@ import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
 import type { ExpertRequest, MentorRequestRole } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
-import type { ThesisData } from '../../types/thesis';
 import type { Session } from '../../types/session';
 import type { UserProfile, UserRole } from '../../types/profile';
 import { AnimatedPage } from '../Animate';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
-import { findGroupById } from '../../utils/firebase/firestore/groups';
+import { findGroupById, listenGroupsByMentorRole } from '../../utils/firebase/firestore/groups';
 import { listenMentorRequestsByMentor } from '../../utils/firebase/firestore/mentorRequests';
-import { listenThesesForMentor, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { findUsersByIds, onUserProfile, updateUserProfile } from '../../utils/firebase/firestore/user';
 import MentorRequestCard from './MentorRequestCard';
-import { filterActiveMentorTheses } from '../../utils/mentorProfileUtils';
+import { filterActiveGroups } from '../../utils/mentorProfileUtils';
 
 interface MentorRequestViewModel {
     request: ExpertRequest;
@@ -163,11 +161,11 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     const [capacityError, setCapacityError] = React.useState<string | null>(null);
     const [capacitySaving, setCapacitySaving] = React.useState(false);
     const [editingCapacity, setEditingCapacity] = React.useState(false);
-    const [assignments, setAssignments] = React.useState<(ThesisData & { id: string })[]>([]);
+    const [assignments, setAssignments] = React.useState<ThesisGroup[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(false);
 
     const activeAssignments = React.useMemo(
-        () => filterActiveMentorTheses(assignments),
+        () => filterActiveGroups(assignments),
         [assignments]
     );
     const minimumCapacity = activeAssignments.length;
@@ -248,9 +246,9 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
         }
 
         setAssignmentsLoading(true);
-        const unsubscribe = listenThesesForMentor(mentorUid, {
-            onData: (records: ThesisRecord[]) => {
-                setAssignments(records);
+        const unsubscribe = listenGroupsByMentorRole(role, mentorUid, {
+            onData: (groups: ThesisGroup[]) => {
+                setAssignments(groups);
                 setAssignmentsLoading(false);
             },
             onError: (listenerError: Error) => {

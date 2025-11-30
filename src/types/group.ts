@@ -1,5 +1,3 @@
-import type { ExpertRequest } from './expertRequest';
-import type { TopicProposalSet } from './proposal';
 import type { ThesisData } from './thesis';
 
 /**
@@ -18,16 +16,9 @@ export interface ThesisGroup {
     createdAt: string;
     updatedAt: string;
     status: GroupStatus;
-    expertRequests?: ExpertRequest[]; // Array of ExpertRequest IDs
-    proposals?: TopicProposalSet[];
     thesis?: ThesisData;
-    panelComments?: string[];
     department?: string;
     course?: string;
-    /** Pending invites to other students (array of UIDs) */
-    invites?: string[];
-    /** Incoming join requests from students (array of UIDs) */
-    requests?: string[];
     /** Rejection reason (only populated when status is 'rejected') */
     rejectionReason?: string;
 }

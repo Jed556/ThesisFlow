@@ -1,6 +1,5 @@
 import type { FileAttachment } from './file';
 import type { UserRole } from './profile';
-import type { TopicProposalSet } from './proposal';
 
 
 /**
@@ -138,7 +137,6 @@ export interface ThesisData {
     submissionDate: Date | string;
     lastUpdated: Date | string;
     stages: ThesisStage[];
-    proposals?: TopicProposalSet;
     chapters?: ThesisChapter[];
 }
 

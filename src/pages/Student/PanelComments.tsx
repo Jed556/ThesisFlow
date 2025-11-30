@@ -19,7 +19,7 @@ import {
     listenPanelCommentEntries, listenPanelCommentRelease,
     updatePanelCommentStudentFields, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
-import { findGroupById } from '../../utils/firebase/firestore/groups';
+import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
@@ -103,6 +103,7 @@ export default function StudentPanelCommentsPage() {
     React.useEffect(() => {
         if (!userUid) {
             setThesis(null);
+            setGroup(null);
             setThesisLoading(false);
             setThesisError(null);
             return;
@@ -110,24 +111,35 @@ export default function StudentPanelCommentsPage() {
 
         setThesisLoading(true);
         setThesisError(null);
-        const unsubscribe = listenThesesForParticipant(userUid, {
-            onData: (records) => {
-                const preferred = records.find((record) => record.leader === userUid) ?? records[0] ?? null;
-                setThesis(preferred ?? null);
+
+        // Load group first, then get thesis from group context
+        (async () => {
+            try {
+                // Try to find group where user is leader first, then as member
+                const leaderGroups = await getGroupsByLeader(userUid);
+                const memberGroups = await getGroupsByMember(userUid);
+                const allGroups = [...leaderGroups, ...memberGroups];
+                // Prefer group where user is leader
+                const preferredGroup = allGroups.find((g) => g.members.leader === userUid) ?? allGroups[0] ?? null;
+                setGroup(preferredGroup);
+
+                if (preferredGroup?.thesis) {
+                    setThesis({ ...preferredGroup.thesis, id: preferredGroup.thesis.id ?? preferredGroup.id });
+                } else {
+                    setThesis(null);
+                }
                 setThesisLoading(false);
-            },
-            onError: (error) => {
+            } catch (error) {
                 console.error('Failed to fetch thesis for panel comments:', error);
                 setThesis(null);
+                setGroup(null);
                 setThesisLoading(false);
                 setThesisError('Unable to load your thesis record right now.');
-            },
-        });
-
-        return () => unsubscribe();
+            }
+        })();
     }, [userUid]);
 
-    const groupId = thesis?.groupId ?? null;
+    const groupId = group?.id ?? null;
 
     React.useEffect(() => {
         if (!panelCommentCtx) {
@@ -367,9 +379,11 @@ export default function StudentPanelCommentsPage() {
     if (!thesis || !groupId) {
         return (
             <AnimatedPage variant="slideUp">
-                <Alert severity="info">
-                    Panel comment sheets will appear here once your thesis record and group are active.
-                </Alert>
+                <UnauthorizedNotice
+                    title="Thesis record unavailable"
+                    description="Panel comment sheets will appear here once your thesis record and group are active."
+                    variant="box"
+                />
             </AnimatedPage>
         );
     }

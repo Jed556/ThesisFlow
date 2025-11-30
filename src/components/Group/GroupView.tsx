@@ -8,7 +8,7 @@ import { formatDateShort } from '../../utils/dateUtils';
 import type { ThesisGroup } from '../../types/group';
 import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
-import { findGroupById } from '../../utils/firebase/firestore/groups';
+import { findGroupById, getGroupInvites, getGroupJoinRequests } from '../../utils/firebase/firestore/groups';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import { findThesisById } from '../../utils/firebase/firestore/thesis';
 import Avatar from '../Avatar';
@@ -16,6 +16,8 @@ import { GROUP_STATUS_COLORS, formatGroupStatus } from './constants';
 
 export interface GroupViewHeaderContext {
     group: ThesisGroup | null;
+    invites: string[];
+    requests: string[];
     loading: boolean;
     error: string | null;
 }
@@ -35,6 +37,8 @@ interface GroupState {
     group: ThesisGroup | null;
     thesis: ThesisData | null;
     profiles: Map<string, UserProfile>;
+    invites: string[];
+    requests: string[];
     loading: boolean;
     error: string | null;
 }
@@ -69,7 +73,7 @@ function buildUserName(profile?: UserProfile | null, fallback?: string) {
     return parts.join(' ');
 }
 
-function collectGroupUids(group: ThesisGroup): string[] {
+function collectGroupUids(group: ThesisGroup, invites: string[], requests: string[]): string[] {
     const registry = new Set<string>();
     const { members } = group;
     if (members.leader) registry.add(members.leader);
@@ -78,8 +82,8 @@ function collectGroupUids(group: ThesisGroup): string[] {
     if (members.editor) registry.add(members.editor);
     if (members.statistician) registry.add(members.statistician);
     members.panels?.forEach((uid) => registry.add(uid));
-    group.invites?.forEach((uid) => registry.add(uid));
-    group.requests?.forEach((uid) => registry.add(uid));
+    invites.forEach((uid) => registry.add(uid));
+    requests.forEach((uid) => registry.add(uid));
     return Array.from(registry);
 }
 
@@ -146,16 +150,26 @@ function InfoList({ title, entries }: { title: string; entries: { label: string;
 
 async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Omit<GroupState, 'loading'>> {
     if (!groupId) {
-        return { group: null, thesis: null, profiles: new Map(), error: 'Missing group ID.' };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: 'Missing group ID.' };
     }
     const group = await findGroupById(groupId);
     if (!group) {
-        return { group: null, thesis: null, profiles: new Map(), error: 'Group not found.' };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: 'Group not found.' };
     }
     if (signal.aborted) {
-        return { group: null, thesis: null, profiles: new Map(), error: null };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
     }
-    const profileIds = collectGroupUids(group);
+
+    // Fetch invites and requests from join subcollection
+    const [invites, requests] = await Promise.all([
+        getGroupInvites(group.year, group.department, group.course, group.id),
+        getGroupJoinRequests(group.year, group.department, group.course, group.id),
+    ]);
+    if (signal.aborted) {
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
+    }
+
+    const profileIds = collectGroupUids(group, invites, requests);
     const [profiles, thesisRecord] = await Promise.all([
         profileIds.length > 0
             ? findUsersByIds(profileIds)
@@ -171,12 +185,14 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
             : Promise.resolve(group.thesis ?? null),
     ]);
     if (signal.aborted) {
-        return { group: null, thesis: null, profiles: new Map(), error: null };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
     }
     return {
         group,
         thesis: thesisRecord,
         profiles: new Map(profiles.map((profile) => [profile.uid, profile])),
+        invites,
+        requests,
         error: null,
     };
 }
@@ -186,6 +202,8 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         group: null,
         thesis: null,
         profiles: new Map(),
+        invites: [],
+        requests: [],
         loading: true,
         error: null,
     }));
@@ -226,9 +244,9 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         return <Alert severity="info">Group not found.</Alert>;
     }
 
-    const { group, thesis, profiles } = state;
+    const { group, thesis, profiles, invites, requests } = state;
     const resolvedHeaderActions = typeof headerActions === 'function'
-        ? headerActions({ group, loading: state.loading, error: state.error })
+        ? headerActions({ group, invites, requests, loading: state.loading, error: state.error })
         : headerActions;
     const thesisTitle = thesis?.title ?? group.thesis?.title ?? '—';
     const thesisIdDisplay = group.thesis?.id ?? thesis?.id ?? '—';
@@ -275,8 +293,8 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         label: `Panel ${index + 1}`,
     }));
 
-    const inviteEntries: PersonEntry[] = (group.invites ?? []).map((uid) => ({ uid, label: 'Invite Pending' }));
-    const requestEntries: PersonEntry[] = (group.requests ?? []).map((uid) => ({ uid, label: 'Join Request' }));
+    const inviteEntries: PersonEntry[] = invites.map((uid) => ({ uid, label: 'Invite Pending' }));
+    const requestEntries: PersonEntry[] = requests.map((uid) => ({ uid, label: 'Join Request' }));
 
     return (
         <Stack spacing={3}>
