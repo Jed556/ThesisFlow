@@ -4,23 +4,11 @@
  * year/{year}/departments/{department}/courses/{course}/groups/{groupId}/thesis/{thesisId}/stages/{stage}
  */
 
-import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    updateDoc,
-    serverTimestamp,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ThesisStageName } from '../../../types/thesis';
-import {
-    buildStagesCollectionPath,
-    buildStageDocPath,
-    THESIS_STAGE_SLUGS,
-    type ThesisStageSlug,
-} from '../../../config/firestore';
+import { THESIS_STAGE_SLUGS, type ThesisStageSlug } from '../../../config/firestore';
+import { buildStageDocPath, buildStagesCollectionPath } from './paths';
 
 // ============================================================================
 // Types

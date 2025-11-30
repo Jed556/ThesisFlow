@@ -1,14 +1,14 @@
 import {
-    doc, setDoc, onSnapshot, collection, query, where, getDocs, getDoc,
-    deleteDoc, writeBatch, type QueryConstraint, type QuerySnapshot,
-    type DocumentData, serverTimestamp, collectionGroup,
+    doc, setDoc, onSnapshot, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch,
+    type QueryConstraint, type QuerySnapshot, type DocumentData, serverTimestamp, collectionGroup,
 } from 'firebase/firestore';
 import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
 import { cleanData } from './firestore';
+import { USERS_SUBCOLLECTION } from '../../../config/firestore';
 import {
     buildCourseUsersCollectionPath, buildCourseUserDocPath, buildDepartmentUsersCollectionPath,
-    buildDepartmentUserDocPath, buildYearUsersCollectionPath, buildYearUserDocPath, USERS_SUBCOLLECTION,
-} from '../../../config/firestore';
+    buildDepartmentUserDocPath, buildYearUsersCollectionPath, buildYearUserDocPath,
+} from './paths';
 
 import type { UserProfile, UserRole } from '../../../types/profile';
 

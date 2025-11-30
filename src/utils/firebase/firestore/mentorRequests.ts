@@ -5,38 +5,16 @@
  */
 
 import {
-    collection,
-    collectionGroup,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    where,
-    orderBy,
-    limit,
-    serverTimestamp,
-    onSnapshot,
-    writeBatch,
-    type QueryConstraint,
-    type DocumentReference,
-    type DocumentSnapshot,
-    type QueryDocumentSnapshot,
-    type DocumentData,
+    collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+    query, where, orderBy, limit, serverTimestamp, onSnapshot, writeBatch,
+    type QueryConstraint, type DocumentReference, type DocumentSnapshot, type QueryDocumentSnapshot, type DocumentData
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { createTimestamp, normalizeTimestamp } from '../../dateUtils';
 import type { ExpertRequest, ExpertRequestStatus } from '../../../types/expertRequest';
 import type { UserRole } from '../../../types/profile';
-import {
-    buildExpertRequestsCollectionPath,
-    buildExpertRequestDocPath,
-    EXPERT_REQUESTS_SUBCOLLECTION,
-    GROUPS_SUBCOLLECTION,
-    extractPathParams,
-} from '../../../config/firestore';
+import { EXPERT_REQUESTS_SUBCOLLECTION, GROUPS_SUBCOLLECTION } from '../../../config/firestore';
+import { buildExpertRequestsCollectionPath, buildExpertRequestDocPath, extractPathParams } from './paths';
 
 // ============================================================================
 // Types

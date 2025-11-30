@@ -5,39 +5,14 @@
  */
 
 import {
-    collection,
-    collectionGroup,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    orderBy,
-    serverTimestamp,
-    onSnapshot,
-    writeBatch,
-    type QueryConstraint,
-    type DocumentReference,
-    type DocumentSnapshot,
-    type QueryDocumentSnapshot,
-    type DocumentData,
-    type Timestamp,
+    collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy,
+    serverTimestamp, onSnapshot, writeBatch, type QueryConstraint, type DocumentReference,
+    type DocumentSnapshot, type QueryDocumentSnapshot, type DocumentData, type Timestamp,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type {
-    TopicProposalEntry,
-    TopicProposalSet,
-    TopicProposalReviewEvent,
-} from '../../../types/proposal';
-import {
-    buildProposalsCollectionPath,
-    buildProposalDocPath,
-    PROPOSALS_SUBCOLLECTION,
-    GROUPS_SUBCOLLECTION,
-    extractPathParams,
-} from '../../../config/firestore';
+import type { TopicProposalEntry, TopicProposalSet, TopicProposalReviewEvent } from '../../../types/proposal';
+import { PROPOSALS_SUBCOLLECTION, GROUPS_SUBCOLLECTION } from '../../../config/firestore';
+import { buildProposalsCollectionPath, buildProposalDocPath, extractPathParams } from './paths';
 
 // ============================================================================
 // Types

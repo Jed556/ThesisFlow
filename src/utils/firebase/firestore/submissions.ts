@@ -10,7 +10,8 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ChapterSubmission } from '../../../types/thesis';
-import { buildSubmissionsCollectionPath, buildSubmissionDocPath, SUBMISSIONS_SUBCOLLECTION } from '../../../config/firestore';
+import { SUBMISSIONS_SUBCOLLECTION } from '../../../config/firestore';
+import { buildSubmissionDocPath, buildSubmissionsCollectionPath } from './paths';
 
 // ============================================================================
 // Types

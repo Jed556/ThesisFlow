@@ -11,23 +11,8 @@
  */
 
 import {
-    collection,
-    collectionGroup,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    where,
-    orderBy,
-    serverTimestamp,
-    writeBatch,
-    onSnapshot,
-    type QueryConstraint,
-    type DocumentReference,
-    type DocumentSnapshot,
+    collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy,
+    serverTimestamp, writeBatch, onSnapshot, type QueryConstraint, type DocumentReference, type DocumentSnapshot
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
@@ -35,14 +20,8 @@ import { findUserById, findUsersByIds } from './user';
 import { getGroup } from './groups';
 import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
-import {
-    buildThesisCollectionPath,
-    buildThesisDocPath,
-    THESIS_SUBCOLLECTION,
-    GROUPS_SUBCOLLECTION,
-    extractPathParams,
-    DEFAULT_YEAR,
-} from '../../../config/firestore';
+import { THESIS_SUBCOLLECTION, GROUPS_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
+import { buildThesisCollectionPath, buildThesisDocPath, extractPathParams } from './paths';
 
 // Re-export from specialized modules for backward compatibility
 export * from './stages';

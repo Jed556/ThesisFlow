@@ -12,20 +12,10 @@ import {
     query, orderBy, serverTimestamp, writeBatch, onSnapshot, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type {
-    ThesisChapter,
-    ThesisData,
-    ThesisStatus,
-    MentorRole,
-    MentorApprovalState,
-} from '../../../types/thesis';
+import type { ThesisChapter, ThesisData, ThesisStatus, MentorRole, MentorApprovalState } from '../../../types/thesis';
 import type { WorkspaceChapterDecision } from '../../../types/workspace';
-import {
-    buildChaptersCollectionPath,
-    buildChapterDocPath,
-    buildThesisDocPath,
-    CHAPTERS_SUBCOLLECTION,
-} from '../../../config/firestore';
+import { CHAPTERS_SUBCOLLECTION } from '../../../config/firestore';
+import { buildChaptersCollectionPath, buildChapterDocPath, buildThesisDocPath } from './paths';
 
 // ============================================================================
 // Types

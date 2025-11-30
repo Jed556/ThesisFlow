@@ -18,7 +18,7 @@ import type { UserProfile } from '../../../../types/profile';
 import {
     findAllUsers, getAllGroups, createGroup, updateGroupById, setGroupById, findUsersByFilter,
 } from '../../../../utils/firebase/firestore';
-import { getAcademicYear } from '../../../../config/firestore';
+import { getAcademicYear } from '../../../../utils/dateUtils';
 import { importGroupsFromCsv, exportGroupsToCsv } from '../../../../utils/csv/group';
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../../hooks/useBackgroundJobs';
 import GroupCard from '../../../../components/Group/GroupCard';

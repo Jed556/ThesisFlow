@@ -10,12 +10,10 @@ import { DEFAULT_CHAPTER_STAGE, normalizeChapterOrder } from '../../chapterUtils
 import { templatesToThesisChapters } from '../../thesisChapterTemplates';
 import { getGroupsInCourse } from './groups';
 import {
-    FIRESTORE_IN_QUERY_LIMIT, FIRESTORE_BATCH_WRITE_LIMIT,
-    CONFIGURATION_ROOT, COURSES_SUBCOLLECTION, CHAPTERS_SUBCOLLECTION,
-    THESIS_SUBCOLLECTION,
-    buildConfigDepartmentPath, buildConfigCoursePath, buildChapterConfigsPath,
-    DEFAULT_YEAR,
+    FIRESTORE_IN_QUERY_LIMIT, FIRESTORE_BATCH_WRITE_LIMIT, CONFIGURATION_ROOT,
+    COURSES_SUBCOLLECTION, CHAPTERS_SUBCOLLECTION, THESIS_SUBCOLLECTION, DEFAULT_YEAR
 } from '../../../config/firestore';
+import { buildConfigDepartmentPath, buildConfigCoursePath, buildChapterConfigsPath } from './paths';
 
 /**
  * Generate a sanitized ID for Firestore paths

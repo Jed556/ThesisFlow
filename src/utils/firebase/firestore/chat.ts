@@ -10,28 +10,13 @@
  */
 
 import {
-    collection,
-    collectionGroup,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    orderBy,
-    serverTimestamp,
-    onSnapshot,
-    type QueryConstraint,
+    collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc,
+    deleteDoc, query, orderBy, serverTimestamp, onSnapshot, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ThesisComment, ThesisData, ThesisChapter } from '../../../types/thesis';
-import {
-    buildChatsCollectionPath,
-    buildChatDocPath,
-    buildThesisDocPath,
-    CHATS_SUBCOLLECTION,
-} from '../../../config/firestore';
+import { CHATS_SUBCOLLECTION } from '../../../config/firestore';
+import { buildChatsCollectionPath, buildChatDocPath, buildThesisDocPath } from './paths';
 
 // ============================================================================
 // Types

@@ -14,23 +14,15 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
-import {
-    buildTerminalCollectionPath, buildTerminalDocPath,
-    buildTerminalRequirementsPath, THESIS_STAGE_SLUGS,
-    TERMINAL_SUBCOLLECTION, extractPathParams, DEFAULT_YEAR,
-} from '../../../config/firestore';
+import { THESIS_STAGE_SLUGS, TERMINAL_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
+import { buildTerminalCollectionPath, buildTerminalDocPath, buildTerminalRequirementsPath, extractPathParams } from './paths';
 import type { ThesisStageName } from '../../../types/thesis';
+import type { TerminalRequirement, TerminalRequirementProgress, TerminalRequirementStatus } from '../../../types/terminalRequirement';
+import type { TerminalRequirementConfigDocument, TerminalRequirementConfigEntry } from '../../../types/terminalRequirementConfig';
 import type {
-    TerminalRequirement, TerminalRequirementProgress, TerminalRequirementStatus,
-} from '../../../types/terminalRequirement';
-import type {
-    TerminalRequirementConfigDocument, TerminalRequirementConfigEntry,
-} from '../../../types/terminalRequirementConfig';
-import type {
-    TerminalRequirementApprovalRole, TerminalRequirementApprovalState,
-    TerminalRequirementApprovalStatus, TerminalRequirementApproverAssignments,
-    TerminalRequirementSubmissionHistoryEntry, TerminalRequirementSubmissionRecord,
-    TerminalRequirementSubmissionStatus,
+    TerminalRequirementApprovalRole, TerminalRequirementApprovalState, TerminalRequirementApprovalStatus,
+    TerminalRequirementApproverAssignments, TerminalRequirementSubmissionHistoryEntry,
+    TerminalRequirementSubmissionRecord, TerminalRequirementSubmissionStatus,
 } from '../../../types/terminalRequirementSubmission';
 
 // ============================================================================

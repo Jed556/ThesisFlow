@@ -17,7 +17,7 @@ import {
     findAllUsers, findUserById, findUserByEmail, setUserProfile, updateUserProfile,
     deleteUserProfile, createPersonalCalendar,
 } from '../../../utils/firebase/firestore';
-import { getAcademicYear } from '../../../config/firestore';
+import { getAcademicYear } from '../../../utils/dateUtils';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../../utils/csv/user';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../../utils/avatarUtils';

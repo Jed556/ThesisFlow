@@ -4,9 +4,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
-import {
-    buildPanelCommentEntriesCollectionPath, buildPanelCommentEntryDocPath, buildPanelCommentDocPath
-} from '../../../config/firestore';
+import { buildPanelCommentEntriesCollectionPath, buildPanelCommentEntryDocPath, buildPanelCommentDocPath } from './paths';
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentEntry, type PanelCommentEntryInput,
     type PanelCommentEntryUpdate, type PanelCommentReleaseMap, type PanelCommentStage, type PanelCommentStudentUpdate,

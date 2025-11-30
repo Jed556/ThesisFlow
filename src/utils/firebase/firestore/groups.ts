@@ -5,16 +5,18 @@
  */
 
 import {
-    collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy,
-    serverTimestamp, writeBatch, onSnapshot, arrayUnion, arrayRemove, type QueryConstraint, type DocumentReference, type DocumentSnapshot,
+    collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query,
+    where, orderBy, serverTimestamp, writeBatch, onSnapshot, arrayUnion, arrayRemove,
+    type QueryConstraint, type DocumentReference, type DocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ThesisGroup, ThesisGroupFormData, GroupStatus } from '../../../types/group';
 import type { ThesisData } from '../../../types/thesis';
 import {
-    buildGroupsCollectionPath, buildGroupDocPath, GROUPS_SUBCOLLECTION, extractPathParams, DEFAULT_YEAR,
-    getAcademicYear, buildInvitesDocPath, buildRequestsDocPath, JOIN_SUBCOLLECTION,
-} from '../../../config/firestore';
+    buildGroupsCollectionPath, buildGroupDocPath, extractPathParams, buildInvitesDocPath, buildRequestsDocPath
+} from './paths';
+import { DEFAULT_YEAR, GROUPS_SUBCOLLECTION, JOIN_SUBCOLLECTION } from '../../../config/firestore';
+import { getAcademicYear } from '../../../utils/dateUtils';
 
 // ============================================================================
 // Helper Functions
@@ -1177,21 +1179,6 @@ export async function getGroupDepartments(): Promise<string[]> {
         }
     }
     return Array.from(departments);
-}
-
-/**
- * Get all proposals from all groups.
- * NOTE: This function is deprecated. Use listenAllTopicProposals from topicProposals.ts instead
- * as proposals are now stored in subcollections.
- *
- * @deprecated Use topicProposals.ts functions to query proposals subcollection
- * @returns Empty array - proposals are now in subcollections
- */
-export async function getAllProposalsFromGroups(): Promise<
-    { groupId: string; proposal: unknown }[]
-> {
-    console.warn('getAllProposalsFromGroups is deprecated. Proposals are now stored in subcollections. Use topicProposals.ts functions instead.');
-    return [];
 }
 
 /**
