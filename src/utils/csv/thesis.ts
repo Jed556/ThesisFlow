@@ -1,5 +1,10 @@
 /**
  * CSV import/export for Thesis Data
+ * 
+ * Note: Chapters are now stored as subcollections in Firestore.
+ * This CSV format is preserved for backward compatibility with existing exports.
+ * When importing, chapters from CSV should be written to the chapters subcollection
+ * rather than embedded in the thesis document.
  */
 
 import type { ChapterSubmissionEntry, ThesisChapter } from '../../types/thesis';
@@ -7,6 +12,8 @@ import { parseCsvText, normalizeHeader, mapHeaderIndexes, splitArrayField, gener
 
 /**
  * Import theses from CSV text
+ * Note: chapters field is for migration purposes only.
+ * In Firestore, chapters should be stored in subcollections.
  */
 export interface ThesisCsvRow {
     title: string;
@@ -18,6 +25,7 @@ export interface ThesisCsvRow {
     submissionDate: string;
     lastUpdated: string;
     overallStatus: string;
+    /** @deprecated Chapters are now stored in subcollections. This field is for CSV migration only. */
     chapters: ThesisChapter[];
 }
 

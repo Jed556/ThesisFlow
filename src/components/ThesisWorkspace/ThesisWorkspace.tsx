@@ -14,20 +14,15 @@ import { thesisCommentToChatMessage } from '../../utils/chatUtils';
 import { listenFilesForChapter, type FileQueryContext } from '../../utils/firebase/firestore/file';
 import { listenSubmissionsForChapter, type SubmissionContext } from '../../utils/firebase/firestore/submissions';
 import { listenThesisDocument, type ThesisDocumentContext } from '../../utils/firebase/firestore/thesis';
+import { listenChaptersForStage, getThesisChaptersForCourse, type ChapterContext } from '../../utils/firebase/firestore/chapters';
+import { THESIS_STAGE_SLUGS } from '../../config/firestore';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getAssignedExpertRoles, resolveChapterExpertApprovals } from '../../utils/expertUtils';
 import { normalizeChapterSubmissions, normalizeSubmissionEntry } from '../../utils/chapterSubmissionUtils';
 import ChapterRail, { buildVersionOptions, formatChapterLabel } from './ChapterRail';
 import {
-    buildSequentialStageLockMap,
-    buildStageCompletionMap,
-    buildInterleavedStageLockMap,
-    chapterHasStage,
-    resolveChapterStage,
-    describeStageSequenceStep,
-    getPreviousSequenceStep,
-    THESIS_STAGE_METADATA,
-    type StageGateOverrides,
+    buildSequentialStageLockMap, buildStageCompletionMap, buildInterleavedStageLockMap, chapterHasStage,
+    resolveChapterStage, describeStageSequenceStep, getPreviousSequenceStep, THESIS_STAGE_METADATA, type StageGateOverrides,
 } from '../../utils/thesisStageUtils';
 
 interface ThesisWorkspaceProps {
@@ -125,6 +120,8 @@ export default function ThesisWorkspace({
     const [isSubmittingDecision, setIsSubmittingDecision] = React.useState(false);
     const [activeStage, setActiveStage] = React.useState<ThesisStageName>(THESIS_STAGE_METADATA[0].value);
     const [liveThesis, setLiveThesis] = React.useState<ThesisData | null>(null);
+    const [liveChapters, setLiveChapters] = React.useState<ThesisChapter[]>([]);
+    const [templateChapters, setTemplateChapters] = React.useState<ThesisChapter[]>([]);
 
     React.useEffect(() => {
         setChapterFiles({});
@@ -132,7 +129,36 @@ export default function ThesisWorkspace({
         setIsFetchingChapterFiles(false);
         setChapterSubmissionEntries({});
         setLiveThesis(null);
+        setLiveChapters([]);
+        setTemplateChapters([]);
     }, [thesisId]);
+
+    // Load chapter templates from configuration as fallback when chapters subcollection is empty
+    React.useEffect(() => {
+        if (!department || !course) {
+            setTemplateChapters([]);
+            return;
+        }
+
+        let cancelled = false;
+        void (async () => {
+            try {
+                const chapters = await getThesisChaptersForCourse(department, course);
+                if (!cancelled) {
+                    setTemplateChapters(chapters);
+                }
+            } catch (error) {
+                console.error('Failed to load chapter templates:', error);
+                if (!cancelled) {
+                    setTemplateChapters([]);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [department, course]);
 
     React.useEffect(() => {
         if (!thesisId || !groupId || !year || !department || !course) {
@@ -162,19 +188,52 @@ export default function ThesisWorkspace({
         };
     }, [thesisId, groupId, year, department, course]);
 
+    // Listen to chapters from subcollection for active stage
+    React.useEffect(() => {
+        if (!thesisId || !groupId || !year || !department || !course || !activeStage) {
+            setLiveChapters([]);
+            return;
+        }
+
+        const stageSlug = THESIS_STAGE_SLUGS[activeStage] ?? activeStage.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const chapterCtx: ChapterContext = {
+            year,
+            department,
+            course,
+            groupId,
+            thesisId,
+            stage: stageSlug,
+        };
+
+        const unsubscribe = listenChaptersForStage(chapterCtx, {
+            onData: (chapters) => {
+                setLiveChapters(chapters);
+            },
+            onError: (error) => {
+                console.error('Unable to stream chapter updates:', error);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesisId, groupId, year, department, course, activeStage]);
+
     const thesisSource = liveThesis ?? thesis ?? null;
 
     const normalizedChapters = React.useMemo(() => {
-        if (!thesisSource?.chapters) {
+        // Fallback to template chapters when chapters subcollection is empty
+        const sourceChapters = liveChapters.length > 0 ? liveChapters : templateChapters;
+        if (sourceChapters.length === 0) {
             return [] as ThesisChapter[];
         }
-        return thesisSource.chapters.map((chapter) => ({
+        return sourceChapters.map((chapter) => ({
             ...chapter,
             submissions: chapterSubmissionEntries[chapter.id]
                 ?? normalizeChapterSubmissions(chapter.submissions),
             expertApprovals: resolveChapterExpertApprovals(chapter, thesisSource),
         } satisfies ThesisChapter));
-    }, [thesisSource, chapterSubmissionEntries]);
+    }, [liveChapters, templateChapters, thesisSource, chapterSubmissionEntries]);
 
     const stageCompletionMap = React.useMemo(
         () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: false }),

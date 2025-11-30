@@ -8,18 +8,20 @@
  *   └── terminal/{requirement} {document with requirement details}
  * 
  * Group Hierarchical Structure:
- * year/{year}/departments/{department}/courses/{course}/groups/{group}
- *   ├── expertRequests/{request}
- *   ├── proposals/{proposal}
- *   ├── panelComments/{comment}
- *   ├── join/
- *   │   ├── invites (document with userIds array)
- *   │   └── requests (document with userIds array)
- *   ├── thesis/{thesis}
- *   │   └── stages/{stage}/chapters/{chapter}
- *   │       └── submissions/{attachment}/chats/{chat}
- *   │           └── attachments/{attachment}
- *   └── audits/{audit}
+ * year/{year}/departments/{department}/courses/{course}
+ *   └──   groups/{group}
+ *         ├── audits/{audit}
+ *         ├── template/{chapters} (document with chapter template named chapters)
+ *         ├── expertRequests/{request}
+ *         ├── proposals/{proposal}
+ *         ├── panelComments/{comment}
+ *         ├── join/
+ *         │   ├── invites (document with userIds array)
+ *         │   └── requests (document with userIds array)
+ *         └── thesis/{thesis}
+ *             └── stages/{stage}/chapters/{chapter}
+ *                 └── submissions/{attachment}/chats/{chat}
+ *                     └── attachments/{attachment}
  * 
  * User Hierarchical Structure:
  * year/{year}

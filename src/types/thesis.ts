@@ -104,12 +104,16 @@ export interface ThesisComment {
     version?: number;
 }
 
+/**
+ * Thesis stage data
+ * Note: Chapters are stored in a subcollection, not as a field.
+ * Path: thesis/{thesisId}/stages/{stage}/chapters/{chapterId}
+ */
 export interface ThesisStage {
     id: string;
     name: ThesisStageName;
     startedAt: Date;
     completedAt?: Date;
-    chapters?: ThesisChapter[];
 }
 
 /**
@@ -130,6 +134,8 @@ export interface ThesisChapter {
 
 /**
  * Main thesis data
+ * Note: Chapters are stored in a subcollection, not as a field.
+ * Path: thesis/{thesisId}/stages/{stage}/chapters/{chapterId}
  */
 export interface ThesisData {
     id?: string;
@@ -137,7 +143,6 @@ export interface ThesisData {
     submissionDate: Date | string;
     lastUpdated: Date | string;
     stages: ThesisStage[];
-    chapters?: ThesisChapter[];
 }
 
 /**
