@@ -15,8 +15,8 @@ import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { findGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
+import { findThesisByGroupId } from '../../../utils/firebase/firestore/thesis';
 import { aggregateThesisStats, computeExpertCards, type ExpertCardData } from '../../../utils/recommendUtils';
-import { isTopicApproved } from '../../../utils/thesisUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { Session } from '../../../types/session';
 import type { ThesisGroup } from '../../../types/group';
@@ -48,9 +48,45 @@ export default function AdviserEditorRecommendationsPage() {
     const [studentGroup, setStudentGroup] = React.useState<ThesisGroup | null>(null);
     const [groupError, setGroupError] = React.useState<string | null>(null);
     const [allGroups, setAllGroups] = React.useState<ThesisGroup[]>([]);
+    const [hasThesisDocument, setHasThesisDocument] = React.useState(false);
 
     // Track whether we've completed initial group resolution (prevents flicker on re-renders)
     const [groupResolved, setGroupResolved] = React.useState(false);
+
+    // Get the latest version of the student's group from the real-time allGroups listener
+    const liveStudentGroup = React.useMemo(() => {
+        if (!studentGroupId) return null;
+        return allGroups.find((g) => g.id === studentGroupId) ?? null;
+    }, [allGroups, studentGroupId]);
+
+    // Check if thesis document exists in subcollection
+    // Re-runs when studentGroupId changes or when the live group's updatedAt changes
+    React.useEffect(() => {
+        if (!studentGroupId) {
+            setHasThesisDocument(false);
+            return;
+        }
+
+        let cancelled = false;
+        console.log('[Recommendations] Checking thesis for group:', studentGroupId);
+        void findThesisByGroupId(studentGroupId)
+            .then((thesis) => {
+                if (!cancelled) {
+                    console.log('[Recommendations] Thesis found:', thesis);
+                    setHasThesisDocument(Boolean(thesis));
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    console.error('Failed to check thesis document:', err);
+                    setHasThesisDocument(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [studentGroupId, liveStudentGroup?.updatedAt]);
 
     React.useEffect(() => {
         if (!studentGroupId) {
@@ -273,21 +309,15 @@ export default function AdviserEditorRecommendationsPage() {
         [statisticianProfiles, thesisStats]
     );
 
-    const topicApproved = React.useMemo(
-        () => isTopicApproved(studentGroup?.thesis),
-        [studentGroup?.thesis]
-    );
-
-    const hasThesisRecord = React.useMemo(() => (
-        Boolean(studentGroup?.thesis?.id)
-        || Boolean(studentGroup?.thesis?.title)
-    ), [studentGroup?.thesis?.id, studentGroup?.thesis?.title]);
-
     const hasGroupRecord = Boolean(studentGroupId || studentGroup);
     const editorTabLocked = !hasGroupRecord;
-    const adviserTabLocked = !(topicApproved || hasThesisRecord);
+    // Adviser tab unlocks when thesis document exists in subcollection
+    const adviserTabLocked = !hasThesisDocument;
     const adviserAssigned = Boolean(studentGroup?.members?.adviser);
     const statisticianTabLocked = !adviserAssigned;
+
+    // Debug log
+    console.log('[Recommendations] hasThesisDocument:', hasThesisDocument, 'adviserTabLocked:', adviserTabLocked);
 
     const handleTabChange = React.useCallback((_event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);

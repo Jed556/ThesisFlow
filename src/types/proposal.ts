@@ -57,6 +57,8 @@ export interface TopicProposalEntry {
     updatedAt: Date;
     /** Entry status - single string workflow state */
     status?: TopicProposalEntryStatus;
+    /** Whether this entry has been used as the thesis topic */
+    usedAsThesis?: boolean;
 }
 
 /**

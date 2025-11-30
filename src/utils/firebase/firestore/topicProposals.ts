@@ -13,6 +13,8 @@ import { firebaseFirestore } from '../firebaseConfig';
 import type { TopicProposalEntry, TopicProposalSet, TopicProposalReviewEvent } from '../../../types/proposal';
 import { PROPOSALS_SUBCOLLECTION, GROUPS_SUBCOLLECTION } from '../../../config/firestore';
 import { buildProposalsCollectionPath, buildProposalDocPath, extractPathParams } from './paths';
+import { updateGroupById } from './groups';
+
 
 // ============================================================================
 // Types
@@ -82,6 +84,7 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
         createdAt: (entry.createdAt as Timestamp)?.toDate?.() || new Date(),
         updatedAt: (entry.updatedAt as Timestamp)?.toDate?.() || new Date(),
         status: entry.status as TopicProposalEntry['status'],
+        usedAsThesis: typeof entry.usedAsThesis === 'boolean' ? entry.usedAsThesis : undefined,
     }));
 
     const auditsRaw = Array.isArray(data.audits) ? data.audits : [];
@@ -371,7 +374,7 @@ async function recordModeratorDecisionWithContext(
 
     await updateDoc(docRef, {
         entries: updatedEntries.map((e) => stripUndefined(e)),
-        audits: [...proposal.audits, newAudit],
+        audits: [...proposal.audits, stripUndefined(newAudit)],
         updatedAt: serverTimestamp(),
     });
 }
@@ -418,7 +421,7 @@ async function recordHeadDecisionWithContext(
 
     await updateDoc(docRef, {
         entries: updatedEntries.map((e) => stripUndefined(e)),
-        audits: [...proposal.audits, newAudit],
+        audits: [...proposal.audits, stripUndefined(newAudit)],
         updatedAt: serverTimestamp(),
     });
 }
@@ -471,18 +474,31 @@ export async function markProposalAsThesis(
         overallStatus: 'draft' as const,
     };
 
-    await createThesisForGroup(
+    const thesisId = await createThesisForGroup(
         { year: ctx.year, department: ctx.department, course: ctx.course, groupId: ctx.groupId },
         thesisData
     );
 
+    // Update group with thesis reference for backward compatibility
+    await updateGroupById(ctx.groupId, {
+        thesis: { ...thesisData, id: thesisId },
+    });
 
-    // Update proposal set with usedAsThesisAt
+    // Update entry with usedAsThesis flag
+    const updatedEntries = proposal.entries.map((e) =>
+        e.id === payload.entryId
+            ? { ...e, usedAsThesis: true, updatedAt: now }
+            : e
+    );
+
+    // Update proposal set with usedAsThesisAt, usedBy, and updated entries
     const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId);
     const docRef = doc(firebaseFirestore, docPath);
 
     await updateDoc(docRef, {
+        entries: updatedEntries.map((e) => stripUndefined(e)),
         usedAsThesisAt: nowISO,
+        usedBy: payload.requestedBy,
         updatedAt: serverTimestamp(),
     });
 }

@@ -281,11 +281,11 @@ export default function StudentTopicProposalsPage() {
         [proposalSets, activeSet?.id]
     );
 
-    const groupThesisId = group?.thesis?.id ?? undefined;
-    const activeThesisEntryId = React.useMemo(() => {
-        if (!groupThesisId || !activeSet) return undefined;
-        return activeSet.entries.some((entry) => entry.id === groupThesisId) ? groupThesisId : undefined;
-    }, [activeSet, groupThesisId]);
+    // Check if any entry is marked as used for thesis
+    const usedThesisEntry = React.useMemo(() => {
+        if (!activeSet) return undefined;
+        return activeSet.entries.find((entry) => entry.usedAsThesis);
+    }, [activeSet]);
 
     const activeSetMeta = getProposalSetMeta(activeSet);
 
@@ -598,7 +598,7 @@ export default function StudentTopicProposalsPage() {
                                     />
                                     {activeSet.awaitingModerator && <Chip label="For Moderator" color="info" />}
                                     {activeSet.awaitingHead && <Chip label="For Head" color="warning" />}
-                                    {activeThesisEntryId && <Chip label="In Use" color="success" variant="outlined" />}
+                                    {usedThesisEntry && <Chip label="In Use" color="success" variant="outlined" />}
                                 </Stack>
                             </Stack>
 
@@ -629,8 +629,8 @@ export default function StudentTopicProposalsPage() {
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
                         {activeSet.entries.map((entry) => {
                             const author = memberProfiles.get(entry.proposedBy);
-                            const isEntryInUse = activeThesisEntryId === entry.id;
-                            const lockedByAnotherEntry = Boolean(activeThesisEntryId && !isEntryInUse);
+                            const isEntryInUse = entry.usedAsThesis === true;
+                            const lockedByAnotherEntry = Boolean(usedThesisEntry && !isEntryInUse);
                             const entryActions: React.ReactNode[] = [];
                             if (editable) {
                                 entryActions.push(
