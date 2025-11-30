@@ -95,6 +95,17 @@ export interface ReviewerAssignmentsListenerOptions {
     onError?: (error: Error) => void;
 }
 
+/** Context for a specific thesis document */
+export interface ThesisDocumentContext extends ThesisContext {
+    thesisId: string;
+}
+
+/** Listener options for a thesis document */
+export interface ThesisDocumentListenerOptions {
+    onData: (thesis: ThesisData | null) => void;
+    onError?: (error: Error) => void;
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -1097,6 +1108,42 @@ export async function getReviewerAssignmentsForUser(
     }
 
     return assignments;
+}
+
+// ============================================================================
+// Real-time Listeners
+// ============================================================================
+
+/**
+ * Listen to a single thesis document for real-time updates
+ */
+export function listenThesisDocument(
+    ctx: ThesisDocumentContext,
+    options: ThesisDocumentListenerOptions,
+): () => void {
+    const { year, department, course, groupId, thesisId } = ctx;
+    if (!thesisId) {
+        options.onData(null);
+        return () => { /* no-op */ };
+    }
+
+    const docPath = buildThesisDocPath(year, department, course, groupId, thesisId);
+    const ref = doc(firebaseFirestore, docPath);
+
+    return onSnapshot(
+        ref,
+        (snapshot) => {
+            const thesisData = docToThesisData(snapshot);
+            options.onData(thesisData);
+        },
+        (error) => {
+            if (options.onError) {
+                options.onError(error);
+            } else {
+                console.error('Thesis document listener error:', error);
+            }
+        },
+    );
 }
 
 /**

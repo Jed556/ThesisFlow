@@ -114,6 +114,15 @@ export default function FileCard({
     const downloadDisabled = disabled || (!onDownload && !file?.url);
     const deleteDisabled = disabled || !onDelete;
 
+    const versionChip = versionLabel ? (
+        <Chip
+            size="small"
+            color={selected ? 'primary' : 'default'}
+            label={versionLabel}
+            sx={{ fontWeight: 600 }}
+        />
+    ) : null;
+
     const statusChip = statusChipLabel ? (
         <Chip
             size="small"
@@ -123,7 +132,7 @@ export default function FileCard({
         />
     ) : null;
 
-    const hasInlineChips = Boolean(statusChip) || Boolean(versionLabel);
+    const hasInlineChips = Boolean(statusChip) || Boolean(versionChip);
 
     return (
         <Card
@@ -160,15 +169,8 @@ export default function FileCard({
                             <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0 }}>{effectiveTitle}</Typography>
                             {hasInlineChips && (
                                 <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                                    {versionChip}
                                     {statusChip}
-                                    {versionLabel && (
-                                        <Chip
-                                            size="small"
-                                            color={selected ? 'primary' : 'default'}
-                                            label={versionLabel}
-                                            sx={{ fontWeight: 600 }}
-                                        />
-                                    )}
                                 </Stack>
                             )}
                         </Stack>

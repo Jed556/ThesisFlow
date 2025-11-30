@@ -9,6 +9,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
+import type { ChipProps } from '@mui/material';
 import {
     Upload as UploadIcon,
 } from '@mui/icons-material';
@@ -86,10 +87,9 @@ const formatSubmissionStatus = (status?: ChapterSubmissionStatus) => {
 export const buildSubmissionMeta = (
     file?: FileAttachment,
     participants?: Record<string, ConversationParticipant>,
-    status?: ChapterSubmissionStatus,
 ) => {
     if (!file) {
-        return status ? `Status: ${formatSubmissionStatus(status)}` : undefined;
+        return undefined;
     }
     const submittedBy = resolveParticipantName(file.author, participants);
     const submittedOn = formatDateTimeLabel(file.uploadDate);
@@ -101,10 +101,25 @@ export const buildSubmissionMeta = (
     } else if (submittedOn) {
         parts.push(`Submitted on ${submittedOn}`);
     }
-    if (status) {
-        parts.push(`Status: ${formatSubmissionStatus(status)}`);
-    }
     return parts.length ? parts.join(' • ') : undefined;
+};
+
+export const buildSubmissionStatusChip = (
+    status?: ChapterSubmissionStatus,
+): { label?: string; color?: ChipProps['color'] } => {
+    const label = formatSubmissionStatus(status);
+    if (!label) {
+        return { label: undefined, color: undefined };
+    }
+    let color: ChipProps['color'] = 'default';
+    if (status === 'approved') {
+        color = 'success';
+    } else if (status === 'revision_required') {
+        color = 'warning';
+    } else if (status === 'under_review') {
+        color = 'info';
+    }
+    return { label, color };
 };
 
 export const buildVersionOptions = (
@@ -316,14 +331,17 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                                     )}
                                     {versions.map((version) => {
                                         const isVersionActive = version.versionIndex === selectedVersionIndex;
+                                        const { label: statusChipLabel, color: statusChipColor } = buildSubmissionStatusChip(version.status);
                                         return (
                                             <FileCard
                                                 key={version.id}
                                                 file={version.file}
                                                 title={version.label}
                                                 sizeLabel={buildFileSizeLabel(version.file)}
-                                                metaLabel={buildSubmissionMeta(version.file, participants, version.status)}
+                                                metaLabel={buildSubmissionMeta(version.file, participants)}
                                                 versionLabel={`v${version.versionIndex + 1}`}
+                                                statusChipLabel={statusChipLabel}
+                                                statusChipColor={statusChipColor}
                                                 selected={isVersionActive}
                                                 onClick={(event) => {
                                                     event.stopPropagation();

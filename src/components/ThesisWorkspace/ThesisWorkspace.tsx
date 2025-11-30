@@ -13,6 +13,7 @@ import { ConversationPanel, type ConversationParticipant } from '../Conversation
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
 import { listenFilesForChapter, type FileQueryContext } from '../../utils/firebase/firestore/file';
 import { listenSubmissionsForChapter, type SubmissionContext } from '../../utils/firebase/firestore/submissions';
+import { listenThesisDocument, type ThesisDocumentContext } from '../../utils/firebase/firestore/thesis';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getAssignedExpertRoles, resolveChapterExpertApprovals } from '../../utils/expertUtils';
 import { normalizeChapterSubmissions, normalizeSubmissionEntry } from '../../utils/chapterSubmissionUtils';
@@ -114,7 +115,7 @@ export default function ThesisWorkspace({
     const [uploadError, setUploadError] = React.useState<string | null>(null);
     const [chapterFiles, setChapterFiles] = React.useState<Record<number, FileAttachment[]>>({});
     const [isFetchingChapterFiles, setIsFetchingChapterFiles] = React.useState(false);
-    const [chapterFilesError, setChapterFilesError] = React.useState<string | null>(null);
+    const [, setChapterFilesError] = React.useState<string | null>(null);
     const [chapterSubmissionEntries, setChapterSubmissionEntries] = React.useState<Record<number, ChapterSubmissionEntry[]>>({});
     const [pendingDecision, setPendingDecision] = React.useState<{
         chapterId: number;
@@ -123,25 +124,57 @@ export default function ThesisWorkspace({
     const [decisionError, setDecisionError] = React.useState<string | null>(null);
     const [isSubmittingDecision, setIsSubmittingDecision] = React.useState(false);
     const [activeStage, setActiveStage] = React.useState<ThesisStageName>(THESIS_STAGE_METADATA[0].value);
+    const [liveThesis, setLiveThesis] = React.useState<ThesisData | null>(null);
 
     React.useEffect(() => {
         setChapterFiles({});
         setChapterFilesError(null);
         setIsFetchingChapterFiles(false);
         setChapterSubmissionEntries({});
+        setLiveThesis(null);
     }, [thesisId]);
 
+    React.useEffect(() => {
+        if (!thesisId || !groupId || !year || !department || !course) {
+            setLiveThesis(null);
+            return;
+        }
+
+        const docCtx: ThesisDocumentContext = {
+            year,
+            department,
+            course,
+            groupId,
+            thesisId,
+        };
+
+        const unsubscribe = listenThesisDocument(docCtx, {
+            onData: (next) => {
+                setLiveThesis(next);
+            },
+            onError: (error) => {
+                console.error('Unable to stream thesis updates:', error);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesisId, groupId, year, department, course]);
+
+    const thesisSource = liveThesis ?? thesis ?? null;
+
     const normalizedChapters = React.useMemo(() => {
-        if (!thesis?.chapters) {
+        if (!thesisSource?.chapters) {
             return [] as ThesisChapter[];
         }
-        return thesis.chapters.map((chapter) => ({
+        return thesisSource.chapters.map((chapter) => ({
             ...chapter,
             submissions: chapterSubmissionEntries[chapter.id]
                 ?? normalizeChapterSubmissions(chapter.submissions),
-            expertApprovals: resolveChapterExpertApprovals(chapter, thesis),
+            expertApprovals: resolveChapterExpertApprovals(chapter, thesisSource),
         } satisfies ThesisChapter));
-    }, [thesis, chapterSubmissionEntries]);
+    }, [thesisSource, chapterSubmissionEntries]);
 
     const stageCompletionMap = React.useMemo(
         () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: false }),
@@ -170,8 +203,8 @@ export default function ThesisWorkspace({
     );
 
     // Note: thesis may be ThesisWithGroupContext which includes expert fields from the group
-    const thesisWithContext = thesis as unknown as Record<string, unknown> | null | undefined;
-    const expertRoles = React.useMemo(() => getAssignedExpertRoles(thesis as Parameters<typeof getAssignedExpertRoles>[0]), [
+    const thesisWithContext = thesisSource as unknown as Record<string, unknown> | null | undefined;
+    const expertRoles = React.useMemo(() => getAssignedExpertRoles(thesisSource as Parameters<typeof getAssignedExpertRoles>[0]), [
         thesisWithContext?.adviser,
         thesisWithContext?.editor,
         thesisWithContext?.statistician,
@@ -290,7 +323,6 @@ export default function ThesisWorkspace({
         normalizedChapters,
         activeChapterId,
     ]);
-    const activeChapterFiles = activeChapter ? chapterFiles[activeChapter.id] : undefined;
     const isConversationReadOnly = activeChapter?.status === 'approved';
 
     // Listen to submission files for the active chapter in real-time
@@ -366,14 +398,6 @@ export default function ThesisWorkspace({
         };
     }, [thesisId, groupId, year, department, course, activeStage, activeChapter?.id]);
 
-    const chapterMessages = React.useMemo(() => {
-        if (!activeChapter || activeVersionIndex === null) {
-            return [];
-        }
-        const source = (activeChapter.comments ?? []).filter((comment) => comment.version === activeVersionIndex);
-        return source.map((comment, index) => thesisCommentToChatMessage(comment, index));
-    }, [activeChapter, activeVersionIndex]);
-
     const versionOptionsByChapter = React.useMemo<ChapterVersionMap>(() => {
         const map: ChapterVersionMap = {};
         normalizedChapters.forEach((chapter) => {
@@ -383,6 +407,15 @@ export default function ThesisWorkspace({
     }, [normalizedChapters, chapterFiles, activeStage]);
 
     const versionOptions = activeChapterId ? (versionOptionsByChapter[activeChapterId] ?? []) : [];
+
+    const chapterMessages = React.useMemo(() => {
+        if (!activeChapter || activeVersionIndex === null) {
+            return [];
+        }
+        const commentSource = activeChapter.comments ?? [];
+        const filtered = commentSource.filter((comment) => comment.version === activeVersionIndex);
+        return filtered.map((comment, index) => thesisCommentToChatMessage(comment, index));
+    }, [activeChapter, activeVersionIndex]);
     const loadingChapterId = isFetchingChapterFiles ? activeChapter?.id ?? null : null;
     const selectedVersionLabel = React.useMemo(() => {
         if (activeVersionIndex === null) {
@@ -631,7 +664,7 @@ export default function ThesisWorkspace({
         );
     }
 
-    if (!thesis || normalizedChapters.length === 0) {
+    if (!thesisSource || normalizedChapters.length === 0) {
         return (
             <Box>
                 <WorkspaceFilters filters={filters} />
