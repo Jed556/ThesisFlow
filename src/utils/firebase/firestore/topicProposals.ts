@@ -449,7 +449,8 @@ async function recordHeadDecisionWithContext(
 }
 
 /**
- * Mark a proposal entry as being used for thesis
+ * Mark a proposal entry as being used for thesis.
+ * This creates a thesis document and updates the group with the thesis reference.
  */
 export async function markProposalAsThesis(
     ctx: ProposalContext,
@@ -464,11 +465,45 @@ export async function markProposalAsThesis(
         throw new Error('Only head-approved proposals can be used as thesis topic.');
     }
 
+    const now = new Date();
+    const nowISO = now.toISOString();
+
+    // Import thesis utilities dynamically to avoid circular dependencies
+    const { createThesisForGroup } = await import('./thesis');
+    const { updateGroup } = await import('./groups');
+
+    // Create thesis document
+    const thesisData = {
+        title: entry.title,
+        submissionDate: nowISO,
+        lastUpdated: nowISO,
+        stages: [],
+        groupId: ctx.groupId,
+        overallStatus: 'draft' as const,
+    };
+
+    const thesisId = await createThesisForGroup(
+        { year: ctx.year, department: ctx.department, course: ctx.course, groupId: ctx.groupId },
+        thesisData
+    );
+
+    // Update group with thesis reference
+    await updateGroup(ctx.year, ctx.department, ctx.course, ctx.groupId, {
+        thesis: {
+            id: thesisId,
+            title: entry.title,
+            submissionDate: nowISO,
+            lastUpdated: nowISO,
+            stages: [],
+        },
+    });
+
+    // Update proposal set with usedAsThesisAt
     const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId);
     const docRef = doc(firebaseFirestore, docPath);
 
     await updateDoc(docRef, {
-        usedAsThesisAt: new Date().toISOString(),
+        usedAsThesisAt: nowISO,
         updatedAt: serverTimestamp(),
     });
 }
