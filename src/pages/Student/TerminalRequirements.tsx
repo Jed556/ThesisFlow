@@ -32,7 +32,7 @@ import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
-    index: 2,
+    index: 4,
     title: 'Terminal Requirements',
     segment: 'terminal-requirements',
     icon: <FactCheckIcon />,

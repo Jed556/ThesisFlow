@@ -23,7 +23,7 @@ import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
-    index: 1,
+    index: 3,
     title: 'Thesis Workspace',
     segment: 'student-thesis-workspace',
     icon: <SchoolIcon />,

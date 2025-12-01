@@ -136,6 +136,46 @@ export function buildStageCompletionMap(
 }
 
 /**
+ * Determines the current "in progress" stage based on completion and lock maps.
+ * Returns the first stage that is unlocked and not yet completed.
+ * If all unlocked stages are complete, returns the last unlocked stage.
+ * If all stages are locked, returns the first stage.
+ * @param completionMap - A map of stage to completion status
+ * @param lockMap - Optional map of stage to locked status (true = locked)
+ * @returns The stage name that is currently in progress
+ */
+export function getCurrentInProgressStage(
+    completionMap?: Partial<Record<ThesisStageName, boolean>> | null,
+    lockMap?: Partial<Record<ThesisStageName, boolean>> | null
+): ThesisStageName {
+    if (!completionMap) {
+        return DEFAULT_STAGE;
+    }
+
+    // Find the first stage that is unlocked and not completed
+    let lastUnlockedStage: ThesisStageName | null = null;
+    for (const stageMeta of THESIS_STAGE_METADATA) {
+        const isLocked = lockMap?.[stageMeta.value] ?? false;
+        const isComplete = completionMap[stageMeta.value] ?? false;
+
+        if (!isLocked) {
+            lastUnlockedStage = stageMeta.value;
+            if (!isComplete) {
+                return stageMeta.value;
+            }
+        }
+    }
+
+    // All unlocked stages are complete - return the last unlocked stage
+    if (lastUnlockedStage) {
+        return lastUnlockedStage;
+    }
+
+    // All stages locked - return first stage
+    return DEFAULT_STAGE;
+}
+
+/**
  * Builds a lock map where each stage is locked until the previous stage is complete.
  */
 export function buildSequentialStageLockMap(

@@ -214,7 +214,7 @@ function DashboardPage(): React.ReactElement {
                 const merged = Array.from(
                     new Set([...(managed ?? []), ...(groupDepartments ?? [])])).sort((a, b) => a.localeCompare(b));
                 setDepartments(merged);
-                if (merged.length && !merged.includes(departmentFilter)) {
+                if (merged.length && departmentFilter !== GROUP_FILTER_ALL && !merged.includes(departmentFilter)) {
                     setDepartmentFilter(merged[0]);
                 }
                 if (!merged.length) {

@@ -26,6 +26,7 @@ import {
     resolveChapterStage,
     describeStageSequenceStep,
     getPreviousSequenceStep,
+    getCurrentInProgressStage,
     THESIS_STAGE_METADATA,
     type StageGateOverrides,
 } from '../../utils/thesisStageUtils';
@@ -201,6 +202,21 @@ export default function ThesisWorkspace({
         () => normalizedChapters.filter((chapter) => chapterHasStage(chapter, activeStage)),
         [normalizedChapters, activeStage],
     );
+
+    // Auto-select the in-progress stage tab for user convenience
+    // Select the first unlocked stage that is not yet complete
+    const hasAutoSelectedStage = React.useRef(false);
+    React.useEffect(() => {
+        // Only auto-select once when completion data first becomes available
+        if (hasAutoSelectedStage.current) return;
+        const hasData = Object.keys(stageCompletionMap).length > 0;
+        if (!hasData) return;
+
+        hasAutoSelectedStage.current = true;
+        // Pass both completion map and lock map to find the first unlocked, incomplete stage
+        const inProgressStage = getCurrentInProgressStage(stageCompletionMap, stageLockMap);
+        setActiveStage(inProgressStage);
+    }, [stageCompletionMap, stageLockMap]);
 
     // Note: thesis may be ThesisWithGroupContext which includes expert fields from the group
     const thesisWithContext = thesisSource as unknown as Record<string, unknown> | null | undefined;

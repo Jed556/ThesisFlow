@@ -876,52 +876,6 @@ export default function ThesisPage() {
                     })}
                 </Stepper>
             </Paper>
-
-            <Typography variant="h5" sx={{ mb: 2 }}>
-                Chapters
-            </Typography>
-
-            <AnimatedList variant="slideUp" staggerDelay={50}>
-                {(thesis.chapters ?? []).map((chapter) => {
-                    const commentsCount = chapter.comments?.length ?? 0;
-                    return (
-                        <Card key={chapter.id} sx={{ mb: 2, borderRadius: 3 }}>
-                            <CardContent>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                    <Typography variant="h6">{chapter.title}</Typography>
-                                    <Chip
-                                        label={chapter.status.replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}
-                                        color={getStatusColor(chapter.status)}
-                                        size="small"
-                                    />
-                                </Box>
-
-                                {chapter.submissionDate && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Last submitted: {formatDateLabel(chapter.submissionDate)}
-                                    </Typography>
-                                )}
-
-                                {commentsCount > 0 && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        {commentsCount} feedback(s) received
-                                    </Typography>
-                                )}
-                            </CardContent>
-                        </Card>
-                    );
-                })}
-
-                {(thesis.chapters ?? []).length === 0 && (
-                    <Card variant="outlined" sx={{ mb: 2 }}>
-                        <CardContent>
-                            <Typography variant="body2" color="text.secondary">
-                                No chapters have been added yet.
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                )}
-            </AnimatedList>
         </AnimatedPage>
     );
 }

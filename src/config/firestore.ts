@@ -8,22 +8,24 @@
  *   └── terminal/{requirement} {document with requirement details}
  * 
  * Group Hierarchical Structure:
- * year/{year}/departments/{department}/courses/{course}
- *   ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
- *   ├── templates/"terminalRequirements" (parent doc with metadata)
- *   │   └── entries/{requirementId} (individual terminal requirement entries)
- *   └── groups/{group}
- *       ├── audits/{audit}
- *       ├── expertRequests/{request}
- *       ├── proposals/{proposal}
- *       ├── panelComments/{comment}
- *       ├── join/
- *       │   ├── invites (document with userIds array)
- *       │   └── requests (document with userIds array)
- *       └── thesis/{thesis}
- *           └── stages/{stage}/chapters/{chapter}
- *               └── submissions/{attachment}/chats/{chat}
- *                   └── attachments/{attachment}
+ * year/{year}/departments/{department}
+ *   ├── adviserSkills/{skill}
+ *   └── courses/{course}
+ *       ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
+ *       ├── templates/"terminalRequirements" (parent doc with metadata)
+ *       │   └── entries/{requirementId} (individual terminal requirement entries)
+ *       └── groups/{group}
+ *           ├── audits/{audit}
+ *           ├── expertRequests/{request}
+ *           ├── proposals/{proposal}
+ *           ├── panelComments/{comment}
+ *           ├── join/
+ *           │   ├── invites (document with userIds array)
+ *           │   └── requests (document with userIds array)
+ *           └── thesis/{thesis}
+ *               └── stages/{stage}/chapters/{chapter}
+ *                   └── submissions/{attachment}/chats/{chat}
+ *                       └── attachments/{attachment}
  * 
  * User Hierarchical Structure:
  * year/{year}

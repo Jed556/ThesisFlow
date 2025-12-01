@@ -28,7 +28,7 @@ import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
-    index: 3,
+    index: 5,
     title: 'Panel Comments',
     segment: 'panel-comments',
     icon: <CommentBankIcon />,

@@ -101,6 +101,9 @@ export function TerminalRequirementApprovalWorkspace({
     const [returnDialogOpen, setReturnDialogOpen] = React.useState(false);
     const [returnNote, setReturnNote] = React.useState('');
 
+    /** Ref to track if we've already auto-selected a stage for the current thesis */
+    const hasAutoSelectedStage = React.useRef(false);
+
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
             return '—';
@@ -228,8 +231,11 @@ export function TerminalRequirementApprovalWorkspace({
             setGroupMeta(null);
             setSubmissionByStage({});
             setThesisError(null);
+            hasAutoSelectedStage.current = false;
             return;
         }
+        // Reset auto-selection when a different thesis is selected
+        hasAutoSelectedStage.current = false;
 
         let cancelled = false;
         const loadThesis = async () => {
@@ -338,16 +344,41 @@ export function TerminalRequirementApprovalWorkspace({
         });
     }, [submissionByStage]);
 
+    /**
+     * Find the first stage where this role needs to take action (currentRole matches).
+     * Falls back to the first available stage if none require action.
+     */
+    const getInProgressStageForRole = React.useCallback(() => {
+        for (const stageMeta of availableStages) {
+            const submissions = submissionByStage[stageMeta.value];
+            const needsAction = submissions?.some(
+                (sub) => sub.locked && sub.status === 'in_review' && sub.currentRole === role
+            );
+            if (needsAction) {
+                return stageMeta.value;
+            }
+        }
+        return availableStages[0]?.value ?? null;
+    }, [availableStages, submissionByStage, role]);
+
     React.useEffect(() => {
         if (!availableStages.length) {
             setActiveStage(null);
+            hasAutoSelectedStage.current = false;
             return;
         }
         const currentStageSubmissions = activeStage ? submissionByStage[activeStage] : undefined;
         if (!activeStage || !currentStageSubmissions || currentStageSubmissions.length === 0) {
-            setActiveStage(availableStages[0].value);
+            // Auto-select in-progress stage only once per thesis selection
+            if (!hasAutoSelectedStage.current) {
+                hasAutoSelectedStage.current = true;
+                const inProgressStage = getInProgressStageForRole();
+                setActiveStage(inProgressStage);
+            } else {
+                setActiveStage(availableStages[0].value);
+            }
         }
-    }, [availableStages, activeStage, submissionByStage]);
+    }, [availableStages, activeStage, submissionByStage, getInProgressStageForRole]);
 
     const resolvedStage = activeStage ?? availableStages[0]?.value ?? null;
     // Get all submissions for the resolved stage
