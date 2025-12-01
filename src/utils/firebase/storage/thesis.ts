@@ -3,7 +3,7 @@
  * Handles document uploads, media files, and attachments for thesis submissions
  */
 
-import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { firebaseStorage } from '../firebaseConfig';
 import type { FileAttachment, FileCategory } from '../../../types/file';
 import type { ThesisStageName } from '../../../types/thesis';
@@ -62,6 +62,16 @@ interface UploadThesisFileOptions {
 interface UploadThesisFileResult {
     url: string;
     fileAttachment: FileAttachment;
+}
+
+interface TerminalRequirementFileQuery {
+    thesisId: string;
+    groupId: string;
+    stage: ThesisStageName;
+    requirementId: string;
+    year?: string;
+    department?: string;
+    course?: string;
 }
 
 /**
@@ -460,5 +470,97 @@ export async function getLatestChapterSubmission(ctx: FileQueryContext): Promise
     } catch (error) {
         console.error('Error getting latest chapter submission:', error);
         return null;
+    }
+}
+
+function buildTerminalStagePath(
+    thesisId: string,
+    groupId: string,
+    stage: ThesisStageName,
+    year?: string,
+    department?: string,
+    course?: string,
+): string {
+    const yearSegment = sanitizePathSegment(year, 'current');
+    const deptSegment = sanitizePathSegment(department, 'general');
+    const courseSegment = sanitizePathSegment(course, 'common');
+    const groupSegment = sanitizePathSegment(groupId, 'group');
+    const thesisSegment = sanitizePathSegment(thesisId, 'thesis');
+    const stageSegment = sanitizePathSegment(stage);
+    return `${yearSegment}/${deptSegment}/${courseSegment}/${groupSegment}/thesis/${thesisSegment}/terminal/${stageSegment}`;
+}
+
+export async function listTerminalRequirementFiles(
+    query: TerminalRequirementFileQuery,
+): Promise<FileAttachment[]> {
+    const {
+        thesisId,
+        groupId,
+        stage,
+        requirementId,
+        year,
+        department,
+        course,
+    } = query;
+
+    if (!thesisId || !groupId) {
+        return [];
+    }
+
+    try {
+        const stagePath = buildTerminalStagePath(thesisId, groupId, stage, year, department, course);
+        const stageRef = ref(firebaseStorage, stagePath);
+        const listResult = await listAll(stageRef);
+
+        const attachments = await Promise.all(listResult.items.map(async (itemRef) => {
+            try {
+                const metadata = await getMetadata(itemRef);
+                const custom = metadata.customMetadata ?? {};
+                if (custom.terminalRequirementId !== requirementId) {
+                    return null;
+                }
+
+                const downloadUrl = await getDownloadURL(itemRef);
+                const fileName = custom.originalName ?? metadata.name ?? itemRef.name;
+                const extension = getFileExtension(fileName) ?? 'document';
+                const uploadDate = metadata.timeCreated ?? new Date().toISOString();
+                const attachment: FileAttachment = {
+                    id: metadata.name ?? itemRef.name,
+                    thesisId,
+                    groupId,
+                    name: fileName,
+                    type: extension,
+                    size: ((metadata.size ?? 0) as number).toString(),
+                    url: downloadUrl,
+                    mimeType: metadata.contentType ?? undefined,
+                    author: custom.uploadedBy ?? '',
+                    uploadDate,
+                    category: (custom.category as FileAttachment['category']) ?? 'attachment',
+                    terminalStage: (custom.terminalStage as ThesisStageName) ?? stage,
+                    terminalRequirementId: custom.terminalRequirementId ?? requirementId,
+                };
+                return attachment;
+            } catch (metadataError) {
+                console.error('Failed to read terminal requirement file metadata:', metadataError);
+                return null;
+            }
+        }));
+
+        return attachments
+            .filter((file): file is FileAttachment => Boolean(file))
+            .sort((a, b) => {
+                const aTime = new Date(a.uploadDate ?? '').getTime();
+                const bTime = new Date(b.uploadDate ?? '').getTime();
+                if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+                    return 0;
+                }
+                return bTime - aTime;
+            });
+    } catch (error) {
+        if ((error as { code?: string }).code === 'storage/object-not-found') {
+            return [];
+        }
+        console.error('Error listing terminal requirement files:', error);
+        return [];
     }
 }

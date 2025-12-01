@@ -4,21 +4,48 @@
  * Terminal requirements are stored under the thesis stage hierarchy:
  * year/{year}/departments/{department}/courses/{course}/groups/{group}/thesis/{thesis}/stages/{stage}/terminal/{requirement}
  * 
- * Global configuration templates are stored at:
- * configuration/terminalRequirements/{configId}
+ * Course template documents are stored at:
+ * year/{year}/departments/{department}/courses/{course}/templates/terminalRequirements
  */
 
 import {
     collection, collectionGroup, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot,
-    query, orderBy, type DocumentSnapshot,
+    query, orderBy, where, writeBatch, type DocumentSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
-import { THESIS_STAGE_SLUGS, TERMINAL_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
-import { buildTerminalCollectionPath, buildTerminalDocPath, buildTerminalRequirementsPath, extractPathParams } from './paths';
+import {
+    THESIS_STAGE_SLUGS,
+    TERMINAL_SUBCOLLECTION,
+    DEFAULT_YEAR,
+    DEFAULT_DEPARTMENT_SEGMENT,
+    DEFAULT_COURSE_SEGMENT,
+    COURSE_TEMPLATES_SUBCOLLECTION,
+    TERMINAL_REQUIREMENTS_KEY,
+    TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION,
+} from '../../../config/firestore';
+import {
+    buildTerminalCollectionPath,
+    buildTerminalDocPath,
+    buildCourseTerminalTemplateDocPath,
+    buildTerminalRequirementEntriesCollectionPath,
+    buildTerminalRequirementEntryDocPath,
+    extractPathParams,
+    sanitizePathSegment,
+} from './paths';
+import {
+    ensureCourseHierarchyExists,
+    normalizeCourseTemplateContext,
+    type CourseTemplateContextInput,
+    type NormalizedCourseTemplateContext,
+} from './courseTemplateHelpers';
 import type { ThesisStageName } from '../../../types/thesis';
 import type { TerminalRequirement, TerminalRequirementProgress, TerminalRequirementStatus } from '../../../types/terminalRequirement';
-import type { TerminalRequirementConfigDocument, TerminalRequirementConfigEntry } from '../../../types/terminalRequirementConfig';
+import type {
+    TerminalRequirementConfigDocument,
+    TerminalRequirementConfigEntry,
+    TerminalRequirementStageTemplates,
+} from '../../../types/terminalRequirementTemplate';
 import type {
     TerminalRequirementApprovalRole, TerminalRequirementApprovalState, TerminalRequirementApprovalStatus,
     TerminalRequirementApproverAssignments, TerminalRequirementSubmissionHistoryEntry,
@@ -572,15 +599,49 @@ function deriveStatus(record: TerminalRequirementSubmissionRecord): TerminalRequ
 }
 
 // ============================================================================
-// Global Configuration CRUD (configuration/terminalRequirements)
+// Course-Level Configuration CRUD (templates)
 // ============================================================================
 
-function getConfigCollectionRef() {
-    return collection(firebaseFirestore, buildTerminalRequirementsPath());
+function getTerminalTemplateDocRef(context: NormalizedCourseTemplateContext) {
+    return doc(
+        firebaseFirestore,
+        buildCourseTerminalTemplateDocPath(context.year, context.department, context.course)
+    );
 }
 
-function getConfigRef(configId: string) {
-    return doc(firebaseFirestore, buildTerminalRequirementsPath(), configId);
+function getTerminalEntriesCollectionRef(context: NormalizedCourseTemplateContext) {
+    return collection(
+        firebaseFirestore,
+        buildTerminalRequirementEntriesCollectionPath(context.year, context.department, context.course)
+    );
+}
+
+function getTerminalEntryDocRef(context: NormalizedCourseTemplateContext, requirementId: string) {
+    return doc(
+        firebaseFirestore,
+        buildTerminalRequirementEntryDocPath(context.year, context.department, context.course, requirementId)
+    );
+}
+
+function normalizeConfigEntry(entry: TerminalRequirementConfigEntry): TerminalRequirementConfigEntry {
+    const cleanEntry: TerminalRequirementConfigEntry = {
+        stage: entry.stage,
+        requirementId: entry.requirementId,
+        required: Boolean(entry.required),
+    };
+    if (entry.title?.trim()) {
+        cleanEntry.title = entry.title.trim();
+    }
+    if (entry.description?.trim()) {
+        cleanEntry.description = entry.description.trim();
+    }
+    if (entry.requireAttachment !== undefined) {
+        cleanEntry.requireAttachment = entry.requireAttachment;
+    }
+    if (entry.fileTemplate) {
+        cleanEntry.fileTemplate = { ...entry.fileTemplate };
+    }
+    return cleanEntry;
 }
 
 function normalizeConfigEntries(
@@ -589,165 +650,320 @@ function normalizeConfigEntries(
     const normalized = new Map<string, TerminalRequirementConfigEntry>();
     entries.forEach((entry) => {
         if (!entry.requirementId) return;
-        const cleanEntry: TerminalRequirementConfigEntry = {
-            stage: entry.stage,
-            requirementId: entry.requirementId,
-            active: Boolean(entry.active),
-        };
-        if (entry.requireAttachment !== undefined) {
-            cleanEntry.requireAttachment = entry.requireAttachment;
-        }
-        if (entry.template) {
-            cleanEntry.template = { ...entry.template };
-        }
-        normalized.set(entry.requirementId, cleanEntry);
+        normalized.set(entry.requirementId, normalizeConfigEntry(entry));
     });
     return Array.from(normalized.values());
 }
 
+function normalizeStageTemplatesMap(
+    templates?: TerminalRequirementStageTemplates,
+): TerminalRequirementStageTemplates | undefined {
+    if (!templates) {
+        return undefined;
+    }
+
+    const normalized = Object.entries(templates).reduce<TerminalRequirementStageTemplates>((acc, [stage, metadata]) => {
+        if (!metadata) {
+            return acc;
+        }
+        acc[stage as ThesisStageName] = { ...metadata };
+        return acc;
+    }, {});
+
+    return Object.keys(normalized).length > 0 ? normalized : {};
+}
+
+interface TerminalRequirementTemplateDocument extends Omit<TerminalRequirementConfigDocument, 'id'> {
+    templateType: typeof TERMINAL_REQUIREMENTS_KEY;
+}
+
+function generateTerminalRequirementConfigId(
+    year: string,
+    department: string,
+    course: string,
+): string {
+    const yearKey = sanitizePathSegment(year, DEFAULT_YEAR);
+    const deptKey = sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT);
+    const courseKey = sanitizePathSegment(course, DEFAULT_COURSE_SEGMENT);
+    return `${yearKey}_${deptKey}_${courseKey}_terminal`;
+}
+
 function mapConfigSnapshot(
-    data: Omit<TerminalRequirementConfigDocument, 'id'>,
-    docId: string,
-): TerminalRequirementConfigDocument {
-    const fallback = new Date().toISOString();
+    data: Partial<TerminalRequirementTemplateDocument>,
+    requirements: TerminalRequirementConfigEntry[],
+    fallback?: NormalizedCourseTemplateContext,
+): TerminalRequirementConfigDocument | null {
+    const fallbackTimestamp = new Date().toISOString();
+    const year = data.year ?? fallback?.year ?? DEFAULT_YEAR;
+    const department = data.department ?? fallback?.department;
+    const course = data.course ?? fallback?.course;
+
+    if (!department || !course) {
+        return null;
+    }
+
     return {
-        id: docId,
-        name: data.name ?? docId,
+        id: generateTerminalRequirementConfigId(year, department, course),
+        year,
+        name: data.name ?? `${department} - ${course}`,
         description: data.description,
-        requirements: normalizeConfigEntries(data.requirements ?? []),
-        createdAt: data.createdAt ?? fallback,
-        updatedAt: data.updatedAt ?? fallback,
+        department,
+        course,
+        requirements: normalizeConfigEntries(requirements),
+        stageTemplates: normalizeStageTemplatesMap(data.stageTemplates),
+        createdAt: data.createdAt ?? fallbackTimestamp,
+        updatedAt: data.updatedAt ?? fallbackTimestamp,
     };
 }
 
-/**
- * Get a global terminal requirement config by ID or by department/course
- * @param configIdOrDepartment Config ID, or department name if course is provided
- * @param course Optional course name (if provided, first param is treated as department)
- */
-export async function getTerminalRequirementConfig(
-    configIdOrDepartment: string,
-    course?: string,
-): Promise<TerminalRequirementConfigDocument | null> {
-    if (!configIdOrDepartment) return null;
+export interface TerminalRequirementConfigQuery extends CourseTemplateContextInput { }
 
-    let configId: string;
-    if (course) {
-        // Generate ID from department-course pattern
-        const dept = configIdOrDepartment.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        const courseKey = course.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        configId = `${dept}-${courseKey}`;
-    } else {
-        configId = configIdOrDepartment;
-    }
-
-    const ref = getConfigRef(configId);
-    const snapshot = await getDoc(ref);
-    if (!snapshot.exists()) return null;
-    const data = snapshot.data() as Omit<TerminalRequirementConfigDocument, 'id'>;
-    return mapConfigSnapshot(data, ref.id);
-}
-
-/**
- * Get all global terminal requirement configs
- */
-export async function getAllTerminalRequirementConfigs(): Promise<
-    TerminalRequirementConfigDocument[]
-> {
-    const collRef = getConfigCollectionRef();
-    const snapshot = await getDocs(collRef);
-    return snapshot.docs.map((docSnap) => {
-        const data = docSnap.data() as Omit<TerminalRequirementConfigDocument, 'id'>;
-        return mapConfigSnapshot(data, docSnap.id);
-    });
-}
-
-export interface SaveTerminalRequirementConfigPayload {
-    id?: string;
+export interface SaveTerminalRequirementConfigPayload extends CourseTemplateContextInput {
     name?: string;
     description?: string;
-    /** Optional department for organization/filtering. Auto-generates ID if provided with course. */
-    department?: string;
-    /** Optional course for organization/filtering. Auto-generates ID if provided with department. */
-    course?: string;
     requirements: TerminalRequirementConfigEntry[];
+    stageTemplates?: TerminalRequirementStageTemplates;
 }
 
 /**
- * Save (create or update) a global terminal requirement config
+ * Get a terminal requirement config scoped to a course for a given academic year.
+ * Reads the parent document for metadata and the entries subcollection for requirements.
+ */
+export async function getTerminalRequirementConfig(
+    contextInput: TerminalRequirementConfigQuery,
+): Promise<TerminalRequirementConfigDocument | null> {
+    const context = normalizeCourseTemplateContext(contextInput);
+    const ref = getTerminalTemplateDocRef(context);
+    const snapshot = await getDoc(ref);
+    if (!snapshot.exists()) {
+        return null;
+    }
+    const data = snapshot.data() as Partial<TerminalRequirementTemplateDocument>;
+
+    // Fetch requirement entries from the subcollection
+    const entriesRef = getTerminalEntriesCollectionRef(context);
+    const entriesSnapshot = await getDocs(entriesRef);
+
+    const requirements: TerminalRequirementConfigEntry[] = [];
+    entriesSnapshot.forEach((entryDoc) => {
+        const entryData = entryDoc.data() as TerminalRequirementConfigEntry;
+        if (entryData.requirementId) {
+            requirements.push(entryData);
+        }
+    });
+
+    const config = mapConfigSnapshot(data, requirements, context);
+    return config;
+}
+
+/**
+ * Get all terminal requirement configs for a specific academic year.
+ * Note: This only fetches parent metadata; use getTerminalRequirementConfig for full entries.
+ */
+export async function getAllTerminalRequirementConfigs(
+    year: string = DEFAULT_YEAR,
+): Promise<TerminalRequirementConfigDocument[]> {
+    const templatesGroup = collectionGroup(firebaseFirestore, COURSE_TEMPLATES_SUBCOLLECTION);
+    const configsQuery = query(
+        templatesGroup,
+        where('templateType', '==', TERMINAL_REQUIREMENTS_KEY),
+        where('year', '==', year),
+    );
+    const snapshot = await getDocs(configsQuery);
+    const configPromises: Promise<TerminalRequirementConfigDocument | null>[] = [];
+
+    snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Partial<TerminalRequirementTemplateDocument>;
+        const pathParams = extractPathParams(docSnap.ref.path);
+        if (!pathParams.department || !pathParams.course) {
+            return;
+        }
+        const context = normalizeCourseTemplateContext({
+            year: pathParams.year ?? year,
+            department: pathParams.department,
+            course: pathParams.course,
+        });
+
+        // Fetch entries for each config
+        const entriesRef = getTerminalEntriesCollectionRef(context);
+        const entriesPromise = getDocs(entriesRef).then((entriesSnapshot) => {
+            const requirements: TerminalRequirementConfigEntry[] = [];
+            entriesSnapshot.forEach((entryDoc) => {
+                const entryData = entryDoc.data() as TerminalRequirementConfigEntry;
+                if (entryData.requirementId) {
+                    requirements.push(entryData);
+                }
+            });
+            return mapConfigSnapshot(data, requirements, context);
+        });
+        configPromises.push(entriesPromise);
+    });
+
+    const configs = await Promise.all(configPromises);
+    return configs.filter((c): c is TerminalRequirementConfigDocument => c !== null);
+}
+
+/**
+ * Save (create or update) a course-level terminal requirement config.
+ * Writes the parent document for metadata and individual requirement entries to the subcollection.
  */
 export async function setTerminalRequirementConfig(
     payload: SaveTerminalRequirementConfigPayload,
 ): Promise<string> {
-    // Support legacy department/course pattern
-    let configId = payload.id?.trim();
-    let name = payload.name?.trim();
-
-    if (!configId && payload.department && payload.course) {
-        // Generate ID from department-course pattern
-        const dept = payload.department.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        const course = payload.course.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        configId = `${dept}-${course}`;
-        name = name || `${payload.department} - ${payload.course}`;
+    if (!payload.department.trim() || !payload.course.trim()) {
+        throw new Error('Department and course are required to save terminal requirements.');
     }
-
-    if (!configId && name) {
-        configId = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    }
-
-    if (!configId) {
-        throw new Error('Config ID, name, or department/course is required.');
-    }
-
-    const ref = getConfigRef(configId);
-    const snapshot = await getDoc(ref);
+    const context = normalizeCourseTemplateContext(payload);
     const now = new Date().toISOString();
+    await ensureCourseHierarchyExists(context, now);
+
+    const ref = getTerminalTemplateDocRef(context);
+    const snapshot = await getDoc(ref);
     const existing = snapshot.exists()
-        ? (snapshot.data() as Omit<TerminalRequirementConfigDocument, 'id'>)
+        ? (snapshot.data() as TerminalRequirementTemplateDocument)
         : null;
 
-    const documentPayload: Omit<TerminalRequirementConfigDocument, 'id'> = {
-        name: name || configId,
+    const normalizedStageTemplates = payload.stageTemplates !== undefined
+        ? normalizeStageTemplatesMap(payload.stageTemplates)
+        : undefined;
+
+    // Parent document stores metadata (not the requirements array)
+    const documentPayload = {
+        templateType: TERMINAL_REQUIREMENTS_KEY,
+        year: context.year,
+        name: payload.name?.trim() || `${payload.department.trim()} - ${payload.course.trim()}`,
         description: payload.description?.trim(),
-        department: payload.department?.trim(),
-        course: payload.course?.trim(),
-        requirements: normalizeConfigEntries(payload.requirements),
+        department: payload.department.trim(),
+        course: payload.course.trim(),
+        ...(normalizedStageTemplates !== undefined ? { stageTemplates: normalizedStageTemplates } : {}),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
     };
 
     const cleaned = cleanData(documentPayload, existing ? 'update' : 'create');
-    await setDoc(ref, cleaned, { merge: true });
-    return configId;
-}
 
-/**
- * Delete a global terminal requirement config
- */
-export async function deleteTerminalRequirementConfig(configId: string): Promise<void> {
-    if (!configId) {
-        throw new Error('Config ID is required.');
+    // Use a batch to write the parent document and all entries atomically
+    const batch = writeBatch(firebaseFirestore);
+    batch.set(ref, cleaned, { merge: true });
+
+    // Get existing entries to determine which to delete
+    const entriesRef = getTerminalEntriesCollectionRef(context);
+    const existingEntriesSnapshot = await getDocs(entriesRef);
+    const existingEntryIds = new Set<string>();
+    existingEntriesSnapshot.forEach((entryDoc) => {
+        existingEntryIds.add(entryDoc.id);
+    });
+
+    // Normalize and write new entries
+    const normalizedEntries = normalizeConfigEntries(payload.requirements);
+    const newEntryIds = new Set<string>();
+
+    for (const entry of normalizedEntries) {
+        const entryRef = getTerminalEntryDocRef(context, entry.requirementId);
+        const entryPayload = {
+            ...entry,
+            updatedAt: now,
+            createdAt: existingEntryIds.has(entry.requirementId) ? undefined : now,
+        };
+        const cleanedEntry = cleanData(entryPayload, existingEntryIds.has(entry.requirementId) ? 'update' : 'create');
+        batch.set(entryRef, cleanedEntry, { merge: true });
+        newEntryIds.add(entry.requirementId);
     }
-    const ref = getConfigRef(configId);
-    await deleteDoc(ref);
+
+    // Delete entries that are no longer in the payload
+    for (const existingId of existingEntryIds) {
+        if (!newEntryIds.has(existingId)) {
+            const entryRef = getTerminalEntryDocRef(context, existingId);
+            batch.delete(entryRef);
+        }
+    }
+
+    await batch.commit();
+    return generateTerminalRequirementConfigId(context.year, context.department, context.course);
 }
 
 /**
- * Listen to all global terminal requirement configs
+ * Delete a course-level terminal requirement config including all entries.
+ */
+export async function deleteTerminalRequirementConfig(
+    contextInput: TerminalRequirementConfigQuery,
+): Promise<void> {
+    const context = normalizeCourseTemplateContext(contextInput);
+
+    // Delete all entries first
+    const entriesRef = getTerminalEntriesCollectionRef(context);
+    const entriesSnapshot = await getDocs(entriesRef);
+
+    const batch = writeBatch(firebaseFirestore);
+    entriesSnapshot.forEach((entryDoc) => {
+        batch.delete(entryDoc.ref);
+    });
+
+    // Delete the parent document
+    const ref = getTerminalTemplateDocRef(context);
+    batch.delete(ref);
+
+    await batch.commit();
+}
+
+/**
+ * Listen to all terminal requirement configs for a year.
+ * Note: For performance, this listens to parent docs only. Use listenTerminalRequirementConfig for full entries.
  */
 export function listenAllTerminalRequirementConfigs(
     onData: (configs: TerminalRequirementConfigDocument[]) => void,
     onError?: (error: unknown) => void,
+    year: string = DEFAULT_YEAR,
 ): () => void {
-    const collRef = getConfigCollectionRef();
+    const templatesGroup = collectionGroup(firebaseFirestore, COURSE_TEMPLATES_SUBCOLLECTION);
+    const configsQuery = query(
+        templatesGroup,
+        where('templateType', '==', TERMINAL_REQUIREMENTS_KEY),
+        where('year', '==', year),
+    );
+
     return onSnapshot(
-        collRef,
-        (snapshot) => {
-            const configs = snapshot.docs.map((docSnap) => {
-                const data = docSnap.data() as Omit<TerminalRequirementConfigDocument, 'id'>;
-                return mapConfigSnapshot(data, docSnap.id);
+        configsQuery,
+        async (snapshot) => {
+            const configPromises: Promise<TerminalRequirementConfigDocument | null>[] = [];
+
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data() as Partial<TerminalRequirementTemplateDocument>;
+                const pathParams = extractPathParams(docSnap.ref.path);
+                if (!pathParams.department || !pathParams.course) {
+                    return;
+                }
+                const context = normalizeCourseTemplateContext({
+                    year: pathParams.year ?? year,
+                    department: pathParams.department,
+                    course: pathParams.course,
+                });
+
+                // Fetch entries for each config
+                const entriesRef = getTerminalEntriesCollectionRef(context);
+                const entriesPromise = getDocs(entriesRef).then((entriesSnapshot) => {
+                    const requirements: TerminalRequirementConfigEntry[] = [];
+                    entriesSnapshot.forEach((entryDoc) => {
+                        const entryData = entryDoc.data() as TerminalRequirementConfigEntry;
+                        if (entryData.requirementId) {
+                            requirements.push(entryData);
+                        }
+                    });
+                    return mapConfigSnapshot(data, requirements, context);
+                });
+                configPromises.push(entriesPromise);
             });
-            onData(configs);
+
+            try {
+                const configs = await Promise.all(configPromises);
+                onData(configs.filter((c): c is TerminalRequirementConfigDocument => c !== null));
+            } catch (error) {
+                if (onError) {
+                    onError(error);
+                } else {
+                    console.error('Error fetching terminal requirement entries:', error);
+                }
+            }
         },
         (error) => {
             if (onError) {
@@ -760,37 +976,81 @@ export function listenAllTerminalRequirementConfigs(
 }
 
 /**
- * Listen to a specific global terminal requirement config
+ * Listen to a specific course-level terminal requirement config.
+ * Listens to both the parent document and the entries subcollection.
  */
 export function listenTerminalRequirementConfig(
-    configId: string,
+    contextInput: TerminalRequirementConfigQuery,
     onData: (config: TerminalRequirementConfigDocument | null) => void,
     onError?: (error: unknown) => void,
 ): () => void {
-    if (!configId) {
-        onData(null);
-        return () => { /* no-op */ };
-    }
+    const context = normalizeCourseTemplateContext(contextInput);
+    const ref = getTerminalTemplateDocRef(context);
+    const entriesRef = getTerminalEntriesCollectionRef(context);
 
-    const ref = getConfigRef(configId);
-    return onSnapshot(
+    let parentData: Partial<TerminalRequirementTemplateDocument> | null = null;
+    let entriesData: TerminalRequirementConfigEntry[] = [];
+    let parentLoaded = false;
+    let entriesLoaded = false;
+
+    const emitData = () => {
+        if (!parentLoaded || !entriesLoaded) {
+            return;
+        }
+        if (!parentData) {
+            onData(null);
+            return;
+        }
+        const config = mapConfigSnapshot(parentData, entriesData, context);
+        onData(config);
+    };
+
+    const unsubParent = onSnapshot(
         ref,
         (snapshot) => {
+            parentLoaded = true;
             if (!snapshot.exists()) {
-                onData(null);
-                return;
+                parentData = null;
+            } else {
+                parentData = snapshot.data() as Partial<TerminalRequirementTemplateDocument>;
             }
-            const data = snapshot.data() as Omit<TerminalRequirementConfigDocument, 'id'>;
-            onData(mapConfigSnapshot(data, ref.id));
+            emitData();
         },
         (error) => {
             if (onError) {
                 onError(error);
             } else {
-                console.error('Terminal requirement config listener error:', error);
+                console.error('Terminal requirement config parent listener error:', error);
             }
         }
     );
+
+    const unsubEntries = onSnapshot(
+        entriesRef,
+        (snapshot) => {
+            entriesLoaded = true;
+            entriesData = [];
+            snapshot.forEach((entryDoc) => {
+                const entryData = entryDoc.data() as TerminalRequirementConfigEntry;
+                if (entryData.requirementId) {
+                    entriesData.push(entryData);
+                }
+            });
+            emitData();
+        },
+        (error) => {
+            if (onError) {
+                onError(error);
+            } else {
+                console.error('Terminal requirement config entries listener error:', error);
+            }
+        }
+    );
+
+    return () => {
+        unsubParent();
+        unsubEntries();
+    };
 }
 
 // ============================================================================

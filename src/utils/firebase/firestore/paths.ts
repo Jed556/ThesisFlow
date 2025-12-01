@@ -1,10 +1,13 @@
 import {
     DEFAULT_YEAR, YEAR_ROOT, DEFAULT_DEPARTMENT_SEGMENT, DEFAULT_COURSE_SEGMENT, DEPARTMENTS_SUBCOLLECTION,
-    COURSES_SUBCOLLECTION, GROUPS_SUBCOLLECTION, EXPERT_REQUESTS_SUBCOLLECTION, PROPOSALS_SUBCOLLECTION,
-    THESIS_SUBCOLLECTION, STAGES_SUBCOLLECTION, CHAPTERS_SUBCOLLECTION, SUBMISSIONS_SUBCOLLECTION,
-    CHATS_SUBCOLLECTION, AUDITS_SUBCOLLECTION, PANEL_COMMENTS_SUBCOLLECTION, USERS_SUBCOLLECTION,
-    TERMINAL_SUBCOLLECTION, CONFIGURATION_ROOT, TERMINAL_REQUIREMENTS_KEY, CHAPTER_TEMPLATES_KEY,
-    JOIN_SUBCOLLECTION, INVITES_DOC, REQUESTS_DOC, SLOT_REQUESTS_SUBCOLLECTION,
+    COURSES_SUBCOLLECTION, COURSE_TEMPLATES_SUBCOLLECTION, GROUPS_SUBCOLLECTION, EXPERT_REQUESTS_SUBCOLLECTION,
+    PROPOSALS_SUBCOLLECTION, THESIS_SUBCOLLECTION, STAGES_SUBCOLLECTION, CHAPTERS_SUBCOLLECTION,
+    SUBMISSIONS_SUBCOLLECTION, CHATS_SUBCOLLECTION, AUDITS_SUBCOLLECTION, PANEL_COMMENTS_SUBCOLLECTION,
+    USERS_SUBCOLLECTION, TERMINAL_SUBCOLLECTION, CONFIGURATION_ROOT, TERMINAL_REQUIREMENTS_KEY,
+    CHAPTER_TEMPLATES_KEY, JOIN_SUBCOLLECTION, INVITES_DOC, REQUESTS_DOC, SLOT_REQUESTS_SUBCOLLECTION,
+    CHAPTER_SLOTS_SUBCOLLECTION, SALARY_SUBCOLLECTION,
+    GROUP_CONFIGURATION_SUBCOLLECTION, GROUP_CONFIGURATION_CHAPTER_DOC,
+    TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION,
 } from '../../../config/firestore';
 
 
@@ -30,6 +33,9 @@ export interface PathParams {
 
 /**
  * Sanitize a string for use in Firestore paths
+ * @param value - The value to sanitize
+ * @param fallback - The fallback value if the input is empty or invalid
+ * @returns Sanitized string suitable for use in Firestore paths
  */
 export function sanitizePathSegment(value: string | null | undefined, fallback: string): string {
     if (!value) return fallback;
@@ -70,6 +76,81 @@ export function buildCoursePath(year: string, department: string, course: string
 }
 
 // ============================================================================
+// Course Template Path Builders
+// ============================================================================
+
+/**
+ * Build path to the templates collection under a course
+ * Path: year/{year}/departments/{department}/courses/{course}/templates
+ */
+export function buildCourseTemplatesCollectionPath(
+    year: string,
+    department: string,
+    course: string,
+): string {
+    return `${buildCoursePath(year, department, course)}/${COURSE_TEMPLATES_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific template document within a course
+ */
+export function buildCourseTemplateDocPath(
+    year: string,
+    department: string,
+    course: string,
+    templateKey: string,
+): string {
+    return `${buildCourseTemplatesCollectionPath(year, department, course)}/${templateKey}`;
+}
+
+/**
+ * Build path to the course-level chapter templates document
+ */
+export function buildCourseChapterTemplateDocPath(
+    year: string,
+    department: string,
+    course: string,
+): string {
+    return buildCourseTemplateDocPath(year, department, course, CHAPTER_TEMPLATES_KEY);
+}
+
+/**
+ * Build path to the course-level terminal requirements template document
+ */
+export function buildCourseTerminalTemplateDocPath(
+    year: string,
+    department: string,
+    course: string,
+): string {
+    return buildCourseTemplateDocPath(year, department, course, TERMINAL_REQUIREMENTS_KEY);
+}
+
+/**
+ * Build path to the terminal requirement entries collection (individual requirement documents)
+ * Structure: year/{year}/departments/{dept}/courses/{course}/templates/terminalRequirements/entries
+ */
+export function buildTerminalRequirementEntriesCollectionPath(
+    year: string,
+    department: string,
+    course: string,
+): string {
+    return `${buildCourseTerminalTemplateDocPath(year, department, course)}/${TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific terminal requirement entry document
+ * Structure: year/{year}/departments/{dept}/courses/{course}/templates/terminalRequirements/entries/{requirementId}
+ */
+export function buildTerminalRequirementEntryDocPath(
+    year: string,
+    department: string,
+    course: string,
+    requirementId: string,
+): string {
+    return `${buildTerminalRequirementEntriesCollectionPath(year, department, course)}/${requirementId}`;
+}
+
+// ============================================================================
 // Group Path Builders
 // ============================================================================
 
@@ -85,6 +166,31 @@ export function buildGroupsCollectionPath(year: string, department: string, cour
  */
 export function buildGroupDocPath(year: string, department: string, course: string, groupId: string): string {
     return `${buildGroupsCollectionPath(year, department, course)}/${groupId}`;
+}
+
+/**
+ * Build path to configuration collection under a group
+ */
+export function buildGroupConfigurationCollectionPath(
+    year: string,
+    department: string,
+    course: string,
+    groupId: string
+): string {
+    return `${buildGroupDocPath(year, department, course, groupId)}/${GROUP_CONFIGURATION_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a configuration document under a group (default: chapters)
+ */
+export function buildGroupConfigurationDocPath(
+    year: string,
+    department: string,
+    course: string,
+    groupId: string,
+    docId: string = GROUP_CONFIGURATION_CHAPTER_DOC
+): string {
+    return `${buildGroupConfigurationCollectionPath(year, department, course, groupId)}/${docId}`;
 }
 
 // ============================================================================
@@ -536,4 +642,82 @@ export function buildSlotRequestsCollectionPath(year: string = DEFAULT_YEAR): st
  */
 export function buildSlotRequestDocPath(year: string, requestId: string): string {
     return `${buildSlotRequestsCollectionPath(year)}/${requestId}`;
+}
+
+// ============================================================================
+// Chapter Slot Path Builders
+// ============================================================================
+
+/**
+ * Build path to chapter slot reservations collection under a year
+ */
+export function buildChapterSlotsCollectionPath(year: string = DEFAULT_YEAR): string {
+    return `${buildYearPath(year)}/${CHAPTER_SLOTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific chapter slot document
+ */
+export function buildChapterSlotDocPath(year: string, slotId: string): string {
+    return `${buildChapterSlotsCollectionPath(year)}/${slotId}`;
+}
+
+// ============================================================================
+// Salary Distribution Path Builders
+// ============================================================================
+
+/**
+ * Build path to salary collection under a year-level user
+ * Path: year/{year}/users/{userId}/salary
+ */
+export function buildYearUserSalaryCollectionPath(year: string, userId: string): string {
+    return `${buildYearUserDocPath(year, userId)}/${SALARY_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific salary document under a year-level user
+ * Path: year/{year}/users/{userId}/salary/{salaryId}
+ */
+export function buildYearUserSalaryDocPath(year: string, userId: string, salaryId: string): string {
+    return `${buildYearUserSalaryCollectionPath(year, userId)}/${salaryId}`;
+}
+
+/**
+ * Build path to salary collection under a department-level user
+ * Path: year/{year}/departments/{department}/users/{userId}/salary
+ */
+export function buildDepartmentUserSalaryCollectionPath(
+    year: string, department: string, userId: string
+): string {
+    return `${buildDepartmentUserDocPath(year, department, userId)}/${SALARY_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific salary document under a department-level user
+ * Path: year/{year}/departments/{department}/users/{userId}/salary/{salaryId}
+ */
+export function buildDepartmentUserSalaryDocPath(
+    year: string, department: string, userId: string, salaryId: string
+): string {
+    return `${buildDepartmentUserSalaryCollectionPath(year, department, userId)}/${salaryId}`;
+}
+
+/**
+ * Build path to salary collection under a course-level user
+ * Path: year/{year}/departments/{department}/courses/{course}/users/{userId}/salary
+ */
+export function buildCourseUserSalaryCollectionPath(
+    year: string, department: string, course: string, userId: string
+): string {
+    return `${buildCourseUserDocPath(year, department, course, userId)}/${SALARY_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific salary document under a course-level user
+ * Path: year/{year}/departments/{department}/courses/{course}/users/{userId}/salary/{salaryId}
+ */
+export function buildCourseUserSalaryDocPath(
+    year: string, department: string, course: string, userId: string, salaryId: string
+): string {
+    return `${buildCourseUserSalaryCollectionPath(year, department, course, userId)}/${salaryId}`;
 }

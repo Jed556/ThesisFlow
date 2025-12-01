@@ -18,7 +18,7 @@ import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import { findUserById, findUsersByIds } from './user';
 import { getGroup } from './groups';
-import type { ThesisData, ThesisChapter } from '../../../types/thesis';
+import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
 import { THESIS_SUBCOLLECTION, GROUPS_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
 import { buildThesisCollectionPath, buildThesisDocPath, extractPathParams } from './paths';
@@ -381,49 +381,46 @@ export async function createThesisForGroup(ctx: ThesisContext, data: Omit<Thesis
 
 /**
  * Calculate thesis progress based on approved chapters
- * Note: This function now requires fetching chapters from subcollections.
- * Consider using getChaptersForStage from chapters.ts for each stage.
  * @param ctx - Thesis context containing path information
  * @param thesisId - Thesis document ID
  * @returns Progress percentage (0-100)
- * @deprecated Chapters are now stored in subcollections. Use getChaptersForStage to fetch chapters per stage.
  */
 export async function calculateThesisProgress(ctx: ThesisContext, thesisId: string): Promise<number> {
     const thesis = await getThesisById(ctx, thesisId);
     if (!thesis?.stages || thesis.stages.length === 0) return 0;
 
-    // TODO: Fetch chapters from subcollections instead of embedded field
-    // Chapters are now in: thesis/{thesisId}/stages/{stage}/chapters/{chapterId}
-    console.warn('calculateThesisProgress: Chapters should be fetched from subcollections');
-    return 0;
-}
+    let totalChapters = 0;
+    let approvedChapters = 0;
 
-/**
- * Compute thesis progress ratio (0-1) from chapters array
- * @param chapters - Array of thesis chapters
- * @returns Progress ratio (0-1)
- */
-export function computeThesisProgressFromChapters(chapters: ThesisChapter[]): number {
-    if (!chapters || chapters.length === 0) return 0;
+    for (const stage of thesis.stages) {
+        if (stage.chapters) {
+            totalChapters += stage.chapters.length;
+            approvedChapters += stage.chapters.filter((ch) => ch.status === 'approved').length;
+        }
+    }
 
-    const approvedCount = chapters.filter((ch) => ch.status === 'approved').length;
-    return chapters.length > 0 ? approvedCount / chapters.length : 0;
+    return totalChapters > 0 ? (approvedChapters / totalChapters) * 100 : 0;
 }
 
 /**
  * Compute thesis progress ratio (0-1)
- * Note: This function signature is kept for backward compatibility but chapters
- * must now be fetched from subcollections separately.
  * @param thesis - Thesis data
  * @returns Progress ratio (0-1)
- * @deprecated Use computeThesisProgressFromChapters with chapters fetched from subcollections
  */
 export function computeThesisProgressRatio(thesis: ThesisData): number {
     if (!thesis.stages || thesis.stages.length === 0) return 0;
 
-    // TODO: Chapters should be fetched from subcollections
-    console.warn('computeThesisProgressRatio: Chapters should be fetched from subcollections');
-    return 0;
+    let totalChapters = 0;
+    let approvedChapters = 0;
+
+    for (const stage of thesis.stages) {
+        if (stage.chapters) {
+            totalChapters += stage.chapters.length;
+            approvedChapters += stage.chapters.filter((ch) => ch.status === 'approved').length;
+        }
+    }
+
+    return totalChapters > 0 ? approvedChapters / totalChapters : 0;
 }
 
 // ============================================================================

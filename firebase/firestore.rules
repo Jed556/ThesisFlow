@@ -179,6 +179,18 @@ service cloud.firestore {
             allow write: if isAdminOrDeveloper();
         }
 
+        // Collection group: templates (course templates for terminal requirements, chapters, etc.)
+        match /{path=**}/templates/{templateId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
+        // Collection group: entries (terminal requirement entries under templates)
+        match /{path=**}/entries/{entryId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdminOrDeveloper();
+        }
+
         // Collection group: terminal
         match /{path=**}/terminal/{terminalId} {
             allow read: if isAuthenticated();
@@ -310,6 +322,23 @@ service cloud.firestore {
                     match /users/{userId} {
                         allow read: if isAuthenticated();
                         allow write: if isAdminOrDeveloper() || isHead() || isAdviser() || isOwner(userId);
+                    }
+
+                    // ================================
+                    // COURSE TEMPLATES (terminal requirements config, chapter templates, etc.)
+                    // ================================
+
+                    match /templates/{templateId} {
+                        // All authenticated users can read templates (students need to see requirements)
+                        allow read: if isAuthenticated();
+                        // Only admins/developers can manage templates
+                        allow write: if isAdminOrDeveloper();
+
+                        // Entries subcollection (terminal requirement entries)
+                        match /entries/{entryId} {
+                            allow read: if isAuthenticated();
+                            allow write: if isAdminOrDeveloper();
+                        }
                     }
 
                     // ================================

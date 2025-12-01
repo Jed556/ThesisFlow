@@ -20,6 +20,8 @@ export interface ChapterTemplate {
 export interface ThesisChapterConfig {
     /** Firestore document ID (usually in format: {department}_{course}) */
     id: string;
+    /** Academic year segment */
+    year: string;
     /** Department name */
     department: string;
     /** Course name */
@@ -40,6 +42,7 @@ export interface ChapterConfigFormData {
     department: string;
     course: string;
     chapters: ChapterTemplate[];
+    year?: string;
 }
 
 /**

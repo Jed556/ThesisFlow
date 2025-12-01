@@ -28,6 +28,7 @@ import { getAcademicYear } from '../../../utils/dateUtils';
 function docToThesisGroup(docSnap: DocumentSnapshot): ThesisGroup | null {
     if (!docSnap.exists()) return null;
     const data = docSnap.data();
+    const context = extractGroupContext(docSnap.ref.path);
     return {
         id: docSnap.id,
         name: data.name || '',
@@ -37,8 +38,9 @@ function docToThesisGroup(docSnap: DocumentSnapshot): ThesisGroup | null {
         updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
         status: data.status || 'draft',
         thesis: data.thesis,
-        department: data.department || '',
-        course: data.course || '',
+        year: context.year || DEFAULT_YEAR,
+        department: data.department || context.department || '',
+        course: data.course || context.course || '',
         rejectionReason: data.rejectionReason,
     } as ThesisGroup;
 }

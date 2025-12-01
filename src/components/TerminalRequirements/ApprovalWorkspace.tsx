@@ -44,11 +44,12 @@ import { findGroupById, listenGroupsByPanelist } from '../../utils/firebase/fire
 import {
     findAndListenTerminalRequirements,
     findAndRecordTerminalRequirementDecision,
+    getTerminalRequirementConfig,
 } from '../../utils/firebase/firestore/terminalRequirements';
-import {
-    fetchTerminalRequirementFiles,
-    getTerminalRequirementsByStage,
-} from '../../utils/terminalRequirements';
+import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementTemplate';
+import type { TerminalRequirement } from '../../types/terminalRequirement';
+import { listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 interface AssignmentOption {
     thesisId: string;
@@ -85,6 +86,9 @@ export function TerminalRequirementApprovalWorkspace({
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [thesisError, setThesisError] = React.useState<string | null>(null);
     const [groupMeta, setGroupMeta] = React.useState<ThesisGroup | null>(null);
+    const [requirementConfig, setRequirementConfig] = React.useState<
+        Record<string, TerminalRequirementConfigEntry>
+    >({});
     const [submissionByStage, setSubmissionByStage] = React.useState<
         Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
     >({});
@@ -119,8 +123,9 @@ export function TerminalRequirementApprovalWorkspace({
             setAssignmentLoading(true);
             const unsubscribe = listenGroupsByPanelist(userUid, {
                 onData: (groups: ThesisGroup[]) => {
+                    // Don't use deprecated group.thesis - store groupId and resolve thesis later
                     setAssignmentOptions(groups.map((group) => ({
-                        thesisId: group.thesis?.id ?? '',
+                        thesisId: '', // Will be resolved via findThesisByGroupId
                         label: group.name || group.id,
                         groupId: group.id,
                     })));
@@ -292,6 +297,42 @@ export function TerminalRequirementApprovalWorkspace({
         };
     }, [selectedThesisId]);
 
+    // Load requirement configuration based on group's department/course
+    React.useEffect(() => {
+        if (!groupMeta?.department || !groupMeta?.course || !groupMeta?.year) {
+            setRequirementConfig({});
+            return;
+        }
+        let cancelled = false;
+        void (async () => {
+            try {
+                const config = await getTerminalRequirementConfig({
+                    year: groupMeta.year!,
+                    department: groupMeta.department!,
+                    course: groupMeta.course!,
+                });
+                if (!cancelled) {
+                    // Convert requirements array to a map keyed by requirementId
+                    const configMap: Record<string, TerminalRequirementConfigEntry> = {};
+                    if (config?.requirements) {
+                        config.requirements.forEach((entry) => {
+                            configMap[entry.requirementId] = entry;
+                        });
+                    }
+                    setRequirementConfig(configMap);
+                }
+            } catch (error) {
+                console.error('Failed to load terminal requirement config:', error);
+                if (!cancelled) {
+                    setRequirementConfig({});
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [groupMeta?.year, groupMeta?.department, groupMeta?.course]);
+
     const availableStages = React.useMemo(() => {
         return THESIS_STAGE_METADATA.filter((stageMeta) => submissionByStage[stageMeta.value]);
     }, [submissionByStage]);
@@ -308,13 +349,23 @@ export function TerminalRequirementApprovalWorkspace({
 
     const resolvedStage = activeStage ?? availableStages[0]?.value ?? null;
     const activeSubmission = resolvedStage ? (submissionByStage[resolvedStage] ?? null) : null;
-    const stageRequirements = React.useMemo(() => {
+    const stageRequirements: TerminalRequirement[] = React.useMemo(() => {
         if (!resolvedStage || !activeSubmission) {
             return [];
         }
-        const definitions = getTerminalRequirementsByStage(resolvedStage);
-        return definitions.filter((definition) => activeSubmission.requirementIds.includes(definition.id));
-    }, [resolvedStage, activeSubmission]);
+        // Filter requirements by stage and map to TerminalRequirement format
+        return Object.values(requirementConfig)
+            .filter((entry) =>
+                entry.stage === resolvedStage &&
+                activeSubmission.requirementIds.includes(entry.requirementId),
+            )
+            .map((entry): TerminalRequirement => ({
+                id: entry.requirementId,
+                stage: entry.stage,
+                title: entry.title ?? entry.requirementId,
+                description: entry.description ?? '',
+            }));
+    }, [resolvedStage, activeSubmission, requirementConfig]);
 
     React.useEffect(() => {
         setFilesByRequirement({});
@@ -322,22 +373,37 @@ export function TerminalRequirementApprovalWorkspace({
     }, [resolvedStage, selectedThesisId]);
 
     const loadRequirementFiles = React.useCallback(async (requirementId: string) => {
-        if (!thesis?.id) {
+        if (!thesis?.id || !groupMeta?.id || !resolvedStage) {
             return;
         }
         setFileLoading((prev) => ({ ...prev, [requirementId]: true }));
         try {
-            const files = await fetchTerminalRequirementFiles(thesis.id, requirementId);
+            const files = await listTerminalRequirementFiles({
+                thesisId: thesis.id,
+                groupId: groupMeta.id,
+                stage: resolvedStage,
+                requirementId,
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+            });
             setFilesByRequirement((prev) => ({ ...prev, [requirementId]: files }));
         } catch (error) {
             console.error('Failed to load requirement files for expert view:', error);
         } finally {
             setFileLoading((prev) => ({ ...prev, [requirementId]: false }));
         }
-    }, [thesis?.id]);
+    }, [
+        groupMeta?.course,
+        groupMeta?.department,
+        groupMeta?.id,
+        groupMeta?.year,
+        resolvedStage,
+        thesis?.id,
+    ]);
 
     React.useEffect(() => {
-        if (!activeSubmission) {
+        if (!activeSubmission || !resolvedStage) {
             return;
         }
         activeSubmission.requirementIds.forEach((requirementId) => {
@@ -345,7 +411,7 @@ export function TerminalRequirementApprovalWorkspace({
                 void loadRequirementFiles(requirementId);
             }
         });
-    }, [activeSubmission, filesByRequirement, loadRequirementFiles]);
+    }, [activeSubmission, filesByRequirement, loadRequirementFiles, resolvedStage]);
 
     const canDecide = Boolean(
         userUid

@@ -11,7 +11,7 @@ import type { NavigationItem } from '../../types/navigation';
 import type { ThesisStageName } from '../../types/thesis';
 import type { ThesisGroup } from '../../types/group';
 import type { TerminalRequirement } from '../../types/terminalRequirement';
-import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementConfig';
+import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementTemplate';
 import type { FileAttachment } from '../../types/file';
 import type {
     TerminalRequirementApproverAssignments, TerminalRequirementSubmissionRecord
@@ -22,13 +22,11 @@ import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import {
     getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
-import { uploadThesisFile, deleteThesisFile } from '../../utils/firebase/storage/thesis';
+import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import {
     THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap, describeStageSequenceStep, getPreviousSequenceStep,
 } from '../../utils/thesisStageUtils';
-import {
-    fetchTerminalRequirementFiles, getTerminalRequirementStatus, getTerminalRequirementsByStage
-} from '../../utils/terminalRequirements';
+import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { DEFAULT_YEAR } from '../../config/firestore';
 
@@ -162,10 +160,12 @@ export default function TerminalRequirementsPage() {
         setConfigLoading(true);
         setConfigError(null);
 
-        // FIX: getTerminalRequirementConfig takes a configId, not (department, course)
-        // Use a convention like "department-course" as the config ID
-        const configId = `${groupMeta.department}-${groupMeta.course}`;
-        void getTerminalRequirementConfig(configId)
+        const year = groupMeta.year ?? DEFAULT_YEAR;
+        void getTerminalRequirementConfig({
+            year,
+            department: groupMeta.department,
+            course: groupMeta.course,
+        })
             .then((config) => {
                 if (!cancelled) {
                     setRequirementsConfig(config?.requirements ?? null);
@@ -187,7 +187,7 @@ export default function TerminalRequirementsPage() {
         return () => {
             cancelled = true;
         };
-    }, [groupMeta?.department, groupMeta?.course]);
+    }, [groupMeta?.department, groupMeta?.course, groupMeta?.year]);
 
     React.useEffect(() => {
         if (!thesis?.id) {
@@ -227,27 +227,30 @@ export default function TerminalRequirementsPage() {
 
     const stageRequirementsByStage = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, TerminalRequirement[]>>((acc, stageMeta) => {
-            const baseDefinitions = getTerminalRequirementsByStage(stageMeta.value);
             if (!configRequirementMap) {
-                acc[stageMeta.value] = baseDefinitions;
+                // No config loaded yet - return empty array for each stage
+                acc[stageMeta.value] = [];
             } else {
-                acc[stageMeta.value] = baseDefinitions
-                    .filter((definition) => {
-                        const entry = configRequirementMap[definition.id];
-                        return entry ? entry.active : false;
-                    })
-                    .map((definition) => {
-                        const entry = configRequirementMap[definition.id];
-                        if (!entry?.template) {
-                            return definition;
-                        }
-                        return {
-                            ...definition,
-                            templateFileId: entry.template.fileId,
-                            templateFileName: entry.template.fileName,
-                            templateFileUrl: entry.template.fileUrl,
-                        };
-                    });
+                // Build requirements from config entries for this stage
+                acc[stageMeta.value] = Object.values(configRequirementMap)
+                    .filter((entry) => entry.stage === stageMeta.value && entry.required)
+                    .map((entry): TerminalRequirement => ({
+                        id: entry.requirementId,
+                        stage: entry.stage,
+                        title: entry.title ?? entry.requirementId,
+                        description: entry.description ?? '',
+                        ...(entry.fileTemplate && {
+                            templateFile: {
+                                id: entry.fileTemplate.fileId,
+                                name: entry.fileTemplate.fileName,
+                                url: entry.fileTemplate.fileUrl,
+                                type: '',
+                                size: '',
+                                uploadDate: entry.fileTemplate.uploadedAt,
+                                author: entry.fileTemplate.uploadedBy,
+                            },
+                        }),
+                    }));
             }
             return acc;
         }, {} as Record<ThesisStageName, TerminalRequirement[]>);
@@ -283,13 +286,24 @@ export default function TerminalRequirementsPage() {
 
     const isConfigInitializing = configLoading && !requirementsConfig;
 
-    // FIX: ThesisData doesn't have chapters directly - it has stages which can contain chapters
+    // FIX: ThesisData doesn't have chapters directly - it has stages which can contain chapters.
+    // When extracting chapters from stages, we need to ensure each chapter has its stage
+    // property set so that filtering by stage works correctly.
     const normalizedChapters = React.useMemo(() => {
         if (!thesis?.stages) return [];
-        return thesis.stages.flatMap((stage) => stage.chapters ?? []);
+        return thesis.stages.flatMap((stage) =>
+            (stage.chapters ?? []).map((chapter) => ({
+                ...chapter,
+                // Ensure chapter has stage property set from parent stage
+                stage: chapter.stage ?? [stage.name],
+            }))
+        );
     }, [thesis?.stages]);
+    // FIX: Use treatEmptyAsComplete: true so that stages without chapters don't block
+    // terminal requirements. If no chapters are defined for a stage, students should
+    // still be able to access terminal requirements for that stage.
     const chapterCompletionMap = React.useMemo(
-        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: false }),
+        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: true }),
         [normalizedChapters],
     );
 
@@ -315,20 +329,28 @@ export default function TerminalRequirementsPage() {
         [activeStage],
     );
 
-    const loadRequirementFiles = React.useCallback(async (requirementId: string) => {
-        if (!thesis?.id) {
+    const loadRequirementFiles = React.useCallback(async (requirement: TerminalRequirement) => {
+        if (!thesis?.id || !groupMeta?.id) {
             return;
         }
-        setRequirementLoading((prev) => ({ ...prev, [requirementId]: true }));
+        setRequirementLoading((prev) => ({ ...prev, [requirement.id]: true }));
         try {
-            const files = await fetchTerminalRequirementFiles(thesis.id, requirementId);
-            setRequirementFiles((prev) => ({ ...prev, [requirementId]: files }));
+            const files = await listTerminalRequirementFiles({
+                thesisId: thesis.id,
+                groupId: groupMeta.id,
+                stage: requirement.stage,
+                requirementId: requirement.id,
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+            });
+            setRequirementFiles((prev) => ({ ...prev, [requirement.id]: files }));
         } catch (loadError) {
             console.error('Failed to load requirement files:', loadError);
         } finally {
-            setRequirementLoading((prev) => ({ ...prev, [requirementId]: false }));
+            setRequirementLoading((prev) => ({ ...prev, [requirement.id]: false }));
         }
-    }, [thesis?.id]);
+    }, [groupMeta?.course, groupMeta?.department, groupMeta?.id, groupMeta?.year, thesis?.id]);
 
     React.useEffect(() => {
         if (!thesis?.id || activeStageLocked) {
@@ -338,7 +360,7 @@ export default function TerminalRequirementsPage() {
             if (requirementFiles[requirement.id]) {
                 return;
             }
-            void loadRequirementFiles(requirement.id);
+            void loadRequirementFiles(requirement);
         });
     }, [thesis?.id, activeStageLocked, stageRequirements, requirementFiles, loadRequirementFiles]);
 
@@ -358,6 +380,9 @@ export default function TerminalRequirementsPage() {
 
         setUploadingMap((prev) => ({ ...prev, [requirement.id]: true }));
         setUploadErrors((prev) => ({ ...prev, [requirement.id]: null }));
+        const uploadYear = groupMeta.year ?? DEFAULT_YEAR;
+        const uploadDepartment = groupMeta.department ?? '';
+        const uploadCourse = groupMeta.course ?? '';
 
         try {
             for (const file of files) {
@@ -374,10 +399,13 @@ export default function TerminalRequirementsPage() {
                     },
                     terminalStage: requirement.stage,
                     terminalRequirementId: requirement.id,
+                    year: uploadYear,
+                    department: uploadDepartment,
+                    course: uploadCourse,
                 });
             }
             showNotification('Requirement uploaded successfully.', 'success');
-            await loadRequirementFiles(requirement.id);
+            await loadRequirementFiles(requirement);
         } catch (uploadError) {
             const message = uploadError instanceof Error
                 ? uploadError.message
@@ -387,17 +415,26 @@ export default function TerminalRequirementsPage() {
         } finally {
             setUploadingMap((prev) => ({ ...prev, [requirement.id]: false }));
         }
-    }, [loadRequirementFiles, showNotification, thesis?.id, groupMeta?.id, userUid]);
+    }, [
+        groupMeta?.course,
+        groupMeta?.department,
+        groupMeta?.id,
+        groupMeta?.year,
+        loadRequirementFiles,
+        showNotification,
+        thesis?.id,
+        userUid,
+    ]);
 
-    const handleDeleteFile = React.useCallback(async (requirementId: string, file: FileAttachment) => {
+    const handleDeleteFile = React.useCallback(async (requirement: TerminalRequirement, file: FileAttachment) => {
         if (!thesis?.id || !file.id || !file.url) {
             showNotification('Unable to delete file. Missing metadata.', 'error');
             return;
         }
         try {
-            await deleteThesisFile(file.url, thesis.id, file.id);
+            await deleteThesisFile(file.url);
             showNotification('File removed.', 'success');
-            await loadRequirementFiles(requirementId);
+            await loadRequirementFiles(requirement);
         } catch (deleteError) {
             console.error('Failed to delete requirement file:', deleteError);
             showNotification('Failed to delete file. Please try again.', 'error');
@@ -713,7 +750,7 @@ export default function TerminalRequirementsPage() {
                                                             ? (files) => handleUploadRequirement(requirement, files)
                                                             : undefined}
                                                         onDeleteFile={allowFileActions
-                                                            ? (file) => handleDeleteFile(requirement.id, file)
+                                                            ? (file) => handleDeleteFile(requirement, file)
                                                             : undefined}
                                                     />
                                                 </Grid>

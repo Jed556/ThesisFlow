@@ -1,8 +1,12 @@
 /**
  * Firebase Firestore - Chat & Conversation
  * 
- * This module handles chat messages in hierarchical structure (under submissions):
- * year/{year}/departments/{department}/courses/{course}/groups/{groupId}/thesis/{thesisId}/stages/{stage}/chapters/{chapterId}/submissions/{submissionId}/chats/{chatId}
+ * This module handles:
+ * 1. Chat messages in hierarchical structure (under submissions):
+ *    year/{year}/departments/{department}/courses/{course}/groups/{groupId}/thesis/{thesisId}/stages/{stage}/chapters/{chapterId}/submissions/{submissionId}/chats/{chatId}
+ * 
+ * 2. Chapter comments embedded in thesis documents (using hierarchical paths):
+ *    year/{year}/departments/{department}/courses/{course}/groups/{groupId}/thesis/{thesisId}
  */
 
 import {
@@ -10,9 +14,9 @@ import {
     deleteDoc, query, orderBy, serverTimestamp, onSnapshot, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type { ThesisComment } from '../../../types/thesis';
+import type { ThesisComment, ThesisData, ThesisChapter } from '../../../types/thesis';
 import { CHATS_SUBCOLLECTION } from '../../../config/firestore';
-import { buildChatsCollectionPath, buildChatDocPath } from './paths';
+import { buildChatsCollectionPath, buildChatDocPath, buildThesisDocPath } from './paths';
 
 // ============================================================================
 // Types
@@ -182,7 +186,7 @@ export function listenChatsForSubmission(
 }
 
 // ============================================================================
-// Chapter Comments (via chats subcollection under submissions)
+// Chapter Comments (Embedded in thesis documents)
 // ============================================================================
 
 /**
@@ -198,40 +202,68 @@ function generateCommentId(): string {
     return `comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Context for chapter comment operations (uses chats subcollection) */
-export interface ChapterCommentContext {
+/**
+ * Apply an update to a specific chapter in the thesis
+ * @param thesis - The thesis data containing chapters
+ * @param chapterId - The ID of the chapter to update
+ * @param updater - Function that receives the chapter and returns the updated chapter
+ * @returns Updated chapters array
+ */
+function applyChapterUpdate(
+    thesis: ThesisData,
+    chapterId: number,
+    updater: (chapter: ThesisChapter) => ThesisChapter
+): ThesisChapter[] {
+    const chapters = thesis.chapters ?? [];
+    const index = chapters.findIndex((ch) => ch.id === chapterId);
+    if (index === -1) {
+        throw new Error(`Chapter ${chapterId} not found in thesis`);
+    }
+    const updated = [...chapters];
+    updated[index] = updater(chapters[index]);
+    return updated;
+}
+
+/** Context for thesis-level operations */
+export interface ThesisCommentContext {
     year: string;
     department: string;
     course: string;
     groupId: string;
     thesisId: string;
-    stage: string;
-    chapterId: string;
-    submissionId: string;
 }
 
 /** Input for appending a chapter comment */
 export interface AppendChapterCommentInput {
-    ctx: ChapterCommentContext;
+    ctx: ThesisCommentContext;
+    chapterId: number;
     comment: Omit<ThesisComment, 'id' | 'date'> & { id?: string; date?: string };
 }
 
 /**
- * Append a comment to a chapter submission via chats subcollection
- * Path: thesis/{thesisId}/stages/{stage}/chapters/{chapterId}/submissions/{submissionId}/chats/{chatId}
- * @param input - The chapter context and comment data
+ * Append a comment to a chapter in the thesis document
+ * @param input - The thesis context, chapter ID, and comment data
  * @returns The persisted comment with ID and date
  */
 export async function appendChapterComment({
     ctx,
+    chapterId,
     comment,
 }: AppendChapterCommentInput): Promise<ThesisComment> {
-    const { year, department, course, groupId, thesisId, stage, chapterId, submissionId } = ctx;
+    const { year, department, course, groupId, thesisId } = ctx;
 
-    if (!thesisId || !stage || !chapterId || !submissionId) {
-        throw new Error('thesisId, stage, chapterId, and submissionId are required to append a chapter comment');
+    if (!thesisId) {
+        throw new Error('thesisId is required to append a chapter comment');
     }
 
+    const docPath = buildThesisDocPath(year, department, course, groupId, thesisId);
+    const ref = doc(firebaseFirestore, docPath);
+    const snapshot = await getDoc(ref);
+    if (!snapshot.exists()) {
+        throw new Error(`Thesis ${thesisId} not found`);
+    }
+
+    const thesis = snapshot.data() as ThesisData;
     const persistedComment: ThesisComment = {
         id: comment.id ?? generateCommentId(),
         date: comment.date ?? new Date().toISOString(),
@@ -241,24 +273,23 @@ export async function appendChapterComment({
         version: comment.version,
     };
 
-    const chatCtx: ChatContext = {
-        year,
-        department,
-        course,
-        groupId,
-        thesisId,
-        stage,
-        chapterId,
-        submissionId,
-    };
+    const nextChapters = applyChapterUpdate(thesis, chapterId, (chapter) => ({
+        ...chapter,
+        comments: [...(chapter.comments ?? []), persistedComment],
+    }));
 
-    const chatId = await createChat(chatCtx, persistedComment);
-    return { ...persistedComment, id: chatId };
+    await setDoc(ref, {
+        chapters: nextChapters,
+        lastUpdated: new Date().toISOString(),
+    }, { merge: true });
+
+    return persistedComment;
 }
 
 /** Input for updating a chapter comment */
 export interface UpdateChapterCommentInput {
-    ctx: ChapterCommentContext;
+    ctx: ThesisCommentContext;
+    chapterId: number;
     commentId: string;
     updates: Partial<Omit<ThesisComment, 'id' | 'author' | 'date'>> & {
         comment?: string;
@@ -267,53 +298,60 @@ export interface UpdateChapterCommentInput {
 }
 
 /**
- * Update an existing comment in a chapter submission via chats subcollection
- * @param input - The chapter context, comment ID, and updates
+ * Update an existing comment in a chapter
+ * @param input - The thesis context, chapter ID, comment ID, and updates
  * @returns The updated comment
  */
 export async function updateChapterComment({
     ctx,
+    chapterId,
     commentId,
     updates,
 }: UpdateChapterCommentInput): Promise<ThesisComment> {
-    const { year, department, course, groupId, thesisId, stage, chapterId, submissionId } = ctx;
+    const { year, department, course, groupId, thesisId } = ctx;
 
-    if (!thesisId || !stage || !chapterId || !submissionId) {
-        throw new Error('thesisId, stage, chapterId, and submissionId are required to update a chapter comment');
+    if (!thesisId) {
+        throw new Error('thesisId is required to update a chapter comment');
     }
 
-    const chatCtx: ChatContext = {
-        year,
-        department,
-        course,
-        groupId,
-        thesisId,
-        stage,
-        chapterId,
-        submissionId,
-    };
-
-    // Get the current chat to preserve existing fields
-    const currentChat = await getChat(chatCtx, commentId);
-    if (!currentChat) {
-        throw new Error(`Comment ${commentId} not found in submission ${submissionId}`);
+    const docPath = buildThesisDocPath(year, department, course, groupId, thesisId);
+    const ref = doc(firebaseFirestore, docPath);
+    const snapshot = await getDoc(ref);
+    if (!snapshot.exists()) {
+        throw new Error(`Thesis ${thesisId} not found`);
     }
 
-    const updatedComment: ThesisComment = {
-        ...currentChat,
-        ...updates,
-        comment: updates.comment ?? currentChat.comment,
-        attachments: updates.attachments ?? currentChat.attachments,
-        isEdited: true,
-        date: new Date().toISOString(),
-    };
+    const thesis = snapshot.data() as ThesisData;
+    let updatedComment: ThesisComment | null = null;
 
-    await updateChat(chatCtx, commentId, updatedComment);
+    const nextChapters = applyChapterUpdate(thesis, chapterId, (chapter) => {
+        const comments = [...(chapter.comments ?? [])];
+        const index = comments.findIndex((item) => item.id === commentId);
+        if (index === -1) {
+            throw new Error(`Comment ${commentId} not found in chapter ${chapterId}`);
+        }
+        const current = comments[index];
+        const nextComment: ThesisComment = {
+            ...current,
+            ...updates,
+            comment: updates.comment ?? current.comment,
+            attachments: updates.attachments ?? current.attachments,
+            isEdited: true,
+            date: new Date().toISOString(),
+        };
+        comments[index] = nextComment;
+        updatedComment = nextComment;
+        return { ...chapter, comments };
+    });
+
+    await setDoc(ref, {
+        chapters: nextChapters,
+        lastUpdated: new Date().toISOString(),
+    }, { merge: true });
+
+    if (!updatedComment) {
+        throw new Error('Failed to update comment. Updated comment is undefined.');
+    }
 
     return updatedComment;
 }
-
-/**
- * @deprecated Use ChapterCommentContext instead. This alias is kept for backward compatibility.
- */
-export type ThesisCommentContext = ChapterCommentContext;

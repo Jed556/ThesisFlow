@@ -16,11 +16,11 @@ export interface ThesisGroup {
     createdAt: string;
     updatedAt: string;
     status: GroupStatus;
+    year?: string;
     /**
      * @deprecated Thesis is now stored as a subcollection under the group.
-     * This field remains for backward compatibility with existing documents
-     * but should not be written to new documents.
-     * Use getThesisByGroupId() to fetch thesis data instead.
+     * This field remains for backward compatibility with existing documents.
+     * Use findThesisByGroupId() to fetch thesis data instead.
      */
     thesis?: ThesisData;
     department?: string;
@@ -56,11 +56,11 @@ export interface ThesisGroupFormData {
     panels?: string[];
     /**
      * @deprecated Thesis is now stored as a subcollection under the group.
-     * This field remains for backward compatibility but should not be used
-     * for new group creation.
+     * Do not use for new group creation.
      */
     thesis?: ThesisData;
     status: GroupStatus;
+    year?: string;
     department?: string;
     course?: string;
 }

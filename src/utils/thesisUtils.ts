@@ -22,12 +22,13 @@ export function isCompletedGroupStatus(status?: GroupStatus | null): boolean {
 }
 
 /**
- * Check if a topic has been approved based on thesis title
- * A topic is considered approved if the thesis has a title (from approved proposal)
- * Note: Chapter data is now stored in subcollections and should be fetched separately
- * @param thesis - Thesis data with title
+ * Check if a topic has been approved based on thesis title and proposals
+ * A topic is considered approved if:
+ * - The thesis has a title (from approved proposal)
+ * - Or the thesis has chapters that have been worked on
+ * @param thesis - Thesis data with title and optional chapters
  */
-export function isTopicApproved(thesis?: Pick<ThesisData, 'title'> | null): boolean {
+export function isTopicApproved(thesis?: Pick<ThesisData, 'title' | 'chapters'> | null): boolean {
     if (!thesis) {
         return false;
     }
@@ -35,6 +36,14 @@ export function isTopicApproved(thesis?: Pick<ThesisData, 'title'> | null): bool
     // If thesis has a title, topic was approved
     const promotedTitle = thesis.title?.trim();
     if (promotedTitle) {
+        return true;
+    }
+
+    // If thesis has chapters with any submissions, topic was approved
+    const hasChapterWork = thesis.chapters?.some((chapter) =>
+        chapter.submissions && chapter.submissions.length > 0
+    );
+    if (hasChapterWork) {
         return true;
     }
 

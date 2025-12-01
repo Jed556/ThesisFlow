@@ -42,9 +42,6 @@ export default function AuditsPage(): React.ReactElement {
                     spacing={2}
                     sx={{ mb: 3 }}
                 >
-                    <Typography variant="h4" component="h1">
-                        Audit History
-                    </Typography>
                 </Stack>
 
                 {/* Audit View Component */}

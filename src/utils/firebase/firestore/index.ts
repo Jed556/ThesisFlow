@@ -1,4 +1,5 @@
 export * from './calendars';
+export * from './chapter';
 export * from './chapters';
 export * from './events';
 export * from './file';
@@ -10,3 +11,5 @@ export * from './topicProposals';
 export * from './panelComments';
 export * from './terminalRequirements';
 export * from './expertRequests';
+export * from './chapterSlots';
+export * from './salaries';

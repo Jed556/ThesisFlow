@@ -1,67 +1,66 @@
 import * as React from 'react';
 import {
-    Alert, Autocomplete, Box, Button, Card, CardContent, CircularProgress, Grid,
-    Stack, Switch, Tab, Tabs, TextField, Typography,
+    Alert, Autocomplete, Box, Button, Card, CardContent, CircularProgress,
+    Grid, IconButton, Stack, Switch, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
-import { FactCheck as FactCheckIcon, Upload as UploadIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import {
+    FactCheck as FactCheckIcon, Upload as UploadIcon, Delete as DeleteIcon,
+    Add as AddIcon, Edit as EditIcon
+} from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { AnimatedPage } from '../../components/Animate';
 import { useSnackbar } from '../../components/Snackbar';
+import { RequirementDialog, type RequirementDialogData } from '../../components/TerminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisStageName } from '../../types/thesis';
-import type { TerminalRequirement } from '../../types/terminalRequirement';
-import type { TerminalRequirementConfigEntry, TerminalRequirementTemplateMetadata } from '../../types/terminalRequirementConfig';
-import { findUserById } from '../../utils/firebase/firestore/user';
+import type {
+    TerminalRequirementConfigEntry, TerminalRequirementFileTemplate
+} from '../../types/terminalRequirementTemplate';
+import { findUserById, findAllUsers } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment, getGroupDepartments } from '../../utils/firebase/firestore/groups';
+import { listDepartmentsForYear, listCoursesForDepartment } from '../../utils/firebase/firestore/courseTemplateHelpers';
 import {
-    getAllTerminalRequirementConfigs,
-    getTerminalRequirementConfig,
-    setTerminalRequirementConfig,
+    getAllTerminalRequirementConfigs, getTerminalRequirementConfig, setTerminalRequirementConfig
 } from '../../utils/firebase/firestore/terminalRequirements';
 import {
-    uploadTerminalRequirementTemplate,
-    deleteTerminalRequirementTemplate,
+    uploadTerminalRequirementTemplate, deleteTerminalRequirementTemplate
 } from '../../utils/firebase/storage/terminalRequirements';
-import {
-    THESIS_STAGE_METADATA,
-} from '../../utils/thesisStageUtils';
-import {
-    TERMINAL_REQUIREMENTS,
-} from '../../utils/terminalRequirements';
+import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 type RequirementStateMap = Record<string, TerminalRequirementConfigEntry>;
 
-function createDefaultRequirementState(): RequirementStateMap {
-    return TERMINAL_REQUIREMENTS.reduce<RequirementStateMap>((acc, definition) => {
-        acc[definition.id] = {
-            stage: definition.stage,
-            requirementId: definition.id,
-            active: true,
+/**
+ * Create an empty requirement state - admins build from scratch
+ */
+function createEmptyRequirementState(): RequirementStateMap {
+    return {};
+}
+
+/**
+ * Convert entries array from Firestore to a map
+ */
+function entriesToState(entries?: TerminalRequirementConfigEntry[]): RequirementStateMap {
+    if (!entries || entries.length === 0) {
+        return {};
+    }
+    return entries.reduce<RequirementStateMap>((acc, entry) => {
+        if (!entry.requirementId) {
+            return acc;
+        }
+        acc[entry.requirementId] = {
+            stage: entry.stage,
+            requirementId: entry.requirementId,
+            required: Boolean(entry.required),
+            ...(entry.title ? { title: entry.title } : {}),
+            ...(entry.description ? { description: entry.description } : {}),
+            ...(entry.requireAttachment !== undefined ? { requireAttachment: entry.requireAttachment } : {}),
+            ...(entry.fileTemplate ? { fileTemplate: { ...entry.fileTemplate } } : {}),
         };
         return acc;
     }, {});
-}
-
-function mergeRequirementState(entries?: TerminalRequirementConfigEntry[]): RequirementStateMap {
-    const base = createDefaultRequirementState();
-    if (!entries || entries.length === 0) {
-        return base;
-    }
-    entries.forEach((entry) => {
-        if (!entry.requirementId || !base[entry.requirementId]) {
-            return;
-        }
-        base[entry.requirementId] = {
-            stage: entry.stage,
-            requirementId: entry.requirementId,
-            active: Boolean(entry.active),
-            ...(entry.requireAttachment !== undefined ? { requireAttachment: entry.requireAttachment } : {}),
-            ...(entry.template ? { template: { ...entry.template } } : {}),
-        };
-    });
-    return base;
 }
 
 function cloneRequirementState(state: RequirementStateMap): RequirementStateMap {
@@ -70,9 +69,11 @@ function cloneRequirementState(state: RequirementStateMap): RequirementStateMap 
         acc[key] = {
             stage: entry.stage,
             requirementId: entry.requirementId,
-            active: entry.active,
+            required: entry.required,
+            ...(entry.title ? { title: entry.title } : {}),
+            ...(entry.description ? { description: entry.description } : {}),
             ...(entry.requireAttachment !== undefined ? { requireAttachment: entry.requireAttachment } : {}),
-            ...(entry.template ? { template: { ...entry.template } } : {}),
+            ...(entry.fileTemplate ? { fileTemplate: { ...entry.fileTemplate } } : {}),
         };
         return acc;
     }, {});
@@ -90,22 +91,20 @@ function areRequirementStatesEqual(a: RequirementStateMap, b: RequirementStateMa
         if (!entryA || !entryB) {
             return false;
         }
-        const sameTemplate = entryA.template?.fileId === entryB.template?.fileId
-            && entryA.template?.fileUrl === entryB.template?.fileUrl
-            && entryA.template?.fileName === entryB.template?.fileName
-            && entryA.template?.uploadedAt === entryB.template?.uploadedAt
-            && entryA.template?.uploadedBy === entryB.template?.uploadedBy;
-        return entryA.active === entryB.active
+        const sameTemplate = entryA.fileTemplate?.fileId === entryB.fileTemplate?.fileId
+            && entryA.fileTemplate?.fileUrl === entryB.fileTemplate?.fileUrl
+            && entryA.fileTemplate?.fileName === entryB.fileTemplate?.fileName
+            && entryA.fileTemplate?.uploadedAt === entryB.fileTemplate?.uploadedAt
+            && entryA.fileTemplate?.uploadedBy === entryB.fileTemplate?.uploadedBy;
+        return entryA.required === entryB.required
             && entryA.stage === entryB.stage
+            && entryA.title === entryB.title
+            && entryA.description === entryB.description
             && entryA.requireAttachment === entryB.requireAttachment
             && sameTemplate;
     });
 }
 
-interface RequirementRow {
-    definition: TerminalRequirement;
-    entry: TerminalRequirementConfigEntry;
-}
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -123,6 +122,7 @@ export default function AdminTerminalRequirementsPage() {
 
     const canManage = session?.user?.role === 'admin' || session?.user?.role === 'developer';
 
+    const [selectedYear] = React.useState(DEFAULT_YEAR);
     const [profileLoading, setProfileLoading] = React.useState(true);
     const [departments, setDepartments] = React.useState<string[]>([]);
     const [selectedDepartment, setSelectedDepartment] = React.useState('');
@@ -134,25 +134,31 @@ export default function AdminTerminalRequirementsPage() {
     const [configLoading, setConfigLoading] = React.useState(false);
     const [configError, setConfigError] = React.useState<string | null>(null);
 
-    const [requirementState, setRequirementState] = React.useState<RequirementStateMap>(() => createDefaultRequirementState());
-    const syncedStateRef = React.useRef<RequirementStateMap>(createDefaultRequirementState());
+    const [requirementState, setRequirementState] = React.useState<RequirementStateMap>(() => createEmptyRequirementState());
+    const syncedStateRef = React.useRef<RequirementStateMap>(createEmptyRequirementState());
 
     const [activeStage, setActiveStage] = React.useState<ThesisStageName>(THESIS_STAGE_METADATA[0].value);
     const [saving, setSaving] = React.useState(false);
     const [uploadingMap, setUploadingMap] = React.useState<Record<string, boolean>>({});
     const [removingMap, setRemovingMap] = React.useState<Record<string, boolean>>({});
 
-    const definitionById = React.useMemo<Record<string, TerminalRequirement>>(() => {
-        return TERMINAL_REQUIREMENTS.reduce<Record<string, TerminalRequirement>>((acc, definition) => {
-            acc[definition.id] = definition;
+    // Add requirement dialog state
+    const [addDialogOpen, setAddDialogOpen] = React.useState(false);
+
+    // Edit requirement dialog state
+    const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+    const [editingEntry, setEditingEntry] = React.useState<TerminalRequirementConfigEntry | null>(null);
+
+    const stageLabelMap = React.useMemo<Record<ThesisStageName, string>>(() => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, string>>((acc, stage) => {
+            acc[stage.value as ThesisStageName] = stage.label;
             return acc;
-        }, {});
+        }, {} as Record<ThesisStageName, string>);
     }, []);
 
-    const hasUnsavedChanges = React.useMemo(
-        () => !areRequirementStatesEqual(requirementState, syncedStateRef.current),
-        [requirementState]
-    );
+    const hasUnsavedChanges = React.useMemo(() => {
+        return !areRequirementStatesEqual(requirementState, syncedStateRef.current);
+    }, [requirementState]);
 
     React.useEffect(() => {
         if (!canManage || !userUid) {
@@ -167,10 +173,12 @@ export default function AdminTerminalRequirementsPage() {
 
         const loadDepartments = async () => {
             try {
-                const [profile, allConfigs, groupDepartments] = await Promise.all([
+                const [profile, allConfigs, groupDepartments, hierarchyDepartments, allUsers] = await Promise.all([
                     findUserById(userUid),
-                    getAllTerminalRequirementConfigs().catch(() => []),
+                    getAllTerminalRequirementConfigs(selectedYear).catch(() => []),
                     getGroupDepartments().catch(() => []),
+                    listDepartmentsForYear(selectedYear).catch(() => []),
+                    findAllUsers().catch(() => []),
                 ]);
 
                 if (cancelled) {
@@ -198,7 +206,22 @@ export default function AdminTerminalRequirementsPage() {
                     .map((dept: string) => dept.trim())
                     .filter((dept: string): dept is string => Boolean(dept));
 
-                const unique = new Set<string>([...normalizedKnown, ...normalizedManaged, ...normalizedFromGroups]);
+                const normalizedFromHierarchy = hierarchyDepartments
+                    .map((dept: string) => dept.trim())
+                    .filter((dept: string): dept is string => Boolean(dept));
+
+                // Extract departments from user profiles (like Groups page does)
+                const normalizedFromUsers = allUsers
+                    .map((user) => user.department?.trim())
+                    .filter((dept): dept is string => Boolean(dept));
+
+                const unique = new Set<string>([
+                    ...normalizedKnown,
+                    ...normalizedManaged,
+                    ...normalizedFromGroups,
+                    ...normalizedFromHierarchy,
+                    ...normalizedFromUsers,
+                ]);
                 const sortedDepartments = Array.from(unique).sort((a, b) => a.localeCompare(b));
                 setDepartments(sortedDepartments);
 
@@ -229,7 +252,7 @@ export default function AdminTerminalRequirementsPage() {
         return () => {
             cancelled = true;
         };
-    }, [canManage, showNotification, userUid]);
+    }, [canManage, selectedYear, showNotification, userUid]);
 
     React.useEffect(() => {
         setSelectedCourse('');
@@ -247,9 +270,11 @@ export default function AdminTerminalRequirementsPage() {
 
         const loadCourses = async () => {
             try {
-                const [groups, allConfigs] = await Promise.all([
+                const [groups, allConfigs, hierarchyCourses, allUsers] = await Promise.all([
                     getGroupsByDepartment(selectedDepartment),
-                    getAllTerminalRequirementConfigs().catch(() => []),
+                    getAllTerminalRequirementConfigs(selectedYear).catch(() => []),
+                    listCoursesForDepartment(selectedYear, selectedDepartment).catch(() => []),
+                    findAllUsers().catch(() => []),
                 ]);
 
                 if (cancelled) {
@@ -269,7 +294,19 @@ export default function AdminTerminalRequirementsPage() {
                     .map((config) => config.course?.trim())
                     .filter((course): course is string => Boolean(course));
 
-                const uniqueCourses = Array.from(new Set([...fromGroups, ...fromConfigs])).sort((a, b) => a.localeCompare(b));
+                const fromHierarchy = hierarchyCourses
+                    .map((course: string) => course.trim())
+                    .filter((course): course is string => Boolean(course));
+
+                // Extract courses from user profiles for the selected department (like Groups page does)
+                const fromUsers = allUsers
+                    .filter((user) => user.department?.trim() === selectedDepartment)
+                    .map((user) => user.course?.trim())
+                    .filter((course): course is string => Boolean(course));
+
+                const uniqueCourses = Array.from(
+                    new Set([...fromGroups, ...fromConfigs, ...fromHierarchy, ...fromUsers])
+                ).sort((a, b) => a.localeCompare(b));
                 setCourseOptions(uniqueCourses);
                 setSelectedCourse((current) => {
                     if (current.trim()) {
@@ -296,13 +333,13 @@ export default function AdminTerminalRequirementsPage() {
         return () => {
             cancelled = true;
         };
-    }, [selectedDepartment, showNotification]);
+    }, [selectedDepartment, selectedYear, showNotification]);
 
     React.useEffect(() => {
         if (!selectedDepartment || !selectedCourse) {
-            const defaults = createDefaultRequirementState();
-            setRequirementState(defaults);
-            syncedStateRef.current = cloneRequirementState(defaults);
+            const empty = createEmptyRequirementState();
+            setRequirementState(empty);
+            syncedStateRef.current = cloneRequirementState(empty);
             return;
         }
 
@@ -310,12 +347,16 @@ export default function AdminTerminalRequirementsPage() {
         setConfigLoading(true);
         setConfigError(null);
 
-        void getTerminalRequirementConfig(selectedDepartment, selectedCourse)
+        void getTerminalRequirementConfig({
+            year: selectedYear,
+            department: selectedDepartment,
+            course: selectedCourse,
+        })
             .then((config) => {
                 if (cancelled) {
                     return;
                 }
-                const nextState = mergeRequirementState(config?.requirements);
+                const nextState = entriesToState(config?.requirements);
                 setRequirementState(nextState);
                 syncedStateRef.current = cloneRequirementState(nextState);
             })
@@ -323,9 +364,9 @@ export default function AdminTerminalRequirementsPage() {
                 console.error('Failed to load terminal requirements config:', error);
                 if (!cancelled) {
                     setConfigError('Unable to load terminal requirements for the selected course.');
-                    const defaults = createDefaultRequirementState();
-                    setRequirementState(defaults);
-                    syncedStateRef.current = cloneRequirementState(defaults);
+                    const empty = createEmptyRequirementState();
+                    setRequirementState(empty);
+                    syncedStateRef.current = cloneRequirementState(empty);
                 }
             })
             .finally(() => {
@@ -337,10 +378,10 @@ export default function AdminTerminalRequirementsPage() {
         return () => {
             cancelled = true;
         };
-    }, [selectedCourse, selectedDepartment]);
+    }, [selectedCourse, selectedDepartment, selectedYear]);
 
-    const persistEntries = React.useCallback(async (
-        nextState: RequirementStateMap,
+    const persistConfig = React.useCallback(async (
+        nextRequirements: RequirementStateMap,
         options?: { silent?: boolean },
     ): Promise<boolean> => {
         if (!selectedDepartment || !selectedCourse) {
@@ -355,9 +396,10 @@ export default function AdminTerminalRequirementsPage() {
 
         try {
             await setTerminalRequirementConfig({
+                year: selectedYear,
                 department: selectedDepartment,
                 course: selectedCourse,
-                requirements: Object.values(nextState),
+                requirements: Object.values(nextRequirements),
             });
             return true;
         } catch (error) {
@@ -369,43 +411,97 @@ export default function AdminTerminalRequirementsPage() {
                 setSaving(false);
             }
         }
-    }, [selectedCourse, selectedDepartment, showNotification]);
+    }, [selectedCourse, selectedDepartment, selectedYear, showNotification]);
 
     const handleSave = React.useCallback(async () => {
-        const success = await persistEntries(requirementState);
+        const success = await persistConfig(requirementState);
         if (success) {
             syncedStateRef.current = cloneRequirementState(requirementState);
             showNotification('Terminal requirements saved.', 'success');
         }
-    }, [persistEntries, requirementState, showNotification]);
+    }, [persistConfig, requirementState, showNotification]);
 
-    const handleToggleRequirement = React.useCallback((requirementId: string, nextActive: boolean) => {
+    const handleToggleRequirement = React.useCallback((requirementId: string, nextRequired: boolean) => {
         setRequirementState((prev) => {
             const current = prev[requirementId];
-            if (!current || current.active === nextActive) {
+            if (!current || current.required === nextRequired) {
                 return prev;
             }
-            const nextState = { ...prev, [requirementId]: { ...current, active: nextActive } };
+            const nextState = { ...prev, [requirementId]: { ...current, required: nextRequired } };
             return nextState;
         });
     }, []);
+
+    const handleDeleteRequirement = React.useCallback((requirementId: string) => {
+        setRequirementState((prev) => {
+            const nextState = { ...prev };
+            delete nextState[requirementId];
+            return nextState;
+        });
+    }, []);
+
+    const handleAddRequirement = React.useCallback((data: RequirementDialogData) => {
+        if (!data.title.trim()) {
+            showNotification('Please enter a title for the requirement.', 'error');
+            return;
+        }
+
+        const requirementId = `${activeStage.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+        const newEntry: TerminalRequirementConfigEntry = {
+            stage: activeStage,
+            requirementId,
+            required: data.required ?? true,
+            title: data.title.trim(),
+            description: data.description.trim() || undefined,
+        };
+
+        setRequirementState((prev) => ({
+            ...prev,
+            [requirementId]: newEntry,
+        }));
+
+        setAddDialogOpen(false);
+        showNotification('Requirement added. Remember to save your changes.', 'info');
+    }, [activeStage, showNotification]);
+
+    const handleOpenEditDialog = React.useCallback((entry: TerminalRequirementConfigEntry) => {
+        setEditingEntry(entry);
+        setEditDialogOpen(true);
+    }, []);
+
+    const handleSaveEdit = React.useCallback((data: RequirementDialogData) => {
+        if (!editingEntry) {
+            return;
+        }
+
+        setRequirementState((prev) => {
+            const current = prev[editingEntry.requirementId];
+            if (!current) return prev;
+            return {
+                ...prev,
+                [editingEntry.requirementId]: {
+                    ...current,
+                    title: data.title.trim(),
+                    description: data.description.trim() || undefined,
+                },
+            };
+        });
+
+        setEditDialogOpen(false);
+        setEditingEntry(null);
+        showNotification('Requirement updated. Remember to save your changes.', 'info');
+    }, [editingEntry, showNotification]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStageName) => {
         setActiveStage(nextStage);
     }, []);
 
-    const stageRows = React.useMemo<RequirementRow[]>(() => {
-        return TERMINAL_REQUIREMENTS
-            .filter((requirement) => requirement.stage === activeStage)
-            .map((definition) => ({
-                definition,
-                entry: requirementState[definition.id] ?? {
-                    stage: definition.stage,
-                    requirementId: definition.id,
-                    active: true,
-                },
-            }));
+    // Get entries for the current stage from requirementState
+    const stageEntries = React.useMemo(() => {
+        return Object.values(requirementState).filter((entry) => entry.stage === activeStage);
     }, [activeStage, requirementState]);
+
+    const activeStageLabel = stageLabelMap[activeStage] ?? activeStage;
 
     const handleTemplateUpload = React.useCallback(async (requirementId: string, file: File) => {
         if (!selectedDepartment || !selectedCourse) {
@@ -420,6 +516,7 @@ export default function AdminTerminalRequirementsPage() {
         setUploadingMap((prev) => ({ ...prev, [requirementId]: true }));
         try {
             const uploadResult = await uploadTerminalRequirementTemplate({
+                year: selectedYear,
                 file,
                 department: selectedDepartment,
                 course: selectedCourse,
@@ -427,7 +524,7 @@ export default function AdminTerminalRequirementsPage() {
                 uploadedBy: userUid,
             });
 
-            const metadata: TerminalRequirementTemplateMetadata = {
+            const metadata: TerminalRequirementFileTemplate = {
                 fileId: uploadResult.fileId,
                 fileName: uploadResult.fileName,
                 fileUrl: uploadResult.fileUrl,
@@ -436,17 +533,18 @@ export default function AdminTerminalRequirementsPage() {
             };
 
             const nextState = cloneRequirementState(requirementState);
-            const existing = nextState[requirementId] ?? {
-                stage: definitionById[requirementId]?.stage ?? THESIS_STAGE_METADATA[0].value,
-                requirementId,
-                active: true,
-            };
+            const existing = nextState[requirementId];
+            if (!existing) {
+                showNotification('Requirement not found.', 'error');
+                await deleteTerminalRequirementTemplate(uploadResult.storagePath);
+                return;
+            }
             nextState[requirementId] = {
                 ...existing,
-                template: metadata,
+                fileTemplate: metadata,
             };
 
-            const success = await persistEntries(nextState, { silent: true });
+            const success = await persistConfig(nextState, { silent: true });
             if (success) {
                 setRequirementState(nextState);
                 syncedStateRef.current = cloneRequirementState(nextState);
@@ -460,24 +558,32 @@ export default function AdminTerminalRequirementsPage() {
         } finally {
             setUploadingMap((prev) => ({ ...prev, [requirementId]: false }));
         }
-    }, [definitionById, persistEntries, requirementState, selectedCourse, selectedDepartment, showNotification, userUid]);
+    }, [
+        persistConfig,
+        requirementState,
+        selectedCourse,
+        selectedDepartment,
+        selectedYear,
+        showNotification,
+        userUid,
+    ]);
 
     const handleRemoveTemplate = React.useCallback(async (requirementId: string) => {
         const currentEntry = requirementState[requirementId];
-        if (!currentEntry?.template) {
+        if (!currentEntry?.fileTemplate) {
             return;
         }
 
         setRemovingMap((prev) => ({ ...prev, [requirementId]: true }));
         try {
-            if (currentEntry.template.fileUrl) {
-                await deleteTerminalRequirementTemplate(currentEntry.template.fileUrl);
+            if (currentEntry.fileTemplate.fileUrl) {
+                await deleteTerminalRequirementTemplate(currentEntry.fileTemplate.fileUrl);
             }
 
             const nextState = cloneRequirementState(requirementState);
-            nextState[requirementId] = { ...nextState[requirementId], template: undefined };
+            nextState[requirementId] = { ...nextState[requirementId], fileTemplate: undefined };
 
-            const success = await persistEntries(nextState, { silent: true });
+            const success = await persistConfig(nextState, { silent: true });
             if (success) {
                 setRequirementState(nextState);
                 syncedStateRef.current = cloneRequirementState(nextState);
@@ -489,89 +595,121 @@ export default function AdminTerminalRequirementsPage() {
         } finally {
             setRemovingMap((prev) => ({ ...prev, [requirementId]: false }));
         }
-    }, [persistEntries, requirementState, showNotification]);
+    }, [persistConfig, requirementState, showNotification]);
 
-    const renderRequirementCard = (row: RequirementRow) => {
-        const { definition, entry } = row;
-        const uploading = uploadingMap[definition.id];
-        const removing = removingMap[definition.id];
-        const hasTemplate = Boolean(entry.template);
+    const renderRequirementCard = (entry: TerminalRequirementConfigEntry) => {
+        const uploading = uploadingMap[entry.requirementId];
+        const removing = removingMap[entry.requirementId];
+        const hasTemplate = Boolean(entry.fileTemplate);
 
-        const uploadedAtLabel = entry.template?.uploadedAt
-            ? new Date(entry.template.uploadedAt).toLocaleString()
+        const uploadedAtLabel = entry.fileTemplate?.uploadedAt
+            ? new Date(entry.fileTemplate.uploadedAt).toLocaleString()
             : null;
+
+        // Use title from entry, or fallback to formatted requirementId
+        const displayTitle = entry.title || entry.requirementId
+            .split('-')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ')
+            .replace(/\d+$/, '')
+            .trim() || 'Requirement';
 
         return (
             <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Stack direction="row" justifyContent="space-between" spacing={2}>
-                        <Box>
-                            <Typography variant="subtitle1" fontWeight={600}>{definition.title}</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {definition.description}
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="subtitle1" fontWeight={600}>{displayTitle}</Typography>
+                            {entry.description && (
+                                <Typography variant="body2" color="text.secondary">
+                                    {entry.description}
+                                </Typography>
+                            )}
+                            <Typography variant="caption" color="text.disabled">
+                                ID: {entry.requirementId}
                             </Typography>
                         </Box>
-                        <Stack alignItems="flex-end" spacing={0.5}>
-                            <Typography variant="caption" color="text.secondary">
-                                {entry.active ? 'Required' : 'Hidden'}
-                            </Typography>
-                            <Switch
-                                checked={entry.active}
-                                onChange={(_, checked) => handleToggleRequirement(definition.id, checked)}
-                            />
+                        <Stack direction="row" spacing={0.5}>
+                            <IconButton
+                                size="small"
+                                onClick={() => handleOpenEditDialog(entry)}
+                                title="Edit requirement"
+                                sx={{ bgcolor: 'action.hover' }}
+                            >
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteRequirement(entry.requirementId)}
+                                title="Delete requirement"
+                                sx={{ bgcolor: 'action.hover' }}
+                            >
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
                         </Stack>
                     </Stack>
 
-                    {definition.instructions && (
-                        <Typography variant="caption" color="text.secondary">
-                            {definition.instructions}
-                        </Typography>
-                    )}
-
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
-                        <Button
-                            component="label"
-                            variant="outlined"
-                            startIcon={<UploadIcon />}
-                            disabled={!selectedDepartment || !selectedCourse || uploading}
-                        >
-                            {uploading ? 'Uploading…' : hasTemplate ? 'Replace template' : 'Upload template'}
-                            <input
-                                type="file"
-                                hidden
-                                accept=".pdf,.doc,.docx"
-                                onChange={(event) => {
-                                    const file = event.target.files?.[0];
-                                    if (file) {
-                                        void handleTemplateUpload(definition.id, file);
-                                    }
-                                    event.target.value = '';
-                                }}
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                            <Typography variant="caption" color="text.secondary">
+                                {entry.required ? 'Required' : 'Optional'}
+                            </Typography>
+                            <Switch
+                                checked={entry.required}
+                                onChange={(_, checked) => handleToggleRequirement(entry.requirementId, checked)}
+                                size="small"
                             />
-                        </Button>
+                        </Stack>
+                        <Box sx={{ flexGrow: 1 }} />
                         {(uploading || removing) && <CircularProgress size={20} />}
-                        {hasTemplate && (
-                            <Stack direction="row" spacing={1} flexWrap="wrap">
-                                <Button
-                                    variant="text"
-                                    component="a"
-                                    href={entry.template?.fileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    View template
-                                </Button>
-                                <Button
-                                    variant="text"
-                                    color="error"
-                                    startIcon={<DeleteIcon />}
-                                    onClick={() => handleRemoveTemplate(definition.id)}
-                                    disabled={removing}
-                                >
-                                    Remove
-                                </Button>
-                            </Stack>
-                        )}
+                        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                            {hasTemplate && (
+                                <>
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        component="a"
+                                        href={entry.fileTemplate?.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        View template
+                                    </Button>
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        color="error"
+                                        startIcon={<DeleteIcon />}
+                                        onClick={() => handleRemoveTemplate(entry.requirementId)}
+                                        disabled={removing}
+                                    >
+                                        Remove
+                                    </Button>
+                                </>
+                            )}
+                            <Button
+                                component="label"
+                                variant="outlined"
+                                size="small"
+                                startIcon={<UploadIcon />}
+                                disabled={!selectedDepartment || !selectedCourse || uploading}
+                            >
+                                {uploading ? 'Uploading…' : hasTemplate ? 'Replace' : 'Upload template'}
+                                <input
+                                    type="file"
+                                    hidden
+                                    accept=".pdf,.doc,.docx"
+                                    onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (file) {
+                                            void handleTemplateUpload(entry.requirementId, file);
+                                        }
+                                        event.target.value = '';
+                                    }}
+                                />
+                            </Button>
+                        </Stack>
                     </Stack>
 
                     {uploadedAtLabel && (
@@ -637,13 +775,23 @@ export default function AdminTerminalRequirementsPage() {
                                 sx={{ minWidth: 240 }}
                             />
                             <Box sx={{ flexGrow: 1 }} />
-                            <Button
-                                variant="contained"
-                                onClick={handleSave}
-                                disabled={saving || !hasUnsavedChanges || !selectedDepartment || !selectedCourse}
-                            >
-                                {saving ? 'Saving…' : 'Save changes'}
-                            </Button>
+                            <Stack direction="row" spacing={1}>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => setAddDialogOpen(true)}
+                                    disabled={!selectedDepartment || !selectedCourse}
+                                >
+                                    Add Requirement
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    onClick={handleSave}
+                                    disabled={saving || !hasUnsavedChanges || !selectedDepartment || !selectedCourse}
+                                >
+                                    {saving ? 'Saving…' : 'Save changes'}
+                                </Button>
+                            </Stack>
                         </Stack>
                         {!selectedDepartment && !profileLoading && (
                             <Alert severity="info" sx={{ mt: 2 }}>
@@ -674,7 +822,7 @@ export default function AdminTerminalRequirementsPage() {
                 ) : selectedDepartment && selectedCourse ? (
                     <Stack spacing={2}>
                         <Card variant="outlined">
-                            <CardContent sx={{ p: 0 }}>
+                            <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
                                 <Tabs
                                     value={activeStage}
                                     onChange={handleStageChange}
@@ -688,15 +836,15 @@ export default function AdminTerminalRequirementsPage() {
                                 </Tabs>
                             </CardContent>
                         </Card>
-                        {stageRows.length === 0 ? (
+                        {stageEntries.length === 0 ? (
                             <Alert severity="info">
-                                No terminal requirements defined for {activeStage}.
+                                No terminal requirements defined for {activeStageLabel}.
                             </Alert>
                         ) : (
                             <Grid container spacing={2}>
-                                {stageRows.map((row) => (
-                                    <Grid key={row.definition.id} size={{ xs: 12, md: 6 }}>
-                                        {renderRequirementCard(row)}
+                                {stageEntries.map((entry) => (
+                                    <Grid key={entry.requirementId} size={{ xs: 12, sm: 6, md: 4 }}>
+                                        {renderRequirementCard(entry)}
                                     </Grid>
                                 ))}
                             </Grid>
@@ -708,6 +856,30 @@ export default function AdminTerminalRequirementsPage() {
                     </Alert>
                 )}
             </Stack>
+
+            {/* Add Requirement Dialog */}
+            <RequirementDialog
+                open={addDialogOpen}
+                onClose={() => setAddDialogOpen(false)}
+                onConfirm={handleAddRequirement}
+                mode="add"
+                stageLabel={activeStageLabel}
+            />
+
+            {/* Edit Requirement Dialog */}
+            <RequirementDialog
+                open={editDialogOpen}
+                onClose={() => {
+                    setEditDialogOpen(false);
+                    setEditingEntry(null);
+                }}
+                onConfirm={handleSaveEdit}
+                mode="edit"
+                initialData={editingEntry ? {
+                    title: editingEntry.title ?? '',
+                    description: editingEntry.description ?? '',
+                } : undefined}
+            />
         </AnimatedPage>
     );
 }

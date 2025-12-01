@@ -9,29 +9,34 @@
  * 
  * Group Hierarchical Structure:
  * year/{year}/departments/{department}/courses/{course}
- *   └──   groups/{group}
- *         ├── audits/{audit}
- *         ├── template/{chapters} (document with chapter template named chapters)
- *         ├── expertRequests/{request}
- *         ├── proposals/{proposal}
- *         ├── panelComments/{comment}
- *         ├── join/
- *         │   ├── invites (document with userIds array)
- *         │   └── requests (document with userIds array)
- *         └── thesis/{thesis}
- *             └── stages/{stage}/chapters/{chapter}
- *                 └── submissions/{attachment}/chats/{chat}
- *                     └── attachments/{attachment}
+ *   ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
+ *   ├── templates/"terminalRequirements" (parent doc with metadata)
+ *   │   └── entries/{requirementId} (individual terminal requirement entries)
+ *   └── groups/{group}
+ *       ├── audits/{audit}
+ *       ├── expertRequests/{request}
+ *       ├── proposals/{proposal}
+ *       ├── panelComments/{comment}
+ *       ├── join/
+ *       │   ├── invites (document with userIds array)
+ *       │   └── requests (document with userIds array)
+ *       └── thesis/{thesis}
+ *           └── stages/{stage}/chapters/{chapter}
+ *               └── submissions/{attachment}/chats/{chat}
+ *                   └── attachments/{attachment}
  * 
  * User Hierarchical Structure:
  * year/{year}
  *   ├── users/{user}
+ *   │   └── salary/{salaryDistribution} 
  *   └── departments/{department}
  *       ├── users/{user}
- *       └── /courses/{course}/users/{user}
+ *       │   └── salary/{salaryDistribution}
+ *       └── courses/{course}/users/{user}
+ *           └── salary/{salaryDistribution}
  * 
- * * Firebase Storage Hierarchical Structure:
- * * {year}/{department}/{course}/{group}
+ * Firebase Storage Hierarchical Structure:
+ * {year}/{department}/{course}/{group}
  *   ├── expertRequests/{requestAttachments}
  *   ├── proposals/{proposalAttachments}
  *   ├── panelComments/{commentAttachments}
@@ -63,6 +68,9 @@ export const DEPARTMENTS_SUBCOLLECTION = 'departments';
 
 /** Courses subcollection */
 export const COURSES_SUBCOLLECTION = 'courses';
+
+/** Templates subcollection under a course */
+export const COURSE_TEMPLATES_SUBCOLLECTION = 'templates';
 
 /** Groups subcollection */
 export const GROUPS_SUBCOLLECTION = 'groups';
@@ -112,18 +120,33 @@ export const USERS_SUBCOLLECTION = 'users';
 /** Slot requests subcollection under year */
 export const SLOT_REQUESTS_SUBCOLLECTION = 'slotRequests';
 
+/** Chapter slot reservations subcollection under year */
+export const CHAPTER_SLOTS_SUBCOLLECTION = 'chapterSlots';
+
+/** Salary subcollection under user documents */
+export const SALARY_SUBCOLLECTION = 'salary';
+
 // ============================================================================
 // Configuration Collection (Global settings)
 // ============================================================================
 
-/** Root configuration collection for global settings */
-export const CONFIGURATION_ROOT = 'configuration';
+/** Root configuration path (collection/doc) for global settings */
+export const CONFIGURATION_ROOT = 'configuration/settings';
 
 /** Terminal requirements key */
 export const TERMINAL_REQUIREMENTS_KEY = 'terminalRequirements';
 
+/** Subcollection for individual terminal requirement entries under the template */
+export const TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION = 'entries';
+
 /** Chapter templates key */
 export const CHAPTER_TEMPLATES_KEY = 'chapterTemplates';
+
+/** Group-level configuration subcollection under each group */
+export const GROUP_CONFIGURATION_SUBCOLLECTION = 'configuration';
+
+/** Group-level chapter template document ID */
+export const GROUP_CONFIGURATION_CHAPTER_DOC = 'chapters';
 
 // ============================================================================
 // Thesis Stage Slugs
