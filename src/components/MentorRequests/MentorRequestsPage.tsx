@@ -579,15 +579,14 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                         }
 
                         return (
-                            <Box key={request.id} sx={{ display: 'flex' }}>
-                                <ExpertRequestCard
-                                    request={request}
-                                    group={group}
-                                    requester={requester}
-                                    usersByUid={usersByUid}
-                                    onOpenGroup={handleOpenGroupView}
-                                />
-                            </Box>
+                            <ExpertRequestCard
+                                key={request.id}
+                                request={request}
+                                group={group}
+                                requester={requester}
+                                usersByUid={usersByUid}
+                                onOpenGroup={handleOpenGroupView}
+                            />
                         );
                     })}
                 </Box>
