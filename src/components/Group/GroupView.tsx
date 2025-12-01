@@ -4,18 +4,20 @@ import {
     ListItemText, Paper, Skeleton, Stack, Typography, type ChipProps,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
-import { formatDateShort } from '../../utils/dateUtils';
+import { formatDateShort, getAcademicYear } from '../../utils/dateUtils';
 import type { ThesisGroup } from '../../types/group';
 import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
-import { getGroupById } from '../../utils/firebase/firestore/groups';
-import { getUsersByIds } from '../../utils/firebase/firestore/user';
-import { getThesisById } from '../../utils/firebase/firestore/thesis';
+import { findGroupById, getGroupInvites, getGroupJoinRequests } from '../../utils/firebase/firestore/groups';
+import { findUsersByIds } from '../../utils/firebase/firestore/user';
+import { findThesisById } from '../../utils/firebase/firestore/thesis';
 import Avatar from '../Avatar';
 import { GROUP_STATUS_COLORS, formatGroupStatus } from './constants';
 
 export interface GroupViewHeaderContext {
     group: ThesisGroup | null;
+    invites: string[];
+    requests: string[];
     loading: boolean;
     error: string | null;
 }
@@ -35,6 +37,8 @@ interface GroupState {
     group: ThesisGroup | null;
     thesis: ThesisData | null;
     profiles: Map<string, UserProfile>;
+    invites: string[];
+    requests: string[];
     loading: boolean;
     error: string | null;
 }
@@ -69,7 +73,7 @@ function buildUserName(profile?: UserProfile | null, fallback?: string) {
     return parts.join(' ');
 }
 
-function collectGroupUids(group: ThesisGroup): string[] {
+function collectGroupUids(group: ThesisGroup, invites: string[], requests: string[]): string[] {
     const registry = new Set<string>();
     const { members } = group;
     if (members.leader) registry.add(members.leader);
@@ -78,8 +82,8 @@ function collectGroupUids(group: ThesisGroup): string[] {
     if (members.editor) registry.add(members.editor);
     if (members.statistician) registry.add(members.statistician);
     members.panels?.forEach((uid) => registry.add(uid));
-    group.invites?.forEach((uid) => registry.add(uid));
-    group.requests?.forEach((uid) => registry.add(uid));
+    invites.forEach((uid) => registry.add(uid));
+    requests.forEach((uid) => registry.add(uid));
     return Array.from(registry);
 }
 
@@ -146,36 +150,50 @@ function InfoList({ title, entries }: { title: string; entries: { label: string;
 
 async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Omit<GroupState, 'loading'>> {
     if (!groupId) {
-        return { group: null, thesis: null, profiles: new Map(), error: 'Missing group ID.' };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: 'Missing group ID.' };
     }
-    const group = await getGroupById(groupId);
+    const group = await findGroupById(groupId);
     if (!group) {
-        return { group: null, thesis: null, profiles: new Map(), error: 'Group not found.' };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: 'Group not found.' };
     }
     if (signal.aborted) {
-        return { group: null, thesis: null, profiles: new Map(), error: null };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
     }
-    const profileIds = collectGroupUids(group);
-    const [profiles, thesisRecord] = await Promise.all([
-        profileIds.length > 0
-            ? getUsersByIds(profileIds)
-            : Promise.resolve<UserProfile[]>([]),
-        group.thesisId
-            ? getThesisById(group.thesisId)
-                .then((result) => (result ? { ...result, id: result.id ?? group.thesisId } : null))
-                .catch((error) => {
-                    console.error(`Failed to load thesis ${group.thesisId} for group ${group.id}:`, error);
-                    return null;
-                })
-            : Promise.resolve(null),
+
+    // Fetch invites and requests from join subcollection
+    const year = getAcademicYear();
+    const [invites, requests] = await Promise.all([
+        getGroupInvites(year, group.department ?? '', group.course ?? '', group.id),
+        getGroupJoinRequests(year, group.department ?? '', group.course ?? '', group.id),
     ]);
     if (signal.aborted) {
-        return { group: null, thesis: null, profiles: new Map(), error: null };
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
+    }
+
+    const profileIds = collectGroupUids(group, invites, requests);
+    const [profiles, thesisRecord] = await Promise.all([
+        profileIds.length > 0
+            ? findUsersByIds(profileIds)
+            : Promise.resolve<UserProfile[]>([]),
+        // Thesis is now embedded in group, but fetch fresh if id exists
+        group.thesis?.id
+            ? findThesisById(group.thesis.id)
+                .then((result) => (result ? { ...result, id: result.id ?? group.thesis?.id } : group.thesis ?? null))
+                .catch((error) => {
+                    console.error(`Failed to load thesis ${group.thesis?.id} for group ${group.id}:`, error);
+                    return group.thesis ?? null;
+                })
+            : Promise.resolve(group.thesis ?? null),
+    ]);
+    if (signal.aborted) {
+        return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
     }
     return {
         group,
         thesis: thesisRecord,
         profiles: new Map(profiles.map((profile) => [profile.uid, profile])),
+        invites,
+        requests,
         error: null,
     };
 }
@@ -185,6 +203,8 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         group: null,
         thesis: null,
         profiles: new Map(),
+        invites: [],
+        requests: [],
         loading: true,
         error: null,
     }));
@@ -204,7 +224,10 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
                     return;
                 }
                 console.error('Failed to load group details:', error);
-                setState({ group: null, thesis: null, profiles: new Map(), loading: false, error: 'Unable to load group details.' });
+                setState({
+                    group: null, thesis: null, profiles: new Map(), invites: [], requests: [],
+                    loading: false, error: 'Unable to load group details.'
+                });
             });
         return () => abort.abort();
     }, [groupId, refreshToken]);
@@ -225,13 +248,14 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         return <Alert severity="info">Group not found.</Alert>;
     }
 
-    const { group, thesis, profiles } = state;
+    const { group, thesis, profiles, invites, requests } = state;
     const resolvedHeaderActions = typeof headerActions === 'function'
-        ? headerActions({ group, loading: state.loading, error: state.error })
+        ? headerActions({ group, invites, requests, loading: state.loading, error: state.error })
         : headerActions;
-    const thesisTitle = thesis?.title ?? group.thesisTitle ?? '—';
-    const thesisIdDisplay = group.thesisId ?? thesis?.id ?? '—';
-    const thesisStatus = thesis?.overallStatus ?? '—';
+    const thesisTitle = thesis?.title ?? group.thesis?.title ?? '—';
+    const thesisIdDisplay = group.thesis?.id ?? thesis?.id ?? '—';
+    // Compute thesis status from the latest stage or use group status as fallback
+    const thesisStatus = thesis?.stages?.[thesis.stages.length - 1]?.name ?? '—';
     const statusColor = STATUS_COLOR_MAP[group.status] ?? 'default';
     const metadataItems = [
         { label: 'Group ID', value: group.id },
@@ -257,15 +281,15 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         label: `Member ${index + 1}`,
     }));
 
-    const mentorEntries: PersonEntry[] = [];
+    const expertEntries: PersonEntry[] = [];
     if (group.members.adviser) {
-        mentorEntries.push({ uid: group.members.adviser, label: 'Adviser' });
+        expertEntries.push({ uid: group.members.adviser, label: 'Adviser' });
     }
     if (group.members.editor) {
-        mentorEntries.push({ uid: group.members.editor, label: 'Editor' });
+        expertEntries.push({ uid: group.members.editor, label: 'Editor' });
     }
     if (group.members.statistician) {
-        mentorEntries.push({ uid: group.members.statistician, label: 'Statistician' });
+        expertEntries.push({ uid: group.members.statistician, label: 'Statistician' });
     }
 
     const panelEntries: PersonEntry[] = (group.members.panels ?? []).map((uid, index) => ({
@@ -273,8 +297,8 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
         label: `Panel ${index + 1}`,
     }));
 
-    const inviteEntries: PersonEntry[] = (group.invites ?? []).map((uid) => ({ uid, label: 'Invite Pending' }));
-    const requestEntries: PersonEntry[] = (group.requests ?? []).map((uid) => ({ uid, label: 'Join Request' }));
+    const inviteEntries: PersonEntry[] = invites.map((uid) => ({ uid, label: 'Invite Pending' }));
+    const requestEntries: PersonEntry[] = requests.map((uid) => ({ uid, label: 'Join Request' }));
 
     return (
         <Stack spacing={3}>
@@ -331,7 +355,7 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
                 <InfoList title="Metadata" entries={metadataItems} />
                 <MemberList title="Leader" entries={leaderEntry} profiles={profiles} />
                 <MemberList title="Members" entries={memberEntries} profiles={profiles} />
-                <MemberList title="Assigned Mentors" entries={mentorEntries} profiles={profiles} />
+                <MemberList title="Assigned Experts" entries={expertEntries} profiles={profiles} />
                 <MemberList title="Panel Members" entries={panelEntries} profiles={profiles} />
                 <MemberList title="Pending Invites" entries={inviteEntries} profiles={profiles} />
                 <MemberList title="Join Requests" entries={requestEntries} profiles={profiles} />

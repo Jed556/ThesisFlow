@@ -13,8 +13,6 @@ import { getInitialsFromFullName } from '../../utils/avatarUtils';
 import type { HistoricalThesisEntry, SkillRating, UserProfile, UserRole } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import GroupCard from '../Group/GroupCard';
-// ProfileBanner is replaced by ProfileHeader in this component
-import type { ThesisData } from '../../types/thesis';
 
 export interface ProfilePrimaryAction {
     label: string;
@@ -42,7 +40,7 @@ const DEFAULT_SECTIONS: ProfileViewSections = {
     timeline: true,
 };
 
-const MENTOR_ROLES = new Set<UserRole>(['adviser', 'editor', 'statistician']);
+const EXPERT_ROLES = new Set<UserRole>(['adviser', 'editor', 'statistician']);
 
 const ROLE_SECTION_OVERRIDES: Partial<Record<UserRole, Partial<ProfileViewSections>>> = {
     panel: { currentTheses: false, timeline: false },
@@ -52,7 +50,8 @@ const ROLE_SECTION_OVERRIDES: Partial<Record<UserRole, Partial<ProfileViewSectio
 
 export interface ProfileViewProps {
     profile: UserProfile;
-    currentTheses?: ThesisData[];
+    /** Active groups to display in the current assignments section */
+    currentGroups?: ThesisGroup[];
     skills?: string[];
     skillRatings?: SkillRating[];
     timeline?: HistoricalThesisEntry[];
@@ -98,7 +97,7 @@ function deriveContactItems(
 // (banner styling delegated to ProfileBanner component)
 
 export default function ProfileView({
-    profile, currentTheses, skills, skillRatings, timeline, contacts, primaryAction, backAction,
+    profile, currentGroups, skills, skillRatings, timeline, contacts, primaryAction, backAction,
     assignmentsEmptyMessage = 'No active theses found.',
     timelineEmptyMessage = 'No historical records available yet.',
     additionalSections, headerCaption, sectionVisibility,
@@ -122,8 +121,8 @@ export default function ProfileView({
         // Only advisers should show expertise by default
         defaults.expertise = profile.role === 'adviser';
 
-        // Show current theses + timeline for mentors and students
-        const showsTheses = MENTOR_ROLES.has(profile.role) || profile.role === 'student';
+        // Show current theses + timeline for experts and students
+        const showsTheses = EXPERT_ROLES.has(profile.role) || profile.role === 'student';
         defaults.currentTheses = showsTheses;
         defaults.timeline = showsTheses;
 
@@ -339,41 +338,47 @@ export default function ProfileView({
                                     <CardContent>
                                         <Typography variant="h6" gutterBottom>Current theses</Typography>
                                         <Divider sx={{ mb: 2 }} />
-                                        {currentTheses && currentTheses.length > 0 ? (
+                                        {currentGroups && currentGroups.length > 0 ? (
                                             <List disablePadding>
-                                                {currentTheses.map((thesis) => (
-                                                    <ListItem key={thesis.id ?? thesis.title} sx={{ alignItems: 'flex-start' }}>
-                                                        <ListItemAvatar>
-                                                            <MuiAvatar
-                                                                sx={{
-                                                                    bgcolor: alpha(accentColor, 0.2),
-                                                                    color: accentColor,
-                                                                    width: 40,
-                                                                    height: 40,
-                                                                }}
-                                                            >
-                                                                {getInitialsFromFullName(thesis.title)}
-                                                            </MuiAvatar>
-                                                        </ListItemAvatar>
-                                                        <ListItemText
-                                                            primary={(
-                                                                <Typography variant="subtitle1" fontWeight={600}>
-                                                                    {thesis.title}
-                                                                </Typography>
-                                                            )}
-                                                            secondary={(
-                                                                <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                                                                    <Typography variant="body2" color="text.secondary">
-                                                                        Status: {thesis.overallStatus}
+                                                {currentGroups.map((groupItem) => {
+                                                    const thesis = groupItem.thesis;
+                                                    const title = thesis?.title ?? groupItem.name;
+                                                    return (
+                                                        <ListItem key={groupItem.id} sx={{ alignItems: 'flex-start' }}>
+                                                            <ListItemAvatar>
+                                                                <MuiAvatar
+                                                                    sx={{
+                                                                        bgcolor: alpha(accentColor, 0.2),
+                                                                        color: accentColor,
+                                                                        width: 40,
+                                                                        height: 40,
+                                                                    }}
+                                                                >
+                                                                    {getInitialsFromFullName(title)}
+                                                                </MuiAvatar>
+                                                            </ListItemAvatar>
+                                                            <ListItemText
+                                                                primary={(
+                                                                    <Typography variant="subtitle1" fontWeight={600}>
+                                                                        {title}
                                                                     </Typography>
-                                                                    <Typography variant="body2" color="text.secondary">
-                                                                        Updated: {thesis.lastUpdated ?? 'TBD'}
-                                                                    </Typography>
-                                                                </Stack>
-                                                            )}
-                                                        />
-                                                    </ListItem>
-                                                ))}
+                                                                )}
+                                                                secondary={(
+                                                                    <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                                                                        <Typography variant="body2" color="text.secondary">
+                                                                            Status: {groupItem.status}
+                                                                        </Typography>
+                                                                        <Typography variant="body2" color="text.secondary">
+                                                                            Updated: {groupItem.updatedAt
+                                                                                ? new Date(groupItem.updatedAt).toLocaleDateString()
+                                                                                : 'TBD'}
+                                                                        </Typography>
+                                                                    </Stack>
+                                                                )}
+                                                            />
+                                                        </ListItem>
+                                                    );
+                                                })}
                                             </List>
                                         ) : (
                                             <Typography variant="body2" color="text.secondary">

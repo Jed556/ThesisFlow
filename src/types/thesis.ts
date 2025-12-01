@@ -1,35 +1,95 @@
 import type { FileAttachment } from './file';
+import type { UserRole } from './profile';
+
 
 /**
- * Thesis-specific role types - Based on thesis data context
+ * Thesis-specific status
  */
-export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'statistician' | 'unknown';
-export type MentorRole = Extract<ThesisRole, 'adviser' | 'editor' | 'statistician'>;
-export type MentorApprovalState = Partial<Record<MentorRole, boolean>>;
-export type ChapterSubmissionStatus = 'approved' | 'under_review' | 'revision_required';
+export type ThesisStatus =
+    | 'none'
+    | 'pending'
+    | 'draft'
+    | 'review'
+    | 'revision'
+    | 'approved'
+    | 'rejected'
+    | 'completed'
+    | 'archived'
+    | 'not_submitted'
+    | 'under_review'
+    | 'revision_required';
 
-export interface ChapterSubmissionEntry {
-    id: string;
-    status: ChapterSubmissionStatus;
-    decidedAt?: string | null;
-    decidedBy?: MentorRole | 'system';
+/**
+ * Expert role types for thesis experting
+ */
+export type ExpertRole = 'adviser' | 'editor' | 'statistician';
+
+/**
+ * State of expert approvals (maps expert role to approval status)
+ */
+export type ExpertApprovalState = Partial<Record<ExpertRole, boolean>>;
+
+/**
+ * Thesis role for access control
+ */
+export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'statistician' | 'panel' | 'unknown';
+
+/**
+ * 
+ */
+export type ThesisAgenda = {
+
+    mainTheme: string;
+    subTheme: string;
 }
 
-/**
- * Thesis role display title
- */
-export type ThesisRoleDisplay =
-    | 'Student (Leader)'
-    | 'Student (Member)'
-    | 'Adviser'
-    | 'Editor'
-    | 'Statistician'
-    | 'Unknown';
+export type ThesisAgendas = ThesisAgenda[];
 
 /**
  * Supported thesis progress stages
  */
-export type ThesisStage = 'Pre-Proposal' | 'Post-Proposal' | 'Pre-Defense' | 'Post-Defense';
+export type ThesisStageName = 'Pre-Proposal' | 'Post-Proposal' | 'Pre-Defense' | 'Post-Defense';
+
+/**
+ *  
+ */
+export type ESG = 'Environment' | 'Social' | 'Governance';
+
+export type SDG = 'No Poverty' | 'Zero Hunger' | 'Good Health and Well-being' | 'Quality Education' | 'Gender Equality' |
+    'Clean Water and Sanitation' | 'Affordable and Clean Energy' | 'Decent Work and Economic Growth' |
+    'Industry, Innovation and Infrastructure' | 'Reduced Inequalities' | 'Sustainable Cities and Communities' |
+    'Responsible Consumption and Production' | 'Climate Action' | 'Life Below Water' | 'Life on Land' |
+    'Peace, Justice and Strong Institutions' | 'Partnerships for the Goals';
+
+/**
+ * Chapter submission status for review workflow
+ */
+export type ChapterSubmissionStatus = 'under_review' | 'approved' | 'rejected' | 'revision_required';
+
+/**
+ * Chapter submission entry with decision metadata
+ */
+export interface ChapterSubmissionEntry {
+    id: string;
+    status: ChapterSubmissionStatus;
+    decidedAt?: string;
+    decidedBy?: ExpertRole | 'system';
+}
+
+/**
+ * Chapter submission details
+ */
+export interface ChapterSubmission {
+    id: string;
+    status: ThesisStatus;
+    submittedAt?: Date;
+    submittedBy?: UserRole;
+    files?: FileAttachment[];
+    /** Decision timestamp */
+    decidedAt?: string;
+    /** Who made the decision */
+    decidedBy?: ExpertRole | 'system';
+}
 
 /**
  * Thesis comment/feedback
@@ -37,11 +97,19 @@ export type ThesisStage = 'Pre-Proposal' | 'Post-Proposal' | 'Pre-Defense' | 'Po
 export interface ThesisComment {
     id: string;
     author: string; // Firebase UID of author
-    date: string;
+    date: Date | string;
     comment: string;
     isEdited?: boolean;
-    attachments?: (string | FileAttachment)[]; // Supports legacy hashes and rich metadata
-    version?: number; // Version index based on submission hash position in submissions array
+    attachments?: FileAttachment[];
+    version?: number;
+}
+
+export interface ThesisStage {
+    id: string;
+    name: ThesisStageName;
+    startedAt: Date;
+    completedAt?: Date;
+    chapters?: ThesisChapter[];
 }
 
 /**
@@ -50,13 +118,14 @@ export interface ThesisComment {
 export interface ThesisChapter {
     id: number;
     title: string;
-    status: 'approved' | 'under_review' | 'revision_required' | 'not_submitted';
-    submissionDate: string | null;
-    lastModified: string | null;
-    submissions: (string | ChapterSubmissionEntry)[];
+    status: ThesisStatus;
+    submissionDate?: Date | string | null;
+    lastModified?: Date | string | null;
+    submissions: (ChapterSubmission | ChapterSubmissionEntry)[];
     comments: ThesisComment[];
-    stage?: ThesisStage | ThesisStage[];
-    mentorApprovals?: MentorApprovalState;
+    stage?: ThesisStageName[];
+    approvalStatus?: ThesisStatus;
+    expertApprovals?: ExpertApprovalState;
 }
 
 /**
@@ -65,16 +134,10 @@ export interface ThesisChapter {
 export interface ThesisData {
     id?: string;
     title: string;
-    groupId: string;
-    leader?: string;
-    members?: string[];
-    adviser?: string;
-    editor?: string;
-    statistician?: string;
-    submissionDate: string;
-    lastUpdated: string;
-    overallStatus: string;
-    chapters: ThesisChapter[];
+    submissionDate: Date | string;
+    lastUpdated: Date | string;
+    stages: ThesisStage[];
+    chapters?: ThesisChapter[];
 }
 
 /**

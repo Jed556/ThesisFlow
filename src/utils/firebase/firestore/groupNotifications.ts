@@ -1,6 +1,5 @@
 import {
-    collection, doc, documentId, onSnapshot, query, serverTimestamp, setDoc, where,
-    type DocumentData, type QuerySnapshot,
+    collection, doc, documentId, onSnapshot, query, serverTimestamp, setDoc, where, type DocumentData, type QuerySnapshot
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { GroupNotificationDoc, GroupNotificationEntry } from '../../../types/notification';

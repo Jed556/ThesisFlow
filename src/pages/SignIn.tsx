@@ -1,17 +1,19 @@
 import * as React from 'react';
 import {
-    TextField, Button, Link, Alert, Typography, FormControl, IconButton, InputAdornment,
-    InputLabel, OutlinedInput, Box, Chip, Stack, CircularProgress
+    TextField, Button, Link, Alert, Typography, FormControl, IconButton,
+    InputAdornment, InputLabel, OutlinedInput, Fab, CircularProgress, Tooltip
 } from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Engineering as EngineeringIcon } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
-import { Navigate, useNavigate, useLocation } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
-import { getAllUsers, getUserById } from '../utils/firebase/firestore/user';
-import { isDevelopmentEnvironment } from '../utils/devUtils';
+import { findUserById } from '../utils/firebase/firestore/user';
+
+import { buildAdminApiHeaders, resolveAdminApiBaseUrl } from '../utils/firebase/api';
+import { encryptPassword } from '../utils/cryptoUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
 import { AnimatedPage } from '../components/Animate';
@@ -28,7 +30,6 @@ const DEV_HELPER_PASSWORD = import.meta.env.VITE_DEV_HELPER_PASSWORD || '';
 const DEV_EMAIL_DOMAIN = import.meta.env.VITE_DEV_EMAIL_DOMAIN || 'thesisflow.dev';
 const DEV_EMAIL_SUFFIX = DEV_EMAIL_DOMAIN.startsWith('@') ? DEV_EMAIL_DOMAIN : '@' + DEV_EMAIL_DOMAIN;
 const DEV_HELPER_EXISTS = DEV_HELPER_USERNAME !== '' && DEV_HELPER_PASSWORD !== '';
-const DEV_HELPER_ENABLED = (import.meta.env.VITE_DEV_HELPER_ENABLED === 'true') && DEV_HELPER_EXISTS;
 
 
 /**
@@ -43,81 +44,17 @@ const FormContext = React.createContext<{
 } | null>(null);
 
 /**
- * Info alert with test account buttons for development environment
+ * Alert shown when no admin accounts exist yet
  */
 function Alerts() {
     const formContext = React.useContext(FormContext);
-    const noUsersState = formContext?.noUsersState;
-
-    let testAccountsStack;
-
-    if (isDevelopmentEnvironment()) {
-        const testAccounts: { role: string; email: string; color: 'primary' | 'secondary' | 'info' | 'error' | 'success' }[] = [
-            { role: 'Student', email: 'student' + DEV_EMAIL_SUFFIX, color: 'primary' as const },
-            { role: 'Adviser', email: 'adviser' + DEV_EMAIL_SUFFIX, color: 'secondary' as const },
-            { role: 'Editor', email: 'editor' + DEV_EMAIL_SUFFIX, color: 'info' as const },
-            { role: 'Admin', email: 'admin' + DEV_EMAIL_SUFFIX, color: 'error' as const },
-        ];
-
-        if (DEV_HELPER_ENABLED) {
-            testAccounts.push({ role: 'Developer', email: DEV_HELPER_USERNAME + DEV_EMAIL_SUFFIX, color: 'success' as const });
-        }
-
-        const handleDevClick = (email: string) => {
-            if (formContext && isDevelopmentEnvironment()) {
-                formContext.setEmailValue(email);
-
-                if (DEV_HELPER_ENABLED)
-                    try {
-                        const emailPrefix = email.split('@')[0];
-                        if (emailPrefix === (DEV_HELPER_USERNAME) && DEV_HELPER_PASSWORD) {
-                            formContext.setPasswordValue(DEV_HELPER_PASSWORD);
-                            return;
-                        }
-                    } catch (error) {
-                        console.warn('DEV helper env parsing failed in handleDevClick', error);
-                    }
-
-                formContext.setPasswordValue('Password_123');
-            }
-        };
-
-        testAccountsStack = (
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                {testAccounts.map((account) => (
-                    <Chip
-                        key={account.email}
-                        label={account.role}
-                        color={account.color}
-                        variant="outlined"
-                        clickable
-                        size="small"
-                        onClick={() => handleDevClick(account.email)}
-                        sx={{
-                            cursor: 'pointer',
-                            '&:hover': {
-                                backgroundColor: `${account.color}.50`,
-                            }
-                        }}
-                    />
-                ))}
-            </Stack>
-        );
-    }
+    const noAdminState = formContext?.noUsersState;
 
     return (
         <>
-            {testAccountsStack && (
-                <Alert severity="info">
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                        Development Test Accounts
-                    </Typography>
-                    {testAccountsStack}
-                </Alert>
-            )}
-            {noUsersState === true && (
+            {noAdminState === true && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                    No user accounts exist yet. Sign in with the developer account first to initialize users.
+                    No admin accounts exist yet. Use the developer button to initialize the system.
                 </Alert>
             )}
         </>
@@ -219,10 +156,123 @@ function ForgotPasswordLink() {
 }
 
 /**
+ * Props for DevAccountFab component
+ */
+interface DevAccountFabProps {
+    onSignIn: (email: string, password: string) => Promise<void>;
+    showFab: boolean;
+}
+
+/**
+ * Floating action button for creating/signing in developer account
+ * Only visible when no admin accounts exist (excluding developer accounts)
+ */
+function DevAccountFab({ onSignIn, showFab }: DevAccountFabProps) {
+    const [loading, setLoading] = React.useState(false);
+    const { showNotification } = useSnackbar();
+
+    // Only show if DEV_HELPER is configured and no admin accounts exist
+    if (!DEV_HELPER_EXISTS || !showFab) {
+        return null;
+    }
+
+    const devEmail = DEV_HELPER_USERNAME + DEV_EMAIL_SUFFIX;
+    const devPassword = DEV_HELPER_PASSWORD;
+
+    const handleClick = async () => {
+        setLoading(true);
+        try {
+            const apiBaseUrl = resolveAdminApiBaseUrl();
+            const headers = await buildAdminApiHeaders();
+            const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET || '';
+
+
+            if (!apiSecret) {
+                showNotification('API secret not configured', 'error');
+                setLoading(false);
+                return;
+            }
+
+            // Encrypt the password before sending to the API
+            const encryptedPassword = await encryptPassword(devPassword, apiSecret);
+
+            // Create the developer account via serverless API
+            const response = await fetch(`${apiBaseUrl}/user/create`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    email: devEmail,
+                    password: encryptedPassword,
+                    role: 'developer',
+                }),
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                // Account created or already exists
+                if (data.message?.includes('already exists')) {
+                    showNotification('Developer account exists, signing in...', 'info', 2000);
+                } else {
+                    showNotification('Developer account created, signing in...', 'success', 2000);
+                }
+            } else if (response.status === 409 || data.error?.includes('already exists')) {
+                // Account exists - this is acceptable
+                showNotification('Developer account exists, signing in...', 'info', 2000);
+            } else {
+                // Real error - show and abort
+                console.error('Dev account creation failed:', response.status, data);
+                showNotification(data.error || 'Failed to create developer account', 'error');
+                setLoading(false);
+                return;
+            }
+
+            // Small delay to ensure Firebase Auth has the user ready
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Sign in with Firebase Auth using the dev credentials
+            await onSignIn(devEmail, devPassword);
+        } catch (error) {
+            console.error('Dev account FAB error:', error);
+            showNotification(
+                error instanceof Error ? error.message : 'Failed to sign in as developer',
+                'error'
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Tooltip title="Quick Developer Sign In" placement="left">
+            <Fab
+                color="success"
+                onClick={handleClick}
+                disabled={loading}
+                sx={{
+                    position: 'fixed',
+                    bottom: 24,
+                    right: 24,
+                    zIndex: 1000,
+                }}
+                aria-label="developer sign in"
+            >
+                {loading ? (
+                    <CircularProgress size={24} color="inherit" />
+                ) : (
+                    <EngineeringIcon />
+                )}
+            </Fab>
+        </Tooltip>
+    );
+}
+
+/**
  * Sign-in page
  */
 export default function SignIn() {
-    const session = useSession<Session>();
+    // Session hook for potential future use (e.g., redirect if already signed in)
+    useSession<Session>();
     const authentication = React.useContext(AuthenticationContext) as ExtendedAuthentication | null;
     const { showNotification } = useSnackbar();
     const navigate = useNavigate();
@@ -270,37 +320,50 @@ export default function SignIn() {
         let active = true;
         (async () => {
             try {
-                const existing = await getAllUsers();
+                // Use serverless API to check if admin users exist (avoids permission issues)
+                const apiBaseUrl = resolveAdminApiBaseUrl();
+                const headers = await buildAdminApiHeaders();
+                const response = await fetch(`${apiBaseUrl}/user/exists`, {
+                    method: 'GET',
+                    headers,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}`);
+                }
+
+                const data = await response.json();
                 if (!active) return;
-                setNoUsersState(existing.length === 0);
+                // noUsersState = true means NO admin accounts exist (show FAB)
+                setNoUsersState(!data.adminExists);
             } catch (error) {
-                console.warn('Error checking existing users:', error);
+                console.warn('Error checking existing admin users:', error);
                 if (!active) return;
                 setNoUsersState(null);
-                showNotification('Unable to check existing users', 'warning');
+                // Don't show notification for this check - it's not critical
             }
         })();
         return () => { active = false; };
-    }, [showNotification]);
+    }, []);
 
-    if (session?.loading) {
-        return (
-            <AnimatedPage variant="fade">
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-                    <Stack spacing={2} alignItems="center">
-                        <CircularProgress size={28} />
-                        <Typography variant="body2" color="text.secondary">
-                            Preparing your session...
-                        </Typography>
-                    </Stack>
-                </Box>
-            </AnimatedPage>
-        );
-    }
+    // if (session?.loading) {
+    //     return (
+    //         <AnimatedPage variant="fade">
+    //             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+    //                 <Stack spacing={2} alignItems="center">
+    //                     <CircularProgress size={28} />
+    //                     <Typography variant="body2" color="text.secondary">
+    //                         Preparing your session...
+    //                     </Typography>
+    //                 </Stack>
+    //             </Box>
+    //         </AnimatedPage>
+    //     );
+    // }
 
-    if (session?.user) {
-        return <Navigate to="/" />;
-    }
+    // if (session?.user) {
+    //     return <Navigate to="/" />;
+    // }
 
     const formContextValue = {
         emailValue,
@@ -309,6 +372,33 @@ export default function SignIn() {
         setPasswordValue,
         noUsersState,
     };
+
+    /**
+     * Handles developer account sign-in for the floating action button
+     * Uses real Firebase authentication - no fake sessions
+     */
+    const handleDevSignIn = React.useCallback(async (email: string, password: string) => {
+        // Use real Firebase sign-in (account must exist in Firebase Auth)
+        const result = await signInWithCredentials(email, password);
+        if (result?.success && result?.user) {
+            // For developer accounts, we may not have a Firestore profile
+            // Create session from Firebase Auth user data
+            const userSession: Session = {
+                user: {
+                    uid: result.user.uid,
+                    name: result.user.displayName || email.split('@')[0],
+                    email: result.user.email || email,
+                    image: result.user.photoURL || '',
+                    role: 'developer',
+                },
+            };
+            authentication?.setSession?.(userSession);
+            navigate('/', { replace: true });
+            showNotification('Signed in as developer', 'success', 3000);
+        } else {
+            throw new Error(result?.error || 'Sign in failed');
+        }
+    }, [authentication, navigate, showNotification]);
 
     return (
         <AnimatedPage variant='fade' duration='enteringScreen'>
@@ -331,7 +421,7 @@ export default function SignIn() {
 
 
                                 // Special dev-only db-helper shortcut: emails like <name>@thesisflow.dev
-                                if ((DEV_HELPER_EXISTS && noUsersState) || DEV_HELPER_ENABLED)
+                                if ((DEV_HELPER_EXISTS && noUsersState))
                                     try {
                                         if (email.toLowerCase().endsWith(DEV_EMAIL_SUFFIX)) {
                                             const name = email.split('@')[0];
@@ -351,12 +441,12 @@ export default function SignIn() {
                                                             },
                                                         };
                                                         authentication?.setSession?.(tmpSession);
-                                                        navigate('/dev-helper', { replace: true });
+                                                        navigate('/', { replace: true });
                                                         showNotification('Signed in as developer', 'success', 3000);
                                                         return {};
                                                     } catch (e) {
                                                         // navigation error: fall back to normal flow
-                                                        console.warn('dev-helper navigation failed', e);
+                                                        console.warn('dev navigation failed', e);
                                                     }
                                                 } else {
                                                     return { error: 'Invalid dev credentials' };
@@ -373,7 +463,7 @@ export default function SignIn() {
                             }
 
                             if (result?.success && result?.user) {
-                                const profile = await getUserById(result.user.uid);
+                                const profile = await findUserById(result.user.uid);
 
                                 if (!profile) {
                                     showNotification('User profile not found. Contact an administrator.', 'error', 0);
@@ -417,6 +507,7 @@ export default function SignIn() {
                         forgotPasswordLink: ForgotPasswordLink,
                     }}
                 />
+                <DevAccountFab onSignIn={handleDevSignIn} showFab={noUsersState === true} />
             </FormContext.Provider>
         </AnimatedPage>
     );

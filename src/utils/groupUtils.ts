@@ -1,26 +1,10 @@
 import type { ThesisGroup } from '../types/group';
 import type { UserProfile } from '../types/profile';
-import type { MentorRequestRole } from '../types/mentorRequest';
-import { getUserById } from './firebase/firestore/user';
+import type { ExpertRequestRole } from '../types/expertRequest';
+import { findUserById } from './firebase/firestore/user';
 
-export {
-    acceptInvite,
-    acceptJoinRequest,
-    cancelJoinRequest,
-    createGroup,
-    deleteGroup,
-    getGroupById,
-    getGroupsByCourse,
-    getGroupsByLeader,
-    getGroupsByMember,
-    inviteUserToGroup,
-    rejectJoinRequest,
-    removeInviteFromGroup,
-    requestToJoinGroup,
-    submitGroupForReview,
-} from './firebase/firestore/groups';
-
-export { getUserById, getUsersByFilter } from './firebase/firestore/user';
+// Re-export user lookup functions for convenience
+export { findUserById } from './firebase/firestore/user';
 
 /**
  * Collects all relevant participant UIDs from a thesis group ensuring uniqueness.
@@ -56,7 +40,7 @@ export async function buildGroupProfileMap(groupData: ThesisGroup): Promise<Map<
     const profileMap = new Map<string, UserProfile>();
     await Promise.all(
         ids.map(async (uid) => {
-            const profile = await getUserById(uid);
+            const profile = await findUserById(uid);
             if (profile) {
                 profileMap.set(uid, profile);
             }
@@ -66,11 +50,11 @@ export async function buildGroupProfileMap(groupData: ThesisGroup): Promise<Map<
 }
 
 /**
- * Resolves the mentor UID assigned to the requested role for the provided group.
+ * Resolves the expert UID assigned to the requested role for the provided group.
  */
-export function getGroupMentorByRole(
+export function getGroupExpertByRole(
     group: ThesisGroup | null | undefined,
-    role: MentorRequestRole,
+    role: ExpertRequestRole,
 ): string | undefined {
     if (!group) {
         return undefined;

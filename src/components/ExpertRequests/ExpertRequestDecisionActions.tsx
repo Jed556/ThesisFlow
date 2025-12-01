@@ -4,28 +4,28 @@ import {
     DialogContentText, DialogTitle, TextField, Tooltip,
 } from '@mui/material';
 import { CheckCircle as ApproveIcon, Close as RejectIcon } from '@mui/icons-material';
-import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
+import type { ExpertRequest, ExpertRequestRole } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
-import { assignMentorToGroup } from '../../utils/firebase/firestore/groups';
-import { respondToMentorRequest } from '../../utils/firebase/firestore/mentorRequests';
-import { getGroupMentorByRole } from '../../utils/groupUtils';
+import { assignExpertToGroup } from '../../utils/firebase/firestore/groups';
+import { respondToExpertRequestById } from '../../utils/firebase/firestore/expertRequests';
+import { getGroupExpertByRole } from '../../utils/groupUtils';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 
-export interface MentorRequestDecisionActionsProps {
-    request: MentorRequest | null;
+export interface ExpertRequestDecisionActionsProps {
+    request: ExpertRequest | null;
     group: ThesisGroup | null;
-    role: MentorRequestRole;
+    role: ExpertRequestRole;
     roleLabel: string;
-    mentorUid: string | null | undefined;
+    expertUid: string | null | undefined;
     loading?: boolean;
     onCompleted?: (status: 'approved' | 'rejected') => void;
 }
 
 /**
- * Renders approve/reject controls with the same behavior as the mentor requests list.
+ * Renders approve/reject controls with the same behavior as the expert requests list.
  */
-export default function MentorRequestDecisionActions({ request, group, role, roleLabel, mentorUid, loading, onCompleted }:
-    MentorRequestDecisionActionsProps) {
+export default function ExpertRequestDecisionActions({ request, group, role, roleLabel, expertUid, loading, onCompleted }:
+    ExpertRequestDecisionActionsProps) {
 
     const { showNotification } = useSnackbar();
     const [dialogMode, setDialogMode] = React.useState<'approve' | 'reject' | null>(null);
@@ -35,13 +35,13 @@ export default function MentorRequestDecisionActions({ request, group, role, rol
     const roleLabelLower = roleLabel.toLowerCase();
     const roleArticle = /^[aeiou]/i.test(roleLabelLower) ? 'an' : 'a';
 
-    const assignedMentorUid = getGroupMentorByRole(group, role);
-    const alreadyMentoredByViewer = Boolean(mentorUid && assignedMentorUid === mentorUid);
-    const approveDisabledReason = assignedMentorUid && !alreadyMentoredByViewer
+    const assignedExpertUid = getGroupExpertByRole(group, role);
+    const alreadyExpertedByViewer = Boolean(expertUid && assignedExpertUid === expertUid);
+    const approveDisabledReason = assignedExpertUid && !alreadyExpertedByViewer
         ? `This group already has ${roleArticle} ${roleLabelLower} assigned.`
         : undefined;
 
-    const disableAll = loading || !mentorUid || !request || request.status !== 'pending';
+    const disableAll = loading || !expertUid || !request || request.status !== 'pending';
     const disableApprove = disableAll || Boolean(approveDisabledReason);
 
     const handleOpenDialog = React.useCallback((mode: 'approve' | 'reject') => {
@@ -61,7 +61,7 @@ export default function MentorRequestDecisionActions({ request, group, role, rol
     }, [submitting]);
 
     const handleSubmit = React.useCallback(async () => {
-        if (!dialogMode || !request || !mentorUid) {
+        if (!dialogMode || !request || !expertUid) {
             return;
         }
         if (request.status !== 'pending') {
@@ -78,29 +78,29 @@ export default function MentorRequestDecisionActions({ request, group, role, rol
                     showNotification('Group details are missing. Please reload and try again.', 'error');
                     return;
                 }
-                if (assignedMentorUid && assignedMentorUid !== mentorUid) {
-                    showNotification('This group already has a mentor for this role.', 'warning');
+                if (assignedExpertUid && assignedExpertUid !== expertUid) {
+                    showNotification('This group already has a expert for this role.', 'warning');
                     return;
                 }
-                await assignMentorToGroup(request.groupId, role, mentorUid);
-                await respondToMentorRequest(request.id, 'approved', { responseNote: note });
+                await assignExpertToGroup(group.id, expertUid!, role);
+                await respondToExpertRequestById(request.id, 'approved', { responseNote: note });
                 showNotification('Request approved successfully.', 'success');
                 onCompleted?.('approved');
             } else {
-                await respondToMentorRequest(request.id, 'rejected', { responseNote: note });
+                await respondToExpertRequestById(request.id, 'rejected', { responseNote: note });
                 showNotification('Request rejected.', 'info');
                 onCompleted?.('rejected');
             }
             setDialogMode(null);
             setDialogNote('');
         } catch (err) {
-            console.error('Failed to update mentor request from group view:', err);
+            console.error('Failed to update expert request from group view:', err);
             const fallback = err instanceof Error ? err.message : 'Unable to process the request right now.';
             showNotification(fallback, 'error');
         } finally {
             setSubmitting(false);
         }
-    }, [assignedMentorUid, dialogMode, dialogNote, group, mentorUid, onCompleted, request, role, showNotification]);
+    }, [assignedExpertUid, dialogMode, dialogNote, group, expertUid, onCompleted, request, role, showNotification]);
 
     if (!request) {
         return null;

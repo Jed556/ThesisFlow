@@ -3,13 +3,13 @@
  * Handles document uploads, media files, and attachments for thesis submissions
  */
 
-import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { firebaseStorage } from '../firebaseConfig';
 import type { FileAttachment, FileCategory } from '../../../types/file';
-import type { ThesisStage } from '../../../types/thesis';
+import type { ThesisStageName } from '../../../types/thesis';
 import { getError } from '../../../../utils/errorUtils';
 import { getFileCategory, getFileExtension, validateFile } from '../../fileUtils';
-import { setFileMetadata, getFilesByThesis, deleteFileMetadata } from '../firestore/file';
+import { getFilesForChapter, getLatestChapterFile, type FileQueryContext } from '../firestore/file';
 
 /**
  * Allowed file types for thesis submissions
@@ -45,17 +45,33 @@ interface UploadThesisFileOptions {
     thesisId: string;
     groupId: string;
     chapterId?: number;
-    chapterStage?: ThesisStage;
+    chapterStage?: ThesisStageName;
     commentId?: string;
     category?: 'submission' | 'attachment' | 'revision';
     metadata?: Record<string, string>;
-    terminalStage?: ThesisStage;
+    terminalStage?: ThesisStageName;
     terminalRequirementId?: string;
+    /** Academic year for hierarchical storage path */
+    year?: string;
+    /** Department for hierarchical storage path */
+    department?: string;
+    /** Course for hierarchical storage path */
+    course?: string;
 }
 
 interface UploadThesisFileResult {
     url: string;
     fileAttachment: FileAttachment;
+}
+
+interface TerminalRequirementFileQuery {
+    thesisId: string;
+    groupId: string;
+    stage: ThesisStageName;
+    requirementId: string;
+    year?: string;
+    department?: string;
+    course?: string;
 }
 
 /**
@@ -125,10 +141,16 @@ interface GenerateFilePathParams {
     groupId: string;
     fileName: string;
     chapterId?: number;
-    chapterStage?: ThesisStage;
+    chapterStage?: ThesisStageName;
     commentId?: string;
     category: string;
-    terminalStage?: ThesisStage;
+    terminalStage?: ThesisStageName;
+    /** Academic year for hierarchical storage path */
+    year?: string;
+    /** Department for hierarchical storage path */
+    department?: string;
+    /** Course for hierarchical storage path */
+    course?: string;
 }
 
 function sanitizePathSegment(value: string | number | undefined | null, fallback: string = 'general'): string {
@@ -143,7 +165,9 @@ function sanitizePathSegment(value: string | number | undefined | null, fallback
 }
 
 /**
- * Generates a unique file path for thesis uploads using UIDs with group/stage context.
+ * Generates a unique file path for thesis uploads using hierarchical structure.
+ * Path format: {year}/{department}/{course}/{group}/thesis/{thesis}/{stage}/{chapter}/submissions/{filename}
+ * Or chat: {year}/{department}/{course}/{group}/thesis/{thesis}/{stage}/{chapter}/chats/{filename}
  */
 function generateThesisFilePath(params: GenerateFilePathParams): string {
     const {
@@ -156,15 +180,28 @@ function generateThesisFilePath(params: GenerateFilePathParams): string {
         commentId,
         category,
         terminalStage,
+        year,
+        department,
+        course,
     } = params;
 
     const timestamp = Date.now();
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const sanitizedGroup = sanitizePathSegment(groupId, thesisId);
+
+    // Build hierarchical base path
+    const yearSegment = sanitizePathSegment(year, 'current');
+    const deptSegment = sanitizePathSegment(department, 'general');
+    const courseSegment = sanitizePathSegment(course, 'common');
+    const groupSegment = sanitizePathSegment(groupId, 'group');
+    const thesisSegment = sanitizePathSegment(thesisId, 'thesis');
+
+    // Base path: {year}/{department}/{course}/{group}/thesis/{thesis}
+    const basePath = `${yearSegment}/${deptSegment}/${courseSegment}/${groupSegment}/thesis/${thesisSegment}`;
 
     if (terminalStage) {
         const stageSegment = sanitizePathSegment(terminalStage);
-        return `theses/${sanitizedGroup}/terminal/${stageSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
+        // Terminal requirements path
+        return `${basePath}/terminal/${stageSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
     }
 
     if (chapterId !== undefined) {
@@ -175,13 +212,16 @@ function generateThesisFilePath(params: GenerateFilePathParams): string {
         const chapterSegment = sanitizePathSegment(chapterId, 'chapter');
 
         if (commentId) {
-            return `theses/${sanitizedGroup}/chat/${stageSegment}/${chapterSegment}/${userUid}_${timestamp}_${sanitizedFileName}`;
+            // Chat attachments path
+            return `${basePath}/${stageSegment}/${chapterSegment}/chats/${userUid}_${timestamp}_${sanitizedFileName}`;
         }
 
-        return `theses/${sanitizedGroup}/chapters/${stageSegment}/${chapterSegment}/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
+        // Chapter submissions path
+        return `${basePath}/${stageSegment}/${chapterSegment}/submissions/${userUid}_${timestamp}_${sanitizedFileName}`;
     }
 
-    return `theses/${sanitizedGroup}/attachments/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
+    // General attachments path
+    return `${basePath}/attachments/${category}/${userUid}_${timestamp}_${sanitizedFileName}`;
 }
 
 /**
@@ -211,6 +251,9 @@ export async function uploadThesisFile(
         metadata = {},
         terminalStage,
         terminalRequirementId,
+        year,
+        department,
+        course,
     } = options;
 
     try {
@@ -241,6 +284,9 @@ export async function uploadThesisFile(
             commentId,
             category,
             terminalStage,
+            year,
+            department,
+            course,
         });
 
         // Create storage reference
@@ -294,8 +340,8 @@ export async function uploadThesisFile(
             ...(terminalRequirementId && { terminalRequirementId })
         };
 
-        // Save metadata to Firestore
-        await setFileMetadata(fileHash, fileAttachment, userUid);
+        // File metadata is stored in submission/chat documents, not in a separate files collection
+        // The caller (e.g., handleUploadChapter) is responsible for creating the submission record
 
         return {
             url: downloadURL,
@@ -339,15 +385,11 @@ export async function uploadThesisFilesBatch(
 }
 
 /**
- * Deletes a thesis file from Storage and Firestore
+ * Deletes a thesis file from Storage
  * @param fileUrl - Download URL of the file to delete
- * @param thesisId - Thesis ID
- * @param fileHash - File hash for Firestore metadata
  */
 export async function deleteThesisFile(
     fileUrl: string,
-    thesisId: string,
-    fileHash: string
 ): Promise<void> {
     try {
         // Extract storage path from URL
@@ -362,9 +404,6 @@ export async function deleteThesisFile(
         // Delete from Storage
         const fileRef = ref(firebaseStorage, filePath);
         await deleteObject(fileRef);
-
-        // Delete metadata from Firestore
-        await deleteFileMetadata(fileHash);
     } catch (error) {
         const { message } = getError(error, 'Failed to delete thesis file');
         throw new Error(message);
@@ -373,18 +412,12 @@ export async function deleteThesisFile(
 
 /**
  * Lists all files for a specific chapter
- * @param thesisId - Thesis ID
- * @param chapterId - Chapter ID
+ * @param ctx - File query context with hierarchical path information
  * @returns Promise with array of file attachments
  */
-export async function listChapterFiles(
-    thesisId: string,
-    chapterId: number
-): Promise<FileAttachment[]> {
+export async function listChapterFiles(ctx: FileQueryContext): Promise<FileAttachment[]> {
     try {
-        // Get files from Firestore metadata
-        const files = await getFilesByThesis(thesisId, chapterId);
-        return files;
+        return await getFilesForChapter(ctx);
     } catch (error) {
         console.error('Error listing chapter files:', error);
         return [];
@@ -401,12 +434,14 @@ export async function listThesisFilesFromStorage(
     thesisId: string,
     chapterId?: number,
     groupId?: string,
-    chapterStage?: ThesisStage,
+    chapterStage?: ThesisStageName,
 ): Promise<string[]> {
     try {
         const sanitizedGroup = sanitizePathSegment(groupId ?? thesisId, thesisId);
+        const stageSegment = sanitizePathSegment(chapterStage ?? 'stage');
+        const chapterSegment = sanitizePathSegment(chapterId, 'chapter');
         const basePath = chapterId !== undefined
-            ? `theses/${sanitizedGroup}/chapters/${sanitizePathSegment(chapterStage ?? 'stage')}/${sanitizePathSegment(chapterId, 'chapter')}`
+            ? `theses/${sanitizedGroup}/chapters/${stageSegment}/${chapterSegment}`
             : `theses/${sanitizedGroup}`;
 
         const listRef = ref(firebaseStorage, basePath);
@@ -426,30 +461,106 @@ export async function listThesisFilesFromStorage(
 
 /**
  * Gets the latest submission for a chapter
- * @param thesisId - Thesis ID
- * @param chapterId - Chapter ID
+ * @param ctx - File query context with hierarchical path information
  * @returns Promise with the latest file attachment or null
  */
-export async function getLatestChapterSubmission(
-    thesisId: string,
-    chapterId: number
-): Promise<FileAttachment | null> {
+export async function getLatestChapterSubmission(ctx: FileQueryContext): Promise<FileAttachment | null> {
     try {
-        const files = await getFilesByThesis(thesisId, chapterId, 'submission');
-
-        // Filter submissions only
-        const submissions = files.filter((f: FileAttachment) => f.category === 'submission');
-
-        if (submissions.length === 0) return null;
-
-        // Sort by upload date descending
-        submissions.sort((a: FileAttachment, b: FileAttachment) =>
-            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-        );
-
-        return submissions[0];
+        return await getLatestChapterFile(ctx);
     } catch (error) {
         console.error('Error getting latest chapter submission:', error);
         return null;
+    }
+}
+
+function buildTerminalStagePath(
+    thesisId: string,
+    groupId: string,
+    stage: ThesisStageName,
+    year?: string,
+    department?: string,
+    course?: string,
+): string {
+    const yearSegment = sanitizePathSegment(year, 'current');
+    const deptSegment = sanitizePathSegment(department, 'general');
+    const courseSegment = sanitizePathSegment(course, 'common');
+    const groupSegment = sanitizePathSegment(groupId, 'group');
+    const thesisSegment = sanitizePathSegment(thesisId, 'thesis');
+    const stageSegment = sanitizePathSegment(stage);
+    return `${yearSegment}/${deptSegment}/${courseSegment}/${groupSegment}/thesis/${thesisSegment}/terminal/${stageSegment}`;
+}
+
+export async function listTerminalRequirementFiles(
+    query: TerminalRequirementFileQuery,
+): Promise<FileAttachment[]> {
+    const {
+        thesisId,
+        groupId,
+        stage,
+        requirementId,
+        year,
+        department,
+        course,
+    } = query;
+
+    if (!thesisId || !groupId) {
+        return [];
+    }
+
+    try {
+        const stagePath = buildTerminalStagePath(thesisId, groupId, stage, year, department, course);
+        const stageRef = ref(firebaseStorage, stagePath);
+        const listResult = await listAll(stageRef);
+
+        const attachments = await Promise.all(listResult.items.map(async (itemRef) => {
+            try {
+                const metadata = await getMetadata(itemRef);
+                const custom = metadata.customMetadata ?? {};
+                if (custom.terminalRequirementId !== requirementId) {
+                    return null;
+                }
+
+                const downloadUrl = await getDownloadURL(itemRef);
+                const fileName = custom.originalName ?? metadata.name ?? itemRef.name;
+                const extension = getFileExtension(fileName) ?? 'document';
+                const uploadDate = metadata.timeCreated ?? new Date().toISOString();
+                const attachment: FileAttachment = {
+                    id: metadata.name ?? itemRef.name,
+                    thesisId,
+                    groupId,
+                    name: fileName,
+                    type: extension,
+                    size: ((metadata.size ?? 0) as number).toString(),
+                    url: downloadUrl,
+                    mimeType: metadata.contentType ?? undefined,
+                    author: custom.uploadedBy ?? '',
+                    uploadDate,
+                    category: (custom.category as FileAttachment['category']) ?? 'attachment',
+                    terminalStage: (custom.terminalStage as ThesisStageName) ?? stage,
+                    terminalRequirementId: custom.terminalRequirementId ?? requirementId,
+                };
+                return attachment;
+            } catch (metadataError) {
+                console.error('Failed to read terminal requirement file metadata:', metadataError);
+                return null;
+            }
+        }));
+
+        return attachments
+            .filter((file): file is FileAttachment => Boolean(file))
+            .sort((a, b) => {
+                const aTime = new Date(a.uploadDate ?? '').getTime();
+                const bTime = new Date(b.uploadDate ?? '').getTime();
+                if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+                    return 0;
+                }
+                return bTime - aTime;
+            });
+    } catch (error) {
+        if ((error as { code?: string }).code === 'storage/object-not-found') {
+            return [];
+        }
+        console.error('Error listing terminal requirement files:', error);
+        return [];
     }
 }

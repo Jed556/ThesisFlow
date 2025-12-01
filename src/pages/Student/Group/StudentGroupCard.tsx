@@ -1,9 +1,9 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Chip, Divider, IconButton, Paper, Skeleton, Stack, Typography,
+    Alert, Box, Button, Chip, Divider, IconButton, Skeleton, Stack, Typography,
 } from '@mui/material';
 import {
-    Add as AddIcon, Delete as DeleteIcon, PersonAdd as PersonAddIcon, Search as SearchIcon, Send as SendIcon,
+    Delete as DeleteIcon, PersonAdd as PersonAddIcon, Send as SendIcon,
     Check as CheckIcon, Close as CloseIcon,
 } from '@mui/icons-material';
 import type { ThesisGroup } from '../../../types/group';
@@ -22,10 +22,13 @@ export interface StudentGroupCardProps {
     group: ThesisGroup | null;
     isLeader: boolean;
     profiles: Map<string, UserProfile>;
+    /** Pending invite user IDs fetched from join subcollection */
+    invites: string[];
+    /** Join request user IDs fetched from join subcollection */
+    requests: string[];
     formatLabel: LabelFormatter;
     onOpenProfile: UidCallback;
     onOpenCreateDialog: VoidCallback;
-    onOpenSearchDialog: VoidCallback;
     onOpenInviteDialog: VoidCallback;
     onSubmitForReview: VoidCallback;
     onDeleteGroup: VoidCallback;
@@ -34,30 +37,22 @@ export interface StudentGroupCardProps {
     inviteActionsDisabled: boolean;
 }
 
-function renderEmptyState(onOpenCreateDialog: VoidCallback, onOpenSearchDialog: VoidCallback) {
+function renderEmptyState() {
     return (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ p: 0, mb: 0 }}>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
                 You are not part of any group yet. Create a new group or join an existing one.
             </Typography>
-            <Stack direction="row" spacing={2}>
-                <Button startIcon={<AddIcon />} variant="contained" onClick={onOpenCreateDialog}>
-                    Create Group
-                </Button>
-                <Button startIcon={<SearchIcon />} variant="outlined" onClick={onOpenSearchDialog}>
-                    Search Group by ID
-                </Button>
-            </Stack>
-        </Paper>
+        </Box>
     );
 }
 
 function renderSkeleton() {
     return (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ p: 0, mb: 0 }}>
             <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
             <Skeleton variant="rounded" height={120} />
-        </Paper>
+        </Box>
     );
 }
 
@@ -69,10 +64,11 @@ export default function StudentGroupCard({
     group,
     isLeader,
     profiles,
+    invites,
+    requests,
     formatLabel,
     onOpenProfile,
     onOpenCreateDialog,
-    onOpenSearchDialog,
     onOpenInviteDialog,
     onSubmitForReview,
     onDeleteGroup,
@@ -87,13 +83,13 @@ export default function StudentGroupCard({
         if (!profile) {
             const displayName = formatLabel(uid);
             return (
-                <Paper
+                <Box
                     key={`${roleLabel}-${uid}`}
-                    variant="outlined"
                     sx={{
                         p: 2,
                         borderRadius: 2,
                         bgcolor: 'background.default',
+                        border: '1px solid',
                         borderColor: 'divider',
                         width: '100%',
                     }}
@@ -109,7 +105,7 @@ export default function StudentGroupCard({
                             </Typography>
                         </Box>
                     </Stack>
-                </Paper>
+                </Box>
             );
         }
 
@@ -167,15 +163,15 @@ export default function StudentGroupCard({
     }
 
     if (!group) {
-        return renderEmptyState(onOpenCreateDialog, onOpenSearchDialog);
+        return renderEmptyState();
     }
 
     const researcherEntries = [
         { uid: group.members.leader, role: 'Lead Researcher' },
         ...group.members.members.map((uid) => ({ uid, role: 'Researcher' })),
     ];
-    // Combine advisers, editors and statisticians into a single 'Mentors' section
-    const mentorEntries = [
+    // Combine advisers, editors and statisticians into a single 'Experts' section
+    const expertEntries = [
         ...(group.members.adviser ? [{ uid: group.members.adviser, role: 'Adviser' }] : []),
         ...(group.members.editor ? [{ uid: group.members.editor, role: 'Editor' }] : []),
         ...(group.members.statistician ? [{ uid: group.members.statistician, role: 'Statistician' }] : []),
@@ -183,7 +179,7 @@ export default function StudentGroupCard({
     const panelEntries = (group.members.panels ?? []).map((uid) => ({ uid, role: 'Panelist' }));
 
     return (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ p: 0, mb: 0 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                 <Box>
                     <Typography variant="overline" color="text.secondary">
@@ -220,31 +216,31 @@ export default function StudentGroupCard({
             <Divider sx={{ my: 3 }} />
 
             {renderRoleSection('Researchers', researcherEntries)}
-            {renderRoleSection('Mentors', mentorEntries)}
+            {renderRoleSection('Experts', expertEntries)}
             {renderRoleSection('Panelists', panelEntries)}
 
             {isLeader && (
                 <>
-                    {(group.invites ?? []).length > 0 && (
+                    {invites.length > 0 && (
                         <>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                                 Pending Invites
                             </Typography>
                             <Stack spacing={1} sx={{ mb: 2 }}>
-                                {group.invites!.map((uid) => (
+                                {invites.map((uid) => (
                                     <Chip key={uid} label={uid} size="small" variant="outlined" />
                                 ))}
                             </Stack>
                         </>
                     )}
 
-                    {(group.requests ?? []).length > 0 && (
+                    {requests.length > 0 && (
                         <>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                                 Join Requests
                             </Typography>
                             <Stack spacing={1} sx={{ mb: 2 }}>
-                                {group.requests!.map((uid) => (
+                                {requests.map((uid) => (
                                     <Stack key={uid} direction="row" spacing={1} alignItems="center">
                                         <Avatar
                                             uid={uid}
@@ -291,6 +287,6 @@ export default function StudentGroupCard({
                     </Stack>
                 </>
             )}
-        </Paper>
+        </Box>
     );
 }

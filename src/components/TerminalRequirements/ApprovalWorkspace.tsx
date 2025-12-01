@@ -22,26 +22,34 @@ import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import UndoIcon from '@mui/icons-material/Undo';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
-import type { ThesisStage, ThesisData } from '../../types/thesis';
+import type { ThesisStageName, ThesisData } from '../../types/thesis';
 import type { ThesisGroup } from '../../types/group';
 import type { FileAttachment } from '../../types/file';
-import type { ReviewerAssignment, ReviewerRole } from '../../types/reviewer';
-import type { TerminalRequirementApprovalRole, TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
+import type {
+    TerminalRequirementApprovalRole,
+    TerminalRequirementSubmissionRecord,
+} from '../../types/terminalRequirementSubmission';
 import { SubmissionStatus, TERMINAL_REQUIREMENT_ROLE_LABELS } from './SubmissionStatus';
 import { TerminalRequirementCard } from './RequirementCard';
 import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
 import { useSnackbar } from '../Snackbar';
 import {
     getReviewerAssignmentsForUser,
-    getThesisById,
-    getThesisByGroupId,
+    findThesisById,
+    findThesisByGroupId,
+    type ReviewerRole,
+    type ReviewerAssignment,
 } from '../../utils/firebase/firestore/thesis';
-import { getGroupById, listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
+import { findGroupById, listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
 import {
-    listenTerminalRequirementSubmission,
-    recordTerminalRequirementDecision,
-} from '../../utils/firebase/firestore/terminalRequirementSubmissions';
-import { fetchTerminalRequirementFiles, getTerminalRequirementsByStage } from '../../utils/terminalRequirements';
+    findAndListenTerminalRequirements,
+    findAndRecordTerminalRequirementDecision,
+    getTerminalRequirementConfig,
+} from '../../utils/firebase/firestore/terminalRequirements';
+import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementTemplate';
+import type { TerminalRequirement } from '../../types/terminalRequirement';
+import { listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 interface AssignmentOption {
     thesisId: string;
@@ -58,14 +66,12 @@ const ROLE_TITLES: Record<TerminalRequirementApprovalRole, string> = {
 
 export interface TerminalRequirementApprovalWorkspaceProps {
     role: TerminalRequirementApprovalRole;
-    title: string;
     description: string;
     emptyStateMessage: string;
 }
 
 export function TerminalRequirementApprovalWorkspace({
     role,
-    title,
     description,
     emptyStateMessage,
 }: TerminalRequirementApprovalWorkspaceProps) {
@@ -80,9 +86,16 @@ export function TerminalRequirementApprovalWorkspace({
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [thesisError, setThesisError] = React.useState<string | null>(null);
     const [groupMeta, setGroupMeta] = React.useState<ThesisGroup | null>(null);
-    const [submissionByStage, setSubmissionByStage] = React.useState<Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>>({});
-    const [activeStage, setActiveStage] = React.useState<ThesisStage | null>(null);
-    const [filesByRequirement, setFilesByRequirement] = React.useState<Record<string, FileAttachment[]>>({});
+    const [requirementConfig, setRequirementConfig] = React.useState<
+        Record<string, TerminalRequirementConfigEntry>
+    >({});
+    const [submissionByStage, setSubmissionByStage] = React.useState<
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
+    >({});
+    const [activeStage, setActiveStage] = React.useState<ThesisStageName | null>(null);
+    const [filesByRequirement, setFilesByRequirement] = React.useState<
+        Record<string, FileAttachment[]>
+    >({});
     const [fileLoading, setFileLoading] = React.useState<Record<string, boolean>>({});
     const [decisionLoading, setDecisionLoading] = React.useState(false);
     const [returnDialogOpen, setReturnDialogOpen] = React.useState(false);
@@ -109,15 +122,16 @@ export function TerminalRequirementApprovalWorkspace({
         if (role === 'panel') {
             setAssignmentLoading(true);
             const unsubscribe = listenGroupsByPanelist(userUid, {
-                onData: (groups) => {
+                onData: (groups: ThesisGroup[]) => {
+                    // Don't use deprecated group.thesis - store groupId and resolve thesis later
                     setAssignmentOptions(groups.map((group) => ({
-                        thesisId: group.thesisId ?? '',
+                        thesisId: '', // Will be resolved via findThesisByGroupId
                         label: group.name || group.id,
                         groupId: group.id,
                     })));
                     setAssignmentLoading(false);
                 },
-                onError: (listenerError) => {
+                onError: (listenerError: Error) => {
                     console.error('Failed to load panel assignments:', listenerError);
                     setAssignmentOptions([]);
                     setAssignmentLoading(false);
@@ -139,7 +153,7 @@ export function TerminalRequirementApprovalWorkspace({
                     })));
                 }
             } catch (error) {
-                console.error('Failed to load mentor assignments:', error);
+                console.error('Failed to load expert assignments:', error);
                 if (!cancelled) {
                     setAssignmentOptions([]);
                 }
@@ -181,7 +195,7 @@ export function TerminalRequirementApprovalWorkspace({
         setThesisLoading(true);
         void (async () => {
             try {
-                const groupThesis = await getThesisByGroupId(fallback.groupId!);
+                const groupThesis = await findThesisByGroupId(fallback.groupId!);
                 if (cancelled) {
                     return;
                 }
@@ -224,14 +238,14 @@ export function TerminalRequirementApprovalWorkspace({
             setThesis(null);
             setGroupMeta(null);
             try {
-                const data = await getThesisById(selectedThesisId);
+                const data = await findThesisById(selectedThesisId);
                 if (cancelled) {
                     return;
                 }
                 if (data) {
                     setThesis({ ...data, id: selectedThesisId });
                     if (data.groupId) {
-                        const group = await getGroupById(data.groupId);
+                        const group = await findGroupById(data.groupId);
                         if (!cancelled) {
                             setGroupMeta(group);
                         }
@@ -240,7 +254,7 @@ export function TerminalRequirementApprovalWorkspace({
                     setThesisError('Unable to load thesis details.');
                 }
             } catch (error) {
-                console.error('Failed to load thesis record for mentor approvals:', error);
+                console.error('Failed to load thesis record for expert approvals:', error);
                 if (!cancelled) {
                     setThesisError('Unable to load thesis details.');
                 }
@@ -264,14 +278,14 @@ export function TerminalRequirementApprovalWorkspace({
         }
         const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => {
             const stageValue = stageMeta.value;
-            return listenTerminalRequirementSubmission(selectedThesisId, stageValue, {
-                onData: (record) => {
+            return findAndListenTerminalRequirements(selectedThesisId, stageValue, {
+                onData: (records: TerminalRequirementSubmissionRecord[]) => {
                     setSubmissionByStage((prev) => ({
                         ...prev,
-                        [stageValue]: record,
+                        [stageValue]: records,
                     }));
                 },
-                onError: (listenerError) => {
+                onError: (listenerError: Error) => {
                     console.error(`Submission listener error for ${stageValue}:`, listenerError);
                 },
             });
@@ -281,8 +295,47 @@ export function TerminalRequirementApprovalWorkspace({
         };
     }, [selectedThesisId]);
 
+    // Load requirement configuration based on group's department/course
+    React.useEffect(() => {
+        if (!groupMeta?.department || !groupMeta?.course || !groupMeta?.year) {
+            setRequirementConfig({});
+            return;
+        }
+        let cancelled = false;
+        void (async () => {
+            try {
+                const config = await getTerminalRequirementConfig({
+                    year: groupMeta.year!,
+                    department: groupMeta.department!,
+                    course: groupMeta.course!,
+                });
+                if (!cancelled) {
+                    // Convert requirements array to a map keyed by requirementId
+                    const configMap: Record<string, TerminalRequirementConfigEntry> = {};
+                    if (config?.requirements) {
+                        config.requirements.forEach((entry) => {
+                            configMap[entry.requirementId] = entry;
+                        });
+                    }
+                    setRequirementConfig(configMap);
+                }
+            } catch (error) {
+                console.error('Failed to load terminal requirement config:', error);
+                if (!cancelled) {
+                    setRequirementConfig({});
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [groupMeta?.year, groupMeta?.department, groupMeta?.course]);
+
     const availableStages = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.filter((stageMeta) => submissionByStage[stageMeta.value]);
+        return THESIS_STAGE_METADATA.filter((stageMeta) => {
+            const submissions = submissionByStage[stageMeta.value];
+            return submissions && submissions.length > 0;
+        });
     }, [submissionByStage]);
 
     React.useEffect(() => {
@@ -290,20 +343,43 @@ export function TerminalRequirementApprovalWorkspace({
             setActiveStage(null);
             return;
         }
-        if (!activeStage || !submissionByStage[activeStage]) {
+        const currentStageSubmissions = activeStage ? submissionByStage[activeStage] : undefined;
+        if (!activeStage || !currentStageSubmissions || currentStageSubmissions.length === 0) {
             setActiveStage(availableStages[0].value);
         }
     }, [availableStages, activeStage, submissionByStage]);
 
     const resolvedStage = activeStage ?? availableStages[0]?.value ?? null;
-    const activeSubmission = resolvedStage ? (submissionByStage[resolvedStage] ?? null) : null;
-    const stageRequirements = React.useMemo(() => {
-        if (!resolvedStage || !activeSubmission) {
+    // Get all submissions for the resolved stage
+    const activeSubmissions = resolvedStage ? (submissionByStage[resolvedStage] ?? []) : [];
+    // Use the first submission for display purposes (they should have similar workflow state)
+    const activeSubmission = activeSubmissions.length > 0 ? activeSubmissions[0] : null;
+    // Collect all requirement IDs from all submissions in the stage
+    const allRequirementIds = React.useMemo(() => {
+        const ids = new Set<string>();
+        activeSubmissions.forEach((submission) => {
+            submission.requirementIds.forEach((id) => ids.add(id));
+        });
+        return Array.from(ids);
+    }, [activeSubmissions]);
+
+    const stageRequirements: TerminalRequirement[] = React.useMemo(() => {
+        if (!resolvedStage || allRequirementIds.length === 0) {
             return [];
         }
-        const definitions = getTerminalRequirementsByStage(resolvedStage);
-        return definitions.filter((definition) => activeSubmission.requirementIds.includes(definition.id));
-    }, [resolvedStage, activeSubmission]);
+        // Filter requirements by stage and map to TerminalRequirement format
+        return Object.values(requirementConfig)
+            .filter((entry) =>
+                entry.stage === resolvedStage &&
+                allRequirementIds.includes(entry.requirementId),
+            )
+            .map((entry): TerminalRequirement => ({
+                id: entry.requirementId,
+                stage: entry.stage,
+                title: entry.title ?? entry.requirementId,
+                description: entry.description ?? '',
+            }));
+    }, [resolvedStage, allRequirementIds, requirementConfig]);
 
     React.useEffect(() => {
         setFilesByRequirement({});
@@ -311,38 +387,55 @@ export function TerminalRequirementApprovalWorkspace({
     }, [resolvedStage, selectedThesisId]);
 
     const loadRequirementFiles = React.useCallback(async (requirementId: string) => {
-        if (!thesis?.id) {
+        if (!thesis?.id || !groupMeta?.id || !resolvedStage) {
             return;
         }
         setFileLoading((prev) => ({ ...prev, [requirementId]: true }));
         try {
-            const files = await fetchTerminalRequirementFiles(thesis.id, requirementId);
+            const files = await listTerminalRequirementFiles({
+                thesisId: thesis.id,
+                groupId: groupMeta.id,
+                stage: resolvedStage,
+                requirementId,
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+            });
             setFilesByRequirement((prev) => ({ ...prev, [requirementId]: files }));
         } catch (error) {
-            console.error('Failed to load requirement files for mentor view:', error);
+            console.error('Failed to load requirement files for expert view:', error);
         } finally {
             setFileLoading((prev) => ({ ...prev, [requirementId]: false }));
         }
-    }, [thesis?.id]);
+    }, [
+        groupMeta?.course,
+        groupMeta?.department,
+        groupMeta?.id,
+        groupMeta?.year,
+        resolvedStage,
+        thesis?.id,
+    ]);
 
     React.useEffect(() => {
-        if (!activeSubmission) {
+        if (allRequirementIds.length === 0 || !resolvedStage) {
             return;
         }
-        activeSubmission.requirementIds.forEach((requirementId) => {
+        allRequirementIds.forEach((requirementId) => {
             if (!filesByRequirement[requirementId]) {
                 void loadRequirementFiles(requirementId);
             }
         });
-    }, [activeSubmission, filesByRequirement, loadRequirementFiles]);
+    }, [allRequirementIds, filesByRequirement, loadRequirementFiles, resolvedStage]);
 
-    const canDecide = Boolean(
-        userUid
-        && activeSubmission
-        && activeSubmission.locked
-        && activeSubmission.status === 'in_review'
-        && activeSubmission.currentRole === role,
-    );
+    // Can decide if ANY submission in this stage is awaiting this role's decision
+    const canDecide = React.useMemo(() => {
+        if (!userUid) return false;
+        return activeSubmissions.some((submission) =>
+            submission.locked &&
+            submission.status === 'in_review' &&
+            submission.currentRole === role
+        );
+    }, [userUid, activeSubmissions, role]);
 
     const awaitingLabel = activeSubmission?.currentRole
         ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.currentRole]
@@ -361,10 +454,11 @@ export function TerminalRequirementApprovalWorkspace({
             showNotification('This group has no thesis yet.', 'info');
             return;
         }
+        const groupId = option.groupId;
         setThesisLoading(true);
         void (async () => {
             try {
-                const groupThesis = await getThesisByGroupId(option.groupId);
+                const groupThesis = await findThesisByGroupId(groupId as string);
                 if (groupThesis?.id) {
                     setSelectedThesisId(groupThesis.id);
                 } else {
@@ -389,7 +483,7 @@ export function TerminalRequirementApprovalWorkspace({
         }
         setDecisionLoading(true);
         try {
-            await recordTerminalRequirementDecision({
+            await findAndRecordTerminalRequirementDecision({
                 thesisId: thesis.id,
                 stage: resolvedStage,
                 role,
@@ -416,7 +510,7 @@ export function TerminalRequirementApprovalWorkspace({
         }
         setDecisionLoading(true);
         try {
-            await recordTerminalRequirementDecision({
+            await findAndRecordTerminalRequirementDecision({
                 thesisId: thesis.id,
                 stage: resolvedStage,
                 role,
@@ -463,9 +557,13 @@ export function TerminalRequirementApprovalWorkspace({
         }
 
         if (activeSubmission.status === 'returned') {
+            const returnedByLabel = activeSubmission.returnedBy
+                ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.returnedBy]
+                : 'a expert';
             return (
                 <Alert severity="warning">
-                    Returned to students by {activeSubmission.returnedBy ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.returnedBy] : 'a mentor'} on {formatDateTime(activeSubmission.returnedAt)}.
+                    Returned to students by {returnedByLabel} on{' '}
+                    {formatDateTime(activeSubmission.returnedAt)}.
                 </Alert>
             );
         }
@@ -503,9 +601,6 @@ export function TerminalRequirementApprovalWorkspace({
     return (
         <Stack spacing={3}>
             <Box>
-                <Typography variant="h4" gutterBottom>
-                    {title}
-                </Typography>
                 <Typography variant="body1" color="text.secondary">
                     {description}
                 </Typography>
@@ -553,13 +648,17 @@ export function TerminalRequirementApprovalWorkspace({
                                         {thesis?.title ?? 'Thesis'}
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                        {groupMeta?.name ? `Group ${groupMeta.name}` : groupMeta?.id ? `Group ${groupMeta.id}` : 'No group metadata'}
+                                        {groupMeta?.name
+                                            ? `Group ${groupMeta.name}`
+                                            : groupMeta?.id
+                                                ? `Group ${groupMeta.id}`
+                                                : 'No group metadata'}
                                     </Typography>
                                 </Box>
 
                                 <Tabs
                                     value={resolvedStage}
-                                    onChange={(_, value: ThesisStage) => setActiveStage(value)}
+                                    onChange={(_, value: ThesisStageName) => setActiveStage(value)}
                                     variant="scrollable"
                                     allowScrollButtonsMobile
                                 >

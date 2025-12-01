@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import type { NavigationItem } from '../../../types/navigation';
-import MentorRequestGroupView from '../../../components/MentorRequests/MentorRequestGroupView';
+import ExpertRequestGroupView from '../../../components/ExpertRequests/ExpertRequestGroupView';
 
 export const metadata: NavigationItem = {
     title: 'Group Profile',
@@ -12,11 +12,11 @@ export const metadata: NavigationItem = {
 export default function AdviserGroupViewPage() {
     const { groupId } = useParams<{ groupId: string }>();
     return (
-        <MentorRequestGroupView
+        <ExpertRequestGroupView
             groupId={groupId ?? ''}
             role="adviser"
             roleLabel="Adviser"
-            hint="Shows the thesis group requesting mentorship."
+            hint="Shows the thesis group requesting expertship."
         />
     );
 }

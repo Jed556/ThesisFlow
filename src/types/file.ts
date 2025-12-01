@@ -1,4 +1,4 @@
-import type { ThesisStage } from './thesis';
+import type { ThesisStageName } from './thesis';
 
 /**
  * File-related type definitions for the ThesisFlow application
@@ -65,6 +65,10 @@ export interface MediaMetadata {
  */
 export interface FileAttachment {
     id?: string; // Optional unique identifier for the attachment
+    groupId?: string;
+    thesisId?: string;
+    chapterId?: number;
+    commentId?: string;
     name: string;
     type: string;
     size: string;
@@ -76,12 +80,8 @@ export interface FileAttachment {
     metadata?: MediaMetadata; // Additional metadata for media files
     author: string; // Firebase UID of the uploader
     category?: 'submission' | 'attachment';
-    thesisId?: string;
-    groupId?: string;
-    chapterId?: number;
-    chapterStage?: ThesisStage;
-    commentId?: string;
-    terminalStage?: ThesisStage;
+    chapterStage?: ThesisStageName;
+    terminalStage?: ThesisStageName;
     terminalRequirementId?: string;
 }
 

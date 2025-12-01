@@ -3,12 +3,12 @@ import { Alert, Box, Button, Skeleton, Stack } from '@mui/material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../../components/Profile/ProfileView';
-import { getGroupsByMember } from '../../../utils/groupUtils';
+import { getGroupsByMember } from '../../../utils/firebase/firestore/groups';
 import { buildGroupProfileMap } from '../../../utils/groupUtils';
 import type { ThesisGroup } from '../../../types/group';
 import type { NavigationItem } from '../../../types/navigation';
 import type { UserProfile } from '../../../types/profile';
-import { getUserById } from '../../../utils/firebase/firestore/user';
+import { findUserById } from '../../../utils/firebase/firestore/user';
 
 interface GroupProfileLocationState {
     profile?: UserProfile;
@@ -76,7 +76,7 @@ export default function GroupMemberProfileViewPage() {
 
         setLoading(true);
         setError(null);
-        void getUserById(uid)
+        void findUserById(uid)
             .then((profileData) => {
                 if (cancelled) return;
                 if (!profileData) {

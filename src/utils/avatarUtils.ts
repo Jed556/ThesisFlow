@@ -1,6 +1,6 @@
 import type { UserProfile } from '../types/profile';
 import { uploadAvatar as uploadAvatarToStorage } from './firebase/storage/avatar';
-import { setUserProfile } from './firebase/firestore';
+import { updateUserProfile } from './firebase/firestore';
 
 /**
  * Utility functions for avatar generation and user name handling
@@ -45,20 +45,18 @@ export const createAvatarPreview = (file: File): Promise<string> => {
  * Uploads an avatar file to Firebase Storage and updates the user profile
  * @param avatarFile - File to upload
  * @param uid - User ID
- * @param userProfile - Current user profile
  * @returns Promise that resolves to the uploaded avatar URL
  * @throws Error if upload fails
  */
 export const uploadAvatar = async (
     avatarFile: File,
-    uid: string,
-    userProfile: UserProfile
+    uid: string
 ): Promise<string> => {
     // Upload to storage
     const avatarUrl = await uploadAvatarToStorage(avatarFile, uid);
 
     // Update the profile with the new avatar URL
-    await setUserProfile(uid, { ...userProfile, avatar: avatarUrl });
+    await updateUserProfile(uid, { avatar: avatarUrl });
 
     return avatarUrl;
 };

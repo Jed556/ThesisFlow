@@ -4,7 +4,6 @@ import {
     Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
-import { where } from 'firebase/firestore';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
@@ -14,13 +13,14 @@ import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable } from '../../components/PanelComments';
 import { useSnackbar } from '../../components/Snackbar';
 import { getAllGroups } from '../../utils/firebase/firestore/groups';
-import { listenTheses, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
+import { listenThesisByGroupId, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import {
     listenPanelCommentEntries,
     listenPanelCommentRelease,
     setPanelCommentReleaseState,
+    type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
-import { getUsersByIds } from '../../utils/firebase/firestore/user';
+import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
     PANEL_COMMENT_STAGE_METADATA,
@@ -28,6 +28,7 @@ import {
     formatPanelistDisplayName,
 } from '../../utils/panelCommentUtils';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -50,6 +51,18 @@ export default function AdminPanelCommentsPage() {
         () => groups.find((group) => group.id === selectedGroupId) ?? null,
         [groups, selectedGroupId]
     );
+
+    /** Build panel comment context from selected group */
+    const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
+        if (!selectedGroup) return null;
+        return {
+            year: DEFAULT_YEAR,
+            department: selectedGroup.department ?? '',
+            course: selectedGroup.course ?? '',
+            groupId: selectedGroup.id,
+        };
+    }, [selectedGroup]);
+
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [releaseMap, setReleaseMap] = React.useState<PanelCommentReleaseMap>(createDefaultPanelCommentReleaseMap());
@@ -92,14 +105,12 @@ export default function AdminPanelCommentsPage() {
             return;
         }
         setThesisLoading(true);
-        const unsubscribe = listenTheses([
-            where('groupId', '==', selectedGroupId),
-        ], {
-            onData: (records) => {
+        const unsubscribe = listenThesisByGroupId(selectedGroupId, {
+            onData: (records: ThesisRecord[]) => {
                 setThesis(records[0] ?? null);
                 setThesisLoading(false);
             },
-            onError: (error) => {
+            onError: (error: Error) => {
                 console.error('Failed to load thesis for admin panel page:', error);
                 setThesis(null);
                 setThesisLoading(false);
@@ -109,26 +120,26 @@ export default function AdminPanelCommentsPage() {
     }, [selectedGroupId]);
 
     React.useEffect(() => {
-        if (!selectedGroupId) {
+        if (!panelCommentCtx) {
             setReleaseMap(createDefaultPanelCommentReleaseMap());
             return;
         }
-        const unsubscribe = listenPanelCommentRelease(selectedGroupId, {
+        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
             onData: (next) => setReleaseMap(next),
             onError: (error) => console.error('Panel release listener error (admin view):', error),
         });
         return () => unsubscribe();
-    }, [selectedGroupId]);
+    }, [panelCommentCtx]);
 
     React.useEffect(() => {
-        if (!selectedGroupId || !activePanelUid) {
+        if (!panelCommentCtx || !activePanelUid) {
             setEntries([]);
             setEntriesLoading(false);
             return;
         }
         setEntriesLoading(true);
         setEntriesError(null);
-        const unsubscribe = listenPanelCommentEntries(selectedGroupId, activeStage, {
+        const unsubscribe = listenPanelCommentEntries(panelCommentCtx, activeStage, {
             onData: (next) => {
                 setEntries(next);
                 setEntriesLoading(false);
@@ -141,7 +152,7 @@ export default function AdminPanelCommentsPage() {
             },
         }, activePanelUid);
         return () => unsubscribe();
-    }, [selectedGroupId, activeStage, activePanelUid]);
+    }, [panelCommentCtx, activeStage, activePanelUid]);
 
     React.useEffect(() => {
         let isMounted = true;
@@ -170,7 +181,7 @@ export default function AdminPanelCommentsPage() {
             setPanelistsLoading(true);
             setPanelistsError(null);
             try {
-                const profiles = await getUsersByIds(panelUids);
+                const profiles = await findUsersByIds(panelUids);
                 if (!isMounted) {
                     return;
                 }
@@ -235,7 +246,7 @@ export default function AdminPanelCommentsPage() {
     };
 
     const handleToggleRelease = React.useCallback(async () => {
-        if (!selectedGroupId || !userUid) {
+        if (!panelCommentCtx || !userUid) {
             showNotification('Select a group first.', 'error');
             return;
         }
@@ -246,7 +257,7 @@ export default function AdminPanelCommentsPage() {
         }
         setReleaseSaving(true);
         try {
-            await setPanelCommentReleaseState(selectedGroupId, activeStage, !currentState, userUid);
+            await setPanelCommentReleaseState(panelCommentCtx, activeStage, !currentState, userUid);
             showNotification(!currentState ? 'Comments sent to students.' : 'Student access revoked.', 'success');
         } catch (error) {
             console.error('Failed to update panel release state:', error);
@@ -254,7 +265,7 @@ export default function AdminPanelCommentsPage() {
         } finally {
             setReleaseSaving(false);
         }
-    }, [selectedGroupId, userUid, releaseMap, activeStage, canRelease, showNotification]);
+    }, [panelCommentCtx, userUid, releaseMap, activeStage, canRelease, showNotification]);
 
     if (session?.loading) {
         return (

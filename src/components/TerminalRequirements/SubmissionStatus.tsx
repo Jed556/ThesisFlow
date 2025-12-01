@@ -45,7 +45,7 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
             <Stack spacing={1}>
                 <Typography variant="subtitle2">{title}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                    Awaiting internal verification. No mentor approvals are configured for this stage.
+                    Awaiting internal verification. No expert approvals are configured for this stage.
                 </Typography>
             </Stack>
         );

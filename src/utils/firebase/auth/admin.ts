@@ -1,5 +1,6 @@
 import { resolveAdminApiBaseUrl, buildAdminApiHeaders } from '../api';
 import { getError } from '../../../../utils/errorUtils';
+import { encryptPassword } from '../../cryptoUtils';
 
 /**
  * Shape of the request payload for the admin delete callable function.
@@ -118,12 +119,16 @@ export async function adminCreateUserAccount(
     try {
         const apiUrl = resolveAdminApiBaseUrl();
         const headers = await buildAdminApiHeaders();
+        const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET || '';
+
+        // Encrypt password before sending to the API
+        const encryptedPassword = apiSecret ? await encryptPassword(password, apiSecret) : password;
 
         // Call the admin API server
         const response = await fetch(`${apiUrl}/user/create`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ email, password, role, uid }),
+            body: JSON.stringify({ email, password: encryptedPassword, role, uid }),
         });
 
         const result = await response.json();
@@ -180,12 +185,19 @@ export async function adminUpdateUserAccount(payload: AdminUpdateUserPayload): P
     try {
         const apiUrl = resolveAdminApiBaseUrl();
         const headers = await buildAdminApiHeaders();
+        const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET || '';
+
+        // Encrypt password if provided before sending to the API
+        const requestPayload = { ...payload };
+        if (requestPayload.password && apiSecret) {
+            requestPayload.password = await encryptPassword(requestPayload.password, apiSecret);
+        }
 
         // Call the admin API server
         const response = await fetch(`${apiUrl}/user/update`, {
             method: 'PUT',
             headers,
-            body: JSON.stringify(payload),
+            body: JSON.stringify(requestPayload),
         });
 
         const result = await response.json();

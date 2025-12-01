@@ -109,7 +109,7 @@ export default function ConversationPanel({
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height, px: 3, overflowY: 'auto' }}>
             <Box sx={{ flex: 1, overflowY: 'auto', pr: 1 }}>
                 {isLoading ? (
                     <Stack spacing={2}>

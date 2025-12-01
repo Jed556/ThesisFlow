@@ -4,14 +4,19 @@ import type { ThesisGroup } from '../../types/group';
 /**
  * Enumerates the allowable thesis group statuses in display order.
  */
-export const GROUP_STATUS_OPTIONS: ThesisGroup['status'][] = ['active', 'inactive', 'completed', 'archived'];
+export const GROUP_STATUS_OPTIONS: ThesisGroup['status'][] = [
+    'draft', 'review', 'active', 'inactive', 'rejected', 'completed', 'archived'
+];
 
 /**
  * Maps thesis group statuses to the corresponding MUI chip color token.
  */
 export const GROUP_STATUS_COLORS: Record<ThesisGroup['status'], ChipProps['color']> = {
+    draft: 'default',
+    review: 'warning',
     active: 'success',
     inactive: 'default',
+    rejected: 'error',
     completed: 'info',
     archived: 'warning',
 };

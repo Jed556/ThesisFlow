@@ -3,7 +3,7 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, 
 
 export interface TopicProposalFormValues {
     title: string;
-    abstract: string;
+    description: string;
     problemStatement?: string;
     expectedOutcome?: string;
     keywords: string[];
@@ -20,7 +20,7 @@ export interface TopicProposalFormDialogProps {
 
 const EMPTY_VALUES: TopicProposalFormValues = {
     title: '',
-    abstract: '',
+    description: '',
     problemStatement: '',
     expectedOutcome: '',
     keywords: [],
@@ -65,8 +65,8 @@ export default function TopicProposalFormDialog(props: TopicProposalFormDialogPr
         if (!values.title.trim()) {
             validationErrors.title = 'Title is required';
         }
-        if (!values.abstract.trim()) {
-            validationErrors.abstract = 'Abstract is required';
+        if (!values.description.trim()) {
+            validationErrors.description = 'Brief description is required';
         }
 
         if (Object.keys(validationErrors).length > 0) {
@@ -77,7 +77,7 @@ export default function TopicProposalFormDialog(props: TopicProposalFormDialogPr
         await onSubmit({
             ...values,
             title: values.title.trim(),
-            abstract: values.abstract.trim(),
+            description: values.description.trim(),
             problemStatement: values.problemStatement?.trim() || undefined,
             expectedOutcome: values.expectedOutcome?.trim() || undefined,
             keywords: fromKeywordsInput(keywordsInput),
@@ -99,11 +99,11 @@ export default function TopicProposalFormDialog(props: TopicProposalFormDialogPr
                         fullWidth
                     />
                     <TextField
-                        label="Abstract"
-                        value={values.abstract}
-                        onChange={handleFieldChange('abstract')}
-                        error={Boolean(errors.abstract)}
-                        helperText={errors.abstract}
+                        label="Brief Description"
+                        value={values.description}
+                        onChange={handleFieldChange('description')}
+                        error={Boolean(errors.description)}
+                        helperText={errors.description}
                         disabled={loading}
                         fullWidth
                         multiline

@@ -3,11 +3,13 @@
  * Handles both system-wide authentication roles and thesis-specific contextual roles
  */
 
-import type { ThesisRole, ThesisData } from '../types/thesis';
+import type { ThesisRole } from '../types/thesis';
 import type { UserRole } from '../types/profile';
+import type { ThesisGroup } from '../types/group';
 import { firebaseAuth, firebaseFirestore } from './firebase/firebaseConfig';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { getUserById } from './firebase/firestore';
+import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
+import { findUserById } from './firebase/firestore/user';
+import { GROUPS_SUBCOLLECTION } from '../config/firestore';
 
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
@@ -32,18 +34,11 @@ export async function getUserRole(forceRefresh: boolean = true): Promise<UserRol
             return role;
         }
 
-        // Fallback to Firestore if no claim exists
-        const userEmail = user.email;
-        if (userEmail) {
-            const userDocRef = doc(firebaseFirestore, 'users', encodeURIComponent(userEmail));
-            const docSnap = await getDoc(userDocRef);
-
-            if (docSnap.exists()) {
-                const userData = docSnap.data();
-                if (userData.role) {
-                    return userData.role as UserRole;
-                }
-            }
+        // Fallback to Firestore using collectionGroup query across hierarchical paths
+        // Use UID as the primary identifier (more stable than email which can change)
+        const userProfile = await findUserById(user.uid);
+        if (userProfile?.role) {
+            return userProfile.role;
         }
 
         console.warn('No role found in Auth claims or Firestore, defaulting to student');
@@ -98,7 +93,7 @@ export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boole
  * @returns true when the user's role matches, false otherwise
  */
 export async function isUserInRole(uid: string, role: UserRole): Promise<boolean> {
-    const profile = await getUserById(uid);
+    const profile = await findUserById(uid);
     if (!profile) return false;
     return profile.role === role;
 }
@@ -108,62 +103,82 @@ export async function isUserInRole(uid: string, role: UserRole): Promise<boolean
 // ==================================================
 
 /**
- * Get thesis by user UID from Firestore
- * Searches for a thesis where the user is leader, member, adviser, or editor
+ * Get thesis role for a user from group membership
+ * Uses ThesisGroup.members to determine the user's role
+ * @param uid - User ID to check
+ * @param group - ThesisGroup containing member information
+ * @returns The user's thesis role
  */
-async function getThesisByUserUid(uid: string): Promise<ThesisData | null> {
-    try {
-        const thesesRef = collection(firebaseFirestore, 'theses');
+export function getThesisRoleForUid(uid: string, group: ThesisGroup | null): ThesisRole {
+    if (!group?.members) return 'unknown';
 
-        // Query for theses where user is leader
-        const leaderQuery = query(thesesRef, where('leader', '==', uid));
+    if (uid === group.members.leader) return 'leader';
+    if (group.members.members?.includes(uid)) return 'member';
+    if (uid === group.members.adviser) return 'adviser';
+    if (uid === group.members.editor) return 'editor';
+    if (uid === group.members.statistician) return 'statistician';
+    if (group.members.panels?.includes(uid)) return 'panel';
+
+    return 'unknown';
+}
+
+/**
+ * Get group by user UID from Firestore using collectionGroup query
+ * Searches for a group where the user is leader, member, adviser, editor, or statistician
+ * Uses hierarchical group subcollection path
+ */
+async function getGroupByUserUid(uid: string): Promise<ThesisGroup | null> {
+    try {
+        const groupsGroup = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
+
+        // Query for groups where user is leader
+        const leaderQuery = query(groupsGroup, where('members.leader', '==', uid));
         const leaderSnap = await getDocs(leaderQuery);
         if (!leaderSnap.empty) {
-            return leaderSnap.docs[0].data() as ThesisData;
+            return { id: leaderSnap.docs[0].id, ...leaderSnap.docs[0].data() } as ThesisGroup;
         }
 
-        // Query for theses where user is in members array
-        const memberQuery = query(thesesRef, where('members', 'array-contains', uid));
+        // Query for groups where user is in members array
+        const memberQuery = query(groupsGroup, where('members.members', 'array-contains', uid));
         const memberSnap = await getDocs(memberQuery);
         if (!memberSnap.empty) {
-            return memberSnap.docs[0].data() as ThesisData;
+            return { id: memberSnap.docs[0].id, ...memberSnap.docs[0].data() } as ThesisGroup;
         }
 
-        // Query for theses where user is adviser
-        const adviserQuery = query(thesesRef, where('adviser', '==', uid));
+        // Query for groups where user is adviser
+        const adviserQuery = query(groupsGroup, where('members.adviser', '==', uid));
         const adviserSnap = await getDocs(adviserQuery);
         if (!adviserSnap.empty) {
-            return adviserSnap.docs[0].data() as ThesisData;
+            return { id: adviserSnap.docs[0].id, ...adviserSnap.docs[0].data() } as ThesisGroup;
         }
 
-        // Query for theses where user is editor
-        const editorQuery = query(thesesRef, where('editor', '==', uid));
+        // Query for groups where user is editor
+        const editorQuery = query(groupsGroup, where('members.editor', '==', uid));
         const editorSnap = await getDocs(editorQuery);
         if (!editorSnap.empty) {
-            return editorSnap.docs[0].data() as ThesisData;
+            return { id: editorSnap.docs[0].id, ...editorSnap.docs[0].data() } as ThesisGroup;
+        }
+
+        // Query for groups where user is statistician
+        const statisticianQuery = query(groupsGroup, where('members.statistician', '==', uid));
+        const statisticianSnap = await getDocs(statisticianQuery);
+        if (!statisticianSnap.empty) {
+            return { id: statisticianSnap.docs[0].id, ...statisticianSnap.docs[0].data() } as ThesisGroup;
         }
 
         return null;
     } catch (error) {
-        console.error('Error getting thesis by user UID:', error);
+        console.error('Error getting group by user UID:', error);
         return null;
     }
 }
 
 /**
- * Get user's thesis-specific role by uid from Firestore thesis data
+ * Get user's thesis-specific role by uid from Firestore group data
  */
 export async function getThesisRole(uid: string): Promise<ThesisRole> {
-    const thesis = await getThesisByUserUid(uid);
-
-    if (!thesis) return 'unknown';
-
-    if (uid === thesis.leader) return 'leader';
-    if (thesis.members.includes(uid)) return 'member';
-    if (uid === thesis.adviser) return 'adviser';
-    if (uid === thesis.editor) return 'editor';
-
-    return 'unknown';
+    const group = await getGroupByUserUid(uid);
+    return getThesisRoleForUid(uid, group);
 }
 
 /**
@@ -176,6 +191,8 @@ export async function getThesisRoleDisplayText(uid: string): Promise<string> {
         case 'member': return 'Student (Member)';
         case 'adviser': return 'Adviser';
         case 'editor': return 'Editor';
+        case 'statistician': return 'Statistician';
+        case 'panel': return 'Panel Member';
         default: return 'Unknown';
     }
 }

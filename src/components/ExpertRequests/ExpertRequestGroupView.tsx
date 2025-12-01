@@ -3,40 +3,40 @@ import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/ma
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
-import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
+import type { ExpertRequest, ExpertRequestRole } from '../../types/expertRequest';
 import type { Session } from '../../types/session';
-import MentorRequestDecisionActions from './MentorRequestDecisionActions';
+import ExpertRequestDecisionActions from './ExpertRequestDecisionActions';
 import GroupView from '../Group/GroupView';
 import type { ThesisGroup } from '../../types/group';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { AnimatedPage } from '../Animate';
-import { getPendingMentorRequest } from '../../utils/firebase/firestore/mentorRequests';
+import { getPendingExpertRequestByGroup } from '../../utils/firebase/firestore/expertRequests';
 
-interface MentorRequestRouteState {
-    mentorRequest?: MentorRequest;
+interface ExpertRequestRouteState {
+    expertRequest?: ExpertRequest;
 }
 
-export interface MentorRequestGroupViewProps {
+export interface ExpertRequestGroupViewProps {
     groupId: string;
-    role: MentorRequestRole;
+    role: ExpertRequestRole;
     roleLabel: string;
     hint?: string;
 }
 
 /**
- * Shared mentor request group view that injects decision buttons beside the back button.
+ * Shared expert request group view that injects decision buttons beside the back button.
  */
-export default function MentorRequestGroupView({ groupId, role, roleLabel, hint }: MentorRequestGroupViewProps) {
+export default function ExpertRequestGroupView({ groupId, role, roleLabel, hint }: ExpertRequestGroupViewProps) {
     const session = useSession<Session>();
     const viewerRole = session?.user?.role;
-    const mentorUid = session?.user?.uid ?? null;
+    const expertUid = session?.user?.uid ?? null;
     const navigate = useNavigate();
     const location = useLocation();
 
-    const routeState = location.state as MentorRequestRouteState | null;
-    const routeRequest = routeState?.mentorRequest ?? null;
+    const routeState = location.state as ExpertRequestRouteState | null;
+    const routeRequest = routeState?.expertRequest ?? null;
 
-    const [request, setRequest] = React.useState<MentorRequest | null>(routeRequest);
+    const [request, setRequest] = React.useState<ExpertRequest | null>(routeRequest);
     const [requestLoading, setRequestLoading] = React.useState(!routeRequest);
     const [requestError, setRequestError] = React.useState<string | null>(null);
 
@@ -48,7 +48,7 @@ export default function MentorRequestGroupView({ groupId, role, roleLabel, hint 
 
     React.useEffect(() => {
         let ignore = false;
-        if (!groupId || !mentorUid) {
+        if (!groupId || !expertUid) {
             setRequest(routeRequest);
             setRequestLoading(false);
             return () => { ignore = true; };
@@ -63,8 +63,8 @@ export default function MentorRequestGroupView({ groupId, role, roleLabel, hint 
 
         setRequestLoading(true);
         setRequestError(null);
-        void getPendingMentorRequest(groupId, mentorUid, role)
-            .then((record) => {
+        void getPendingExpertRequestByGroup(groupId, expertUid, role)
+            .then((record: ExpertRequest | null) => {
                 if (ignore) {
                     return;
                 }
@@ -73,11 +73,11 @@ export default function MentorRequestGroupView({ groupId, role, roleLabel, hint 
                     setRequestError('No pending request for this group.');
                 }
             })
-            .catch((error) => {
+            .catch((error: Error) => {
                 if (ignore) {
                     return;
                 }
-                console.error('Failed to fetch pending mentor request:', error);
+                console.error('Failed to fetch pending expert request:', error);
                 setRequest(null);
                 setRequestError('Unable to load the request for this group.');
             })
@@ -90,7 +90,7 @@ export default function MentorRequestGroupView({ groupId, role, roleLabel, hint 
         return () => {
             ignore = true;
         };
-    }, [groupId, mentorUid, role, routeRequest]);
+    }, [groupId, expertUid, role, routeRequest]);
 
     const handleDecisionComplete = React.useCallback((status: 'approved' | 'rejected') => {
         setRequest((prev) => (prev ? { ...prev, status } : prev));
@@ -101,17 +101,17 @@ export default function MentorRequestGroupView({ groupId, role, roleLabel, hint 
             <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={handleBack}>
                 Back
             </Button>
-            <MentorRequestDecisionActions
+            <ExpertRequestDecisionActions
                 request={request}
                 group={context.group}
                 role={role}
                 roleLabel={roleLabel}
-                mentorUid={mentorUid}
+                expertUid={expertUid}
                 loading={context.loading || requestLoading}
                 onCompleted={handleDecisionComplete}
             />
         </>
-    ), [handleBack, handleDecisionComplete, mentorUid, request, requestLoading, role, roleLabel]);
+    ), [handleBack, handleDecisionComplete, expertUid, request, requestLoading, role, roleLabel]);
 
     if (!session || session.loading) {
         return (
@@ -130,17 +130,17 @@ export default function MentorRequestGroupView({ groupId, role, roleLabel, hint 
         return (
             <UnauthorizedNotice
                 variant="box"
-                title="Mentor access only"
+                title="Expert access only"
                 description={`Only ${roleLabel.toLowerCase()}s can view this page.`}
             />
         );
     }
 
-    if (!mentorUid) {
+    if (!expertUid) {
         return (
             <AnimatedPage variant="fade">
                 <Alert severity="warning">
-                    You need to sign in again to review mentor requests.
+                    You need to sign in again to review expert requests.
                 </Alert>
             </AnimatedPage>
         );

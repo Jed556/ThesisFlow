@@ -1,30 +1,18 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ReviewerAssignment } from '../../types/reviewer';
-import type { ThesisData } from '../../types/thesis';
+import type { ReviewerAssignment, ThesisWithGroupContext } from '../../utils/firebase/firestore/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceChapterDecisionPayload, WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
-import {
-    getReviewerAssignmentsForUser,
-    getThesisById,
-} from '../../utils/firebase/firestore/thesis';
-import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
-import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDecisions';
+import { getReviewerAssignmentsForUser, findThesisById } from '../../utils/firebase/firestore/thesis';
+import { appendChapterComment } from '../../utils/firebase/firestore/chat';
+import { updateChapterDecision } from '../../utils/firebase/firestore/chapters';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
 
@@ -33,7 +21,7 @@ export const metadata: NavigationItem = {
     index: 0,
     title: 'Thesis Overview',
     segment: 'editor-thesis-overview',
-    icon: <VisibilityIcon />,
+    icon: <SchoolIcon />,
     roles: ['editor'],
 };
 
@@ -44,7 +32,7 @@ export default function EditorThesisOverviewPage() {
     const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
     const [selectedThesisId, setSelectedThesisId] = React.useState<string>('');
-    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesis, setThesis] = React.useState<ThesisWithGroupContext | null>(null);
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
     const [error, setError] = React.useState<string | null>(null);
@@ -135,7 +123,7 @@ export default function EditorThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const data = await getThesisById(selectedThesisId);
+                const data = await findThesisById(selectedThesisId);
                 if (!cancelled) {
                     setThesis(data);
                     await hydrateDisplayNames([
@@ -217,7 +205,8 @@ export default function EditorThesisOverviewPage() {
         content,
         files,
     }: WorkspaceCommentPayload) => {
-        if (!editorUid || !selectedThesisId || !thesis?.groupId) {
+        if (!editorUid || !selectedThesisId || !thesis?.groupId || !thesis.year ||
+            !thesis.department || !thesis.course) {
             throw new Error('Missing editor context.');
         }
 
@@ -233,7 +222,13 @@ export default function EditorThesisOverviewPage() {
         }
 
         const savedComment = await appendChapterComment({
-            thesisId: selectedThesisId,
+            ctx: {
+                year: thesis.year,
+                department: thesis.department,
+                course: thesis.course,
+                groupId: thesis.groupId,
+                thesisId: selectedThesisId,
+            },
             chapterId,
             comment: {
                 author: editorUid,
@@ -249,30 +244,40 @@ export default function EditorThesisOverviewPage() {
             }
             return {
                 ...prev,
-                chapters: prev.chapters.map((chapter) =>
+                chapters: (prev.chapters ?? []).map((chapter) =>
                     chapter.id === chapterId
                         ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
                         : chapter
                 ),
             };
         });
-    }, [editorUid, selectedThesisId, thesis?.groupId]);
+    }, [editorUid, selectedThesisId, thesis]);
 
-    const handleChapterDecision = React.useCallback(async ({ thesisId: targetThesisId, chapterId, decision }: WorkspaceChapterDecisionPayload) => {
-        if (!targetThesisId) {
+    const handleChapterDecision = React.useCallback(async (
+        { thesisId: targetThesisId, chapterId, decision }: WorkspaceChapterDecisionPayload
+    ) => {
+        if (!targetThesisId || !thesis?.year || !thesis.department ||
+            !thesis.course || !thesis.groupId) {
             throw new Error('Missing thesis context for decision.');
         }
 
+        // Only handle decisions for the currently selected thesis
+        if (targetThesisId !== selectedThesisId) {
+            throw new Error('Cannot make decisions for a different thesis.');
+        }
+
         const result = await updateChapterDecision({
-            thesisId: targetThesisId,
+            ctx: {
+                year: thesis.year,
+                department: thesis.department,
+                course: thesis.course,
+                groupId: thesis.groupId,
+                thesisId: targetThesisId,
+            },
             chapterId,
             decision,
             role: 'editor',
         });
-
-        if (targetThesisId !== selectedThesisId) {
-            return;
-        }
 
         setThesis((prev) => {
             if (!prev) {
@@ -281,19 +286,19 @@ export default function EditorThesisOverviewPage() {
             return {
                 ...prev,
                 lastUpdated: result.decidedAt,
-                chapters: prev.chapters.map((chapter) =>
+                chapters: (prev.chapters ?? []).map((chapter) =>
                     chapter.id === chapterId
                         ? {
                             ...chapter,
                             status: result.status,
                             lastModified: result.decidedAt,
-                            mentorApprovals: result.mentorApprovals,
+                            expertApprovals: result.expertApprovals,
                         }
                         : chapter
                 ),
             };
         });
-    }, [selectedThesisId]);
+    }, [selectedThesisId, thesis]);
 
     const isLoading = assignmentsLoading || thesisLoading;
     const noAssignments = !assignmentsLoading && assignments.length === 0;
@@ -328,6 +333,10 @@ export default function EditorThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={selectedThesisId}
+                    groupId={thesis?.groupId}
+                    year={thesis?.year}
+                    department={thesis?.department}
+                    course={thesis?.course}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={editorUid}
@@ -336,7 +345,7 @@ export default function EditorThesisOverviewPage() {
                     allowCommenting
                     emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
                     onCreateComment={handleCreateComment}
-                    mentorRole="editor"
+                    expertRole="editor"
                     onChapterDecision={handleChapterDecision}
                 />
             )}

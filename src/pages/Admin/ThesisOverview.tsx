@@ -1,26 +1,16 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { UserProfile } from '../../types/profile';
-import type { ThesisData } from '../../types/thesis';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceFilterConfig } from '../../types/workspace';
-import { getThesisByGroupId } from '../../utils/firebase/firestore/thesis';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import { findThesisByGroupId, type ThesisWithGroupContext } from '../../utils/firebase/firestore/thesis';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { getDisplayName } from '../../utils/userUtils';
 
@@ -29,7 +19,7 @@ export const metadata: NavigationItem = {
     index: 4,
     title: 'Thesis Overview',
     segment: 'admin-thesis-overview',
-    icon: <AdminPanelSettingsIcon />,
+    icon: <SchoolIcon />,
     roles: ['admin'],
 };
 
@@ -37,7 +27,6 @@ export default function AdminThesisOverviewPage() {
     const session = useSession<Session>();
     const adminUid = session?.user?.uid ?? '';
 
-    const [profile, setProfile] = React.useState<UserProfile | null>(null);
     const [profileLoading, setProfileLoading] = React.useState(true);
 
     const [departments, setDepartments] = React.useState<string[]>([]);
@@ -50,7 +39,7 @@ export default function AdminThesisOverviewPage() {
     const [selectedCourse, setSelectedCourse] = React.useState('');
     const [selectedGroupId, setSelectedGroupId] = React.useState('');
 
-    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesis, setThesis] = React.useState<ThesisWithGroupContext | null>(null);
     const [selectedThesisId, setSelectedThesisId] = React.useState('');
     const [thesisLoading, setThesisLoading] = React.useState(false);
 
@@ -91,7 +80,6 @@ export default function AdminThesisOverviewPage() {
 
     React.useEffect(() => {
         if (!adminUid) {
-            setProfile(null);
             setProfileLoading(false);
             return;
         }
@@ -100,12 +88,11 @@ export default function AdminThesisOverviewPage() {
         setProfileLoading(true);
         setError(null);
 
-        void getUserById(adminUid)
+        void findUserById(adminUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;
                 }
-                setProfile(userProfile ?? null);
                 const managedDepartments = userProfile?.departments?.filter(Boolean)
                     ?? (userProfile?.department ? [userProfile.department] : []);
                 setDepartments(managedDepartments);
@@ -120,7 +107,6 @@ export default function AdminThesisOverviewPage() {
             .catch((fetchError) => {
                 console.error('Failed to load admin profile:', fetchError);
                 if (!cancelled) {
-                    setProfile(null);
                     setDepartments([]);
                     setSelectedDepartment('');
                     setError('Unable to load your admin profile.');
@@ -223,7 +209,7 @@ export default function AdminThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const record = await getThesisByGroupId(selectedGroupId);
+                const record = await findThesisByGroupId(selectedGroupId);
                 if (!cancelled) {
                     setSelectedThesisId(record?.id ?? '');
                     setThesis(record ?? null);
@@ -360,13 +346,21 @@ export default function AdminThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={selectedThesisId}
+                    groupId={selectedGroupId}
+                    year={thesis?.year}
+                    department={thesis?.department ?? selectedDepartment}
+                    course={thesis?.course ?? selectedCourse}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={adminUid}
                     filters={filters}
                     isLoading={isLoading}
                     allowCommenting={false}
-                    emptyStateMessage={selectedGroupId ? 'No thesis data available for this group yet.' : 'Select a department, course, and group to begin.'}
+                    emptyStateMessage={
+                        selectedGroupId
+                            ? 'No thesis data available for this group yet.'
+                            : 'Select a department, course, and group to begin.'
+                    }
                 />
             )}
         </AnimatedPage>

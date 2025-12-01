@@ -1,23 +1,23 @@
 import * as React from 'react';
 import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
-import ScienceIcon from '@mui/icons-material/Science';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ReviewerAssignment } from '../../types/reviewer';
-import type { ThesisData, ThesisStage } from '../../types/thesis';
+import type { ReviewerAssignment, ThesisWithGroupContext } from '../../utils/firebase/firestore/thesis';
+import type { ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceChapterDecisionPayload, WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
-import { getReviewerAssignmentsForUser, getThesisById } from '../../utils/firebase/firestore/thesis';
-import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
-import { updateChapterDecision } from '../../utils/firebase/firestore/chapterDecisions';
+import { getReviewerAssignmentsForUser, findThesisById } from '../../utils/firebase/firestore/thesis';
+import { appendChapterComment } from '../../utils/firebase/firestore/chat';
+import { updateChapterDecision } from '../../utils/firebase/firestore/chapters';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
 import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
-import { listenTerminalRequirementSubmission } from '../../utils/firebase/firestore/terminalRequirementSubmissions';
+import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 
 export const metadata: NavigationItem = {
@@ -25,7 +25,7 @@ export const metadata: NavigationItem = {
     index: 1,
     title: 'Thesis Overview',
     segment: 'statistician-thesis-overview',
-    icon: <ScienceIcon />,
+    icon: <SchoolIcon />,
     roles: ['statistician'],
 };
 
@@ -36,12 +36,12 @@ export default function StatisticianThesisOverviewPage() {
     const [assignments, setAssignments] = React.useState<ReviewerAssignment[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(true);
     const [selectedThesisId, setSelectedThesisId] = React.useState<string>('');
-    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesis, setThesis] = React.useState<ThesisWithGroupContext | null>(null);
     const [thesisLoading, setThesisLoading] = React.useState(false);
     const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
     const [error, setError] = React.useState<string | null>(null);
     const [submissionByStage, setSubmissionByStage] = React.useState<
-        Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
 
     const resolveDisplayName = React.useCallback((uid?: string | null) => {
@@ -131,7 +131,7 @@ export default function StatisticianThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const data = await getThesisById(selectedThesisId);
+                const data = await findThesisById(selectedThesisId);
                 if (!cancelled) {
                     setThesis(data);
                     await hydrateDisplayNames([
@@ -168,11 +168,11 @@ export default function StatisticianThesisOverviewPage() {
         }
 
         const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => (
-            listenTerminalRequirementSubmission(thesis.id!, stageMeta.value, {
-                onData: (record) => {
+            findAndListenTerminalRequirements(thesis.id!, stageMeta.value, {
+                onData: (records) => {
                     setSubmissionByStage((prev) => ({
                         ...prev,
-                        [stageMeta.value]: record,
+                        [stageMeta.value]: records,
                     }));
                 },
                 onError: (listenerError) => {
@@ -187,11 +187,12 @@ export default function StatisticianThesisOverviewPage() {
     }, [thesis?.id]);
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
-            const record = submissionByStage[stageMeta.value];
-            acc[stageMeta.value] = record?.status === 'approved';
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
+            const records = submissionByStage[stageMeta.value] ?? [];
+            // Stage is complete if there are submissions and ALL are approved
+            acc[stageMeta.value] = records.length > 0 && records.every((r) => r.status === 'approved');
             return acc;
-        }, {} as Record<ThesisStage, boolean>);
+        }, {} as Record<ThesisStageName, boolean>);
     }, [submissionByStage]);
 
     const participants = React.useMemo(() => {
@@ -246,7 +247,8 @@ export default function StatisticianThesisOverviewPage() {
         content,
         files,
     }: WorkspaceCommentPayload) => {
-        if (!statisticianUid || !selectedThesisId || !thesis?.groupId) {
+        if (!statisticianUid || !selectedThesisId || !thesis?.groupId || !thesis.year ||
+            !thesis.department || !thesis.course) {
             throw new Error('Missing statistician context.');
         }
 
@@ -262,7 +264,13 @@ export default function StatisticianThesisOverviewPage() {
         }
 
         const savedComment = await appendChapterComment({
-            thesisId: selectedThesisId,
+            ctx: {
+                year: thesis.year,
+                department: thesis.department,
+                course: thesis.course,
+                groupId: thesis.groupId,
+                thesisId: selectedThesisId,
+            },
             chapterId,
             comment: {
                 author: statisticianUid,
@@ -278,31 +286,40 @@ export default function StatisticianThesisOverviewPage() {
             }
             return {
                 ...prev,
-                chapters: prev.chapters.map((chapter) =>
+                chapters: (prev.chapters ?? []).map((chapter) =>
                     chapter.id === chapterId
                         ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
                         : chapter
                 ),
             };
         });
-    }, [statisticianUid, selectedThesisId, thesis?.groupId]);
+    }, [statisticianUid, selectedThesisId, thesis]);
 
-    const handleChapterDecision = React.useCallback(async ({ thesisId: targetThesisId, chapterId, decision }
-        : WorkspaceChapterDecisionPayload) => {
-        if (!targetThesisId) {
+    const handleChapterDecision = React.useCallback(async (
+        { thesisId: targetThesisId, chapterId, decision }: WorkspaceChapterDecisionPayload
+    ) => {
+        if (!targetThesisId || !thesis?.year || !thesis.department ||
+            !thesis.course || !thesis.groupId) {
             throw new Error('Missing thesis context for decision.');
         }
 
+        // Only handle decisions for the currently selected thesis
+        if (targetThesisId !== selectedThesisId) {
+            throw new Error('Cannot make decisions for a different thesis.');
+        }
+
         const result = await updateChapterDecision({
-            thesisId: targetThesisId,
+            ctx: {
+                year: thesis.year,
+                department: thesis.department,
+                course: thesis.course,
+                groupId: thesis.groupId,
+                thesisId: targetThesisId,
+            },
             chapterId,
             decision,
             role: 'statistician',
         });
-
-        if (targetThesisId !== selectedThesisId) {
-            return;
-        }
 
         setThesis((prev) => {
             if (!prev) {
@@ -311,19 +328,19 @@ export default function StatisticianThesisOverviewPage() {
             return {
                 ...prev,
                 lastUpdated: result.decidedAt,
-                chapters: prev.chapters.map((chapter) =>
+                chapters: (prev.chapters ?? []).map((chapter) =>
                     chapter.id === chapterId
                         ? {
                             ...chapter,
                             status: result.status,
                             lastModified: result.decidedAt,
-                            mentorApprovals: result.mentorApprovals,
+                            expertApprovals: result.expertApprovals,
                         }
                         : chapter
                 ),
             };
         });
-    }, [selectedThesisId]);
+    }, [selectedThesisId, thesis]);
 
     const isLoading = assignmentsLoading || thesisLoading;
     const noAssignments = !assignmentsLoading && assignments.length === 0;
@@ -358,6 +375,10 @@ export default function StatisticianThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={selectedThesisId}
+                    groupId={thesis?.groupId}
+                    year={thesis?.year}
+                    department={thesis?.department}
+                    course={thesis?.course}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={statisticianUid}
@@ -366,7 +387,7 @@ export default function StatisticianThesisOverviewPage() {
                     allowCommenting
                     emptyStateMessage={assignments.length ? 'Select a thesis to begin reviewing chapters.' : undefined}
                     onCreateComment={handleCreateComment}
-                    mentorRole="statistician"
+                    expertRole="statistician"
                     onChapterDecision={handleChapterDecision}
                     enforceTerminalRequirementSequence
                     terminalRequirementCompletionMap={terminalRequirementCompletionMap}

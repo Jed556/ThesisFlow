@@ -1,20 +1,19 @@
 import * as React from 'react';
-import {
-    Alert,
-    Button,
-    Skeleton,
-    Stack,
-} from '@mui/material';
+import { Alert, Button, Skeleton, Stack } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AnimatedPage } from '../../components/Animate';
 import ProfileView from '../../components/Profile/ProfileView';
 import type { NavigationItem } from '../../types/navigation';
 import type { UserProfile, UserRole, HistoricalThesisEntry } from '../../types/profile';
-import type { ThesisData } from '../../types/thesis';
+import type { ThesisGroup } from '../../types/group';
 import { onUserProfile } from '../../utils/firebase/firestore/user';
-import { listenThesesForMentor, listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
-import { filterActiveMentorTheses, deriveMentorThesisHistory, isCompletedThesisStatus } from '../../utils/mentorProfileUtils';
+import {
+    listenGroupsByExpertRole, getGroupsByLeader, getGroupsByMember,
+} from '../../utils/firebase/firestore/groups';
+import {
+    filterActiveGroups, deriveExpertThesisHistory, isCompletedGroupStatus,
+} from '../../utils/expertProfileUtils';
 
 export const metadata: NavigationItem = {
     title: 'User Profile',
@@ -23,12 +22,12 @@ export const metadata: NavigationItem = {
     hidden: true,
 };
 
-const MENTOR_ROLES = new Set<UserRole>(['adviser', 'editor', 'statistician']);
+const EXPERT_ROLES = new Set<UserRole>(['adviser', 'editor', 'statistician']);
 
-type MentorRole = 'adviser' | 'editor' | 'statistician';
+type ExpertRole = 'adviser' | 'editor' | 'statistician';
 
-function isMentorRole(role: UserRole | undefined): role is MentorRole {
-    return Boolean(role && MENTOR_ROLES.has(role));
+function isExpertRole(role: UserRole | undefined): role is ExpertRole {
+    return Boolean(role && EXPERT_ROLES.has(role));
 }
 
 export default function AdminProfileViewPage() {
@@ -36,7 +35,7 @@ export default function AdminProfileViewPage() {
     const navigate = useNavigate();
 
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
-    const [assignments, setAssignments] = React.useState<(ThesisData & { id?: string })[]>([]);
+    const [assignments, setAssignments] = React.useState<ThesisGroup[]>([]);
     const [profileLoading, setProfileLoading] = React.useState(true);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
@@ -66,13 +65,13 @@ export default function AdminProfileViewPage() {
         };
     }, [uid]);
 
-    const mentorRole = React.useMemo<MentorRole | null>(() => (
-        isMentorRole(profile?.role) ? profile.role : null
+    const expertRole = React.useMemo<ExpertRole | null>(() => (
+        isExpertRole(profile?.role) ? profile.role : null
     ), [profile?.role]);
 
     React.useEffect(() => {
-        // Only attach a listener for mentors or students (participants)
-        if (!uid || (!mentorRole && profile?.role !== 'student')) {
+        // Only attach a listener for experts or students (participants)
+        if (!uid || (!expertRole && profile?.role !== 'student')) {
             setAssignments([]);
             setAssignmentsLoading(false);
             return () => { /* no-op */ };
@@ -81,59 +80,70 @@ export default function AdminProfileViewPage() {
         setAssignmentsLoading(true);
         let unsubscribe = () => { /* no-op */ };
 
-        if (mentorRole) {
-            unsubscribe = listenThesesForMentor(mentorRole, uid, {
-                onData: (records) => {
-                    setAssignments(records);
+        if (expertRole) {
+            unsubscribe = listenGroupsByExpertRole(expertRole, uid, {
+                onData: (groups: ThesisGroup[]) => {
+                    setAssignments(groups);
                     setAssignmentsLoading(false);
                 },
-                onError: (listenerError) => {
+                onError: (listenerError: Error) => {
                     console.error('Failed to load assignments:', listenerError);
                     setAssignments([]);
                     setAssignmentsLoading(false);
                 },
             });
         } else if (profile?.role === 'student') {
-            unsubscribe = listenThesesForParticipant(uid, {
-                onData: (records) => {
-                    setAssignments(records as (ThesisData & { id?: string })[]);
+            // For students, fetch groups where they are leader or member
+            (async () => {
+                try {
+                    const leaderGroups = await getGroupsByLeader(uid);
+                    const memberGroups = await getGroupsByMember(uid);
+                    // Combine and deduplicate by group id
+                    const allGroups = [...leaderGroups];
+                    for (const group of memberGroups) {
+                        if (!allGroups.some((g) => g.id === group.id)) {
+                            allGroups.push(group);
+                        }
+                    }
+                    setAssignments(allGroups);
                     setAssignmentsLoading(false);
-                },
-                onError: (listenerError) => {
+                } catch (listenerError) {
                     console.error('Failed to load participant assignments:', listenerError);
                     setAssignments([]);
                     setAssignmentsLoading(false);
-                },
-            });
+                }
+            })();
+            // No unsubscribe needed for async fetch
         }
 
         return () => unsubscribe();
-    }, [mentorRole, uid, profile?.role]);
+    }, [expertRole, uid, profile?.role]);
 
     const activeAssignments = React.useMemo(() => (
-        (mentorRole || profile?.role === 'student') ? filterActiveMentorTheses(assignments) : []
-    ), [assignments, mentorRole, profile?.role]);
+        (expertRole || profile?.role === 'student') ? filterActiveGroups(assignments) : []
+    ), [assignments, expertRole, profile?.role]);
 
     const history = React.useMemo<HistoricalThesisEntry[]>(() => {
         if (!profile) return [];
 
-        if (mentorRole) {
-            return deriveMentorThesisHistory(assignments, profile.uid, mentorRole);
+        if (expertRole) {
+            return deriveExpertThesisHistory(assignments, profile.uid, expertRole);
         }
 
-        // For student accounts treat participant theses as history once completed
-        const completed = assignments.filter((t) => isCompletedThesisStatus(t.overallStatus));
-        return completed.map((thesis) => {
-            const rawDate = thesis.submissionDate ? new Date(thesis.submissionDate) : null;
+        // For student accounts treat participant groups as history once completed
+        const completed = assignments.filter((g) => isCompletedGroupStatus(g.status));
+        return completed.map((group) => {
+            const thesis = group.thesis;
+            const rawDate = thesis?.submissionDate ? new Date(thesis.submissionDate) : null;
             const year = rawDate && !Number.isNaN(rawDate.getTime()) ? rawDate.getFullYear().toString() : '—';
             return {
                 year,
-                title: thesis.title,
+                title: thesis?.title ?? group.name,
                 role: 'Student',
-                outcome: thesis.overallStatus ?? '—',
+                outcome: group.status ?? '—',
             } as HistoricalThesisEntry;
         }).sort((a, b) => (Number.parseInt(b.year, 10) || 0) - (Number.parseInt(a.year, 10) || 0));
-    }, [assignments, mentorRole, profile]);
+    }, [assignments, expertRole, profile]);
 
     const handleBack = React.useCallback(() => {
         navigate(-1);
@@ -179,14 +189,14 @@ export default function AdminProfileViewPage() {
                 profile={profile}
                 skills={profile.skills}
                 skillRatings={profile.skillRatings}
-                currentTheses={(mentorRole || profile.role === 'student') ? activeAssignments : undefined}
-                timeline={(mentorRole || profile.role === 'student') ? history : undefined}
-                assignmentsEmptyMessage={mentorRole
+                currentGroups={(expertRole || profile.role === 'student') ? activeAssignments : undefined}
+                timeline={(expertRole || profile.role === 'student') ? history : undefined}
+                assignmentsEmptyMessage={expertRole
                     ? assignmentsLoading
-                        ? 'Loading mentor assignments…'
-                        : 'No active theses for this mentor.'
-                    : 'Mentor assignments hidden for this role.'}
-                timelineEmptyMessage={mentorRole
+                        ? 'Loading expert assignments…'
+                        : 'No active theses for this expert.'
+                    : 'Expert assignments hidden for this role.'}
+                timelineEmptyMessage={expertRole
                     ? assignmentsLoading
                         ? 'Loading previous theses…'
                         : 'Completed theses will appear once available.'
@@ -194,7 +204,7 @@ export default function AdminProfileViewPage() {
                 headerCaption={headerCaption}
                 backAction={{ label: 'Back to users', onClick: handleBack }}
                 floatingBackButton
-                sectionVisibility={(mentorRole || profile.role === 'student') ? undefined : { currentTheses: false, timeline: false }}
+                sectionVisibility={(expertRole || profile.role === 'student') ? undefined : { currentTheses: false, timeline: false }}
             />
         </AnimatedPage>
     );

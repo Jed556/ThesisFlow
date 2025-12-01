@@ -1,70 +1,49 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
+    Alert, Box, Button, Card, CardContent, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
-import UploadIcon from '@mui/icons-material/Upload';
-import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import { FactCheck as FactCheckIcon, TaskAlt as TaskAltIcon } from '@mui/icons-material';
 import { AnimatedPage } from '../../components/Animate';
-import {
-    SubmissionStatus,
-    TerminalRequirementCard,
-    TERMINAL_REQUIREMENT_ROLE_LABELS,
-} from '../../components/TerminalRequirements';
+import { SubmissionStatus, TerminalRequirementCard, TERMINAL_REQUIREMENT_ROLE_LABELS } from '../../components/TerminalRequirements';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
-import type { ThesisData, ThesisStage } from '../../types/thesis';
+import type { ThesisStageName } from '../../types/thesis';
 import type { ThesisGroup } from '../../types/group';
-import type { TerminalRequirementDefinition } from '../../types/terminalRequirement';
-import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementConfig';
+import type { TerminalRequirement } from '../../types/terminalRequirement';
+import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementTemplate';
 import type { FileAttachment } from '../../types/file';
 import type {
-    TerminalRequirementApproverAssignments,
-    TerminalRequirementSubmissionRecord,
+    TerminalRequirementApproverAssignments, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
 import { useSnackbar } from '../../components/Snackbar';
-import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
-import { getGroupById } from '../../utils/firebase/firestore/groups';
-import { getTerminalRequirementConfig } from '../../utils/firebase/firestore/terminalRequirementConfigs';
-import { uploadThesisFile, deleteThesisFile } from '../../utils/firebase/storage/thesis';
+import { listenThesesForParticipant, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
+import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import {
-    THESIS_STAGE_METADATA,
-    buildStageCompletionMap,
-    buildInterleavedStageLockMap,
-    describeStageSequenceStep,
-    getPreviousSequenceStep,
+    getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
+} from '../../utils/firebase/firestore/terminalRequirements';
+import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
+import {
+    THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap, describeStageSequenceStep, getPreviousSequenceStep,
 } from '../../utils/thesisStageUtils';
-import {
-    fetchTerminalRequirementFiles,
-    getTerminalRequirementStatus,
-    getTerminalRequirementsByStage,
-} from '../../utils/terminalRequirements';
-import {
-    listenTerminalRequirementSubmission,
-    submitTerminalRequirementStage,
-} from '../../utils/firebase/firestore/terminalRequirementSubmissions';
+import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
+import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 2,
     title: 'Terminal Requirements',
     segment: 'terminal-requirements',
-    icon: <UploadIcon />,
+    icon: <FactCheckIcon />,
     roles: ['student'],
 };
 
-type ThesisRecord = ThesisData & { id: string };
+// FIX: In the new data model, thesis data and group membership are stored separately.\n// The page now fetches the user's group first, then gets the thesis from the group.
 
 type RequirementFilesMap = Record<string, FileAttachment[]>;
 type RequirementFlagMap = Record<string, boolean>;
 type RequirementMessageMap = Record<string, string | null>;
-
-interface StageStatusMeta {
-    label: string;
-    color: 'default' | 'success' | 'info' | 'warning' | 'error';
-    variant: 'filled' | 'outlined';
-}
 
 export default function TerminalRequirementsPage() {
     const session = useSession<Session>();
@@ -74,7 +53,7 @@ export default function TerminalRequirementsPage() {
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
-    const [activeStage, setActiveStage] = React.useState<ThesisStage>(THESIS_STAGE_METADATA[0].value);
+    const [activeStage, setActiveStage] = React.useState<ThesisStageName>(THESIS_STAGE_METADATA[0].value);
     const [requirementFiles, setRequirementFiles] = React.useState<RequirementFilesMap>({});
     const [requirementLoading, setRequirementLoading] = React.useState<RequirementFlagMap>({});
     const [uploadingMap, setUploadingMap] = React.useState<RequirementFlagMap>({});
@@ -84,7 +63,7 @@ export default function TerminalRequirementsPage() {
     const [configLoading, setConfigLoading] = React.useState(false);
     const [configError, setConfigError] = React.useState<string | null>(null);
     const [submissionByStage, setSubmissionByStage] = React.useState<
-        Partial<Record<ThesisStage, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
     const [submitLoading, setSubmitLoading] = React.useState(false);
 
@@ -111,7 +90,9 @@ export default function TerminalRequirementsPage() {
 
         const unsubscribe = listenThesesForParticipant(userUid, {
             onData: (records) => {
-                const preferred = records.find((record) => record.leader === userUid) ?? records[0] ?? null;
+                // FIX: ThesisRecord doesn't have leader - just take the first thesis for now.
+                // A more complete solution would match the thesis to the user's primary group.
+                const preferred = records[0] ?? null;
                 setThesis(preferred ?? null);
                 setIsLoading(false);
                 setError(null);
@@ -130,7 +111,8 @@ export default function TerminalRequirementsPage() {
     }, [userUid]);
 
     React.useEffect(() => {
-        if (!thesis?.groupId) {
+        // FIX: ThesisRecord doesn't have groupId - fetch the user's group instead
+        if (!userUid) {
             setGroupMeta(null);
             setRequirementsConfig(null);
             setConfigError(null);
@@ -143,13 +125,15 @@ export default function TerminalRequirementsPage() {
         setRequirementsConfig(null);
         setConfigError(null);
 
-        void getGroupById(thesis.groupId)
-            .then((group) => {
+        void getGroupsByMember(userUid)
+            .then((groups) => {
                 if (!cancelled) {
-                    if (group?.department && group?.course) {
+                    // Take the first active group the user is a member of
+                    const activeGroup = groups.find((g) => g.status === 'active') ?? groups[0] ?? null;
+                    if (activeGroup?.department && activeGroup?.course) {
                         setConfigLoading(true);
                     }
-                    setGroupMeta(group);
+                    setGroupMeta(activeGroup);
                 }
             })
             .catch((error) => {
@@ -162,7 +146,7 @@ export default function TerminalRequirementsPage() {
         return () => {
             cancelled = true;
         };
-    }, [thesis?.groupId]);
+    }, [userUid]);
 
     React.useEffect(() => {
         if (!groupMeta?.department || !groupMeta?.course) {
@@ -176,7 +160,12 @@ export default function TerminalRequirementsPage() {
         setConfigLoading(true);
         setConfigError(null);
 
-        void getTerminalRequirementConfig(groupMeta.department, groupMeta.course)
+        const year = groupMeta.year ?? DEFAULT_YEAR;
+        void getTerminalRequirementConfig({
+            year,
+            department: groupMeta.department,
+            course: groupMeta.course,
+        })
             .then((config) => {
                 if (!cancelled) {
                     setRequirementsConfig(config?.requirements ?? null);
@@ -198,7 +187,7 @@ export default function TerminalRequirementsPage() {
         return () => {
             cancelled = true;
         };
-    }, [groupMeta?.department, groupMeta?.course]);
+    }, [groupMeta?.department, groupMeta?.course, groupMeta?.year]);
 
     React.useEffect(() => {
         if (!thesis?.id) {
@@ -208,11 +197,11 @@ export default function TerminalRequirementsPage() {
 
         const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => {
             const stageValue = stageMeta.value;
-            return listenTerminalRequirementSubmission(thesis.id, stageValue, {
-                onData: (record) => {
+            return findAndListenTerminalRequirements(thesis.id, stageValue, {
+                onData: (records) => {
                     setSubmissionByStage((prev) => ({
                         ...prev,
-                        [stageValue]: record,
+                        [stageValue]: records,
                     }));
                 },
                 onError: (listenerError) => {
@@ -237,31 +226,34 @@ export default function TerminalRequirementsPage() {
     }, [requirementsConfig]);
 
     const stageRequirementsByStage = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, TerminalRequirementDefinition[]>>((acc, stageMeta) => {
-            const baseDefinitions = getTerminalRequirementsByStage(stageMeta.value);
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, TerminalRequirement[]>>((acc, stageMeta) => {
             if (!configRequirementMap) {
-                acc[stageMeta.value] = baseDefinitions;
+                // No config loaded yet - return empty array for each stage
+                acc[stageMeta.value] = [];
             } else {
-                acc[stageMeta.value] = baseDefinitions
-                    .filter((definition) => {
-                        const entry = configRequirementMap[definition.id];
-                        return entry ? entry.active : false;
-                    })
-                    .map((definition) => {
-                        const entry = configRequirementMap[definition.id];
-                        if (!entry?.template) {
-                            return definition;
-                        }
-                        return {
-                            ...definition,
-                            templateFileId: entry.template.fileId,
-                            templateFileName: entry.template.fileName,
-                            templateFileUrl: entry.template.fileUrl,
-                        };
-                    });
+                // Build requirements from config entries for this stage
+                acc[stageMeta.value] = Object.values(configRequirementMap)
+                    .filter((entry) => entry.stage === stageMeta.value && entry.required)
+                    .map((entry): TerminalRequirement => ({
+                        id: entry.requirementId,
+                        stage: entry.stage,
+                        title: entry.title ?? entry.requirementId,
+                        description: entry.description ?? '',
+                        ...(entry.fileTemplate && {
+                            templateFile: {
+                                id: entry.fileTemplate.fileId,
+                                name: entry.fileTemplate.fileName,
+                                url: entry.fileTemplate.fileUrl,
+                                type: '',
+                                size: '',
+                                uploadDate: entry.fileTemplate.uploadedAt,
+                                author: entry.fileTemplate.uploadedBy,
+                            },
+                        }),
+                    }));
             }
             return acc;
-        }, {} as Record<ThesisStage, TerminalRequirementDefinition[]>);
+        }, {} as Record<ThesisStageName, TerminalRequirement[]>);
     }, [configRequirementMap]);
 
     const approverAssignments = React.useMemo<TerminalRequirementApproverAssignments>(() => {
@@ -273,38 +265,55 @@ export default function TerminalRequirementsPage() {
             assignments.panel = panels;
         }
 
-        const adviserUid = members?.adviser ?? thesis?.adviser;
+        // FIX: adviser, editor, statistician are on group.members, not on thesis
+        const adviserUid = members?.adviser;
         if (adviserUid) {
             assignments.adviser = [adviserUid];
         }
 
-        const editorUid = members?.editor ?? thesis?.editor;
+        const editorUid = members?.editor;
         if (editorUid) {
             assignments.editor = [editorUid];
         }
 
-        const statisticianUid = members?.statistician ?? thesis?.statistician;
+        const statisticianUid = members?.statistician;
         if (statisticianUid) {
             assignments.statistician = [statisticianUid];
         }
 
         return assignments;
-    }, [groupMeta?.members, thesis?.adviser, thesis?.editor, thesis?.statistician]);
+    }, [groupMeta?.members]);
 
     const isConfigInitializing = configLoading && !requirementsConfig;
 
-    const normalizedChapters = thesis?.chapters ?? [];
+    // FIX: ThesisData doesn't have chapters directly - it has stages which can contain chapters.
+    // When extracting chapters from stages, we need to ensure each chapter has its stage
+    // property set so that filtering by stage works correctly.
+    const normalizedChapters = React.useMemo(() => {
+        if (!thesis?.stages) return [];
+        return thesis.stages.flatMap((stage) =>
+            (stage.chapters ?? []).map((chapter) => ({
+                ...chapter,
+                // Ensure chapter has stage property set from parent stage
+                stage: chapter.stage ?? [stage.name],
+            }))
+        );
+    }, [thesis?.stages]);
+    // FIX: Use treatEmptyAsComplete: true so that stages without chapters don't block
+    // terminal requirements. If no chapters are defined for a stage, students should
+    // still be able to access terminal requirements for that stage.
     const chapterCompletionMap = React.useMemo(
-        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: false }),
+        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: true }),
         [normalizedChapters],
     );
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
-            const submission = submissionByStage[stageMeta.value];
-            acc[stageMeta.value] = submission?.status === 'approved';
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
+            const submissions = submissionByStage[stageMeta.value] ?? [];
+            // Stage is complete if there are submissions and ALL are approved
+            acc[stageMeta.value] = submissions.length > 0 && submissions.every((s) => s.status === 'approved');
             return acc;
-        }, {} as Record<ThesisStage, boolean>);
+        }, {} as Record<ThesisStageName, boolean>);
     }, [submissionByStage]);
 
     const stageLockMaps = React.useMemo(() => buildInterleavedStageLockMap({
@@ -321,20 +330,28 @@ export default function TerminalRequirementsPage() {
         [activeStage],
     );
 
-    const loadRequirementFiles = React.useCallback(async (requirementId: string) => {
-        if (!thesis?.id) {
+    const loadRequirementFiles = React.useCallback(async (requirement: TerminalRequirement) => {
+        if (!thesis?.id || !groupMeta?.id) {
             return;
         }
-        setRequirementLoading((prev) => ({ ...prev, [requirementId]: true }));
+        setRequirementLoading((prev) => ({ ...prev, [requirement.id]: true }));
         try {
-            const files = await fetchTerminalRequirementFiles(thesis.id, requirementId);
-            setRequirementFiles((prev) => ({ ...prev, [requirementId]: files }));
+            const files = await listTerminalRequirementFiles({
+                thesisId: thesis.id,
+                groupId: groupMeta.id,
+                stage: requirement.stage,
+                requirementId: requirement.id,
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+            });
+            setRequirementFiles((prev) => ({ ...prev, [requirement.id]: files }));
         } catch (loadError) {
             console.error('Failed to load requirement files:', loadError);
         } finally {
-            setRequirementLoading((prev) => ({ ...prev, [requirementId]: false }));
+            setRequirementLoading((prev) => ({ ...prev, [requirement.id]: false }));
         }
-    }, [thesis?.id]);
+    }, [groupMeta?.course, groupMeta?.department, groupMeta?.id, groupMeta?.year, thesis?.id]);
 
     React.useEffect(() => {
         if (!thesis?.id || activeStageLocked) {
@@ -344,15 +361,16 @@ export default function TerminalRequirementsPage() {
             if (requirementFiles[requirement.id]) {
                 return;
             }
-            void loadRequirementFiles(requirement.id);
+            void loadRequirementFiles(requirement);
         });
     }, [thesis?.id, activeStageLocked, stageRequirements, requirementFiles, loadRequirementFiles]);
 
     const handleUploadRequirement = React.useCallback(async (
-        requirement: TerminalRequirementDefinition,
+        requirement: TerminalRequirement,
         fileList: FileList,
     ) => {
-        if (!thesis?.id || !thesis.groupId || !userUid) {
+        // FIX: Use groupMeta.id instead of thesis.groupId (thesis doesn't have groupId)
+        if (!thesis?.id || !groupMeta?.id || !userUid) {
             showNotification('You must be signed in to upload requirements.', 'error');
             return;
         }
@@ -363,6 +381,9 @@ export default function TerminalRequirementsPage() {
 
         setUploadingMap((prev) => ({ ...prev, [requirement.id]: true }));
         setUploadErrors((prev) => ({ ...prev, [requirement.id]: null }));
+        const uploadYear = groupMeta.year ?? DEFAULT_YEAR;
+        const uploadDepartment = groupMeta.department ?? '';
+        const uploadCourse = groupMeta.course ?? '';
 
         try {
             for (const file of files) {
@@ -370,7 +391,7 @@ export default function TerminalRequirementsPage() {
                     file,
                     userUid,
                     thesisId: thesis.id,
-                    groupId: thesis.groupId,
+                    groupId: groupMeta.id,
                     category: 'attachment',
                     metadata: {
                         scope: 'terminal-requirements',
@@ -379,10 +400,13 @@ export default function TerminalRequirementsPage() {
                     },
                     terminalStage: requirement.stage,
                     terminalRequirementId: requirement.id,
+                    year: uploadYear,
+                    department: uploadDepartment,
+                    course: uploadCourse,
                 });
             }
             showNotification('Requirement uploaded successfully.', 'success');
-            await loadRequirementFiles(requirement.id);
+            await loadRequirementFiles(requirement);
         } catch (uploadError) {
             const message = uploadError instanceof Error
                 ? uploadError.message
@@ -392,24 +416,33 @@ export default function TerminalRequirementsPage() {
         } finally {
             setUploadingMap((prev) => ({ ...prev, [requirement.id]: false }));
         }
-    }, [loadRequirementFiles, showNotification, thesis?.id, userUid]);
+    }, [
+        groupMeta?.course,
+        groupMeta?.department,
+        groupMeta?.id,
+        groupMeta?.year,
+        loadRequirementFiles,
+        showNotification,
+        thesis?.id,
+        userUid,
+    ]);
 
-    const handleDeleteFile = React.useCallback(async (requirementId: string, file: FileAttachment) => {
+    const handleDeleteFile = React.useCallback(async (requirement: TerminalRequirement, file: FileAttachment) => {
         if (!thesis?.id || !file.id || !file.url) {
             showNotification('Unable to delete file. Missing metadata.', 'error');
             return;
         }
         try {
-            await deleteThesisFile(file.url, thesis.id, file.id);
+            await deleteThesisFile(file.url);
             showNotification('File removed.', 'success');
-            await loadRequirementFiles(requirementId);
+            await loadRequirementFiles(requirement);
         } catch (deleteError) {
             console.error('Failed to delete requirement file:', deleteError);
             showNotification('Failed to delete file. Please try again.', 'error');
         }
     }, [loadRequirementFiles, showNotification, thesis?.id]);
 
-    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStage) => {
+    const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStageName) => {
         setActiveStage(nextStage);
     }, []);
 
@@ -426,50 +459,6 @@ export default function TerminalRequirementsPage() {
         };
     }, [stageRequirements, requirementFiles]);
 
-    const stageStatusMetaMap = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, StageStatusMeta>>((acc, stageMeta) => {
-            const stageValue = stageMeta.value;
-            const unlocked = !(terminalStageLockMap[stageValue] ?? false);
-            const submission = submissionByStage[stageValue];
-            let label: string;
-            let color: StageStatusMeta['color'];
-            let variant: StageStatusMeta['variant'];
-
-            if (!unlocked) {
-                label = 'Locked';
-                color = 'default';
-                variant = 'outlined';
-            } else if (submission) {
-                if (submission.status === 'approved') {
-                    label = 'Approved';
-                    color = 'success';
-                    variant = 'filled';
-                } else if (submission.status === 'returned') {
-                    label = 'Needs updates';
-                    color = 'warning';
-                    variant = 'filled';
-                } else {
-                    label = 'Submitted';
-                    color = 'info';
-                    variant = 'filled';
-                }
-            } else {
-                const requirements = stageRequirementsByStage[stageValue] ?? [];
-                const submittedCount = requirements.filter((requirement) => (
-                    (requirementFiles[requirement.id]?.length ?? 0) > 0
-                )).length;
-                const completed = requirements.length > 0 && submittedCount === requirements.length;
-                const inProgress = submittedCount > 0 && !completed;
-                label = completed ? 'Ready to submit' : inProgress ? 'In progress' : 'Ready';
-                color = completed ? 'success' : inProgress ? 'info' : 'default';
-                variant = completed || inProgress ? 'filled' : 'outlined';
-            }
-
-            acc[stageValue] = { label, color, variant };
-            return acc;
-        }, {} as Record<ThesisStage, StageStatusMeta>);
-    }, [terminalStageLockMap, submissionByStage, stageRequirementsByStage, requirementFiles]);
-
     const stageTitle = activeStageMeta?.label ?? activeStage;
     const stageLockedDescription = React.useMemo(() => {
         const previousStep = getPreviousSequenceStep(activeStage, 'terminal');
@@ -479,8 +468,12 @@ export default function TerminalRequirementsPage() {
         return 'Complete the required chapters to unlock this checklist.';
     }, [activeStage, stageTitle]);
 
-    const activeSubmission = submissionByStage[activeStage] ?? null;
-    const stageLockedByWorkflow = Boolean(activeSubmission?.locked);
+    // Get all submissions for the active stage and derive aggregate status
+    const activeSubmissions = submissionByStage[activeStage] ?? [];
+    // Use the first submission for display purposes, but consider all for workflow logic
+    const activeSubmission = activeSubmissions[0] ?? null;
+    // Stage is locked by workflow if ANY submission is locked
+    const stageLockedByWorkflow = activeSubmissions.some((s) => s.locked);
     const allowFileActions = !activeStageLocked && !stageLockedByWorkflow;
     const readyForSubmission = stageRequirements.length > 0
         && stageRequirements.every((requirement) => (requirementFiles[requirement.id]?.length ?? 0) > 0);
@@ -490,10 +483,11 @@ export default function TerminalRequirementsPage() {
     const canSubmit = allowFileActions && readyForSubmission && !submitLoading;
     const pendingRoleLabel = activeSubmission?.currentRole
         ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.currentRole]
-        : 'mentor';
+        : 'expert';
 
     const handleSubmitStage = React.useCallback(async () => {
-        if (!thesis?.id || !thesis.groupId) {
+        // FIX: Use groupMeta.id instead of thesis.groupId
+        if (!thesis?.id || !groupMeta?.id) {
             showNotification('Missing thesis metadata. Please reload the page and try again.', 'error');
             return;
         }
@@ -512,15 +506,27 @@ export default function TerminalRequirementsPage() {
 
         setSubmitLoading(true);
         try {
-            await submitTerminalRequirementStage({
+            // FIX: Use submitTerminalRequirement instead of submitTerminalRequirementStage
+            // Submit each requirement in the stage individually
+            const ctx: TerminalContext = {
+                year: DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+                groupId: groupMeta.id,
                 thesisId: thesis.id,
-                groupId: thesis.groupId,
                 stage: activeStage,
-                requirementIds: stageRequirements.map((requirement) => requirement.id),
-                submittedBy: userUid,
-                assignments: approverAssignments,
-            });
-            showNotification('Submitted for mentor review.', 'success');
+            };
+
+            for (const requirement of stageRequirements) {
+                await submitTerminalRequirement({
+                    ctx,
+                    requirementId: requirement.id,
+                    submittedBy: userUid,
+                    assignments: approverAssignments,
+                    definition: requirement,
+                });
+            }
+            showNotification('Submitted for expert review.', 'success');
         } catch (submitError) {
             console.error('Failed to submit terminal requirements:', submitError);
             const message = submitError instanceof Error
@@ -532,7 +538,7 @@ export default function TerminalRequirementsPage() {
         }
     }, [
         thesis?.id,
-        thesis?.groupId,
+        groupMeta,
         userUid,
         stageRequirements,
         readyForSubmission,
@@ -558,7 +564,7 @@ export default function TerminalRequirementsPage() {
         if (activeSubmission.status === 'returned') {
             return (
                 <Alert severity="warning">
-                    {activeSubmission.returnNote ?? 'A mentor requested changes to your submission.'}
+                    {activeSubmission.returnNote ?? 'A expert requested changes to your submission.'}
                     {activeSubmission.returnedBy && (
                         <Typography variant="body2" sx={{ mt: 1 }}>
                             Returned by{' '}
@@ -595,31 +601,13 @@ export default function TerminalRequirementsPage() {
                 scrollButtons
                 allowScrollButtonsMobile
             >
-                {THESIS_STAGE_METADATA.map((stageMeta) => {
-                    const unlocked = !(terminalStageLockMap[stageMeta.value] ?? false);
-                    const statusMeta = stageStatusMetaMap[stageMeta.value] ?? {
-                        label: unlocked ? 'Ready' : 'Locked',
-                        color: unlocked ? 'default' : 'default',
-                        variant: unlocked ? 'outlined' : 'outlined',
-                    };
-                    return (
-                        <Tab
-                            key={stageMeta.value}
-                            value={stageMeta.value}
-                            label={(
-                                <Stack spacing={0.5} alignItems="center">
-                                    <Typography variant="body2" fontWeight={600}>{stageMeta.label}</Typography>
-                                    <Chip
-                                        label={statusMeta.label}
-                                        size="small"
-                                        color={statusMeta.color}
-                                        variant={statusMeta.variant}
-                                    />
-                                </Stack>
-                            )}
-                        />
-                    );
-                })}
+                {THESIS_STAGE_METADATA.map((stageMeta) => (
+                    <Tab
+                        key={stageMeta.value}
+                        value={stageMeta.value}
+                        label={stageMeta.label}
+                    />
+                ))}
             </Tabs>
         </Card>
     );
@@ -664,9 +652,11 @@ export default function TerminalRequirementsPage() {
     if (!thesis) {
         return (
             <AnimatedPage variant="slideUp">
-                <Alert severity="info">
-                    Your terminal requirements will appear here once your thesis record is available.
-                </Alert>
+                <UnauthorizedNotice
+                    title="No thesis record"
+                    description="Your terminal requirements will appear here once your thesis record is available."
+                    variant="box"
+                />
             </AnimatedPage>
         );
     }
@@ -683,11 +673,14 @@ export default function TerminalRequirementsPage() {
                 {renderTabs()}
 
                 {activeStageLocked ? (
-                    <UnauthorizedNotice
-                        title={`${stageTitle} requirements locked`}
-                        description={stageLockedDescription}
-                        variant="box"
-                    />
+                    <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+                        <UnauthorizedNotice
+                            title={`${stageTitle} requirements locked`}
+                            description={stageLockedDescription}
+                            variant="box"
+                            sx={{ minHeight: 'auto' }}
+                        />
+                    </Box>
                 ) : isConfigInitializing ? (
                     <Stack spacing={3}>
                         <Skeleton variant="rectangular" height={160} />
@@ -762,7 +755,7 @@ export default function TerminalRequirementsPage() {
                                                             ? (files) => handleUploadRequirement(requirement, files)
                                                             : undefined}
                                                         onDeleteFile={allowFileActions
-                                                            ? (file) => handleDeleteFile(requirement.id, file)
+                                                            ? (file) => handleDeleteFile(requirement, file)
                                                             : undefined}
                                                     />
                                                 </Grid>

@@ -1,5 +1,5 @@
 import type { FileAttachment } from './file';
-import type { ChapterSubmissionStatus, MentorRole, ThesisStage } from './thesis';
+import type { ChapterSubmissionStatus, ExpertRole, ThesisStageName } from './thesis';
 
 export interface WorkspaceFilterOption {
     label: string;
@@ -23,7 +23,7 @@ export interface WorkspaceFilterConfig {
 export interface WorkspaceCommentPayload {
     thesisId: string;
     chapterId: number;
-    chapterStage: ThesisStage;
+    chapterStage: ThesisStageName;
     versionIndex: number | null;
     content: string;
     files: File[];
@@ -38,8 +38,14 @@ export interface WorkspaceUploadPayload {
     thesisId: string;
     groupId: string;
     chapterId: number;
-    chapterStage: ThesisStage;
+    chapterStage: ThesisStageName;
     file: File;
+    /** Academic year for hierarchical storage path */
+    year?: string;
+    /** Department for hierarchical storage path */
+    department?: string;
+    /** Course for hierarchical storage path */
+    course?: string;
 }
 
 export type WorkspaceChapterDecision = 'approved' | 'revision_required';
@@ -49,7 +55,7 @@ export interface WorkspaceChapterDecisionPayload {
     chapterId: number;
     versionIndex?: number | null;
     decision: WorkspaceChapterDecision;
-    role?: MentorRole;
+    role?: ExpertRole;
 }
 
 export interface VersionOption {

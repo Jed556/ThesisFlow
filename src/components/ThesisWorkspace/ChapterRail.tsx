@@ -9,16 +9,17 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
+import type { ChipProps } from '@mui/material';
 import {
     Upload as UploadIcon,
 } from '@mui/icons-material';
-import type { ChapterSubmissionStatus, MentorRole, ThesisChapter, ThesisStage } from '../../types/thesis';
+import type { ChapterSubmissionStatus, ExpertRole, ThesisChapter, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../Conversation';
 import { FileCard } from '../File';
 import { formatFileSize } from '../../utils/fileUtils';
 import type { ChapterVersionMap, VersionOption } from '../../types/workspace';
-import { mentorRoleLabels } from '../../utils/mentorUtils';
+import { expertRoleLabels } from '../../utils/expertUtils';
 import { normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import { resolveChapterStage } from '../../utils/thesisStageUtils';
 
@@ -86,10 +87,9 @@ const formatSubmissionStatus = (status?: ChapterSubmissionStatus) => {
 export const buildSubmissionMeta = (
     file?: FileAttachment,
     participants?: Record<string, ConversationParticipant>,
-    status?: ChapterSubmissionStatus,
 ) => {
     if (!file) {
-        return status ? `Status: ${formatSubmissionStatus(status)}` : undefined;
+        return undefined;
     }
     const submittedBy = resolveParticipantName(file.author, participants);
     const submittedOn = formatDateTimeLabel(file.uploadDate);
@@ -101,16 +101,31 @@ export const buildSubmissionMeta = (
     } else if (submittedOn) {
         parts.push(`Submitted on ${submittedOn}`);
     }
-    if (status) {
-        parts.push(`Status: ${formatSubmissionStatus(status)}`);
-    }
     return parts.length ? parts.join(' • ') : undefined;
+};
+
+export const buildSubmissionStatusChip = (
+    status?: ChapterSubmissionStatus,
+): { label?: string; color?: ChipProps['color'] } => {
+    const label = formatSubmissionStatus(status);
+    if (!label) {
+        return { label: undefined, color: undefined };
+    }
+    let color: ChipProps['color'] = 'default';
+    if (status === 'approved') {
+        color = 'success';
+    } else if (status === 'revision_required') {
+        color = 'warning';
+    } else if (status === 'under_review') {
+        color = 'info';
+    }
+    return { label, color };
 };
 
 export const buildVersionOptions = (
     chapter?: ThesisChapter,
     files?: FileAttachment[],
-    stageFilter?: ThesisStage,
+    stageFilter?: ThesisStageName,
 ): VersionOption[] => {
     if (!chapter) {
         return [];
@@ -172,13 +187,13 @@ interface ChapterRailProps {
     onUploadChapter?: (chapterId: number, file: File) => void;
     uploadingChapterId?: number | null;
     enableUploads?: boolean;
-    mentorRoles?: MentorRole[];
-    currentMentorRole?: MentorRole;
+    expertRoles?: ExpertRole[];
+    currentExpertRole?: ExpertRole;
     versionOptionsByChapter: ChapterVersionMap;
     participants?: Record<string, ConversationParticipant>;
     loadingChapterId?: number | null;
     loadingMessage?: string;
-    activeStage: ThesisStage;
+    activeStage: ThesisStageName;
     reviewActions?: {
         onApprove: (chapterId: number) => void;
         onRequestRevision: (chapterId: number) => void;
@@ -197,8 +212,8 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
     onUploadChapter,
     uploadingChapterId,
     enableUploads,
-    mentorRoles,
-    currentMentorRole,
+    expertRoles,
+    currentExpertRole,
     versionOptionsByChapter,
     participants,
     loadingChapterId,
@@ -234,11 +249,11 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                         : 'Uploads are disabled while this chapter is under review.')
                     : undefined;
                 const reviewLockedByStatus = chapter.status === 'approved';
-                const resolveApprovalForRole = (role: MentorRole) => (
-                    reviewLockedByStatus ? true : Boolean(chapter.mentorApprovals?.[role])
+                const resolveApprovalForRole = (role: ExpertRole) => (
+                    reviewLockedByStatus ? true : Boolean(chapter.expertApprovals?.[role])
                 );
-                const alreadyApprovedByCurrent = currentMentorRole
-                    ? resolveApprovalForRole(currentMentorRole)
+                const alreadyApprovedByCurrent = currentExpertRole
+                    ? resolveApprovalForRole(currentExpertRole)
                     : reviewLockedByStatus;
                 const baseReviewDisabled = Boolean(reviewActions?.disabled) || isDecisionInFlight || reviewLockedByStatus;
                 const approveDisabled = baseReviewDisabled || alreadyApprovedByCurrent;
@@ -280,14 +295,14 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                                 </Stack>
                             </Stack>
 
-                            {mentorRoles && mentorRoles.length > 0 && (
+                            {expertRoles && expertRoles.length > 0 && (
                                 <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-                                    {mentorRoles.map((role) => {
+                                    {expertRoles.map((role) => {
                                         const approved = resolveApprovalForRole(role);
                                         return (
                                             <Chip
                                                 key={`${chapter.id}-${role}`}
-                                                label={`${mentorRoleLabels[role]} · ${approved ? 'Approved' : 'Pending'}`}
+                                                label={`${expertRoleLabels[role]} · ${approved ? 'Approved' : 'Pending'}`}
                                                 size="small"
                                                 color={approved ? 'success' : 'default'}
                                                 variant={approved ? 'filled' : 'outlined'}
@@ -316,14 +331,17 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                                     )}
                                     {versions.map((version) => {
                                         const isVersionActive = version.versionIndex === selectedVersionIndex;
+                                        const { label: statusChipLabel, color: statusChipColor } = buildSubmissionStatusChip(version.status);
                                         return (
                                             <FileCard
                                                 key={version.id}
                                                 file={version.file}
                                                 title={version.label}
                                                 sizeLabel={buildFileSizeLabel(version.file)}
-                                                metaLabel={buildSubmissionMeta(version.file, participants, version.status)}
+                                                metaLabel={buildSubmissionMeta(version.file, participants)}
                                                 versionLabel={`v${version.versionIndex + 1}`}
+                                                statusChipLabel={statusChipLabel}
+                                                statusChipColor={statusChipColor}
                                                 selected={isVersionActive}
                                                 onClick={(event) => {
                                                     event.stopPropagation();

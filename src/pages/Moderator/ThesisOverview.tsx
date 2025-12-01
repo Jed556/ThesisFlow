@@ -1,28 +1,22 @@
 import * as React from 'react';
-import {
-    Alert,
-    Box,
-    Card,
-    CardContent,
-    Skeleton,
-    Stack,
-    Typography,
-} from '@mui/material';
-import GavelIcon from '@mui/icons-material/Gavel';
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from '@mui/material';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
 import type { UserProfile } from '../../types/profile';
-import type { ThesisData } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../../components/Conversation';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
-import { getThesisByGroupId } from '../../utils/firebase/firestore/thesis';
-import { appendChapterComment } from '../../utils/firebase/firestore/conversation';
-import { getUserById } from '../../utils/firebase/firestore/user';
+import {
+    findThesisByGroupId,
+    type ThesisWithGroupContext
+} from '../../utils/firebase/firestore/thesis';
+import { appendChapterComment } from '../../utils/firebase/firestore/chat';
+import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
@@ -42,7 +36,7 @@ export const metadata: NavigationItem = {
     index: 2,
     title: 'Thesis Overview',
     segment: 'moderator-thesis-overview',
-    icon: <GavelIcon />,
+    icon: <SchoolIcon />,
     roles: ['moderator'],
 };
 
@@ -60,7 +54,7 @@ export default function ModeratorThesisOverviewPage() {
     const [groupsLoading, setGroupsLoading] = React.useState(false);
     const [selectedGroupId, setSelectedGroupId] = React.useState('');
 
-    const [thesis, setThesis] = React.useState<ThesisData | null>(null);
+    const [thesis, setThesis] = React.useState<ThesisWithGroupContext | null>(null);
     const [selectedThesisId, setSelectedThesisId] = React.useState('');
     const [thesisLoading, setThesisLoading] = React.useState(false);
 
@@ -111,7 +105,7 @@ export default function ModeratorThesisOverviewPage() {
         setProfileLoading(true);
         setError(null);
 
-        void getUserById(moderatorUid)
+        void findUserById(moderatorUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;
@@ -205,7 +199,7 @@ export default function ModeratorThesisOverviewPage() {
             setThesisLoading(true);
             setError(null);
             try {
-                const result = await getThesisByGroupId(selectedGroupId);
+                const result = await findThesisByGroupId(selectedGroupId);
                 if (!cancelled) {
                     setSelectedThesisId(result?.id ?? '');
                     setThesis(result ?? null);
@@ -309,7 +303,8 @@ export default function ModeratorThesisOverviewPage() {
         content,
         files,
     }: WorkspaceCommentPayload) => {
-        if (!moderatorUid || !selectedThesisId || !thesis?.groupId) {
+        if (!moderatorUid || !selectedThesisId || !thesis?.groupId || !thesis.year ||
+            !thesis.department || !thesis.course) {
             throw new Error('Missing moderator context.');
         }
 
@@ -325,7 +320,13 @@ export default function ModeratorThesisOverviewPage() {
         }
 
         const savedComment = await appendChapterComment({
-            thesisId: selectedThesisId,
+            ctx: {
+                year: thesis.year,
+                department: thesis.department,
+                course: thesis.course,
+                groupId: thesis.groupId,
+                thesisId: selectedThesisId,
+            },
             chapterId,
             comment: {
                 author: moderatorUid,
@@ -341,14 +342,14 @@ export default function ModeratorThesisOverviewPage() {
             }
             return {
                 ...prev,
-                chapters: prev.chapters.map((chapter) =>
+                chapters: (prev.chapters ?? []).map((chapter) =>
                     chapter.id === chapterId
                         ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
                         : chapter
                 ),
             };
         });
-    }, [moderatorUid, selectedThesisId, thesis?.groupId]);
+    }, [moderatorUid, selectedThesisId, thesis]);
 
     const isLoading = profileLoading || groupsLoading || thesisLoading;
     const noCourses = !profileLoading && courses.length === 0;
@@ -383,6 +384,10 @@ export default function ModeratorThesisOverviewPage() {
             ) : (
                 <ThesisWorkspace
                     thesisId={selectedThesisId}
+                    groupId={selectedGroupId}
+                    year={thesis?.year}
+                    department={thesis?.department ?? groups.find(g => g.id === selectedGroupId)?.department}
+                    course={thesis?.course ?? selectedCourse}
                     thesis={thesis}
                     participants={participants}
                     currentUserId={moderatorUid}

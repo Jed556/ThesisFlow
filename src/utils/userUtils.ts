@@ -1,5 +1,5 @@
 import type { UserProfile } from '../types/profile';
-import { getProfile } from './firebase/firestore/user';
+import { findUserById } from './firebase/firestore/user';
 
 /**
  * Builds a human-friendly label for a user profile using their name and email.
@@ -27,7 +27,7 @@ export function formatProfileLabel(profile: UserProfile | null | undefined): str
  * @returns Formatted display name or UID as fallback
  */
 export async function getDisplayName(uid: string): Promise<string> {
-    const profile = await getProfile(uid);
+    const profile = await findUserById(uid);
 
     if (!profile) {
         return uid;

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Box, Card, CardContent, Chip, Divider, Stack, Typography } from '@mui/material';
-import type { TopicProposalEntry } from '../../types/topicProposal';
+import type { TopicProposalEntry } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { Avatar, Name } from '../Avatar';
 import { getStatusChipConfig } from '../../utils/topicProposalUtils';
@@ -18,7 +18,7 @@ export interface TopicProposalEntryCardProps {
  */
 export default function TopicProposalEntryCard(props: TopicProposalEntryCardProps) {
     const { entry, author, actions, footer, highlight = false } = props;
-    const statusChip = getStatusChipConfig(entry.status);
+    const statusChip = getStatusChipConfig(entry.status ?? 'draft');
 
     return (
         <Card
@@ -34,9 +34,12 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                         <Typography variant="h6" gutterBottom>
                             {entry.title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {entry.abstract}
-                        </Typography>
+                        <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2">Brief Description</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {entry.description}
+                            </Typography>
+                        </Box>
                     </Box>
                     <Chip label={statusChip.label} color={statusChip.color} size="small" />
                 </Box>

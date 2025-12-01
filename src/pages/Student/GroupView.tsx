@@ -9,7 +9,7 @@ import { AnimatedPage } from '../../components/Animate';
 import GroupView, { type GroupViewHeaderContext } from '../../components/Group/GroupView';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../../contexts/SnackbarContext';
-import { cancelJoinRequest, requestToJoinGroup } from '../../utils/groupUtils';
+import { cancelJoinRequest, requestToJoinGroup } from '../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     title: 'Group Details',
@@ -54,7 +54,7 @@ export default function StudentGroupViewPage() {
         }
     }, [showNotification, userUid]);
 
-    const renderHeaderActions = React.useCallback(({ group, loading }: GroupViewHeaderContext) => {
+    const renderHeaderActions = React.useCallback(({ group, invites, requests, loading }: GroupViewHeaderContext) => {
         const buttons: React.ReactNode[] = [
             <Button key="back" variant="outlined" startIcon={<ArrowBackIcon />} onClick={handleBack}>
                 Back
@@ -64,8 +64,8 @@ export default function StudentGroupViewPage() {
         if (group && userUid) {
             const isLeader = group.members.leader === userUid;
             const isMember = group.members.members.includes(userUid);
-            const hasInvite = (group.invites ?? []).includes(userUid);
-            const hasRequest = (group.requests ?? []).includes(userUid);
+            const hasInvite = invites.includes(userUid);
+            const hasRequest = requests.includes(userUid);
             const allowedStatuses: ThesisGroup['status'][] = ['draft', 'review'];
             const statusAllowsRequest = allowedStatuses.includes(group.status);
             const canRequest = !isLeader && !isMember && !hasInvite && statusAllowsRequest;

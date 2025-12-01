@@ -1,7 +1,7 @@
-import type { ThesisChapter, ThesisStage } from '../types/thesis';
+import type { ThesisChapter, ThesisStageName } from '../types/thesis';
 
 export interface ThesisStageMeta {
-    value: ThesisStage;
+    value: ThesisStageName;
     label: string;
     helper?: string;
 }
@@ -19,7 +19,7 @@ const normalizeStageKey = (value: string): string => value
     .toLowerCase()
     .replace(/[^a-z]/g, '');
 
-const STAGE_LOOKUP = STAGE_SEQUENCE_ORDER.reduce<Map<string, ThesisStage>>((acc, stage) => {
+const STAGE_LOOKUP = STAGE_SEQUENCE_ORDER.reduce<Map<string, ThesisStageName>>((acc, stage) => {
     acc.set(normalizeStageKey(stage), stage);
     return acc;
 }, new Map());
@@ -27,7 +27,7 @@ const STAGE_LOOKUP = STAGE_SEQUENCE_ORDER.reduce<Map<string, ThesisStage>>((acc,
 export type StageSequenceTarget = 'chapters' | 'terminal';
 
 export interface StageSequenceStep {
-    stage: ThesisStage;
+    stage: ThesisStageName;
     target: StageSequenceTarget;
 }
 
@@ -42,9 +42,9 @@ export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = [
     { stage: 'Post-Defense', target: 'terminal' },
 ] as const;
 
-const DEFAULT_STAGE: ThesisStage = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
+const DEFAULT_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
 
-function canonicalizeStageValue(value?: ThesisStage | string | null): ThesisStage | null {
+function canonicalizeStageValue(value?: ThesisStageName | string | null): ThesisStageName | null {
     if (!value) {
         return null;
     }
@@ -52,7 +52,7 @@ function canonicalizeStageValue(value?: ThesisStage | string | null): ThesisStag
     return STAGE_LOOKUP.get(normalized) ?? null;
 }
 
-function normalizeChapterStages(stage?: ThesisStage | ThesisStage[] | null): ThesisStage[] {
+function normalizeChapterStages(stage?: ThesisStageName | ThesisStageName[] | null): ThesisStageName[] {
     const values = Array.isArray(stage)
         ? stage
         : stage
@@ -61,9 +61,9 @@ function normalizeChapterStages(stage?: ThesisStage | ThesisStage[] | null): The
 
     const canonical = values
         .map((value) => canonicalizeStageValue(value))
-        .filter((value): value is ThesisStage => Boolean(value));
+        .filter((value): value is ThesisStageName => Boolean(value));
 
-    const unique: ThesisStage[] = [];
+    const unique: ThesisStageName[] = [];
     canonical.forEach((value) => {
         if (!unique.includes(value)) {
             unique.push(value);
@@ -90,7 +90,7 @@ function normalizeChapterStages(stage?: ThesisStage | ThesisStage[] | null): The
     });
 }
 
-export function resolveChapterStages(chapter?: ThesisChapter | null): ThesisStage[] {
+export function resolveChapterStages(chapter?: ThesisChapter | null): ThesisStageName[] {
     if (!chapter) {
         return [DEFAULT_STAGE];
     }
@@ -100,11 +100,11 @@ export function resolveChapterStages(chapter?: ThesisChapter | null): ThesisStag
 /**
  * Returns the normalized stage assigned to a thesis chapter.
  */
-export function resolveChapterStage(chapter?: ThesisChapter | null): ThesisStage {
+export function resolveChapterStage(chapter?: ThesisChapter | null): ThesisStageName {
     return resolveChapterStages(chapter)[0];
 }
 
-export function chapterHasStage(chapter: ThesisChapter | undefined, stage: ThesisStage): boolean {
+export function chapterHasStage(chapter: ThesisChapter | undefined, stage: ThesisStageName): boolean {
     if (!chapter) {
         return false;
     }
@@ -121,10 +121,10 @@ export interface StageCompletionOptions {
 export function buildStageCompletionMap(
     chapters: ThesisChapter[] | undefined,
     options?: StageCompletionOptions,
-): Record<ThesisStage, boolean> {
+): Record<ThesisStageName, boolean> {
     const source = chapters ?? [];
     const { treatEmptyAsComplete = false } = options ?? {};
-    return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta) => {
+    return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
         const stageChapters = filterChaptersByStage(source, stageMeta.value);
         if (stageChapters.length === 0) {
             acc[stageMeta.value] = treatEmptyAsComplete;
@@ -132,16 +132,16 @@ export function buildStageCompletionMap(
             acc[stageMeta.value] = stageChapters.every((chapter) => chapter.status === 'approved');
         }
         return acc;
-    }, {} as Record<ThesisStage, boolean>);
+    }, {} as Record<ThesisStageName, boolean>);
 }
 
 /**
  * Builds a lock map where each stage is locked until the previous stage is complete.
  */
 export function buildSequentialStageLockMap(
-    completionMap: Record<ThesisStage, boolean>
-): Record<ThesisStage, boolean> {
-    return THESIS_STAGE_METADATA.reduce<Record<ThesisStage, boolean>>((acc, stageMeta, index) => {
+    completionMap: Record<ThesisStageName, boolean>
+): Record<ThesisStageName, boolean> {
+    return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta, index) => {
         if (index === 0) {
             acc[stageMeta.value] = false;
         } else {
@@ -149,22 +149,22 @@ export function buildSequentialStageLockMap(
             acc[stageMeta.value] = !(completionMap[previousStage] ?? false);
         }
         return acc;
-    }, {} as Record<ThesisStage, boolean>);
+    }, {} as Record<ThesisStageName, boolean>);
 }
 
 export interface StageProgressSnapshot {
-    chapters?: Partial<Record<ThesisStage, boolean>>;
-    terminalRequirements?: Partial<Record<ThesisStage, boolean>>;
+    chapters?: Partial<Record<ThesisStageName, boolean>>;
+    terminalRequirements?: Partial<Record<ThesisStageName, boolean>>;
 }
 
 export interface StageInterleavedLockMap {
-    chapters: Record<ThesisStage, boolean>;
-    terminalRequirements: Record<ThesisStage, boolean>;
+    chapters: Record<ThesisStageName, boolean>;
+    terminalRequirements: Record<ThesisStageName, boolean>;
 }
 
 export interface StageGateOverrides {
-    chapters?: Partial<Record<ThesisStage, boolean>>;
-    terminalRequirements?: Partial<Record<ThesisStage, boolean>>;
+    chapters?: Partial<Record<ThesisStageName, boolean>>;
+    terminalRequirements?: Partial<Record<ThesisStageName, boolean>>;
 }
 
 const describeTargetLabel: Record<StageSequenceTarget, string> = {
@@ -177,7 +177,7 @@ export function describeStageSequenceStep(step: StageSequenceStep): string {
 }
 
 export function getPreviousSequenceStep(
-    stage: ThesisStage,
+    stage: ThesisStageName,
     target: StageSequenceTarget,
 ): StageSequenceStep | null {
     const index = THESIS_STAGE_UNLOCK_SEQUENCE.findIndex(
@@ -194,8 +194,8 @@ export function buildInterleavedStageLockMap(
     gates?: StageGateOverrides,
 ): StageInterleavedLockMap {
     const locks: StageInterleavedLockMap = {
-        chapters: {} as Record<ThesisStage, boolean>,
-        terminalRequirements: {} as Record<ThesisStage, boolean>,
+        chapters: {} as Record<ThesisStageName, boolean>,
+        terminalRequirements: {} as Record<ThesisStageName, boolean>,
     };
     let previousStepComplete = true;
 
@@ -224,7 +224,7 @@ export function buildInterleavedStageLockMap(
  */
 export function filterChaptersByStage(
     chapters: ThesisChapter[] | undefined,
-    stage: ThesisStage,
+    stage: ThesisStageName,
 ): ThesisChapter[] {
     if (!chapters || chapters.length === 0) {
         return [];

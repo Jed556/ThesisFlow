@@ -1,5 +1,6 @@
+/* eslint-disable max-len */
 import * as React from 'react';
-import EditNoteIcon from '@mui/icons-material/EditNote';
+import { FactCheck as FactCheckIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import { AnimatedPage } from '../../components/Animate';
 import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalRequirements';
@@ -7,9 +8,9 @@ import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalR
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 3,
-    title: 'Terminal Approvals',
-    segment: 'editor-terminal-approvals',
-    icon: <EditNoteIcon />,
+    title: 'Terminal Requirements',
+    segment: 'editor-terminal-requirements',
+    icon: <FactCheckIcon />,
     roles: ['editor'],
 };
 
@@ -18,7 +19,6 @@ export default function EditorTerminalRequirementApprovalsPage() {
         <AnimatedPage variant="slideUp">
             <TerminalRequirementApprovalWorkspace
                 role="editor"
-                title="Terminal Requirement Approvals"
                 description="Review and mark each submission after adviser sign-off so statisticians and admins know when manuscript formatting is finished."
                 emptyStateMessage="No thesis groups are currently assigned to you as an editor."
             />

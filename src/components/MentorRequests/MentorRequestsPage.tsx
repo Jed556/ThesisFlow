@@ -5,45 +5,46 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
-import type { MentorRequest, MentorRequestRole } from '../../types/mentorRequest';
+import type { ExpertRequest, ExpertRequestRole } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
-import type { ThesisData } from '../../types/thesis';
 import type { Session } from '../../types/session';
 import type { UserProfile, UserRole } from '../../types/profile';
+import { DEFAULT_MAX_EXPERT_SLOTS } from '../../types/slotRequest';
 import { AnimatedPage } from '../Animate';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
-import { getGroupById } from '../../utils/firebase/firestore/groups';
-import { listenMentorRequestsByMentor } from '../../utils/firebase/firestore/mentorRequests';
-import { listenThesesForMentor } from '../../utils/firebase/firestore/thesis';
-import { getUsersByIds, onUserProfile, setUserProfile } from '../../utils/firebase/firestore/user';
-import MentorRequestCard from './MentorRequestCard';
-import { filterActiveMentorTheses } from '../../utils/mentorProfileUtils';
+import { findGroupById, listenGroupsByExpertRole } from '../../utils/firebase/firestore/groups';
+import { listenExpertRequestsByExpert } from '../../utils/firebase/firestore/expertRequests';
+import { findUsersByIds, onUserProfile, updateUserProfile } from '../../utils/firebase/firestore/user';
+import ExpertRequestCard from '../ExpertRequests/ExpertRequestCard';
+import { SlotRequestButton } from '../ExpertRequests/SlotRequestDialog';
 
-interface MentorRequestViewModel {
-    request: MentorRequest;
+interface ExpertRequestViewModel {
+    request: ExpertRequest;
     group: ThesisGroup | null;
     requester: UserProfile | null;
     usersByUid: Map<string, UserProfile>;
 }
 
 function formatMinimumCapacityMessage(currentCount: number): string {
-    return `You currently mentor ${currentCount} group${currentCount === 1 ? '' : 's'}. Slots cannot go below that.`;
+    return `You currently expert ${currentCount} group${currentCount === 1 ? '' : 's'}. Slots cannot go below that.`;
 }
 
-export interface MentorRequestsPageProps {
-    role: MentorRequestRole;
+export interface ExpertRequestsPageProps {
+    role: ExpertRequestRole;
     roleLabel: string;
     allowedRoles?: UserRole[];
 }
 
-function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestViewModel[] {
+function useExpertRequestViewModels(requests: ExpertRequest[]): ExpertRequestViewModel[] {
     const [groupsById, setGroupsById] = React.useState<Map<string, ThesisGroup | null>>(new Map());
     const [profilesByUid, setProfilesByUid] = React.useState<Map<string, UserProfile>>(new Map());
 
     React.useEffect(() => {
         let cancelled = false;
-        const uniqueGroupIds = Array.from(new Set(requests.map((req) => req.groupId)));
+        const uniqueGroupIds = Array.from(
+            new Set(requests.map((req) => req.groupId).filter((id): id is string => !!id))
+        );
         if (uniqueGroupIds.length === 0) {
             setGroupsById(new Map());
             return () => { /* no-op */ };
@@ -54,7 +55,7 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
                 const resolved = await Promise.all(
                     uniqueGroupIds.map(async (groupId) => {
                         try {
-                            const record = await getGroupById(groupId);
+                            const record = await findGroupById(groupId);
                             return [groupId, record] as const;
                         } catch (err) {
                             console.error(`Failed to resolve group ${groupId}:`, err);
@@ -67,7 +68,7 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
                 }
             } catch (err) {
                 if (!cancelled) {
-                    console.error('Failed to resolve mentor request groups:', err);
+                    console.error('Failed to resolve expert request groups:', err);
                 }
             }
         })();
@@ -99,7 +100,7 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
 
         void (async () => {
             try {
-                const profiles = await getUsersByIds(ids);
+                const profiles = await findUsersByIds(ids);
                 if (!cancelled) {
                     setProfilesByUid(new Map(profiles.map((profile) => [profile.uid, profile])));
                 }
@@ -117,7 +118,7 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
 
     return React.useMemo(() => (
         requests.map((request) => {
-            const group = groupsById.get(request.groupId) ?? null;
+            const group = request.groupId ? groupsById.get(request.groupId) ?? null : null;
             const requester = profilesByUid.get(request.requestedBy) ?? null;
             const usersByUid = new Map<string, UserProfile>();
             if (requester) {
@@ -135,54 +136,56 @@ function useMentorRequestViewModels(requests: MentorRequest[]): MentorRequestVie
                 group,
                 requester,
                 usersByUid,
-            } satisfies MentorRequestViewModel;
+            } satisfies ExpertRequestViewModel;
         })
     ), [groupsById, profilesByUid, requests]);
 }
 
 /**
- * Shared mentor requests experience for adviser/editor/statistician dashboards.
+ * Shared expert requests experience for adviser/editor/statistician dashboards.
  */
-export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: MentorRequestsPageProps) {
+export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: ExpertRequestsPageProps) {
     const session = useSession<Session>();
-    const mentorUid = session?.user?.uid ?? null;
+    const expertUid = session?.user?.uid ?? null;
     const viewerRole = session?.user?.role;
     const permittedRoles = allowedRoles ?? [role];
     const { showNotification } = useSnackbar();
     const navigate = useNavigate();
 
-    const [requests, setRequests] = React.useState<MentorRequest[]>([]);
+    const [requests, setRequests] = React.useState<ExpertRequest[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
     // Dialog state removed: approvals are handled in the group view header now.
-    const [mentorProfile, setMentorProfile] = React.useState<UserProfile | null>(null);
+    const [expertProfile, setExpertProfile] = React.useState<UserProfile | null>(null);
     const [capacityInput, setCapacityInput] = React.useState('');
     const [capacityError, setCapacityError] = React.useState<string | null>(null);
     const [capacitySaving, setCapacitySaving] = React.useState(false);
     const [editingCapacity, setEditingCapacity] = React.useState(false);
-    const [assignments, setAssignments] = React.useState<(ThesisData & { id: string })[]>([]);
+    const [assignments, setAssignments] = React.useState<ThesisGroup[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(false);
 
+    // Count only groups with 'active' status as taken slots
     const activeAssignments = React.useMemo(
-        () => filterActiveMentorTheses(assignments),
+        () => assignments.filter((group) => group.status === 'active'),
         [assignments]
     );
     const minimumCapacity = activeAssignments.length;
-    const mentorCapacityRaw = typeof mentorProfile?.capacity === 'number'
-        ? mentorProfile.capacity
+    const expertCapacityRaw = typeof expertProfile?.slots === 'number'
+        ? expertProfile.slots
         : 0;
-    const normalizedCapacity = Math.max(mentorCapacityRaw, minimumCapacity);
-    const slotsSummary = mentorProfile ? `${activeAssignments.length}/${normalizedCapacity}` : '—';
+    const maxSlots = expertProfile?.maxSlots ?? DEFAULT_MAX_EXPERT_SLOTS;
+    const normalizedCapacity = Math.max(expertCapacityRaw, minimumCapacity);
+    const slotsSummary = expertProfile ? `${activeAssignments.length}/${normalizedCapacity}` : '—';
     const openSlots = Math.max(normalizedCapacity - activeAssignments.length, 0);
     const capacityHelperHint = minimumCapacity > 0
-        ? `Minimum ${minimumCapacity} to cover current assignments.`
-        : 'Students only see you when slots are available.';
+        ? `Minimum ${minimumCapacity} to cover current assignments. Max allowed: ${maxSlots}.`
+        : `Max allowed: ${maxSlots}.`;
 
-    const viewModels = useMentorRequestViewModels(requests);
+    const viewModels = useExpertRequestViewModels(requests);
 
     React.useEffect(() => {
-        if (!mentorUid) {
+        if (!expertUid) {
             setRequests([]);
             setLoading(false);
             return () => { /* no-op */ };
@@ -190,14 +193,14 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
 
         setLoading(true);
         setError(null);
-        const unsubscribe = listenMentorRequestsByMentor(role, mentorUid, {
+        const unsubscribe = listenExpertRequestsByExpert(expertUid, role, {
             onData: (records) => {
                 setRequests(records);
                 setLoading(false);
             },
             onError: (listenerError) => {
-                console.error('Failed to load mentor requests:', listenerError);
-                setError('Unable to load mentor requests right now.');
+                console.error('Failed to load expert requests:', listenerError);
+                setError('Unable to load expert requests right now.');
                 setLoading(false);
             },
         });
@@ -205,25 +208,25 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
         return () => {
             unsubscribe();
         };
-    }, [mentorUid, role]);
+    }, [expertUid, role]);
 
     React.useEffect(() => {
-        if (!mentorUid) {
-            setMentorProfile(null);
+        if (!expertUid) {
+            setExpertProfile(null);
             return () => { /* no-op */ };
         }
 
-        const unsubscribe = onUserProfile(mentorUid, (profile) => {
-            setMentorProfile(profile);
+        const unsubscribe = onUserProfile(expertUid, (profile) => {
+            setExpertProfile(profile);
         });
 
         return () => {
             unsubscribe();
         };
-    }, [mentorUid]);
+    }, [expertUid]);
 
     React.useEffect(() => {
-        if (!mentorProfile) {
+        if (!expertProfile) {
             setCapacityInput('');
             return;
         }
@@ -231,28 +234,28 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
             return;
         }
 
-        const baseValue = typeof mentorProfile.capacity === 'number'
-            ? mentorProfile.capacity
+        const baseValue = typeof expertProfile.slots === 'number'
+            ? expertProfile.slots
             : 0;
         const nextValue = Math.max(minimumCapacity, baseValue);
         setCapacityInput(String(nextValue));
-    }, [mentorProfile, minimumCapacity, editingCapacity]);
+    }, [expertProfile, minimumCapacity, editingCapacity]);
 
     React.useEffect(() => {
-        if (!mentorUid) {
+        if (!expertUid) {
             setAssignments([]);
             setAssignmentsLoading(false);
             return () => { /* no-op */ };
         }
 
         setAssignmentsLoading(true);
-        const unsubscribe = listenThesesForMentor(role, mentorUid, {
-            onData: (records) => {
-                setAssignments(records);
+        const unsubscribe = listenGroupsByExpertRole(role, expertUid, {
+            onData: (groups: ThesisGroup[]) => {
+                setAssignments(groups);
                 setAssignmentsLoading(false);
             },
-            onError: (listenerError) => {
-                console.error('Failed to load mentor assignments for capacity view:', listenerError);
+            onError: (listenerError: Error) => {
+                console.error('Failed to load expert assignments for capacity view:', listenerError);
                 setAssignments([]);
                 setAssignmentsLoading(false);
             },
@@ -261,7 +264,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
         return () => {
             unsubscribe();
         };
-    }, [mentorUid, role]);
+    }, [expertUid, role]);
 
     const pendingCount = React.useMemo(
         () => requests.filter((record) => record.status === 'pending').length,
@@ -278,39 +281,43 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
 
     const handleCapacityInputChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
-        setCapacityInput(value);
         if (value.trim() === '') {
+            setCapacityInput(value);
             setCapacityError('Enter how many groups you can handle.');
             return;
         }
         const parsed = Number(value);
         if (Number.isNaN(parsed)) {
+            setCapacityInput(value);
             setCapacityError('Enter a valid number.');
         } else if (!Number.isInteger(parsed)) {
+            setCapacityInput(value);
             setCapacityError('Use whole numbers only.');
         } else if (parsed < 0) {
+            setCapacityInput(value);
             setCapacityError('Slots cannot be negative.');
-        } else if (parsed < minimumCapacity) {
-            setCapacityError(formatMinimumCapacityMessage(minimumCapacity));
         } else {
+            // Clamp value between minimumCapacity and maxSlots
+            const clamped = Math.max(minimumCapacity, Math.min(parsed, maxSlots));
+            setCapacityInput(String(clamped));
             setCapacityError(null);
         }
-    }, [minimumCapacity]);
+    }, [minimumCapacity, maxSlots]);
 
     const capacityHasChanged = React.useMemo(() => {
-        if (!mentorProfile) {
+        if (!expertProfile) {
             return false;
         }
-        const baseline = mentorCapacityRaw;
+        const baseline = expertCapacityRaw;
         const parsed = Number(capacityInput);
         if (capacityInput.trim() === '' || Number.isNaN(parsed)) {
             return false;
         }
         return parsed !== baseline;
-    }, [capacityInput, mentorProfile]);
+    }, [capacityInput, expertProfile]);
 
     const canSaveCapacity = Boolean(
-        mentorUid &&
+        expertUid &&
         !capacitySaving &&
         !capacityError &&
         capacityInput.trim() !== '' &&
@@ -318,7 +325,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
     );
 
     const handleSaveCapacity = React.useCallback(async () => {
-        if (!mentorUid) {
+        if (!expertUid) {
             return;
         }
 
@@ -331,47 +338,51 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
             setCapacityError(formatMinimumCapacityMessage(minimumCapacity));
             return;
         }
+        if (parsed > maxSlots) {
+            setCapacityError(`Cannot exceed your maximum limit of ${maxSlots}. Request more slots if needed.`);
+            return;
+        }
 
         setCapacitySaving(true);
         try {
-            await setUserProfile(mentorUid, { capacity: parsed });
+            await updateUserProfile(expertUid, { slots: parsed });
             showNotification('Updated your available slots.', 'success');
             setEditingCapacity(false);
             setCapacityError(null);
         } catch (err) {
-            console.error('Failed to update mentor capacity:', err);
+            console.error('Failed to update expert capacity:', err);
             const fallback = err instanceof Error ? err.message : 'Unable to update slots right now.';
             showNotification(fallback, 'error');
         } finally {
             setCapacitySaving(false);
         }
-    }, [capacityInput, mentorUid, showNotification, minimumCapacity]);
+    }, [capacityInput, expertUid, showNotification, minimumCapacity, maxSlots]);
 
     const handleStartEditing = React.useCallback(() => {
-        if (!mentorProfile) return;
+        if (!expertProfile) return;
         setEditingCapacity(true);
-    }, [mentorProfile]);
+    }, [expertProfile]);
 
     const handleCancelEditing = React.useCallback(() => {
-        if (mentorProfile) {
-            const nextValue = typeof mentorProfile.capacity === 'number'
-                ? String(Math.max(minimumCapacity, mentorProfile.capacity))
+        if (expertProfile) {
+            const nextValue = typeof expertProfile.slots === 'number'
+                ? String(Math.max(minimumCapacity, expertProfile.slots))
                 : String(minimumCapacity);
             setCapacityInput(nextValue);
         }
         setCapacityError(null);
         setEditingCapacity(false);
-    }, [mentorProfile, minimumCapacity]);
+    }, [expertProfile, minimumCapacity]);
 
 
 
-    const handleOpenGroupView = React.useCallback((requestToOpen: MentorRequest) => {
+    const handleOpenGroupView = React.useCallback((requestToOpen: ExpertRequest) => {
         const basePath = role === 'adviser'
             ? '/adviser-requests'
             : role === 'editor'
                 ? '/editor-requests'
                 : '/statistician-requests';
-        navigate(`${basePath}/${requestToOpen.groupId}`, { state: { mentorRequest: requestToOpen } });
+        navigate(`${basePath}/${requestToOpen.groupId}`, { state: { expertRequest: requestToOpen } });
     }, [navigate, role]);
 
 
@@ -390,17 +401,17 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
         return (
             <UnauthorizedNotice
                 variant='box'
-                title="Mentor access only"
+                title="Expert access only"
                 description={`This page is available to ${roleLabel.toLowerCase()}s.`}
             />
         );
     }
 
-    if (!mentorUid) {
+    if (!expertUid) {
         return (
             <AnimatedPage variant="fade">
                 <Alert severity="warning">
-                    You need to sign in again to manage mentor requests.
+                    You need to sign in again to manage expert requests.
                 </Alert>
             </AnimatedPage>
         );
@@ -448,27 +459,31 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                         <CardContent>
                             {editingCapacity ? (
                                 <>
-                                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                    <Typography variant="subtitle2" color="text.secondary">
                                         Update accepted groups
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                        Set how many thesis groups you can handle. Use 0 to temporarily pause new requests.
                                     </Typography>
                                     <Stack
                                         direction={{ xs: 'column', sm: 'row' }}
                                         spacing={2}
                                         alignItems={{ xs: 'stretch', sm: 'flex-end' }}
+                                        sx={{ width: '100%', mt: 2 }}
                                     >
                                         <TextField
-                                            label="Accepted groups"
+                                            label="Slots"
                                             type="number"
-                                            slotProps={{ htmlInput: { min: minimumCapacity, step: 1 } }}
+                                            slotProps={{
+                                                htmlInput: {
+                                                    min: minimumCapacity,
+                                                    max: maxSlots,
+                                                    step: 1
+                                                }
+                                            }}
                                             value={capacityInput}
                                             onChange={handleCapacityInputChange}
-                                            sx={{ flex: 1, maxWidth: 220 }}
+                                            sx={{ flex: 1, minWidth: 150 }}
                                             error={Boolean(capacityError)}
                                             helperText={capacityError ?? capacityHelperHint}
-                                            disabled={!mentorProfile}
+                                            disabled={!expertProfile}
                                         />
                                     </Stack>
                                 </>
@@ -507,13 +522,24 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
                                     </Button>
                                 </Stack>
                             ) : (
-                                <Button
-                                    variant="outlined"
-                                    onClick={handleStartEditing}
-                                    disabled={!mentorProfile}
-                                >
-                                    Edit slots
-                                </Button>
+                                <Stack direction="row" spacing={1}>
+                                    <Button
+                                        variant="outlined"
+                                        onClick={handleStartEditing}
+                                        disabled={!expertProfile}
+                                    >
+                                        Edit slots
+                                    </Button>
+                                    {expertUid && (
+                                        <SlotRequestButton
+                                            expertUid={expertUid}
+                                            expertRole={role}
+                                            profile={expertProfile}
+                                            currentMaxSlots={maxSlots}
+                                            size="small"
+                                        />
+                                    )}
+                                </Stack>
                             )}
                         </CardActions>
                     </Card>
@@ -528,7 +554,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
             ) : viewModels.length === 0 ? (
                 <Paper sx={{ p: 3 }}>
                     <Typography variant="body1" color="text.secondary">
-                        No mentor requests yet. Groups with an approved topic can send you a request from your profile page.
+                        No expert requests yet. Groups with an approved topic can send you a request from your profile page.
                     </Typography>
                 </Paper>
             ) : (
@@ -554,7 +580,7 @@ export default function MentorRequestsPage({ role, roleLabel, allowedRoles }: Me
 
                         return (
                             <Box key={request.id} sx={{ display: 'flex' }}>
-                                <MentorRequestCard
+                                <ExpertRequestCard
                                     request={request}
                                     group={group}
                                     requester={requester}

@@ -1,19 +1,19 @@
 import type { ChapterTemplate } from '../types/chapter';
-import type { ThesisStage } from '../types/thesis';
+import type { ThesisStageName } from '../types/thesis';
 import { THESIS_STAGE_METADATA } from './thesisStageUtils';
 
-export const DEFAULT_CHAPTER_STAGE: ThesisStage = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
+export const DEFAULT_CHAPTER_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
 
-function collapseStages(stages: ThesisStage[]): ThesisStage | ThesisStage[] {
+function collapseStages(stages: ThesisStageName[]): ThesisStageName | ThesisStageName[] {
     return stages.length === 1 ? stages[0] : stages;
 }
 
 /**
  * Returns a sanitized list of thesis stages for a chapter entry.
  */
-export function coerceChapterStages(stage?: ThesisStage | ThesisStage[]): ThesisStage[] {
+export function coerceChapterStages(stage?: ThesisStageName | ThesisStageName[]): ThesisStageName[] {
     const values = Array.isArray(stage) ? stage : stage ? [stage] : [];
-    const filtered = values.filter((value): value is ThesisStage => Boolean(value));
+    const filtered = values.filter((value): value is ThesisStageName => Boolean(value));
     const unique = Array.from(new Set(filtered));
     return unique.length > 0 ? unique : [DEFAULT_CHAPTER_STAGE];
 }
@@ -33,7 +33,7 @@ export function normalizeChapterOrder(chapters: ChapterTemplate[]): ChapterTempl
 /**
  * Generates an empty chapter template with a deterministic ID.
  */
-export function createEmptyChapterTemplate(order: number, stage: ThesisStage = DEFAULT_CHAPTER_STAGE): ChapterTemplate {
+export function createEmptyChapterTemplate(order: number, stage: ThesisStageName = DEFAULT_CHAPTER_STAGE): ChapterTemplate {
     return {
         id: order,
         title: '',

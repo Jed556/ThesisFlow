@@ -28,8 +28,10 @@ import type { ThesisGroup } from '../../../types/group';
 import type { UserProfile } from '../../../types/profile';
 import { AnimatedPage, AnimatedList } from '../../../components/Animate';
 import { Avatar, Name } from '../../../components/Avatar';
-import { getGroupsByStatus, approveGroup, rejectGroup } from '../../../utils/firebase/firestore/groups';
-import { getUserById } from '../../../utils/firebase/firestore/user';
+import {
+    getAllGroupsByStatus, approveGroup, rejectGroup,
+} from '../../../utils/firebase/firestore/groups';
+import { findUserById } from '../../../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
     group: 'admin-management',
@@ -59,7 +61,7 @@ export default function AdminGroupRequestsPage() {
             setLoading(true);
             setError(null);
 
-            const groups = await getGroupsByStatus('review');
+            const groups = await getAllGroupsByStatus('review');
             setPendingGroups(groups);
         } catch (err) {
             console.error('Failed to load pending groups:', err);
@@ -200,7 +202,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
         const loadProfiles = async () => {
             try {
                 // Load leader profile
-                const leader = await getUserById(group.members.leader);
+                const leader = await findUserById(group.members.leader);
                 if (!cancelled && leader) {
                     setLeaderProfile(leader);
                 }
@@ -209,7 +211,7 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                 const membersMap = new Map<string, UserProfile>();
                 await Promise.all(
                     group.members.members.map(async (uid) => {
-                        const profile = await getUserById(uid);
+                        const profile = await findUserById(uid);
                         if (profile) {
                             membersMap.set(uid, profile);
                         }

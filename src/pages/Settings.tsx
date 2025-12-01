@@ -8,7 +8,7 @@ import {
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
-import { getCurrentUserProfile, setUserProfile } from '../utils/firebase/firestore/user';
+import { getCurrentUserProfile, updateUserProfile } from '../utils/firebase/firestore/user';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { uploadBanner, deleteFileFromStorage, revokeImagePreview } from '../utils/firebase/storage';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../utils/avatarUtils';
@@ -158,7 +158,7 @@ export default function SettingsPage() {
         try {
             setSaving(true);
             // We store a partial UserProfile object in formData, so pass it directly
-            await setUserProfile(session.user.uid, formData as Partial<UserProfile>);
+            await updateUserProfile(session.user.uid, formData as Partial<UserProfile>);
 
             // Update theme if color changed
             if ((formData.preferences?.themeColor ?? '') !== currentThemeColor) {
@@ -209,7 +209,7 @@ export default function SettingsPage() {
                 await deleteFileFromStorage(profile.avatar).catch(console.error);
             }
 
-            await uploadAvatar(file, session.user.uid, profile);
+            await uploadAvatar(file, session.user.uid);
             await loadProfile();
 
             showNotification('Avatar updated successfully', 'success');
@@ -238,7 +238,7 @@ export default function SettingsPage() {
                 await deleteFileFromStorage(profile.banner).catch(console.error);
             }
 
-            await setUserProfile(session.user.uid, { banner: downloadURL });
+            await updateUserProfile(session.user.uid, { banner: downloadURL });
             await loadProfile();
 
             showNotification('Banner updated successfully', 'success');
@@ -280,7 +280,7 @@ export default function SettingsPage() {
 
             setFormData(updated);
 
-            await setUserProfile(session.user.uid, { preferences: updated.preferences });
+            await updateUserProfile(session.user.uid, { preferences: updated.preferences });
 
             showNotification('Theme color updated successfully', 'success');
         } catch (error: unknown) {

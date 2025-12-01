@@ -16,13 +16,9 @@ import type { ThesisGroup, ThesisGroupFormData } from '../../../../types/group';
 import type { Session } from '../../../../types/session';
 import type { UserProfile } from '../../../../types/profile';
 import {
-    getAllUsers,
-    getAllGroups,
-    createGroup,
-    updateGroup,
-    setGroup,
-    getUsersByFilter,
+    findAllUsers, getAllGroups, createGroup, updateGroupById, setGroupById, findUsersByFilter,
 } from '../../../../utils/firebase/firestore';
+import { getAcademicYear } from '../../../../utils/dateUtils';
 import { importGroupsFromCsv, exportGroupsToCsv } from '../../../../utils/csv/group';
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../../hooks/useBackgroundJobs';
 import GroupCard from '../../../../components/Group/GroupCard';
@@ -45,7 +41,7 @@ const emptyFormData: ThesisGroupFormData = {
     adviser: '',
     editor: '',
     status: 'active',
-    thesisTitle: '',
+    thesis: undefined,
     department: '',
     course: '',
 };
@@ -173,7 +169,7 @@ export default function AdminGroupManagementPage() {
 
             setStudentOptionsLoading(true);
             try {
-                const filteredStudents = await getUsersByFilter({
+                const filteredStudents = await findUsersByFilter({
                     role: 'student',
                     department: normalizedDepartment,
                     course: normalizedCourse,
@@ -286,7 +282,7 @@ export default function AdminGroupManagementPage() {
         try {
             setLoading(true);
             // Load users
-            const allUsers = await getAllUsers();
+            const allUsers = await findAllUsers();
             setUsers(allUsers);
 
             // Load groups based on filters
@@ -338,7 +334,7 @@ export default function AdminGroupManagementPage() {
                     adviser: groupToEdit.members.adviser ?? '',
                     editor: groupToEdit.members.editor ?? '',
                     status: groupToEdit.status,
-                    thesisTitle: groupToEdit.thesisTitle,
+                    thesis: groupToEdit.thesis,
                     department: groupToEdit.department,
                     course: groupToEdit.course || derivedCourse || '',
                 });
@@ -658,7 +654,30 @@ export default function AdminGroupManagementPage() {
         try {
             if (!editMode) {
                 // Create new group
-                const newGroupData: Omit<ThesisGroup, 'id' | 'createdAt' | 'updatedAt'> = {
+                // Save to Firestore
+                const year = getAcademicYear();
+                const createdGroupId = await createGroup(
+                    year,
+                    normalizedDepartment || '',
+                    normalizedCourse,
+                    {
+                        name: formData.name.trim(),
+                        description: formData.description?.trim(),
+                        leader: formData.leader,
+                        members: formData.members,
+                        adviser: formData.adviser || undefined,
+                        editor: formData.editor || undefined,
+                        status: formData.status,
+                        thesis: formData.thesis?.title?.trim() ? {
+                            ...formData.thesis,
+                            title: formData.thesis.title.trim(),
+                        } : undefined,
+                        department: normalizedDepartment || '',
+                        course: normalizedCourse,
+                    }
+                );
+                const createdGroup: ThesisGroup = {
+                    id: createdGroupId,
                     name: formData.name.trim(),
                     description: formData.description?.trim(),
                     members: {
@@ -668,13 +687,15 @@ export default function AdminGroupManagementPage() {
                         editor: formData.editor || undefined,
                     },
                     status: formData.status,
-                    thesisTitle: formData.thesisTitle?.trim(),
+                    thesis: formData.thesis?.title?.trim() ? {
+                        ...formData.thesis,
+                        title: formData.thesis.title.trim(),
+                    } : undefined,
                     department: normalizedDepartment || '',
                     course: normalizedCourse,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
                 };
-
-                // Save to Firestore
-                const createdGroup = await createGroup(newGroupData);
                 setGroups((prev) => [...prev, createdGroup]);
                 showNotification(`Group "${createdGroup.name}" created successfully`, 'success');
                 // Navigate to the newly created group
@@ -683,28 +704,40 @@ export default function AdminGroupManagementPage() {
                 // Update existing group
                 if (!selectedGroup) return;
 
-                const updates: Partial<ThesisGroup> = {
+                // Update in Firestore
+                await updateGroupById(selectedGroup.id, {
+                    name: formData.name.trim(),
+                    description: formData.description?.trim(),
+                    leader: formData.leader,
+                    members: formData.members,
+                    adviser: formData.adviser || undefined,
+                    editor: formData.editor || undefined,
+                    status: formData.status,
+                    thesis: formData.thesis?.title?.trim() ? {
+                        ...formData.thesis,
+                        title: formData.thesis.title.trim(),
+                    } : undefined,
+                    department: normalizedDepartment || '',
+                    course: normalizedCourse,
+                });
+                const updatedGroup: ThesisGroup = {
+                    ...selectedGroup,
                     name: formData.name.trim(),
                     description: formData.description?.trim(),
                     members: {
+                        ...selectedGroup.members,
                         leader: formData.leader,
                         members: formData.members,
                         adviser: formData.adviser || undefined,
                         editor: formData.editor || undefined,
-                        panels: selectedGroup.members.panels,
                     },
                     status: formData.status,
-                    thesisTitle: formData.thesisTitle?.trim(),
+                    thesis: formData.thesis?.title?.trim() ? {
+                        ...formData.thesis,
+                        title: formData.thesis.title.trim(),
+                    } : undefined,
                     department: normalizedDepartment || '',
                     course: normalizedCourse,
-                };
-
-                // Update in Firestore
-                await updateGroup(selectedGroup.id, updates);
-                const updatedGroup: ThesisGroup = {
-                    ...selectedGroup,
-                    ...updates,
-                    members: updates.members ?? selectedGroup.members,
                     updatedAt: new Date().toISOString(),
                 };
                 setGroups((prev) => prev.map((g) => (g.id === updatedGroup.id ? updatedGroup : g)));
@@ -781,7 +814,7 @@ export default function AdminGroupManagementPage() {
                         try {
                             const fallbackId = `imported-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
                             const groupId = (groupData as Partial<ThesisGroup>).id || fallbackId;
-                            await setGroup(groupId, {
+                            await setGroupById(groupId, {
                                 ...groupData,
                                 id: groupId,
                             });
@@ -809,7 +842,7 @@ export default function AdminGroupManagementPage() {
                             try {
                                 setLoading(true);
                                 const [allUsers, groupsData] = await Promise.all([
-                                    getAllUsers(),
+                                    findAllUsers(),
                                     getAllGroups(),
                                 ]);
                                 setUsers(allUsers);
@@ -867,14 +900,14 @@ export default function AdminGroupManagementPage() {
     if (!canManage) {
         return (
             <AnimatedPage variant="fade">
-                <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." variant='box'/>
+                <UnauthorizedNotice description="You need to be an administrator or developer to manage groups." variant='box' />
             </AnimatedPage>
         );
     }
 
     return (
         <AnimatedPage variant="fade">
-            <Box sx={{ width: '100%'}}>
+            <Box sx={{ width: '100%' }}>
                 <Stack spacing={3}>
                     <Stack
                         direction={{ xs: 'column', lg: 'row' }}

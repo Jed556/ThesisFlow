@@ -15,12 +15,15 @@ import {
 import { AnimatedPage } from '../components/Animate';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
-import type { ThesisChapter, ThesisData } from '../types/thesis';
+import type { ThesisChapter, ThesisData, ThesisStageName } from '../types/thesis';
 import type { UserProfile } from '../types/profile';
 import type { ScheduleEvent } from '../types/schedule';
 import type { GroupNotificationDoc, GroupNotificationEntry } from '../types/notification';
 import { listenTheses } from '../utils/firebase/firestore/thesis';
-import { getUsersByIds, onUserProfile } from '../utils/firebase/firestore/user';
+import { getGroupDepartments, findGroupById } from '../utils/firebase/firestore/groups';
+import type { ThesisGroup } from '../types/group';
+import { THESIS_STAGE_METADATA, chapterHasStage } from '../utils/thesisStageUtils';
+import { findUsersByIds, onUserProfile } from '../utils/firebase/firestore/user';
 import { listenEventsByThesisIds } from '../utils/firebase/firestore/events';
 import { ensureGroupNotificationDocument, listenGroupNotifications } from '../utils/firebase/firestore/groupNotifications';
 
@@ -36,7 +39,6 @@ export const metadata: NavigationItem = {
 type ThesisRecord = ThesisData & { id: string };
 
 type DashboardStageKey = 'pre-title' | 'pre-thesis' | 'final-defense' | 'publication' | 'in-progress';
-type DefenseStageFilter = 'all' | DashboardStageKey;
 
 interface ChapterAggregate extends Record<string, number | string> {
     chapter: string;
@@ -87,8 +89,10 @@ function DashboardPage(): React.ReactElement {
     const [loadingTheses, setLoadingTheses] = React.useState(true);
     const [thesisError, setThesisError] = React.useState<string | null>(null);
     const [leaderProfiles, setLeaderProfiles] = React.useState<Record<string, UserProfile>>({});
-    const [groupFilter, setGroupFilter] = React.useState<string>(GROUP_FILTER_ALL);
-    const [defenseStageFilter, setDefenseStageFilter] = React.useState<DefenseStageFilter>('all');
+    const [departmentFilter, setDepartmentFilter] = React.useState<string>(GROUP_FILTER_ALL);
+    const [departments, setDepartments] = React.useState<string[]>([]);
+    const [stageFilter, setStageFilter] = React.useState<'all' | ThesisStageName>('all');
+    const [groupMap, setGroupMap] = React.useState<Record<string, any>>({});
     const [upcomingEvents, setUpcomingEvents] = React.useState<ScheduleEvent[]>([]);
     const [eventsLoading, setEventsLoading] = React.useState(false);
     const [groupNotifications, setGroupNotifications] = React.useState<GroupNotificationDoc[]>([]);
@@ -119,13 +123,13 @@ function DashboardPage(): React.ReactElement {
 
     React.useEffect(() => {
         setLoadingTheses(true);
-        const unsubscribe = listenTheses(undefined, {
-            onData: (records) => {
+        const unsubscribe = listenTheses({
+            onData: (records: ThesisRecord[]) => {
                 setTheses(records);
                 setLoadingTheses(false);
                 setThesisError(null);
             },
-            onError: (error) => {
+            onError: (error: Error) => {
                 console.error('Failed to load theses for dashboard:', error);
                 setThesisError('Unable to load thesis data right now. Please try again later.');
                 setLoadingTheses(false);
@@ -158,12 +162,7 @@ function DashboardPage(): React.ReactElement {
         );
     }, [theses, userRole, userUid]);
 
-    const availableGroups = React.useMemo(() => {
-        const titles = theses
-            .map((record) => record.title)
-            .filter((title): title is string => Boolean(title));
-        return Array.from(new Set(titles)).sort((a, b) => a.localeCompare(b));
-    }, [theses]);
+    // NOTE: department and stage filters are used instead of per-group filtering
 
     React.useEffect(() => {
         if (userRole !== 'adviser' && userRole !== 'editor') {
@@ -183,7 +182,7 @@ function DashboardPage(): React.ReactElement {
         let cancelled = false;
         void (async () => {
             try {
-                const profiles = await getUsersByIds(Array.from(new Set(leaderIds)));
+                const profiles = await findUsersByIds(Array.from(new Set(leaderIds)));
                 if (cancelled) {
                     return;
                 }
@@ -203,6 +202,67 @@ function DashboardPage(): React.ReactElement {
             cancelled = true;
         };
     }, [managedTheses, userRole]);
+
+    React.useEffect(() => {
+        // Load department list for the filter; combine profile-managed with known group departments
+        let cancelled = false;
+        const load = async () => {
+            const managed = profile?.departments?.filter(Boolean) ?? (profile?.department ? [profile.department] : []);
+            try {
+                const groupDepartments = await getGroupDepartments().catch(() => []);
+                if (cancelled) return;
+                const merged = Array.from(
+                    new Set([...(managed ?? []), ...(groupDepartments ?? [])])).sort((a, b) => a.localeCompare(b));
+                setDepartments(merged);
+                if (merged.length && !merged.includes(departmentFilter)) {
+                    setDepartmentFilter(merged[0]);
+                }
+                if (!merged.length) {
+                    setDepartmentFilter(GROUP_FILTER_ALL);
+                }
+            } catch (error) {
+                console.error('Failed to load departments for dashboard:', error);
+                setDepartments([]);
+                setDepartmentFilter(GROUP_FILTER_ALL);
+            }
+        };
+        void load();
+        return () => { cancelled = true; };
+    }, [profile, departmentFilter]);
+
+    React.useEffect(() => {
+        // hydrate group map for theses so we can resolve department from groupId
+        const groupIds = Array.from(new Set(theses.map((t) => t.groupId).filter((id): id is string => Boolean(id))));
+        if (groupIds.length === 0) {
+            setGroupMap({});
+            return;
+        }
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const entries = await Promise.all(groupIds.map(async (gid) => {
+                    try {
+                        const group = await findGroupById(gid);
+                        return [gid, group] as const;
+                    } catch (err) {
+                        return [gid, null] as const;
+                    }
+                }));
+                if (cancelled) return;
+                const map: Record<string, ThesisGroup | null> = {};
+                entries.forEach(([gid, group]) => {
+                    if (group && gid) {
+                        map[gid] = group;
+                    }
+                });
+                setGroupMap(map);
+            } catch (error) {
+                console.error('Failed to hydrate group map for dashboard:', error);
+            }
+        };
+        void load();
+        return () => { cancelled = true; };
+    }, [theses]);
 
     const relevantThesisIds = React.useMemo(() => {
         if (userRole === 'student' && userThesis?.id) {
@@ -300,12 +360,13 @@ function DashboardPage(): React.ReactElement {
 
     const filteredTheses = React.useMemo(() => {
         return theses.filter((record) => {
-            const matchesGroup = groupFilter === GROUP_FILTER_ALL || record.title === groupFilter;
-            const stage = deriveDefenseStage(record.overallStatus);
-            const matchesStage = defenseStageFilter === 'all' || defenseStageFilter === stage;
-            return matchesGroup && matchesStage;
+            const group = record.groupId ? groupMap[record.groupId] : undefined;
+            const recordDepartment = group?.department ?? '';
+            const matchesDepartment = departmentFilter === GROUP_FILTER_ALL || departmentFilter === '' || recordDepartment === departmentFilter;
+            const matchesStage = stageFilter === 'all' || (record.chapters ?? []).some((chapter) => chapterHasStage(chapter, stageFilter as ThesisStageName));
+            return matchesDepartment && matchesStage;
         });
-    }, [defenseStageFilter, groupFilter, theses]);
+    }, [departmentFilter, stageFilter, theses, groupMap]);
 
     const defenseStageBuckets = React.useMemo<DashboardStageBucket[]>(() => ([
         { key: 'pre-title', label: 'Pre-Title Defense', color: primaryColor },
@@ -407,7 +468,8 @@ function DashboardPage(): React.ReactElement {
     }, [profile?.name?.first, session?.user?.name]);
 
     const roleDisplay = profile?.role ?? userRole ?? 'Contributor';
-    const departmentDisplay = profile?.department ?? profile?.course ?? '';
+    const departmentDisplay = profile?.department ?? '';
+    const courseDisplay = profile?.course ?? '';
 
     if (loadingTheses) {
         return (
@@ -439,6 +501,9 @@ function DashboardPage(): React.ReactElement {
                         {departmentDisplay && (
                             <Chip label={departmentDisplay} variant="outlined" size="small" />
                         )}
+                        {courseDisplay && (
+                            <Chip label={courseDisplay} variant="outlined" size="small" color="secondary" />
+                        )}
                     </Stack>
                 </Box>
 
@@ -467,7 +532,7 @@ function DashboardPage(): React.ReactElement {
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                 <Chip label={userThesis.overallStatus} color="primary" size="small" />
                                 <Typography variant="body2" color="text.secondary">
-                                    Last updated: {formatDateTime(userThesis.lastUpdated)}
+                                    Last updated: {formatDateTime(typeof userThesis.lastUpdated === 'string' ? userThesis.lastUpdated : userThesis.lastUpdated?.toISOString())}
                                 </Typography>
                             </Stack>
                             <Grid container spacing={1.5}>
@@ -592,33 +657,31 @@ function DashboardPage(): React.ReactElement {
                                     </Typography>
                                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                                         <FormControl size="small" sx={{ minWidth: 220, flex: 1 }}>
-                                            <InputLabel>Group</InputLabel>
+                                            <InputLabel>Department</InputLabel>
                                             <Select
-                                                value={groupFilter}
-                                                label="Group"
-                                                onChange={(event) => setGroupFilter(event.target.value)}
+                                                value={departmentFilter}
+                                                label="Department"
+                                                onChange={(event) => setDepartmentFilter(event.target.value)}
                                             >
-                                                <MenuItem value={GROUP_FILTER_ALL}>All Groups</MenuItem>
-                                                {availableGroups.map((title) => (
-                                                    <MenuItem key={title} value={title}>
-                                                        {title}
+                                                <MenuItem value={GROUP_FILTER_ALL}>All Departments</MenuItem>
+                                                {departments.map((dept) => (
+                                                    <MenuItem key={dept} value={dept}>
+                                                        {dept}
                                                     </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
                                         <FormControl size="small" sx={{ minWidth: 220, flex: 1 }}>
-                                            <InputLabel>Defense Stage</InputLabel>
+                                            <InputLabel>Stage</InputLabel>
                                             <Select
-                                                value={defenseStageFilter}
-                                                label="Defense Stage"
-                                                onChange={(event) => setDefenseStageFilter(event.target.value as DefenseStageFilter)}
+                                                value={stageFilter}
+                                                label="Stage"
+                                                onChange={(event) => setStageFilter(event.target.value)}
                                             >
                                                 <MenuItem value="all">All Stages</MenuItem>
-                                                <MenuItem value="pre-title">Pre-Title Defense</MenuItem>
-                                                <MenuItem value="pre-thesis">Pre-Thesis Defense</MenuItem>
-                                                <MenuItem value="final-defense">Final Defense</MenuItem>
-                                                <MenuItem value="publication">Publication / Archive</MenuItem>
-                                                <MenuItem value="in-progress">In Progress</MenuItem>
+                                                {THESIS_STAGE_METADATA.map((meta) => (
+                                                    <MenuItem key={meta.value} value={meta.value}>{meta.label}</MenuItem>
+                                                ))}
                                             </Select>
                                         </FormControl>
                                     </Stack>

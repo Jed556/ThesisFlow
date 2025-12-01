@@ -70,7 +70,7 @@ export default function GroupCard({ group, usersByUid, onClick, footer, actions 
                         </Stack>
 
                         <Typography variant="body2" color="text.secondary" noWrap>
-                            {group.thesisTitle || 'No thesis title yet'}
+                            {group.thesis?.title || 'No thesis title yet'}
                         </Typography>
 
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>

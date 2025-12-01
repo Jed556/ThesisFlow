@@ -2,7 +2,7 @@
  * CSV import/export for Thesis Data
  */
 
-import type { ThesisChapter } from '../../types/thesis';
+import type { ChapterSubmissionEntry, ThesisChapter } from '../../types/thesis';
 import { parseCsvText, normalizeHeader, mapHeaderIndexes, splitArrayField, generateCsvText } from './parser';
 
 /**
@@ -54,15 +54,27 @@ export function importThesesFromCsv(csvText: string): { parsed: ThesisCsvRow[]; 
                 if (Array.isArray(parsedJson)) {
                     chapters = parsedJson.map((entry, i) => {
                         const chapter = (typeof entry === 'object' && entry !== null ? entry : {}) as Partial<ThesisChapter>;
+                        // Parse submissions as ChapterSubmissionEntry[]
+                        const submissions: ChapterSubmissionEntry[] = Array.isArray(chapter.submissions)
+                            ? chapter.submissions.map(item => {
+                                if (typeof item === 'string') {
+                                    return { id: item, status: 'under_review' } satisfies ChapterSubmissionEntry;
+                                }
+                                return {
+                                    id: String((item as ChapterSubmissionEntry).id ?? `sub-${Date.now()}`),
+                                    status: (item as ChapterSubmissionEntry).status ?? 'under_review',
+                                    decidedAt: (item as ChapterSubmissionEntry).decidedAt,
+                                    decidedBy: (item as ChapterSubmissionEntry).decidedBy,
+                                } satisfies ChapterSubmissionEntry;
+                            })
+                            : [];
                         return {
                             id: typeof chapter.id === 'number' ? chapter.id : i + 1,
                             title: typeof chapter.title === 'string' ? chapter.title : `Chapter ${i + 1}`,
                             status: typeof chapter.status === 'string' ? chapter.status : 'not_submitted',
                             submissionDate: typeof chapter.submissionDate === 'string' ? chapter.submissionDate : null,
                             lastModified: typeof chapter.lastModified === 'string' ? chapter.lastModified : null,
-                            submissions: Array.isArray(chapter.submissions)
-                                ? chapter.submissions.map(item => String(item))
-                                : [],
+                            submissions,
                             comments: Array.isArray(chapter.comments)
                                 ? (chapter.comments as ThesisChapter['comments'])
                                 : [],

@@ -25,12 +25,12 @@ export interface UserName {
 }
 
 /**
- * Skill rating metadata for mentor expertise
+ * Skill rating metadata for expert expertise
  */
 export interface SkillRating {
     /** Display name of the skill */
     name: string;
-    /** Mentor self- or system-assessed rating using a 0-5 scale */
+    /** Expert self- or system-assessed rating using a 0-5 scale */
     rating: number;
     /** Optional count of endorsements backing the rating */
     endorsements?: number;
@@ -105,7 +105,13 @@ export interface UserProfile {
      * Capacity for handled theses (only for advisers, editors and statisticians)
      * If 0 or undefined, not accepting advisees
      */
-    capacity?: number;
+    slots?: number;
+
+    /**
+     * Maximum allowed expert slots (only for advisers, editors and statisticians)
+     * Default is 5 if undefined. Can be increased via admin approval.
+     */
+    maxSlots?: number;
 
     preferences?: {
         /**

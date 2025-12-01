@@ -236,8 +236,8 @@ export default function CalendarPage() {
             // Load all users for calendar sharing (admin/developer only)
             if (session.user.role === 'admin' || session.user.role === 'developer') {
                 try {
-                    const { getAllUsers } = await import('../utils/firebase/firestore');
-                    const users: UserProfile[] = await getAllUsers();
+                    const { findAllUsers } = await import('../utils/firebase/firestore');
+                    const users: UserProfile[] = await findAllUsers();
                     setAllUsers(users);
                 } catch (error) {
                     console.error('Failed to load users:', error);

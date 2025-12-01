@@ -1,4 +1,4 @@
-import type { ThesisStage } from './thesis';
+import type { ThesisStageName } from './thesis';
 
 /**
  * Chapter template definition for a course
@@ -11,7 +11,7 @@ export interface ChapterTemplate {
     /** Chapter description or requirements */
     description?: string;
     /** Thesis stage(s) when the chapter is expected */
-    stage?: ThesisStage | ThesisStage[];
+    stage?: ThesisStageName | ThesisStageName[];
 }
 
 /**
@@ -20,6 +20,8 @@ export interface ChapterTemplate {
 export interface ThesisChapterConfig {
     /** Firestore document ID (usually in format: {department}_{course}) */
     id: string;
+    /** Academic year segment */
+    year: string;
     /** Department name */
     department: string;
     /** Course name */
@@ -40,6 +42,7 @@ export interface ChapterConfigFormData {
     department: string;
     course: string;
     chapters: ChapterTemplate[];
+    year?: string;
 }
 
 /**

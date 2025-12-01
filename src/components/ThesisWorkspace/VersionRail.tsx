@@ -3,7 +3,7 @@ import { Alert, Card, CardContent, Skeleton, Stack, Typography } from '@mui/mate
 import { FileCard } from '../File';
 import type { VersionOption } from '../../types/workspace';
 import type { ConversationParticipant } from '../Conversation';
-import { buildFileSizeLabel, buildSubmissionMeta } from './ChapterRail';
+import { buildFileSizeLabel, buildSubmissionMeta, buildSubmissionStatusChip } from './ChapterRail';
 
 interface VersionRailProps {
     versions: VersionOption[];
@@ -58,14 +58,17 @@ export const VersionRail: React.FC<VersionRailProps> = ({
         <Stack spacing={1}>
             {versions.map((version) => {
                 const isActive = version.versionIndex === selectedVersionIndex;
+                const { label: statusChipLabel, color: statusChipColor } = buildSubmissionStatusChip(version.status);
                 return (
                     <FileCard
                         key={version.id}
                         file={version.file}
                         title={version.label}
                         sizeLabel={buildFileSizeLabel(version.file)}
-                        metaLabel={buildSubmissionMeta(version.file, participants, version.status)}
+                        metaLabel={buildSubmissionMeta(version.file, participants)}
                         versionLabel={`v${version.versionIndex + 1}`}
+                        statusChipLabel={statusChipLabel}
+                        statusChipColor={statusChipColor}
                         selected={isActive}
                         onClick={() => onSelect(version.versionIndex)}
                         showDeleteButton={false}

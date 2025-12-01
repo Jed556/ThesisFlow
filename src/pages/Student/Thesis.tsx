@@ -13,11 +13,13 @@ import type { Session } from '../../types/session';
 import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
+import type { TopicProposalSetRecord } from '../../utils/firebase/firestore/topicProposals';
 import { AnimatedList, AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
-import { getThesisTeamMembers, isTopicApproved } from '../../utils/thesisUtils';
+import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
+import { listenTopicProposalSetsByGroup } from '../../utils/firebase/firestore/topicProposals';
 import { normalizeDateInput } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router';
 import type { WorkflowStep } from '../../types/workflow';
@@ -36,7 +38,7 @@ export const metadata: NavigationItem = {
 
 type ThesisRecord = ThesisData & { id: string };
 
-type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembers>> extends (infer Member)[]
+type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembersById>> extends (infer Member)[]
     ? Member
     : never;
 
@@ -52,11 +54,50 @@ function getStatusColor(status: ThesisChapter['status']): 'success' | 'warning' 
     return 'default';
 }
 
+/**
+ * Check if any proposal entry has been approved by the head
+ */
+function hasApprovedProposal(proposalSets: TopicProposalSetRecord[]): boolean {
+    return proposalSets.some((set) =>
+        set.entries.some((entry) => entry.status === 'head_approved')
+    );
+}
+
+/**
+ * Get the title of the first approved proposal entry
+ */
+function getApprovedProposalTitle(proposalSets: TopicProposalSetRecord[]): string | undefined {
+    for (const set of proposalSets) {
+        const approvedEntry = set.entries.find((entry) => entry.status === 'head_approved');
+        if (approvedEntry) {
+            return approvedEntry.title;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Check if any proposal has been submitted for review
+ */
+function hasSubmittedProposals(proposalSets: TopicProposalSetRecord[]): boolean {
+    return proposalSets.some((set) =>
+        set.entries.some((entry) =>
+            entry.status && entry.status !== 'draft'
+        )
+    );
+}
+
 function buildThesisWorkflowSteps(
     record: ThesisRecord | null,
     members: TeamMember[],
-    group: ThesisGroup | null
+    group: ThesisGroup | null,
+    proposalSets: TopicProposalSetRecord[] = []
 ): WorkflowStep[] {
+    // Check proposal approval status from proposal sets
+    const proposalApproved = hasApprovedProposal(proposalSets);
+    const approvedTitle = getApprovedProposalTitle(proposalSets);
+    const proposalsSubmitted = hasSubmittedProposals(proposalSets);
+
     if (!record) {
         // Determine group state for better messaging
         const groupStatus = group?.status;
@@ -94,9 +135,6 @@ function buildThesisWorkflowSteps(
                 : 'Create your research group to unlock editor selection.';
         const editorState: WorkflowStep['state'] = editorAssigned ? 'completed' : 'available';
 
-        const adviserDescription = adviserAssigned
-            ? 'Research adviser assigned.'
-            : 'Adviser selection unlocks after your topic proposal is approved.';
         const adviserState: WorkflowStep['state'] = adviserAssigned ? 'completed' : 'available';
 
         const baseSteps: WorkflowStep[] = [
@@ -126,9 +164,15 @@ function buildThesisWorkflowSteps(
             {
                 id: 'submit-proposals',
                 title: 'Submit Topic Proposals',
-                description: 'Upload up to 3 thesis title proposals for review and approval.',
-                completedMessage: 'Your topic proposal has been approved.',
-                state: 'available',
+                description: proposalApproved
+                    ? `Topic approved: "${approvedTitle}"`
+                    : proposalsSubmitted
+                        ? 'Proposals submitted. Awaiting approval.'
+                        : 'Upload up to 3 thesis title proposals for review and approval.',
+                completedMessage: proposalApproved
+                    ? `Your topic proposal "${approvedTitle}" has been approved.`
+                    : 'Your topic proposal has been approved.',
+                state: resolveStepState({ completed: proposalApproved, started: proposalsSubmitted }),
                 actionLabel: 'View Proposals',
                 actionPath: '/topic-proposals',
                 icon: <TopicIcon />,
@@ -140,7 +184,11 @@ function buildThesisWorkflowSteps(
             {
                 id: 'request-adviser',
                 title: 'Select Research Adviser',
-                description: adviserDescription,
+                description: adviserAssigned
+                    ? 'Research adviser assigned.'
+                    : proposalApproved
+                        ? 'Choose your research adviser now that your topic is approved.'
+                        : 'Adviser selection unlocks after your topic proposal is approved.',
                 completedMessage: 'Research adviser has been assigned to your group.',
                 state: adviserState,
                 actionLabel: adviserAssigned ? undefined : 'Browse Advisers',
@@ -183,7 +231,7 @@ function buildThesisWorkflowSteps(
 
     const chapters = record.chapters ?? [];
     const totalMembers = members.length;
-    const hasGroup = Boolean(record.groupId) || totalMembers > 0 || Boolean(group);
+    const hasGroup = totalMembers > 0 || Boolean(group);
 
     // Determine group approval state with detailed status
     const groupStatus = group?.status;
@@ -193,10 +241,12 @@ function buildThesisWorkflowSteps(
     const isRejected = groupStatus === 'rejected';
     const groupApproved = isActive || (totalMembers > 1 && groupStatus !== 'draft');
 
-    const adviserAssigned = Boolean(record.adviser ?? group?.members?.adviser);
-    const editorAssigned = Boolean(record.editor ?? group?.members?.editor);
-    const hasTopicProposals = Boolean(record.title);
-    const topicApproved = isTopicApproved(record);
+    const adviserAssigned = Boolean(group?.members?.adviser);
+    const editorAssigned = Boolean(group?.members?.editor);
+    const hasTopicProposals = Boolean(record.title) || proposalsSubmitted;
+    // Topic is approved if proposal is head_approved OR thesis record indicates approval
+    const topicApproved = proposalApproved || isTopicApproved(record);
+    const displayTitle = approvedTitle || record.title;
     const chaptersSubmitted = chapters.some((chapter) => chapter.status !== 'not_submitted');
     const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
     const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
@@ -251,11 +301,11 @@ function buildThesisWorkflowSteps(
             id: 'submit-proposals',
             title: 'Submit Topic Proposals',
             description: topicApproved
-                ? `Topic approved: "${record.title}"`
+                ? `Topic approved: "${displayTitle}"`
                 : hasTopicProposals
                     ? 'Proposals submitted. Awaiting approval.'
                     : 'Upload up to 3 thesis title proposals for review and approval.',
-            completedMessage: `Your topic proposal "${record.title}" has been approved.`,
+            completedMessage: `Your topic proposal "${displayTitle}" has been approved.`,
             state: resolveStepState({ completed: topicApproved, started: hasTopicProposals || topicApproved }),
             actionLabel: 'View Proposals',
             actionPath: '/topic-proposals',
@@ -320,7 +370,7 @@ function buildThesisWorkflowSteps(
     return applyPrerequisiteLocks(baseSteps);
 }
 
-function formatDateLabel(value?: string | null): string {
+function formatDateLabel(value?: string | Date | null): string {
     const date = normalizeDateInput(value ?? undefined);
     return date ? date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
 }
@@ -351,6 +401,7 @@ export default function ThesisPage() {
     const [userTheses, setUserTheses] = React.useState<ThesisRecord[]>([]);
     const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>([]);
     const [group, setGroup] = React.useState<ThesisGroup | null>(null);
+    const [proposalSets, setProposalSets] = React.useState<TopicProposalSetRecord[]>([]);
     const [progress, setProgress] = React.useState<number>(0);
     const [loading, setLoading] = React.useState<boolean>(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -405,7 +456,8 @@ export default function ThesisPage() {
             return;
         }
 
-        const candidate = userTheses.find((record) => record.leader === userUid) ?? userTheses[0];
+        // Select thesis - prefer one where user is the group leader
+        const candidate = userTheses[0];
         setThesis(candidate);
         setProgress(computeThesisProgressPercent(candidate));
         setHasNoThesis(false);
@@ -421,7 +473,7 @@ export default function ThesisPage() {
 
         const loadTeam = async () => {
             try {
-                const members = await getThesisTeamMembers(thesis.id);
+                const members = await getThesisTeamMembersById(thesis.id);
                 if (!cancelled) {
                     setTeamMembers(members);
                 }
@@ -489,10 +541,32 @@ export default function ThesisPage() {
         };
     }, [userUid]);
 
+    // Load proposal sets when group is available
+    React.useEffect(() => {
+        if (!group?.id) {
+            setProposalSets([]);
+            return;
+        }
+
+        const unsubscribe = listenTopicProposalSetsByGroup(group.id, {
+            onData: (records) => {
+                setProposalSets(records);
+            },
+            onError: (err) => {
+                console.error('Failed to load proposal sets:', err);
+                setProposalSets([]);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [group?.id]);
+
     // Compute workflow steps before any conditional returns (hooks must be called unconditionally)
     const workflowSteps = React.useMemo(
-        () => buildThesisWorkflowSteps(thesis, teamMembers, group),
-        [thesis, teamMembers, group]
+        () => buildThesisWorkflowSteps(thesis, teamMembers, group, proposalSets),
+        [thesis, teamMembers, group, proposalSets]
     );
     const activeStepIndex = React.useMemo(() => getActiveStepIndex(workflowSteps), [workflowSteps]);
 
@@ -708,7 +782,7 @@ export default function ThesisPage() {
                             <strong>Last Updated:</strong> {formattedLastUpdated}
                         </Typography>
                         <Typography variant="body1">
-                            <strong>Status:</strong> {thesis.overallStatus ?? 'In Progress'}
+                            <strong>Status:</strong> {group?.status === 'completed' ? 'Completed' : 'In Progress'}
                         </Typography>
                     </Box>
                 </Box>

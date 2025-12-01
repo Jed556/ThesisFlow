@@ -5,7 +5,7 @@ import {
 import { CloudUpload as CloudUploadIcon, Download as DownloadIcon } from '@mui/icons-material';
 import type { FileAttachment } from '../../types/file';
 import type {
-    TerminalRequirementDefinition,
+    TerminalRequirement,
     TerminalRequirementStatus,
 } from '../../types/terminalRequirement';
 import { FileCard } from '../File';
@@ -16,7 +16,7 @@ const STATUS_META: Record<TerminalRequirementStatus, { label: string; color: 'de
 };
 
 export interface TerminalRequirementCardProps {
-    requirement: TerminalRequirementDefinition;
+    requirement: TerminalRequirement;
     files?: FileAttachment[];
     status: TerminalRequirementStatus;
     loading?: boolean;
@@ -133,18 +133,18 @@ export function TerminalRequirementCard({
                     </>
                 )}
 
-                {requirement.templateFileUrl && (
+                {requirement.templateFile?.url && (
                     <Button
                         variant="text"
                         startIcon={<DownloadIcon />}
                         component="a"
-                        href={requirement.templateFileUrl}
+                        href={requirement.templateFile.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         sx={{ alignSelf: 'flex-start' }}
                     >
-                        {requirement.templateFileName
-                            ? `Download ${requirement.templateFileName}`
+                        {requirement.templateFile?.name
+                            ? `Download ${requirement.templateFile.name}`
                             : 'Download template'}
                     </Button>
                 )}

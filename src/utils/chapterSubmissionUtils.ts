@@ -1,7 +1,7 @@
 import type {
     ChapterSubmissionEntry,
     ChapterSubmissionStatus,
-    MentorRole,
+    ExpertRole,
     ThesisChapter,
 } from '../types/thesis';
 
@@ -23,10 +23,25 @@ export const normalizeSubmissionEntry = (
         } satisfies ChapterSubmissionEntry;
     }
 
+    // Map ThesisStatus to ChapterSubmissionStatus
+    const normalizeStatus = (status?: string): ChapterSubmissionStatus => {
+        switch (status) {
+            case 'approved':
+                return 'approved';
+            case 'rejected':
+                return 'rejected';
+            case 'revision':
+            case 'revision_required':
+                return 'revision_required';
+            default:
+                return DEFAULT_STATUS;
+        }
+    };
+
     return {
         id: submission.id,
-        status: submission.status ?? DEFAULT_STATUS,
-        decidedAt: submission.decidedAt ?? null,
+        status: normalizeStatus(submission.status),
+        decidedAt: submission.decidedAt ?? undefined,
         decidedBy: submission.decidedBy,
     } satisfies ChapterSubmissionEntry;
 };
@@ -47,7 +62,7 @@ export const setSubmissionStatusAt = (
     submissions: ThesisChapter['submissions'],
     index: number,
     status: ChapterSubmissionStatus,
-    meta?: { decidedAt?: string; decidedBy?: MentorRole | 'system' },
+    meta?: { decidedAt?: string; decidedBy?: ExpertRole | 'system' },
 ): ChapterSubmissionEntry[] => {
     const normalized = normalizeChapterSubmissions(submissions);
     if (!Number.isInteger(index) || index < 0 || index >= normalized.length) {
