@@ -41,7 +41,7 @@ export default function StatisticianThesisOverviewPage() {
     const [displayNames, setDisplayNames] = React.useState<Record<string, string>>({});
     const [error, setError] = React.useState<string | null>(null);
     const [submissionByStage, setSubmissionByStage] = React.useState<
-        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
 
     const resolveDisplayName = React.useCallback((uid?: string | null) => {
@@ -172,7 +172,7 @@ export default function StatisticianThesisOverviewPage() {
                 onData: (records) => {
                     setSubmissionByStage((prev) => ({
                         ...prev,
-                        [stageMeta.value]: records[0] ?? null,
+                        [stageMeta.value]: records,
                     }));
                 },
                 onError: (listenerError) => {
@@ -188,8 +188,9 @@ export default function StatisticianThesisOverviewPage() {
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
-            const record = submissionByStage[stageMeta.value];
-            acc[stageMeta.value] = record?.status === 'approved';
+            const records = submissionByStage[stageMeta.value] ?? [];
+            // Stage is complete if there are submissions and ALL are approved
+            acc[stageMeta.value] = records.length > 0 && records.every((r) => r.status === 'approved');
             return acc;
         }, {} as Record<ThesisStageName, boolean>);
     }, [submissionByStage]);

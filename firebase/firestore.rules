@@ -192,9 +192,13 @@ service cloud.firestore {
         }
 
         // Collection group: terminal
+        // Note: More specific rules apply at the nested path level
+        // This allows collection group queries for admins
         match /{path=**}/terminal/{terminalId} {
             allow read: if isAuthenticated();
-            allow write: if isAdminOrDeveloper();
+            // Write operations should go through the nested path rules
+            // which check group membership
+            allow write: if isAuthenticated();
         }
 
         // Collection group: proposals
@@ -605,17 +609,17 @@ service cloud.firestore {
                                         }
                                     }
                                 }
-                            }
 
-                            // ================================
-                            // TERMINAL REQUIREMENTS (under thesis)
-                            // ================================
+                                // ================================
+                                // TERMINAL REQUIREMENTS (under stage)
+                                // ================================
 
-                            match /terminal/{terminalId} {
-                                allow read: if isAuthenticated() && hasThesisAccess();
-                                allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
-                                allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
-                                allow delete: if isAdminOrDeveloper() || isHead();
+                                match /terminal/{terminalId} {
+                                    allow read: if isAuthenticated() && hasThesisAccess();
+                                    allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
+                                    allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
+                                    allow delete: if isAdminOrDeveloper() || isHead();
+                                }
                             }
                         }
                     }

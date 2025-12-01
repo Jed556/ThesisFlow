@@ -1128,6 +1128,7 @@ export function findAndListenTerminalRequirements(
     );
 }
 
+
 /**
  * Payload for recording a decision using thesis ID (context-free).
  */
@@ -1141,12 +1142,13 @@ export interface FindAndRecordDecisionPayload {
 }
 
 /**
- * Find and record a decision on a terminal requirement by thesis ID.
+ * Find and record a decision on ALL terminal requirements for a stage by thesis ID.
  * Searches via collectionGroup when you don't have the full context path.
+ * Processes ALL matching requirements in the stage to ensure consistent state.
  *
  * @param payload Decision payload with thesisId
- * @returns Updated submission record
- * @throws Error if submission not found
+ * @returns Array of updated submission records
+ * @throws Error if no submissions found
  */
 export async function findAndRecordTerminalRequirementDecision(
     payload: FindAndRecordDecisionPayload
@@ -1156,6 +1158,9 @@ export async function findAndRecordTerminalRequirementDecision(
     const terminalQuery = collectionGroup(firebaseFirestore, TERMINAL_SUBCOLLECTION);
     const stageKey = normalizeStageKey(stage);
     const snapshot = await getDocs(terminalQuery);
+
+    // Collect all matching documents for this thesis and stage
+    const matchingDocs: { docSnap: typeof snapshot.docs[0]; ctx: TerminalContext }[] = [];
 
     for (const docSnap of snapshot.docs) {
         const pathParts = docSnap.ref.path.split('/');
@@ -1176,8 +1181,19 @@ export async function findAndRecordTerminalRequirementDecision(
                 thesisId: thesisId,
                 stage: stage,
             };
+            matchingDocs.push({ docSnap, ctx });
+        }
+    }
 
-            return recordTerminalRequirementDecision({
+    if (matchingDocs.length === 0) {
+        throw new Error('Terminal requirement submission not found.');
+    }
+
+    // Process ALL matching requirements
+    const results: TerminalRequirementSubmissionRecord[] = [];
+    for (const { docSnap, ctx } of matchingDocs) {
+        try {
+            const result = await recordTerminalRequirementDecision({
                 ctx,
                 requirementId: docSnap.id,
                 role,
@@ -1185,8 +1201,17 @@ export async function findAndRecordTerminalRequirementDecision(
                 action,
                 note,
             });
+            results.push(result);
+        } catch (error) {
+            // Log but continue processing other requirements
+            console.error(`Failed to record decision for requirement ${docSnap.id}:`, error);
         }
     }
 
-    throw new Error('Terminal requirement submission not found.');
+    if (results.length === 0) {
+        throw new Error('Failed to record decision on any terminal requirement.');
+    }
+
+    // Return the first result for backward compatibility
+    return results[0];
 }

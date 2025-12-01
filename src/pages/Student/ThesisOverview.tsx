@@ -18,8 +18,6 @@ import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thes
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
-import type { PanelCommentReleaseMap } from '../../types/panelComment';
-import { listenPanelCommentRelease, type PanelCommentContext } from '../../utils/firebase/firestore/panelComments';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { DEFAULT_YEAR } from '../../config/firestore';
 
@@ -54,20 +52,8 @@ export default function StudentThesisOverviewPage() {
     const [error, setError] = React.useState<string | null>(null);
     const [participants, setParticipants] = React.useState<Record<string, ConversationParticipant>>();
     const [terminalSubmissions, setTerminalSubmissions] = React.useState<
-        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
-    const [panelRelease, setPanelRelease] = React.useState<PanelCommentReleaseMap | null>(null);
-
-    /** Build panel comment context from group */
-    const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
-        if (!group) return null;
-        return {
-            year: DEFAULT_YEAR,
-            department: group.department ?? '',
-            course: group.course ?? '',
-            groupId: group.id,
-        };
-    }, [group]);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -102,7 +88,6 @@ export default function StudentThesisOverviewPage() {
         if (!thesis?.id) {
             setParticipants(undefined);
             setTerminalSubmissions({});
-            setPanelRelease(null);
             return;
         }
 
@@ -111,7 +96,7 @@ export default function StudentThesisOverviewPage() {
                 onData: (records) => {
                     setTerminalSubmissions((prev) => ({
                         ...prev,
-                        [stageMeta.value]: records[0] ?? null,
+                        [stageMeta.value]: records,
                     }));
                 },
                 onError: (listenerError) => {
@@ -209,28 +194,11 @@ export default function StudentThesisOverviewPage() {
         };
     }, [userUid]);
 
-    React.useEffect(() => {
-        if (!panelCommentCtx) {
-            setPanelRelease(null);
-            return;
-        }
-
-        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
-            onData: (release) => setPanelRelease(release),
-            onError: (listenerError) => {
-                console.error('Failed to listen for panel comment release states:', listenerError);
-            },
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [panelCommentCtx]);
-
     const terminalRequirementCompletionMap = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
-            const submission = terminalSubmissions[stageMeta.value];
-            acc[stageMeta.value] = submission?.status === 'approved';
+            const submissions = terminalSubmissions[stageMeta.value] ?? [];
+            // Stage is complete if there are submissions and ALL are approved
+            acc[stageMeta.value] = submissions.length > 0 && submissions.every((s) => s.status === 'approved');
             return acc;
         }, {} as Record<ThesisStageName, boolean>);
     }, [terminalSubmissions]);
@@ -286,12 +254,10 @@ export default function StudentThesisOverviewPage() {
         });
     }, [userUid, group]);
 
-    const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({
-        chapters: {
-            'Post-Proposal': panelRelease?.proposal?.sent ?? false,
-            'Post-Defense': panelRelease?.defense?.sent ?? false,
-        },
-    }), [panelRelease?.proposal?.sent, panelRelease?.defense?.sent]);
+    // Stage gate overrides - currently no additional gates beyond terminal requirement sequence
+    // The simple flow is: chapters → terminal → next stage chapters → next stage terminal
+    // Panel comment releases are NOT required to unlock subsequent stages
+    const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({}), []);
 
     return (
         <AnimatedPage variant="slideUp">

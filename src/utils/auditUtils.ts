@@ -38,7 +38,7 @@ export type { AuditEntry, AuditEntryFormData, AuditQueryOptions, AuditListenerOp
  */
 export function buildAuditContextFromGroup(group: ThesisGroup): AuditContext {
     return {
-        year: getAcademicYear(),
+        year: group.year || getAcademicYear(),
         department: group.department || 'general',
         course: group.course || 'common',
         groupId: group.id,

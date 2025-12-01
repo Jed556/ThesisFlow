@@ -63,7 +63,7 @@ export default function TerminalRequirementsPage() {
     const [configLoading, setConfigLoading] = React.useState(false);
     const [configError, setConfigError] = React.useState<string | null>(null);
     const [submissionByStage, setSubmissionByStage] = React.useState<
-        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
     const [submitLoading, setSubmitLoading] = React.useState(false);
 
@@ -201,7 +201,7 @@ export default function TerminalRequirementsPage() {
                 onData: (records) => {
                     setSubmissionByStage((prev) => ({
                         ...prev,
-                        [stageValue]: records[0] ?? null,
+                        [stageValue]: records,
                     }));
                 },
                 onError: (listenerError) => {
@@ -309,8 +309,9 @@ export default function TerminalRequirementsPage() {
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
-            const submission = submissionByStage[stageMeta.value];
-            acc[stageMeta.value] = submission?.status === 'approved';
+            const submissions = submissionByStage[stageMeta.value] ?? [];
+            // Stage is complete if there are submissions and ALL are approved
+            acc[stageMeta.value] = submissions.length > 0 && submissions.every((s) => s.status === 'approved');
             return acc;
         }, {} as Record<ThesisStageName, boolean>);
     }, [submissionByStage]);
@@ -467,8 +468,12 @@ export default function TerminalRequirementsPage() {
         return 'Complete the required chapters to unlock this checklist.';
     }, [activeStage, stageTitle]);
 
-    const activeSubmission = submissionByStage[activeStage] ?? null;
-    const stageLockedByWorkflow = Boolean(activeSubmission?.locked);
+    // Get all submissions for the active stage and derive aggregate status
+    const activeSubmissions = submissionByStage[activeStage] ?? [];
+    // Use the first submission for display purposes, but consider all for workflow logic
+    const activeSubmission = activeSubmissions[0] ?? null;
+    // Stage is locked by workflow if ANY submission is locked
+    const stageLockedByWorkflow = activeSubmissions.some((s) => s.locked);
     const allowFileActions = !activeStageLocked && !stageLockedByWorkflow;
     const readyForSubmission = stageRequirements.length > 0
         && stageRequirements.every((requirement) => (requirementFiles[requirement.id]?.length ?? 0) > 0);

@@ -90,7 +90,7 @@ export function TerminalRequirementApprovalWorkspace({
         Record<string, TerminalRequirementConfigEntry>
     >({});
     const [submissionByStage, setSubmissionByStage] = React.useState<
-        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord | null>>
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
     const [activeStage, setActiveStage] = React.useState<ThesisStageName | null>(null);
     const [filesByRequirement, setFilesByRequirement] = React.useState<
@@ -280,11 +280,9 @@ export function TerminalRequirementApprovalWorkspace({
             const stageValue = stageMeta.value;
             return findAndListenTerminalRequirements(selectedThesisId, stageValue, {
                 onData: (records: TerminalRequirementSubmissionRecord[]) => {
-                    // Take the first record if any exist, otherwise null
-                    const record = records.length > 0 ? records[0] : null;
                     setSubmissionByStage((prev) => ({
                         ...prev,
-                        [stageValue]: record,
+                        [stageValue]: records,
                     }));
                 },
                 onError: (listenerError: Error) => {
@@ -334,7 +332,10 @@ export function TerminalRequirementApprovalWorkspace({
     }, [groupMeta?.year, groupMeta?.department, groupMeta?.course]);
 
     const availableStages = React.useMemo(() => {
-        return THESIS_STAGE_METADATA.filter((stageMeta) => submissionByStage[stageMeta.value]);
+        return THESIS_STAGE_METADATA.filter((stageMeta) => {
+            const submissions = submissionByStage[stageMeta.value];
+            return submissions && submissions.length > 0;
+        });
     }, [submissionByStage]);
 
     React.useEffect(() => {
@@ -342,22 +343,35 @@ export function TerminalRequirementApprovalWorkspace({
             setActiveStage(null);
             return;
         }
-        if (!activeStage || !submissionByStage[activeStage]) {
+        const currentStageSubmissions = activeStage ? submissionByStage[activeStage] : undefined;
+        if (!activeStage || !currentStageSubmissions || currentStageSubmissions.length === 0) {
             setActiveStage(availableStages[0].value);
         }
     }, [availableStages, activeStage, submissionByStage]);
 
     const resolvedStage = activeStage ?? availableStages[0]?.value ?? null;
-    const activeSubmission = resolvedStage ? (submissionByStage[resolvedStage] ?? null) : null;
+    // Get all submissions for the resolved stage
+    const activeSubmissions = resolvedStage ? (submissionByStage[resolvedStage] ?? []) : [];
+    // Use the first submission for display purposes (they should have similar workflow state)
+    const activeSubmission = activeSubmissions.length > 0 ? activeSubmissions[0] : null;
+    // Collect all requirement IDs from all submissions in the stage
+    const allRequirementIds = React.useMemo(() => {
+        const ids = new Set<string>();
+        activeSubmissions.forEach((submission) => {
+            submission.requirementIds.forEach((id) => ids.add(id));
+        });
+        return Array.from(ids);
+    }, [activeSubmissions]);
+
     const stageRequirements: TerminalRequirement[] = React.useMemo(() => {
-        if (!resolvedStage || !activeSubmission) {
+        if (!resolvedStage || allRequirementIds.length === 0) {
             return [];
         }
         // Filter requirements by stage and map to TerminalRequirement format
         return Object.values(requirementConfig)
             .filter((entry) =>
                 entry.stage === resolvedStage &&
-                activeSubmission.requirementIds.includes(entry.requirementId),
+                allRequirementIds.includes(entry.requirementId),
             )
             .map((entry): TerminalRequirement => ({
                 id: entry.requirementId,
@@ -365,7 +379,7 @@ export function TerminalRequirementApprovalWorkspace({
                 title: entry.title ?? entry.requirementId,
                 description: entry.description ?? '',
             }));
-    }, [resolvedStage, activeSubmission, requirementConfig]);
+    }, [resolvedStage, allRequirementIds, requirementConfig]);
 
     React.useEffect(() => {
         setFilesByRequirement({});
@@ -403,23 +417,25 @@ export function TerminalRequirementApprovalWorkspace({
     ]);
 
     React.useEffect(() => {
-        if (!activeSubmission || !resolvedStage) {
+        if (allRequirementIds.length === 0 || !resolvedStage) {
             return;
         }
-        activeSubmission.requirementIds.forEach((requirementId) => {
+        allRequirementIds.forEach((requirementId) => {
             if (!filesByRequirement[requirementId]) {
                 void loadRequirementFiles(requirementId);
             }
         });
-    }, [activeSubmission, filesByRequirement, loadRequirementFiles, resolvedStage]);
+    }, [allRequirementIds, filesByRequirement, loadRequirementFiles, resolvedStage]);
 
-    const canDecide = Boolean(
-        userUid
-        && activeSubmission
-        && activeSubmission.locked
-        && activeSubmission.status === 'in_review'
-        && activeSubmission.currentRole === role,
-    );
+    // Can decide if ANY submission in this stage is awaiting this role's decision
+    const canDecide = React.useMemo(() => {
+        if (!userUid) return false;
+        return activeSubmissions.some((submission) =>
+            submission.locked &&
+            submission.status === 'in_review' &&
+            submission.currentRole === role
+        );
+    }, [userUid, activeSubmissions, role]);
 
     const awaitingLabel = activeSubmission?.currentRole
         ? TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.currentRole]

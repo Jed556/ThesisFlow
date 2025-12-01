@@ -313,7 +313,8 @@ export function AuditView({
             const ctx = buildAuditContext(
                 selectedGroup.id,
                 selectedGroup.department || 'general',
-                selectedGroup.course || 'common'
+                selectedGroup.course || 'common',
+                selectedGroup.year
             );
 
             const queryOptions: AuditQueryOptions = {
@@ -358,7 +359,8 @@ export function AuditView({
                 const ctx = buildAuditContext(
                     selectedGroup.id,
                     selectedGroup.department || 'general',
-                    selectedGroup.course || 'common'
+                    selectedGroup.course || 'common',
+                    selectedGroup.year
                 );
 
                 const queryOptions: AuditQueryOptions = {
