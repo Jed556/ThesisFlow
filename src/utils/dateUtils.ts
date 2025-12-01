@@ -393,30 +393,6 @@ export function useTick(conservative: boolean = false, ticksPerSecond: number = 
 }
 
 /**
- * Sorts an array of items by date property
- * @param items - Array of items with date properties
- * @param dateKey - The key name for the date property
- * @param order - Sort order ('asc' for oldest first, 'desc' for newest first)
- * @returns Sorted array
- */
-export function sortByDate<T extends Record<string, unknown>>(
-    items: T[],
-    dateKey: keyof T,
-    order: 'asc' | 'desc' = 'asc'
-): T[] {
-    return [...items].sort((a, b) => {
-        const dateA = parseThesisDate(a[dateKey] as string);
-        const dateB = parseThesisDate(b[dateKey] as string);
-
-        if (order === 'asc') {
-            return dateA.getTime() - dateB.getTime();
-        } else {
-            return dateB.getTime() - dateA.getTime();
-        }
-    });
-}
-
-/**
  * Checks if a date string is valid in ThesisFlow format
  * @param dateString - The date string to validate
  * @returns True if valid, false otherwise
