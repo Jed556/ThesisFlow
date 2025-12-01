@@ -51,15 +51,46 @@ export type ThesisAgendas = ThesisAgenda[];
 export type ThesisStageName = 'Pre-Proposal' | 'Post-Proposal' | 'Pre-Defense' | 'Post-Defense';
 
 /**
- *  
+ * Environmental, Social, and Governance (ESG) categories
  */
 export type ESG = 'Environment' | 'Social' | 'Governance';
 
+/**
+ * Array of all ESG values for selection
+ */
+export const ESG_VALUES: ESG[] = ['Environment', 'Social', 'Governance'];
+
+/**
+ * Sustainable Development Goals (SDG)
+ */
 export type SDG = 'No Poverty' | 'Zero Hunger' | 'Good Health and Well-being' | 'Quality Education' | 'Gender Equality' |
     'Clean Water and Sanitation' | 'Affordable and Clean Energy' | 'Decent Work and Economic Growth' |
     'Industry, Innovation and Infrastructure' | 'Reduced Inequalities' | 'Sustainable Cities and Communities' |
     'Responsible Consumption and Production' | 'Climate Action' | 'Life Below Water' | 'Life on Land' |
     'Peace, Justice and Strong Institutions' | 'Partnerships for the Goals';
+
+/**
+ * Array of all SDG values for selection
+ */
+export const SDG_VALUES: SDG[] = [
+    'No Poverty',
+    'Zero Hunger',
+    'Good Health and Well-being',
+    'Quality Education',
+    'Gender Equality',
+    'Clean Water and Sanitation',
+    'Affordable and Clean Energy',
+    'Decent Work and Economic Growth',
+    'Industry, Innovation and Infrastructure',
+    'Reduced Inequalities',
+    'Sustainable Cities and Communities',
+    'Responsible Consumption and Production',
+    'Climate Action',
+    'Life Below Water',
+    'Life on Land',
+    'Peace, Justice and Strong Institutions',
+    'Partnerships for the Goals',
+];
 
 /**
  * Chapter submission status for review workflow
@@ -138,6 +169,12 @@ export interface ThesisData {
     lastUpdated: Date | string;
     stages: ThesisStage[];
     chapters?: ThesisChapter[];
+    /** Research agenda classification */
+    agenda?: ThesisAgenda;
+    /** ESG category */
+    ESG?: ESG;
+    /** Sustainable Development Goal */
+    SDG?: SDG;
 }
 
 /**

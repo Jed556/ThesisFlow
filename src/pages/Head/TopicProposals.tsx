@@ -11,7 +11,8 @@ import type { ThesisGroup } from '../../types/group';
 import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
-import { TopicProposalEntryCard } from '../../components/TopicProposals';
+import { HeadApprovalDialog, TopicProposalEntryCard } from '../../components/TopicProposals';
+import type { HeadApprovalFormValues } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordHeadDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
@@ -26,10 +27,14 @@ export const metadata: NavigationItem = {
     roles: ['head'],
 };
 
-interface DecisionDialogState {
+interface ApprovalDialogState {
     setId: string;
     proposal: TopicProposalEntry;
-    decision: 'approved' | 'rejected';
+}
+
+interface RejectionDialogState {
+    setId: string;
+    proposal: TopicProposalEntry;
 }
 
 function describeHeadRestriction(status: TopicProposalEntry['status']): { label: string; tooltip: string } {
@@ -66,8 +71,10 @@ export default function HeadTopicProposalsPage() {
     const [groupsError, setGroupsError] = React.useState<string | null>(null);
     const [groupProposalSets, setGroupProposalSets] = React.useState<Map<string, TopicProposalSetRecord | null>>(new Map());
 
-    const [decisionDialog, setDecisionDialog] = React.useState<DecisionDialogState | null>(null);
-    const [decisionNotes, setDecisionNotes] = React.useState('');
+    // Separate state for approval and rejection dialogs
+    const [approvalDialog, setApprovalDialog] = React.useState<ApprovalDialogState | null>(null);
+    const [rejectionDialog, setRejectionDialog] = React.useState<RejectionDialogState | null>(null);
+    const [rejectionNotes, setRejectionNotes] = React.useState('');
     const [decisionLoading, setDecisionLoading] = React.useState(false);
 
     React.useEffect(() => {
@@ -211,31 +218,61 @@ export default function HeadTopicProposalsPage() {
         return [...assignedGroups].sort((a, b) => a.name.localeCompare(b.name));
     }, [assignedGroups]);
 
-    const handleOpenDecision = (setId: string, proposal: TopicProposalEntry, decision: 'approved' | 'rejected') => {
-        setDecisionDialog({ setId, proposal, decision });
-        setDecisionNotes('');
+    const handleOpenApproval = (setId: string, proposal: TopicProposalEntry) => {
+        setApprovalDialog({ setId, proposal });
     };
 
-    const handleConfirmDecision = async () => {
-        if (!decisionDialog || !headUid) {
+    const handleOpenRejection = (setId: string, proposal: TopicProposalEntry) => {
+        setRejectionDialog({ setId, proposal });
+        setRejectionNotes('');
+    };
+
+    const handleConfirmApproval = async (values: HeadApprovalFormValues) => {
+        if (!approvalDialog || !headUid) {
             return;
         }
         setDecisionLoading(true);
         try {
             await recordHeadDecision({
-                setId: decisionDialog.setId,
-                proposalId: decisionDialog.proposal.id,
+                setId: approvalDialog.setId,
+                proposalId: approvalDialog.proposal.id,
                 reviewerUid: headUid,
-                decision: decisionDialog.decision,
-                notes: decisionNotes.trim() || undefined,
+                decision: 'approved',
+                notes: values.notes.trim() || undefined,
+                agenda: values.agenda.mainTheme && values.agenda.subTheme ? values.agenda : undefined,
+                ESG: values.ESG || undefined,
+                SDG: values.SDG || undefined,
             });
-            showNotification('Final decision recorded', 'success');
+            showNotification('Topic approved successfully', 'success');
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to record decision';
+            const message = error instanceof Error ? error.message : 'Failed to approve topic';
             showNotification(message, 'error');
         } finally {
             setDecisionLoading(false);
-            setDecisionDialog(null);
+            setApprovalDialog(null);
+        }
+    };
+
+    const handleConfirmRejection = async () => {
+        if (!rejectionDialog || !headUid) {
+            return;
+        }
+        setDecisionLoading(true);
+        try {
+            await recordHeadDecision({
+                setId: rejectionDialog.setId,
+                proposalId: rejectionDialog.proposal.id,
+                reviewerUid: headUid,
+                decision: 'rejected',
+                notes: rejectionNotes.trim() || undefined,
+            });
+            showNotification('Topic rejected', 'success');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to reject topic';
+            showNotification(message, 'error');
+        } finally {
+            setDecisionLoading(false);
+            setRejectionDialog(null);
         }
     };
 
@@ -355,7 +392,7 @@ export default function HeadTopicProposalsPage() {
                                                         variant="contained"
                                                         color="success"
                                                         size="small"
-                                                        onClick={() => handleOpenDecision(record.id, entry, 'approved')}
+                                                        onClick={() => handleOpenApproval(record.id, entry)}
                                                     >
                                                         Approve
                                                     </Button>,
@@ -364,7 +401,7 @@ export default function HeadTopicProposalsPage() {
                                                         variant="outlined"
                                                         color="error"
                                                         size="small"
-                                                        onClick={() => handleOpenDecision(record.id, entry, 'rejected')}
+                                                        onClick={() => handleOpenRejection(record.id, entry)}
                                                     >
                                                         Reject
                                                     </Button>,
@@ -398,32 +435,43 @@ export default function HeadTopicProposalsPage() {
                 })}
             </Stack>
 
-            <Dialog open={Boolean(decisionDialog)} onClose={() => setDecisionDialog(null)} fullWidth maxWidth="sm">
-                <DialogTitle>
-                    {decisionDialog?.decision === 'approved' ? 'Approve topic proposal' : 'Reject topic proposal'}
-                </DialogTitle>
+            {/* Head Approval Dialog with agenda, ESG, SDG selection */}
+            <HeadApprovalDialog
+                open={Boolean(approvalDialog)}
+                proposal={approvalDialog?.proposal ?? null}
+                loading={decisionLoading}
+                onClose={() => setApprovalDialog(null)}
+                onConfirm={handleConfirmApproval}
+            />
+
+            {/* Simple Rejection Dialog */}
+            <Dialog open={Boolean(rejectionDialog)} onClose={() => setRejectionDialog(null)} fullWidth maxWidth="sm">
+                <DialogTitle>Reject Topic Proposal</DialogTitle>
                 <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Provide feedback to help the group improve their proposal.
+                    </Typography>
                     <TextField
-                        label="Optional notes"
+                        label="Rejection Notes"
                         fullWidth
                         multiline
                         minRows={3}
-                        value={decisionNotes}
-                        onChange={(event) => setDecisionNotes(event.target.value)}
-                        placeholder="Share feedback with the student group"
+                        value={rejectionNotes}
+                        onChange={(event) => setRejectionNotes(event.target.value)}
+                        placeholder="Explain why this topic is being rejected"
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDecisionDialog(null)} color="inherit" disabled={decisionLoading}>
+                    <Button onClick={() => setRejectionDialog(null)} color="inherit" disabled={decisionLoading}>
                         Cancel
                     </Button>
                     <Button
-                        onClick={handleConfirmDecision}
+                        onClick={handleConfirmRejection}
                         variant="contained"
-                        color={decisionDialog?.decision === 'approved' ? 'success' : 'error'}
+                        color="error"
                         disabled={decisionLoading}
                     >
-                        Confirm
+                        Reject Topic
                     </Button>
                 </DialogActions>
             </Dialog>

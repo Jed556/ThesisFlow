@@ -1,11 +1,13 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, LinearProgress, Paper, Skeleton, Stack,
-    Step, StepContent, StepLabel, Stepper, Typography
+    Alert, Box, Button, Chip, Divider, LinearProgress, List, ListItem,
+    ListItemIcon, ListItemText, Paper, Skeleton, Stack, Step, StepContent, StepLabel,
+    Stepper, Typography
 } from '@mui/material';
 import {
     School as SchoolIcon, Groups as GroupsIcon, PersonAdd as PersonAddIcon,
-    Topic as TopicIcon, Article as ArticleIcon, Upload as UploadIcon
+    Topic as TopicIcon, Article as ArticleIcon, Upload as UploadIcon,
+    Event as EventIcon, Notifications as NotificationsIcon
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
@@ -14,12 +16,16 @@ import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import type { TopicProposalSetRecord } from '../../utils/firebase/firestore/topicProposals';
-import { AnimatedList, AnimatedPage } from '../../components/Animate';
+import type { ScheduleEvent } from '../../types/schedule';
+import type { GroupNotificationDoc } from '../../types/notification';
+import { AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
 import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { listenTopicProposalSetsByGroup } from '../../utils/firebase/firestore/topicProposals';
+import { listenEventsByThesisIds } from '../../utils/firebase/firestore/events';
+import { listenGroupNotifications, ensureGroupNotificationDocument } from '../../utils/firebase/firestore/groupNotifications';
 import { normalizeDateInput } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router';
 import type { WorkflowStep } from '../../types/workflow';
@@ -37,6 +43,8 @@ export const metadata: NavigationItem = {
 };
 
 type ThesisRecord = ThesisData & { id: string };
+
+type EventRecord = ScheduleEvent & { id: string };
 
 type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembersById>> extends (infer Member)[]
     ? Member
@@ -408,6 +416,12 @@ export default function ThesisPage() {
     const [hasNoThesis, setHasNoThesis] = React.useState<boolean>(false);
     const [expandedSteps, setExpandedSteps] = React.useState<Set<string>>(new Set());
 
+    // Upcoming events and recent updates state
+    const [upcomingEvents, setUpcomingEvents] = React.useState<EventRecord[]>([]);
+    const [groupNotifications, setGroupNotifications] = React.useState<GroupNotificationDoc[]>([]);
+    const [eventsLoading, setEventsLoading] = React.useState<boolean>(false);
+    const [notificationsLoading, setNotificationsLoading] = React.useState<boolean>(false);
+
     React.useEffect(() => {
         if (!userUid) {
             setThesis(null);
@@ -555,6 +569,65 @@ export default function ThesisPage() {
             onError: (err) => {
                 console.error('Failed to load proposal sets:', err);
                 setProposalSets([]);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [group?.id]);
+
+    // Load upcoming events when thesis is available
+    React.useEffect(() => {
+        if (!thesis?.id) {
+            setUpcomingEvents([]);
+            return;
+        }
+
+        setEventsLoading(true);
+        const unsubscribe = listenEventsByThesisIds([thesis.id], {
+            onData: (events) => {
+                // Filter to only show upcoming events (starting from now)
+                const now = new Date();
+                const upcoming = events.filter((event) => {
+                    const eventStart = new Date(event.startDate);
+                    return eventStart >= now;
+                }).slice(0, 5); // Show max 5 upcoming events
+                setUpcomingEvents(upcoming);
+                setEventsLoading(false);
+            },
+            onError: (err) => {
+                console.error('Failed to load events:', err);
+                setUpcomingEvents([]);
+                setEventsLoading(false);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesis?.id]);
+
+    // Load group notifications when group is available
+    React.useEffect(() => {
+        if (!group?.id) {
+            setGroupNotifications([]);
+            return;
+        }
+
+        // Ensure notification document exists
+        void ensureGroupNotificationDocument(group.id);
+
+        setNotificationsLoading(true);
+        const unsubscribe = listenGroupNotifications([group.id], {
+            onData: (notifications) => {
+                setGroupNotifications(notifications);
+                setNotificationsLoading(false);
+            },
+            onError: (err) => {
+                console.error('Failed to load notifications:', err);
+                setGroupNotifications([]);
+                setNotificationsLoading(false);
             },
         });
 
@@ -876,6 +949,131 @@ export default function ThesisPage() {
                     })}
                 </Stepper>
             </Paper>
+
+            {/* Upcoming Events and Recent Updates */}
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
+                {/* Upcoming Events */}
+                <Paper sx={{ p: 3, flex: 1 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                        <EventIcon color="primary" />
+                        <Typography variant="h6">Upcoming Events</Typography>
+                    </Stack>
+                    {eventsLoading ? (
+                        <Stack spacing={1}>
+                            {Array.from({ length: 3 }).map((_, idx) => (
+                                <Skeleton key={idx} variant="rectangular" height={48} />
+                            ))}
+                        </Stack>
+                    ) : upcomingEvents.length > 0 ? (
+                        <List disablePadding>
+                            {upcomingEvents.map((event, index) => (
+                                <React.Fragment key={event.id}>
+                                    {index > 0 && <Divider />}
+                                    <ListItem disableGutters sx={{ py: 1 }}>
+                                        <ListItemIcon sx={{ minWidth: 40 }}>
+                                            <EventIcon fontSize="small" color="action" />
+                                        </ListItemIcon>
+                                        <ListItemText
+                                            primary={event.title}
+                                            secondary={new Date(event.startDate).toLocaleDateString(undefined, {
+                                                weekday: 'short',
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                            slotProps={{
+                                                primary: { variant: 'body2', fontWeight: 500 },
+                                                secondary: { variant: 'caption' },
+                                            }}
+                                        />
+                                        {event.status && (
+                                            <Chip
+                                                label={event.status}
+                                                size="small"
+                                                color={event.status === 'confirmed' ? 'success' : 'default'}
+                                                variant="outlined"
+                                            />
+                                        )}
+                                    </ListItem>
+                                </React.Fragment>
+                            ))}
+                        </List>
+                    ) : (
+                        <Typography variant="body2" color="text.secondary">
+                            No upcoming events scheduled.
+                        </Typography>
+                    )}
+                </Paper>
+
+                {/* Recent Updates */}
+                <Paper sx={{ p: 3, flex: 1 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                        <NotificationsIcon color="primary" />
+                        <Typography variant="h6">Recent Updates</Typography>
+                    </Stack>
+                    {notificationsLoading ? (
+                        <Stack spacing={1}>
+                            {Array.from({ length: 3 }).map((_, idx) => (
+                                <Skeleton key={idx} variant="rectangular" height={48} />
+                            ))}
+                        </Stack>
+                    ) : groupNotifications.length > 0 &&
+                        groupNotifications.some((doc) => doc.notifications.length > 0) ? (
+                        <List disablePadding>
+                            {groupNotifications
+                                .flatMap((doc) => doc.notifications)
+                                .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+                                .slice(0, 5)
+                                .map((notification, index) => (
+                                    <React.Fragment key={notification.id}>
+                                        {index > 0 && <Divider />}
+                                        <ListItem disableGutters sx={{ py: 1 }}>
+                                            <ListItemIcon sx={{ minWidth: 40 }}>
+                                                <NotificationsIcon fontSize="small" color="action" />
+                                            </ListItemIcon>
+                                            <ListItemText
+                                                primary={notification.title}
+                                                secondary={notification.message}
+                                                slotProps={{
+                                                    primary: { variant: 'body2', fontWeight: 500 },
+                                                    secondary: {
+                                                        variant: 'caption',
+                                                        sx: {
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                        },
+                                                    },
+                                                }}
+                                            />
+                                            <Chip
+                                                label={notification.category}
+                                                size="small"
+                                                color={
+                                                    notification.category === 'milestone'
+                                                        ? 'success'
+                                                        : notification.category === 'deadline'
+                                                            ? 'warning'
+                                                            : notification.category === 'feedback'
+                                                                ? 'info'
+                                                                : 'default'
+                                                }
+                                                variant="outlined"
+                                            />
+                                        </ListItem>
+                                    </React.Fragment>
+                                ))}
+                        </List>
+                    ) : (
+                        <Typography variant="body2" color="text.secondary">
+                            No recent updates.
+                        </Typography>
+                    )}
+                </Paper>
+            </Stack>
         </AnimatedPage>
     );
 }
