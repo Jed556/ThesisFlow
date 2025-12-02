@@ -81,16 +81,6 @@
                     "order": "DESCENDING"
                 }
             ]
-        },
-        {
-            "collectionGroup": "groups",
-            "queryScope": "COLLECTION_GROUP",
-            "fields": [
-                {
-                    "fieldPath": "createdAt",
-                    "order": "DESCENDING"
-                }
-            ]
         }
     ],
     "fieldOverrides": [
@@ -239,6 +229,20 @@
         {
             "collectionGroup": "groups",
             "fieldPath": "status",
+            "indexes": [
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                },
+                {
+                    "order": "DESCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "groups",
+            "fieldPath": "createdAt",
             "indexes": [
                 {
                     "order": "ASCENDING",
