@@ -66,7 +66,7 @@ async function loadAgendas(): Promise<AgendasData> {
         }
     }
     // Import default data
-    const defaultData = await import('../../../../mock/agendas.json');
+    const defaultData = await import('../../../config/agendas.json');
     return defaultData.default as AgendasData;
 }
 
@@ -413,7 +413,7 @@ export default function AgendasManagementPage() {
     const handleResetToDefault = async () => {
         try {
             localStorage.removeItem(STORAGE_KEY);
-            const defaultData = await import('../../../../mock/agendas.json');
+            const defaultData = await import('../../../config/agendas.json');
             setAgendas(defaultData.default as AgendasData);
             showNotification('Agendas reset to default', 'success');
         } catch (error) {

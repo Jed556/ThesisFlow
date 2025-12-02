@@ -1,0 +1,236 @@
+{
+  "institutionalResearchAgenda": {
+    "title": "Institutional Research Agenda",
+    "themes": [
+      {
+        "id": "A",
+        "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
+        "subThemes": [
+          "Education in changing and transforming landscapes",
+          "Education and quality assurance",
+          "Education amid Industry 4.0 and internationalization Inclusive education",
+          "Gender and development in relation to educational issues",
+          "Educational theories in the contexts of teaching and learning practices"
+        ]
+      },
+      {
+        "id": "B",
+        "title": "CORE VALUES & DOMINICAN CHARISM",
+        "subThemes": [
+          "Culture and heritage",
+          "Dominican philosophy",
+          "Folk and popular religiosity",
+          "Spiritual development",
+          "Institutional identity",
+          "Inclusive nation-building"
+        ]
+      },
+      {
+        "id": "C",
+        "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUES",
+        "subThemes": [
+          "Environmental management",
+          "Community impact",
+          "Local responsiveness",
+          "Socio-economic development",
+          "Corporate social responsibility",
+          "Family and migration",
+          "Diversity in the workplace",
+          "Sustainable communities",
+          "Countryside development",
+          "Responsive health systems / nutrition security",
+          "Holistic approaches to health and wellness",
+          "Health resiliency",
+          "Innovation in healthcare",
+          "Global competitiveness in healthcare"
+        ]
+      },
+      {
+        "id": "D",
+        "title": "BUSINESS MANAGEMENT AND QUALITY MANAGEMENT",
+        "subThemes": [
+          "Entrepreneurship and business management",
+          "Leadership and governance",
+          "Policy research and informed decision making",
+          "Human Resource Development",
+          "Social enterprise",
+          "Community/Local-based enterprise management",
+          "Tourism and hospitality management",
+          "Quality management system",
+          "Knowledge management",
+          "Internal evaluation of certifications and accreditations"
+        ]
+      },
+      {
+        "id": "E",
+        "title": "INNOVATIVE & EMERGING TECHNOLOGIES",
+        "subThemes": [
+          "Engineering technologies across various sectors [Health; Agriculture, Aquatic and Natural Resources (AANR); and Disaster Risk Reduction and Climate Change Adaptation (DRR CCA)]",
+          "Alternative and renewable energy",
+          "Intelligent transportation solutions",
+          "Data Science",
+          "Robotics and automation",
+          "Gaming and mobile technology",
+          "Virtual and augmented reality",
+          "Cloud computing, blockchain, cryptocurrency, and cybersecurity",
+          "Software development and artificial intelligence",
+          "Technical nuances of Industry 4.0"
+        ]
+      }
+    ]
+  },
+  "schoolResearchAgendas": [
+    {
+      "department": "School of Business, Management, and Accountancy",
+      "themes": [
+        {
+          "id": "A",
+          "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUE",
+          "subThemes": [
+            "Corporate social responsibility",
+            "Diversity in the workplace"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "BUSINESS MANAGEMENT AND QUALITY MANAGEMENT",
+          "subThemes": [
+            "Entrepreneurship and business management",
+            "Leadership and governance",
+            "Human Resource Development",
+            "Social enterprise"
+          ]
+        }
+      ]
+    },
+    {
+      "department": "School of Computer Studies and Technology",
+      "themes": [
+        {
+          "id": "A",
+          "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
+          "subThemes": [
+            "Education in changing and transforming landscapes"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "INNOVATIVE & EMERGING TECHNOLOGIES",
+          "subThemes": [
+            "Data Science",
+            "Gaming and mobile technology",
+            "Virtual and augmented reality",
+            "Cloud computing, blockchain, cryptocurrency, and cybersecurity",
+            "Software development and artificial intelligence",
+            "Technical nuances of Industry 4.0"
+          ]
+        }
+      ]
+    },
+    {
+      "department": "School of Education, Arts, and Sciences",
+      "themes": [
+        {
+          "id": "A",
+          "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
+          "subThemes": [
+            "Education in changing and transforming landscapes",
+            "Inclusive education",
+            "Gender and development in relation to educational issues"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "CORE VALUES & DOMINICAN CHARISM",
+          "subThemes": [
+            "Culture and heritage",
+            "Institutional identity"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "COMMUNITY DEVELOPMENT AND HEALTH ISSUES",
+          "subThemes": [
+            "Environmental management",
+            "Community impact",
+            "Local responsiveness",
+            "Socio-economic development",
+            "Family and migration",
+            "Diversity in the workplace"
+          ]
+        }
+      ]
+    },
+    {
+      "department": "School of Engineering and Architecture",
+      "themes": [
+        {
+          "id": "A",
+          "title": "INNOVATIVE & EMERGING TECHNOLOGIES",
+          "subThemes": [
+            "Data Science",
+            "Gaming and mobile technology",
+            "Virtual and augmented reality",
+            "Cloud computing, blockchain, cryptocurrency, and cybersecurity",
+            "Software development and artificial intelligence",
+            "Technical nuances of Industry 4.0"
+          ]
+        }
+      ]
+    },
+    {
+      "department": "School of Nursing",
+      "themes": [
+        {
+          "id": "A",
+          "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
+          "subThemes": [
+            "Gender and development in relation to educational issues"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUES",
+          "subThemes": [
+            "Environmental management",
+            "Responsive health systems / nutrition security",
+            "Holistic approaches to health and wellness",
+            "Health resiliency",
+            "Innovation in healthcare",
+            "Global competitiveness in healthcare"
+          ]
+        }
+      ]
+    },
+    {
+      "department": "School of Tourism and Hospitality Management",
+      "themes": [
+        {
+          "id": "A",
+          "title": "CORE VALUES & DOMINICAN CHARISM",
+          "subThemes": [
+            "Culture and heritage"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUES",
+          "subThemes": [
+            "Environmental management",
+            "Socio-economic development",
+            "Sustainable communities"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "BUSINESS MANAGEMENT AND QUALITY MANAGEMENT",
+          "subThemes": [
+            "Entrepreneurship and business management",
+            "Tourism and hospitality management",
+            "Quality management system"
+          ]
+        }
+      ]
+    }
+  ]
+}
