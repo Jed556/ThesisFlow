@@ -1,233 +1,643 @@
 {
-  "institutionalResearchAgenda": {
+  "institutionalAgenda": {
     "title": "Institutional Research Agenda",
-    "themes": [
+    "agenda": [
       {
-        "id": "A",
-        "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
-        "subThemes": [
-          "Education in changing and transforming landscapes",
-          "Education and quality assurance",
-          "Education amid Industry 4.0 and internationalization Inclusive education",
-          "Gender and development in relation to educational issues",
-          "Educational theories in the contexts of teaching and learning practices"
+        "title": "ORGANIZATIONAL EFFECTIVENESS & EFFICIENCY",
+        "subAgenda": [
+          {
+            "title": "Admission & Retention",
+            "subAgenda": []
+          },
+          {
+            "title": "Quality Management System",
+            "subAgenda": []
+          },
+          {
+            "title": "Quality Assurance",
+            "subAgenda": []
+          },
+          {
+            "title": "Linkages & Internalization",
+            "subAgenda": []
+          },
+          {
+            "title": "Employee's Welfare",
+            "subAgenda": []
+          },
+          {
+            "title": "Benchmarking & Data Analysis",
+            "subAgenda": []
+          },
+          {
+            "title": "Financial Sustainability",
+            "subAgenda": []
+          },
+          {
+            "title": "Strategic Directions",
+            "subAgenda": []
+          }
         ]
       },
       {
-        "id": "B",
-        "title": "CORE VALUES & DOMINICAN CHARISM",
-        "subThemes": [
-          "Culture and heritage",
-          "Dominican philosophy",
-          "Folk and popular religiosity",
-          "Spiritual development",
-          "Institutional identity",
-          "Inclusive nation-building"
+        "title": "MULTIDIMENSIONAL STUDENT DEVELOPMENT",
+        "subAgenda": [
+          {
+            "title": "Student Engagement & Campus Life",
+            "subAgenda": []
+          },
+          {
+            "title": "Diversity, Equity, and Inclusion",
+            "subAgenda": []
+          },
+          {
+            "title": "Mental Health and well-being",
+            "subAgenda": []
+          },
+          {
+            "title": "Career Readiness & Professional Development",
+            "subAgenda": []
+          },
+          {
+            "title": "Assessment & Improvement of Student Services Program",
+            "subAgenda": []
+          },
+          {
+            "title": "Campus Safety & Student Conduct",
+            "subAgenda": []
+          },
+          {
+            "title": "Institutional Financial Aid Strategies",
+            "subAgenda": []
+          }
         ]
       },
       {
-        "id": "C",
-        "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUES",
-        "subThemes": [
-          "Environmental management",
-          "Community impact",
-          "Local responsiveness",
-          "Socio-economic development",
-          "Corporate social responsibility",
-          "Family and migration",
-          "Diversity in the workplace",
-          "Sustainable communities",
-          "Countryside development",
-          "Responsive health systems / nutrition security",
-          "Holistic approaches to health and wellness",
-          "Health resiliency",
-          "Innovation in healthcare",
-          "Global competitiveness in healthcare"
-        ]
-      },
-      {
-        "id": "D",
-        "title": "BUSINESS MANAGEMENT AND QUALITY MANAGEMENT",
-        "subThemes": [
-          "Entrepreneurship and business management",
-          "Leadership and governance",
-          "Policy research and informed decision making",
-          "Human Resource Development",
-          "Social enterprise",
-          "Community/Local-based enterprise management",
-          "Tourism and hospitality management",
-          "Quality management system",
-          "Knowledge management",
-          "Internal evaluation of certifications and accreditations"
-        ]
-      },
-      {
-        "id": "E",
-        "title": "INNOVATIVE & EMERGING TECHNOLOGIES",
-        "subThemes": [
-          "Engineering technologies across various sectors [Health; Agriculture, Aquatic and Natural Resources (AANR); and Disaster Risk Reduction and Climate Change Adaptation (DRR CCA)]",
-          "Alternative and renewable energy",
-          "Intelligent transportation solutions",
-          "Data Science",
-          "Robotics and automation",
-          "Gaming and mobile technology",
-          "Virtual and augmented reality",
-          "Cloud computing, blockchain, cryptocurrency, and cybersecurity",
-          "Software development and artificial intelligence",
-          "Technical nuances of Industry 4.0"
+        "title": "COMMUNITY DEVELOPMENT",
+        "subAgenda": [
+          {
+            "title": "Peace and Inclusivity",
+            "subAgenda": []
+          },
+          {
+            "title": "Heritage and Cultural Resilience",
+            "subAgenda": []
+          },
+          {
+            "title": "Service Learning and Capability Building",
+            "subAgenda": []
+          }
         ]
       }
     ]
   },
-  "schoolResearchAgendas": [
+  "departmentalAgendas": [
     {
       "department": "School of Business, Management, and Accountancy",
-      "themes": [
+      "agenda": [
         {
-          "id": "A",
-          "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUE",
-          "subThemes": [
-            "Corporate social responsibility",
-            "Diversity in the workplace"
-          ]
-        },
-        {
-          "id": "B",
-          "title": "BUSINESS MANAGEMENT AND QUALITY MANAGEMENT",
-          "subThemes": [
-            "Entrepreneurship and business management",
-            "Leadership and governance",
-            "Human Resource Development",
-            "Social enterprise"
+          "title": "BUSINESS STRATEGY AND PERFORMANCE",
+          "subAgenda": [
+            {
+              "title": "Socio-preneurship and Innovation",
+              "subAgenda": []
+            },
+            {
+              "title": "Financial Management and Accounting System",
+              "subAgenda": []
+            },
+            {
+              "title": "Green Accounting",
+              "subAgenda": []
+            },
+            {
+              "title": "Marketing and Consumer Behavior",
+              "subAgenda": [
+                {
+                  "title": "Data Analytics",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Consumer Behavior and Trends",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Loyalty Programs and Rewards",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Operations Management and Supply Chain",
+              "subAgenda": [
+                {
+                  "title": "Responsible Consumption and Production",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Human Resource Analytics",
+              "subAgenda": []
+            }
           ]
         }
       ]
     },
     {
       "department": "School of Computer Studies and Technology",
-      "themes": [
+      "agenda": [
         {
-          "id": "A",
-          "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
-          "subThemes": [
-            "Education in changing and transforming landscapes"
+          "title": "DIGITAL TRANSFORMATION AND INNOVATION",
+          "subAgenda": [
+            {
+              "title": "Artificial Intelligence and Data Science",
+              "subAgenda": [
+                {
+                  "title": "Artificial Intelligence",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Machine Learning",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Data Visualization",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Data Mining",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Data Analytics",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Big Data",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Immersive Technologies",
+              "subAgenda": [
+                {
+                  "title": "Virtual Reality",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Augmented Reality",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Software Development",
+              "subAgenda": [
+                {
+                  "title": "Software development",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Mobile Application development",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Web Application development",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Cybersecurity and Cloud Computing",
+              "subAgenda": [
+                {
+                  "title": "Internet Security",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Virtualization and Networking",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Web Service and Performance",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Gamification in Education",
+              "subAgenda": []
+            }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "department": "Basic Education Department",
+      "agenda": [
         {
-          "id": "B",
-          "title": "INNOVATIVE & EMERGING TECHNOLOGIES",
-          "subThemes": [
-            "Data Science",
-            "Gaming and mobile technology",
-            "Virtual and augmented reality",
-            "Cloud computing, blockchain, cryptocurrency, and cybersecurity",
-            "Software development and artificial intelligence",
-            "Technical nuances of Industry 4.0"
+          "title": "EDUCATIONAL EFFECTIVENESS AND IMPROVEMENT",
+          "description": "The overarching goal is to enhance LC students' educational outcomes by focusing on regular curriculum, assessment, strategic teacher development, creative student engagement, equity, school culture, and early childhood education.",
+          "subAgenda": [
+            {
+              "title": "Curriculum and Instruction",
+              "subAgenda": []
+            },
+            {
+              "title": "Assessment and Evaluation",
+              "subAgenda": []
+            },
+            {
+              "title": "Teacher Professional Development",
+              "subAgenda": []
+            },
+            {
+              "title": "Student Engagement and Motivation",
+              "subAgenda": []
+            },
+            {
+              "title": "Equity and Inclusion",
+              "subAgenda": []
+            },
+            {
+              "title": "School Climate and Culture",
+              "subAgenda": []
+            },
+            {
+              "title": "Early Childhood Education",
+              "subAgenda": []
+            }
           ]
         }
       ]
     },
     {
       "department": "School of Education, Arts, and Sciences",
-      "themes": [
+      "agenda": [
         {
-          "id": "A",
-          "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
-          "subThemes": [
-            "Education in changing and transforming landscapes",
-            "Inclusive education",
-            "Gender and development in relation to educational issues"
-          ]
-        },
-        {
-          "id": "B",
-          "title": "CORE VALUES & DOMINICAN CHARISM",
-          "subThemes": [
-            "Culture and heritage",
-            "Institutional identity"
-          ]
-        },
-        {
-          "id": "C",
-          "title": "COMMUNITY DEVELOPMENT AND HEALTH ISSUES",
-          "subThemes": [
-            "Environmental management",
-            "Community impact",
-            "Local responsiveness",
-            "Socio-economic development",
-            "Family and migration",
-            "Diversity in the workplace"
-          ]
-        }
-      ]
-    },
-    {
-      "department": "School of Engineering and Architecture",
-      "themes": [
-        {
-          "id": "A",
-          "title": "INNOVATIVE & EMERGING TECHNOLOGIES",
-          "subThemes": [
-            "Data Science",
-            "Gaming and mobile technology",
-            "Virtual and augmented reality",
-            "Cloud computing, blockchain, cryptocurrency, and cybersecurity",
-            "Software development and artificial intelligence",
-            "Technical nuances of Industry 4.0"
+          "title": "HUMAN DEVELOPMENT AND SOCIETAL TRANSFORMATION",
+          "subAgenda": [
+            {
+              "title": "Human Mind, Behavior, and Society",
+              "subAgenda": [
+                {
+                  "title": "Holistic Approaches to Mental Health and Wellness",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Human Learning and Development",
+              "subAgenda": [
+                {
+                  "title": "Educational Theories and Practices",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Communication and Society",
+              "subAgenda": [
+                {
+                  "title": "Web and Social Media",
+                  "subAgenda": []
+                }
+              ]
+            }
           ]
         }
       ]
     },
     {
       "department": "School of Nursing",
-      "themes": [
+      "agenda": [
         {
-          "id": "A",
-          "title": "RESPONSIVE & CONTEXTUAL EDUCATION",
-          "subThemes": [
-            "Gender and development in relation to educational issues"
+          "title": "NURSING CARE MANAGEMENT",
+          "subAgenda": [
+            {
+              "title": "Maternal and Child Health Nursing",
+              "subAgenda": []
+            },
+            {
+              "title": "Community and Public Health Nursing",
+              "subAgenda": []
+            },
+            {
+              "title": "Adult and Geriatric Health Nursing",
+              "subAgenda": []
+            },
+            {
+              "title": "Psychiatric Nursing",
+              "subAgenda": []
+            }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "department": "Religious Education and Campus Ministry",
+      "agenda": [
         {
-          "id": "B",
-          "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUES",
-          "subThemes": [
-            "Environmental management",
-            "Responsive health systems / nutrition security",
-            "Holistic approaches to health and wellness",
-            "Health resiliency",
-            "Innovation in healthcare",
-            "Global competitiveness in healthcare"
+          "title": "RELIGIOUS CULTURE AND IDENTITY",
+          "subAgenda": [
+            {
+              "title": "Religious Traditions and Practices",
+              "subAgenda": [
+                {
+                  "title": "Catholic Social Teachings",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Institutional Identity",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Religious Identity and Formation",
+              "subAgenda": []
+            },
+            {
+              "title": "Core Values and Dominican Charism",
+              "subAgenda": [
+                {
+                  "title": "Dominican Philosophy of Education",
+                  "subAgenda": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "department": "School of Engineering and Architecture",
+      "agenda": [
+        {
+          "title": "SUSTAINABLE AND INTELLIGENT ENGINEERING SOLUTIONS",
+          "subAgenda": [
+            {
+              "title": "Sustainable and Smart Manufacturing and Production Systems",
+              "subAgenda": [
+                {
+                  "title": "Optimizing industrial processes for efficiency and environmental sustainability",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Implementing Industry 4.0 and smart manufacturing technologies",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Advancing logistics and supply chain optimization",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Improving productivity and quality assurance",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Developing innovative and sustainable materials",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Exploring additive manufacturing and 3D printing applications",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Enhancing product design and prototyping",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Renewable, Efficient, and Resilient Energy Solutions",
+              "subAgenda": [
+                {
+                  "title": "Developing renewable energy generation and integration systems",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Improving energy storage and power electronics technologies",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Enhancing thermal management and energy efficiency",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Addressing global warming and environmental sustainability",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Promoting circular economy and sustainable consumption",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Intelligent, Connected, and Secure Systems",
+              "subAgenda": [
+                {
+                  "title": "Advancing Internet of Things (IoT) and sensor networks",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Designing embedded systems and intelligent devices",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Improving signal processing, communications, and cybersecurity",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Applying machine learning and AI in engineering applications",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Leveraging big data and cloud computing for optimization",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Enhancing decision-making and automation",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Sustainable Infrastructure and Built Environment",
+              "subAgenda": [
+                {
+                  "title": "Promoting sustainable construction and building design",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Enhancing disaster resilience and climate change adaptation",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Optimizing urban planning and livable cities",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Improving water, waste, and natural resource management",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Advancing environmental impact assessment and remediation",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Developing pollution control technologies",
+                  "subAgenda": []
+                }
+              ]
+            }
           ]
         }
       ]
     },
     {
       "department": "School of Tourism and Hospitality Management",
-      "themes": [
+      "agenda": [
         {
-          "id": "A",
-          "title": "CORE VALUES & DOMINICAN CHARISM",
-          "subThemes": [
-            "Culture and heritage"
-          ]
-        },
-        {
-          "id": "B",
-          "title": "COMMUNITY DEVELOPMENT & HEALTH ISSUES",
-          "subThemes": [
-            "Environmental management",
-            "Socio-economic development",
-            "Sustainable communities"
-          ]
-        },
-        {
-          "id": "C",
-          "title": "BUSINESS MANAGEMENT AND QUALITY MANAGEMENT",
-          "subThemes": [
-            "Entrepreneurship and business management",
-            "Tourism and hospitality management",
-            "Quality management system"
+          "title": "SUSTAINABLE TOURISM DEVELOPMENT",
+          "subAgenda": [
+            {
+              "title": "Environmental Sustainability",
+              "subAgenda": [
+                {
+                  "title": "Waste management / Recycling",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Water conservation",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Social and Community Impact",
+              "subAgenda": [
+                {
+                  "title": "Social Sustainability",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Community Engagement and Empowerment",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Tourism Development and Diversification",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Economic Sustainability",
+              "subAgenda": [
+                {
+                  "title": "Economic Sustainability",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Local Procurement and Supply Chains",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Tourism Development and Diversification",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Tourism Marketing and Promotion",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Impact On Tourism Development",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Innovation And Business Models",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Emerging Business Models",
+                  "subAgenda": []
+                }
+              ]
+            },
+            {
+              "title": "Tourism Experience and Management",
+              "subAgenda": [
+                {
+                  "title": "Hospitality Management",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Tourism Marketing and Promotion",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Emerging Travel Trends",
+                  "subAgenda": []
+                },
+                {
+                  "title": "The Impact of Technology on Travel Decisions",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Customer Experience and Satisfaction",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Service Quality and Expectations",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Customer Feedback and Reviews",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Loyalty and Retention",
+                  "subAgenda": []
+                },
+                {
+                  "title": "Risk Assessment and Mitigation in Tourism and Hospitality",
+                  "subAgenda": [
+                    {
+                      "title": "Emerging Threats and Risks",
+                      "subAgenda": []
+                    },
+                    {
+                      "title": "Crisis Preparedness and Response",
+                      "subAgenda": []
+                    },
+                    {
+                      "title": "Communication And Stakeholder Engagement",
+                      "subAgenda": []
+                    }
+                  ]
+                },
+                {
+                  "title": "Recovery and Adaptation",
+                  "subAgenda": [
+                    {
+                      "title": "Post-Crisis Recovery Strategies",
+                      "subAgenda": []
+                    },
+                    {
+                      "title": "Building Resilience",
+                      "subAgenda": []
+                    },
+                    {
+                      "title": "Motivations And Barriers",
+                      "subAgenda": []
+                    }
+                  ]
+                }
+              ]
+            }
           ]
         }
       ]

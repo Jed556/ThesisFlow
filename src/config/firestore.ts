@@ -2,18 +2,25 @@
  * Firestore collection names and constants
  * Centralized configuration for all Firestore collections
  * 
- * Group Hierarchical Structure:
+ * Firestore Hierarchical Structure:
  * year/{year}
  *   ├── agendas/{agenda} (institution-wide research agendas)
  *   ├── ESGs/{esg}
  *   ├── SDGs/{sdg}
+ *   ├── users/{user}
+ *   │   └── salary/{salaryDistribution}
  *   └── departments/{department}
  *       ├── departmentAgendas/{agenda}
  *       ├── adviserSkills/{skill}
+ *       ├── users/{user}
+ *       │   └── salary/{salaryDistribution}
  *       └── courses/{course}
+ *           ├── agendas/{agenda} (departamental research agendas)
  *           ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
  *           ├── templates/"terminalRequirements" (parent doc with metadata)
  *           │   └── entries/{requirementId} (individual terminal requirement entries)
+ *           ├── users/{user}
+ *           │   └── salary/{salaryDistribution}
  *           └── groups/{group}
  *               ├── audits/{audit}
  *               ├── expertRequests/{request}
@@ -26,16 +33,6 @@
  *                   └── stages/{stage}/chapters/{chapter}
  *                       └── submissions/{attachment}/chats/{chat}
  *                           └── attachments/{attachment}
- * 
- * User Hierarchical Structure:
- * year/{year}
- *   ├── users/{user}
- *   │   └── salary/{salaryDistribution} 
- *   └── departments/{department}
- *       ├── users/{user}
- *       │   └── salary/{salaryDistribution}
- *       └── courses/{course}/users/{user}
- *           └── salary/{salaryDistribution}
  * 
  * Firebase Storage Hierarchical Structure:
  * {year}/{department}/{course}/{group}

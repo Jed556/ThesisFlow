@@ -6,28 +6,19 @@ import {
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import type { TopicProposalEntry } from '../../types/proposal';
-import type { ESG, SDG } from '../../types/thesis';
+import type { AgendaItem, AgendaType, ESG, SDG } from '../../types/thesis';
 import { ESG_VALUES, SDG_VALUES } from '../../types/thesis';
 import agendasData from '../../config/agendas.json';
-
-/**
- * Theme structure from agendas.json
- */
-interface AgendaTheme {
-    id: string;
-    title: string;
-    subThemes: string[];
-}
 
 /**
  * Form values for head approval
  */
 export interface HeadApprovalFormValues {
     notes: string;
-    agenda: {
-        mainTheme: string;
-        subTheme: string;
-    };
+    agendaType: AgendaType;
+    department?: string;
+    /** Dynamic agenda path - each element is a selected agenda title at that depth */
+    agendaPath: string[];
     ESG: ESG | '';
     SDG: SDG | '';
 }
@@ -47,13 +38,35 @@ export interface HeadApprovalDialogProps {
 
 const EMPTY_VALUES: HeadApprovalFormValues = {
     notes: '',
-    agenda: {
-        mainTheme: '',
-        subTheme: '',
-    },
+    agendaType: 'institutional',
+    department: '',
+    agendaPath: [],
     ESG: '',
     SDG: '',
 };
+
+/**
+ * Get agendas at a specific depth level given the current path
+ */
+function getAgendasAtDepth(
+    rootAgendas: AgendaItem[],
+    currentPath: string[],
+    depth: number
+): AgendaItem[] {
+    if (depth === 0) {
+        return rootAgendas;
+    }
+
+    let current = rootAgendas;
+    for (let i = 0; i < depth && i < currentPath.length; i++) {
+        const selected = current.find((a) => a.title === currentPath[i]);
+        if (!selected) {
+            return [];
+        }
+        current = selected.subAgenda;
+    }
+    return current;
+}
 
 /**
  * Dialog for head approval of topic proposals.
@@ -64,19 +77,32 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
     const [values, setValues] = React.useState<HeadApprovalFormValues>(EMPTY_VALUES);
     const [errors, setErrors] = React.useState<Record<string, string>>({});
 
-    // Get themes from institutional research agenda
-    const themes: AgendaTheme[] = React.useMemo(() => {
-        return agendasData.institutionalResearchAgenda.themes;
+    // Get institutional agendas
+    const institutionalAgendas: AgendaItem[] = React.useMemo(() => {
+        return (agendasData.institutionalAgenda.agenda as AgendaItem[]) ?? [];
     }, []);
 
-    // Get available sub-themes based on selected main theme
-    const availableSubThemes = React.useMemo(() => {
-        if (!values.agenda.mainTheme) {
-            return [];
+    // Get departmental agendas
+    const departmentalAgendas = React.useMemo(() => {
+        return agendasData.departmentalAgendas ?? [];
+    }, []);
+
+    // Get available departments
+    const availableDepartments = React.useMemo(() => {
+        return departmentalAgendas.map((d: { department: string }) => d.department);
+    }, [departmentalAgendas]);
+
+    // Get root agendas based on type and department selection
+    const rootAgendas: AgendaItem[] = React.useMemo(() => {
+        if (values.agendaType === 'institutional') {
+            return institutionalAgendas;
         }
-        const selectedTheme = themes.find((theme) => theme.title === values.agenda.mainTheme);
-        return selectedTheme?.subThemes ?? [];
-    }, [values.agenda.mainTheme, themes]);
+        if (values.department) {
+            const deptAgenda = departmentalAgendas.find((d: { department: string }) => d.department === values.department);
+            return (deptAgenda?.agenda as AgendaItem[]) ?? [];
+        }
+        return [];
+    }, [values.agendaType, values.department, institutionalAgendas, departmentalAgendas]);
 
     // Reset form when dialog opens/closes or proposal changes
     React.useEffect(() => {
@@ -84,10 +110,9 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
             // Pre-fill with existing values if available
             setValues({
                 notes: '',
-                agenda: {
-                    mainTheme: proposal.agenda?.mainTheme ?? '',
-                    subTheme: proposal.agenda?.subTheme ?? '',
-                },
+                agendaType: proposal.agenda?.type ?? 'institutional',
+                department: proposal.agenda?.department ?? '',
+                agendaPath: proposal.agenda?.agendaPath ?? [],
                 ESG: proposal.ESG ?? '',
                 SDG: proposal.SDG ?? '',
             });
@@ -98,44 +123,49 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
         }
     }, [open, proposal]);
 
-    // Reset sub-theme when main theme changes
-    React.useEffect(() => {
-        if (values.agenda.mainTheme && !availableSubThemes.includes(values.agenda.subTheme)) {
-            setValues((prev) => ({
-                ...prev,
-                agenda: {
-                    ...prev.agenda,
-                    subTheme: '',
-                },
-            }));
-        }
-    }, [values.agenda.mainTheme, values.agenda.subTheme, availableSubThemes]);
-
     const handleNotesChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setValues((prev) => ({ ...prev, notes: event.target.value }));
     };
 
-    const handleMainThemeChange = (event: SelectChangeEvent<string>) => {
-        const newMainTheme = event.target.value;
+    const handleAgendaTypeChange = (event: SelectChangeEvent<AgendaType>) => {
         setValues((prev) => ({
             ...prev,
-            agenda: {
-                mainTheme: newMainTheme,
-                subTheme: '', // Reset sub-theme when main theme changes
-            },
+            agendaType: event.target.value as AgendaType,
+            department: '',
+            agendaPath: [],
         }));
-        setErrors((prev) => ({ ...prev, mainTheme: '', subTheme: '' }));
+        setErrors({});
     };
 
-    const handleSubThemeChange = (event: SelectChangeEvent<string>) => {
+    const handleDepartmentChange = (event: SelectChangeEvent<string>) => {
         setValues((prev) => ({
             ...prev,
-            agenda: {
-                ...prev.agenda,
-                subTheme: event.target.value,
-            },
+            department: event.target.value,
+            agendaPath: [],
         }));
-        setErrors((prev) => ({ ...prev, subTheme: '' }));
+        setErrors((prev) => ({ ...prev, department: '' }));
+    };
+
+    const handleAgendaChange = (depth: number) => (event: SelectChangeEvent<string>) => {
+        const newValue = event.target.value;
+        setValues((prev) => {
+            // Truncate path to current depth and set new value
+            const newPath = [...prev.agendaPath.slice(0, depth), newValue];
+            return { ...prev, agendaPath: newPath };
+        });
+        // Clear errors for this depth and all deeper levels
+        setErrors((prev) => {
+            const newErrors = { ...prev };
+            Object.keys(newErrors).forEach((key) => {
+                if (key.startsWith('agenda_')) {
+                    const keyDepth = parseInt(key.replace('agenda_', ''), 10);
+                    if (keyDepth >= depth) {
+                        delete newErrors[key];
+                    }
+                }
+            });
+            return newErrors;
+        });
     };
 
     const handleESGChange = (event: SelectChangeEvent<ESG | ''>) => {
@@ -151,11 +181,11 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
     const handleConfirm = async () => {
         const validationErrors: Record<string, string> = {};
 
-        if (!values.agenda.mainTheme) {
-            validationErrors.mainTheme = 'Research agenda is required';
+        if (values.agendaType === 'departmental' && !values.department) {
+            validationErrors.department = 'Department is required';
         }
-        if (!values.agenda.subTheme) {
-            validationErrors.subTheme = 'Sub-theme is required';
+        if (values.agendaPath.length === 0) {
+            validationErrors.agenda_0 = 'At least one agenda level is required';
         }
         if (!values.ESG) {
             validationErrors.ESG = 'ESG category is required';
@@ -170,6 +200,62 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
         }
 
         await onConfirm(values);
+    };
+
+    // Generate dynamic agenda selectors based on current path depth
+    const renderAgendaSelectors = () => {
+        const selectors: React.ReactNode[] = [];
+        let depth = 0;
+
+        // Always show at least the first level if root agendas exist
+        while (true) {
+            const agendasAtDepth = getAgendasAtDepth(rootAgendas, values.agendaPath, depth);
+
+            // Stop if no agendas available at this depth
+            if (agendasAtDepth.length === 0) break;
+
+            const currentValue = values.agendaPath[depth] ?? '';
+            const isDisabled = loading || (depth > 0 && !values.agendaPath[depth - 1]);
+            const labelPrefix = depth === 0 ? 'Agenda' : `Sub-Agenda Level ${depth}`;
+
+            selectors.push(
+                <FormControl
+                    key={`agenda-${depth}`}
+                    fullWidth
+                    error={Boolean(errors[`agenda_${depth}`])}
+                    disabled={isDisabled}
+                >
+                    <InputLabel id={`agenda-${depth}-label`}>{labelPrefix}</InputLabel>
+                    <Select
+                        labelId={`agenda-${depth}-label`}
+                        value={currentValue}
+                        onChange={handleAgendaChange(depth)}
+                        label={labelPrefix}
+                    >
+                        {agendasAtDepth.map((agenda, index) => (
+                            <MenuItem key={index} value={agenda.title}>
+                                {agenda.title}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                    {errors[`agenda_${depth}`] && (
+                        <FormHelperText>{errors[`agenda_${depth}`]}</FormHelperText>
+                    )}
+                    {depth > 0 && !values.agendaPath[depth - 1] && (
+                        <FormHelperText>Select the previous level first</FormHelperText>
+                    )}
+                </FormControl>
+            );
+
+            // Only continue if we have a selection at this depth that has sub-agendas
+            if (!currentValue) break;
+            const selectedAgenda = agendasAtDepth.find((a) => a.title === currentValue);
+            if (!selectedAgenda || selectedAgenda.subAgenda.length === 0) break;
+
+            depth++;
+        }
+
+        return selectors;
     };
 
     if (!proposal) {
@@ -191,7 +277,12 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
                         ) : (
                             <Skeleton variant="text" width="60%" />
                         )}
-                        <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }} gutterBottom>
+                        <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                            sx={{ mt: 1 }}
+                            gutterBottom
+                        >
                             Description
                         </Typography>
                         {proposal.description ? (
@@ -208,46 +299,52 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
                         Research Agenda Classification
                     </Typography>
 
-                    <FormControl fullWidth error={Boolean(errors.mainTheme)} disabled={loading}>
-                        <InputLabel id="main-theme-label">Research Agenda (Main Theme)</InputLabel>
+                    {/* Agenda Type Selection */}
+                    <FormControl fullWidth disabled={loading}>
+                        <InputLabel id="agenda-type-label">Agenda Type</InputLabel>
                         <Select
-                            labelId="main-theme-label"
-                            value={values.agenda.mainTheme}
-                            onChange={handleMainThemeChange}
-                            label="Research Agenda (Main Theme)"
+                            labelId="agenda-type-label"
+                            value={values.agendaType}
+                            onChange={handleAgendaTypeChange}
+                            label="Agenda Type"
                         >
-                            {themes.map((theme) => (
-                                <MenuItem key={theme.id} value={theme.title}>
-                                    {theme.id}. {theme.title}
-                                </MenuItem>
-                            ))}
+                            <MenuItem value="institutional">Institutional Research</MenuItem>
+                            <MenuItem value="departmental">Collegiate & Departmental</MenuItem>
                         </Select>
-                        {errors.mainTheme && <FormHelperText>{errors.mainTheme}</FormHelperText>}
                     </FormControl>
 
-                    <FormControl
-                        fullWidth
-                        error={Boolean(errors.subTheme)}
-                        disabled={loading || !values.agenda.mainTheme}
-                    >
-                        <InputLabel id="sub-theme-label">Sub-Theme</InputLabel>
-                        <Select
-                            labelId="sub-theme-label"
-                            value={values.agenda.subTheme}
-                            onChange={handleSubThemeChange}
-                            label="Sub-Theme"
+                    {/* Department Selection (only for departmental) */}
+                    {values.agendaType === 'departmental' && (
+                        <FormControl
+                            fullWidth
+                            error={Boolean(errors.department)}
+                            disabled={loading}
                         >
-                            {availableSubThemes.map((subTheme, index) => (
-                                <MenuItem key={index} value={subTheme}>
-                                    {subTheme}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                        {errors.subTheme && <FormHelperText>{errors.subTheme}</FormHelperText>}
-                        {!values.agenda.mainTheme && (
-                            <FormHelperText>Select a main theme first</FormHelperText>
-                        )}
-                    </FormControl>
+                            <InputLabel id="department-label">Department</InputLabel>
+                            <Select
+                                labelId="department-label"
+                                value={values.department ?? ''}
+                                onChange={handleDepartmentChange}
+                                label="Department"
+                            >
+                                {availableDepartments.map((dept: string) => (
+                                    <MenuItem key={dept} value={dept}>
+                                        {dept}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                            {errors.department && (
+                                <FormHelperText>{errors.department}</FormHelperText>
+                            )}
+                        </FormControl>
+                    )}
+
+                    {/* Dynamic Agenda Selectors */}
+                    {(values.agendaType === 'institutional' || values.department) && (
+                        <>
+                            {renderAgendaSelectors()}
+                        </>
+                    )}
 
                     {/* ESG & SDG Selection */}
                     <Typography variant="subtitle1" fontWeight="medium">

@@ -35,12 +35,37 @@ export type ExpertApprovalState = Partial<Record<ExpertRole, boolean>>;
 export type ThesisRole = 'leader' | 'member' | 'adviser' | 'editor' | 'statistician' | 'panel' | 'unknown';
 
 /**
- * 
+ * Agenda type - institutional or departmental (collegiate)
+ */
+export type AgendaType = 'institutional' | 'departmental';
+
+/**
+ * Recursive agenda item structure for config files
+ */
+export interface AgendaItem {
+    /** Title of the agenda */
+    title: string;
+    /** Optional description */
+    description?: string;
+    /** Nested sub-agendas (can be infinitely nested) */
+    subAgenda: AgendaItem[];
+}
+
+/**
+ * Research agenda classification for a thesis
+ * Supports infinite nesting depth via agendaPath array
  */
 export type ThesisAgenda = {
-
-    mainTheme: string;
-    subTheme: string;
+    /** Type of agenda: institutional or departmental */
+    type: AgendaType;
+    /** Department (only for departmental agendas) */
+    department?: string;
+    /** 
+     * Path of selected agendas from root to leaf
+     * Each element is a title at that depth level
+     * Example: ["DIGITAL TRANSFORMATION AND INNOVATION", "Artificial Intelligence and Data Science", "Machine Learning"]
+     */
+    agendaPath: string[];
 }
 
 export type ThesisAgendas = ThesisAgenda[];

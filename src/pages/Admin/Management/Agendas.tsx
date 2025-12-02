@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Collapse, Dialog, DialogActions,
-    DialogContent, DialogTitle, Divider, IconButton, List, ListItem, ListItemIcon,
+    DialogContent, DialogTitle, Divider, IconButton, List, ListItem,
     ListItemText, Skeleton, Stack, TextField, Tooltip, Typography
 } from '@mui/material';
 import {
@@ -24,12 +24,12 @@ export const metadata: NavigationItem = {
 };
 
 /**
- * Theme structure from agendas.json
+ * Recursive agenda item structure
  */
-interface AgendaTheme {
-    id: string;
+interface AgendaItem {
     title: string;
-    subThemes: string[];
+    description?: string;
+    subAgenda: AgendaItem[];
 }
 
 /**
@@ -37,208 +37,188 @@ interface AgendaTheme {
  */
 interface DepartmentAgenda {
     department: string;
-    themes: AgendaTheme[];
+    agenda: AgendaItem[];
 }
 
 /**
  * Full agendas data structure
  */
 interface AgendasData {
-    institutionalResearchAgenda: {
+    institutionalAgenda: {
         title: string;
-        themes: AgendaTheme[];
+        agenda: AgendaItem[];
     };
-    schoolResearchAgendas: DepartmentAgenda[];
+    departmentalAgendas: DepartmentAgenda[];
 }
 
-const STORAGE_KEY = 'thesisflow_agendas';
+import {
+    getFullAgendasData, saveFullAgendasData,
+    type FullAgendasData,
+} from '../../../utils/firebase/firestore/agendas';
+import { DEFAULT_YEAR } from '../../../config/firestore';
 
 /**
- * Load agendas from localStorage or use defaults from mock file
+ * Load agendas from Firestore, or seed with default data if empty
  */
 async function loadAgendas(): Promise<AgendasData> {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        try {
-            return JSON.parse(stored) as AgendasData;
-        } catch {
-            // Fall through to default
-        }
+    // Try to load from Firestore first
+    const firestoreData = await getFullAgendasData(DEFAULT_YEAR);
+
+    if (firestoreData) {
+        return firestoreData as AgendasData;
     }
-    // Import default data
+
+    // Firestore is empty, load default data from JSON and seed Firestore
     const defaultData = await import('../../../config/agendas.json');
-    return defaultData.default as AgendasData;
+    const data = defaultData.default as unknown as FullAgendasData;
+
+    // Save default data to Firestore
+    await saveFullAgendasData(DEFAULT_YEAR, data);
+
+    return data as AgendasData;
 }
 
 /**
- * Save agendas to localStorage
+ * Save agendas to Firestore
  */
-function saveAgendas(data: AgendasData): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+async function saveAgendas(data: AgendasData): Promise<void> {
+    await saveFullAgendasData(DEFAULT_YEAR, data);
 }
 
 /**
- * Generate next theme ID (A, B, C, ...)
+ * Count total sub-agendas recursively
  */
-function getNextThemeId(themes: AgendaTheme[]): string {
-    if (themes.length === 0) return 'A';
-    const lastId = themes[themes.length - 1].id;
-    return String.fromCharCode(lastId.charCodeAt(0) + 1);
-}
-
-// ============================================================================
-// Reusable Components
-// ============================================================================
-
-interface SubThemeListProps {
-    subThemes: string[];
-    onEdit: (subIndex: number, value: string) => void;
-    onDelete: (subIndex: number, value: string) => void;
-}
-
-/**
- * Renders a list of sub-themes with edit/delete actions
- */
-function SubThemeList({ subThemes, onEdit, onDelete }: SubThemeListProps) {
-    if (subThemes.length === 0) {
-        return (
-            <ListItem sx={{ py: 0.5, pl: 2 }}>
-                <ListItemText
-                    primary="No sub-themes yet"
-                    slotProps={{
-                        primary: {
-                            variant: 'body2',
-                            color: 'text.secondary',
-                            fontStyle: 'italic',
-                        },
-                    }}
-                />
-            </ListItem>
-        );
+function countSubAgendas(agendas: AgendaItem[]): number {
+    let count = 0;
+    for (const agenda of agendas) {
+        count += 1 + countSubAgendas(agenda.subAgenda);
     }
-
-    return (
-        <>
-            {subThemes.map((subTheme, subIndex) => (
-                <ListItem
-                    key={subIndex}
-                    sx={{
-                        py: 0.5,
-                        borderLeft: '2px solid',
-                        borderColor: 'divider',
-                        pl: 2,
-                    }}
-                    secondaryAction={
-                        <Stack direction="row" spacing={0.5}>
-                            <IconButton
-                                size="small"
-                                onClick={() => onEdit(subIndex, subTheme)}
-                            >
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => onDelete(subIndex, subTheme)}
-                            >
-                                <DeleteIcon fontSize="small" />
-                            </IconButton>
-                        </Stack>
-                    }
-                >
-                    <ListItemText
-                        primary={subTheme}
-                        slotProps={{
-                            primary: { variant: 'body2' },
-                        }}
-                    />
-                </ListItem>
-            ))}
-        </>
-    );
+    return count;
 }
 
-interface ThemeItemProps {
-    theme: AgendaTheme;
-    themeIndex: number;
+// ============================================================================
+// Recursive Agenda Item Component
+// ============================================================================
+
+interface RecursiveAgendaItemProps {
+    agenda: AgendaItem;
+    path: number[]; // Index path to this item
+    depth: number;
     expanded: boolean;
     onToggle: () => void;
-    onAddSubTheme: () => void;
-    onEditTheme: () => void;
-    onDeleteTheme: () => void;
-    onEditSubTheme: (subIndex: number, value: string) => void;
-    onDeleteSubTheme: (subIndex: number, value: string) => void;
+    onAdd: (path: number[]) => void;
+    onEdit: (path: number[], agenda: AgendaItem) => void;
+    onDelete: (path: number[], title: string) => void;
     chipColor?: 'primary' | 'secondary';
 }
 
 /**
- * Renders a single theme item with expandable sub-themes
+ * Renders a single agenda item with recursive sub-agendas
  */
-function ThemeItem({
-    theme,
+function RecursiveAgendaItem({
+    agenda,
+    path,
+    depth,
     expanded,
     onToggle,
-    onAddSubTheme,
-    onEditTheme,
-    onDeleteTheme,
-    onEditSubTheme,
-    onDeleteSubTheme,
+    onAdd,
+    onEdit,
+    onDelete,
     chipColor = 'primary',
-}: ThemeItemProps) {
+}: RecursiveAgendaItemProps) {
+    const hasSubAgendas = agenda.subAgenda.length > 0;
+    const [subExpanded, setSubExpanded] = React.useState<Set<number>>(new Set());
+
+    const toggleSubItem = (index: number) => {
+        setSubExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(index)) {
+                next.delete(index);
+            } else {
+                next.add(index);
+            }
+            return next;
+        });
+    };
+
     return (
         <React.Fragment>
             <ListItem
                 sx={{
-                    bgcolor: 'action.hover',
+                    bgcolor: depth === 0 ? 'action.hover' : 'transparent',
                     borderRadius: 1,
-                    mb: 1,
+                    mb: 0.5,
+                    pl: depth * 3,
+                    borderLeft: depth > 0 ? '2px solid' : 'none',
+                    borderColor: 'divider',
                 }}
                 secondaryAction={
                     <Stack direction="row" spacing={0.5}>
-                        <Tooltip title="Add Sub-theme">
-                            <IconButton size="small" onClick={onAddSubTheme}>
+                        <Tooltip title="Add Sub-Agenda">
+                            <IconButton size="small" onClick={() => onAdd(path)}>
                                 <AddIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Edit Theme">
-                            <IconButton size="small" onClick={onEditTheme}>
+                        <Tooltip title="Edit">
+                            <IconButton size="small" onClick={() => onEdit(path, agenda)}>
                                 <EditIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Delete Theme">
-                            <IconButton size="small" color="error" onClick={onDeleteTheme}>
+                        <Tooltip title="Delete">
+                            <IconButton size="small" color="error" onClick={() => onDelete(path, agenda.title)}>
                                 <DeleteIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
                     </Stack>
                 }
             >
-                <ListItemIcon sx={{ minWidth: 'auto', mr: 1 }}>
-                    <IconButton size="small" onClick={onToggle}>
+                {hasSubAgendas && (
+                    <IconButton size="small" onClick={onToggle} sx={{ mr: 1 }}>
                         {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                     </IconButton>
-                </ListItemIcon>
+                )}
+                {!hasSubAgendas && <Box sx={{ width: 40 }} />}
                 <ListItemText
                     primary={
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <Chip label={theme.id} size="small" color={chipColor} />
-                            <Typography variant="subtitle1" fontWeight={500}>
-                                {theme.title}
+                            {depth === 0 && (
+                                <Chip
+                                    label={path[path.length - 1] + 1}
+                                    size="small"
+                                    color={chipColor}
+                                />
+                            )}
+                            <Typography
+                                variant={depth === 0 ? 'subtitle1' : 'body2'}
+                                fontWeight={depth === 0 ? 500 : 400}
+                            >
+                                {agenda.title}
                             </Typography>
                         </Stack>
                     }
-                    secondary={`${theme.subThemes.length} sub-themes`}
+                    secondary={hasSubAgendas ? `${agenda.subAgenda.length} sub-agenda(s)` : undefined}
                 />
             </ListItem>
-            <Collapse in={expanded}>
-                <List disablePadding sx={{ pl: 6, mb: 1 }}>
-                    <SubThemeList
-                        subThemes={theme.subThemes}
-                        onEdit={onEditSubTheme}
-                        onDelete={onDeleteSubTheme}
-                    />
-                </List>
-            </Collapse>
+            {hasSubAgendas && (
+                <Collapse in={expanded}>
+                    <List disablePadding>
+                        {agenda.subAgenda.map((subAgenda, subIndex) => (
+                            <RecursiveAgendaItem
+                                key={subIndex}
+                                agenda={subAgenda}
+                                path={[...path, subIndex]}
+                                depth={depth + 1}
+                                expanded={subExpanded.has(subIndex)}
+                                onToggle={() => toggleSubItem(subIndex)}
+                                onAdd={onAdd}
+                                onEdit={onEdit}
+                                onDelete={onDelete}
+                                chipColor={chipColor}
+                            />
+                        ))}
+                    </List>
+                </Collapse>
+            )}
         </React.Fragment>
     );
 }
@@ -248,7 +228,7 @@ function ThemeItem({
 // ============================================================================
 
 /**
- * Admin page for managing research agendas.
+ * Admin page for managing research agendas with recursive nesting.
  */
 export default function AgendasManagementPage() {
     const { showNotification } = useSnackbar();
@@ -256,31 +236,22 @@ export default function AgendasManagementPage() {
     const [agendas, setAgendas] = React.useState<AgendasData | null>(null);
     const [departments, setDepartments] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [expandedInstitutional, setExpandedInstitutional] = React.useState<string[]>([]);
-    const [expandedDepartments, setExpandedDepartments] = React.useState<string[]>([]);
-    const [expandedDeptThemes, setExpandedDeptThemes] = React.useState<string[]>([]);
+    const [expandedInstitutional, setExpandedInstitutional] = React.useState<Set<number>>(new Set());
+    const [expandedDepartments, setExpandedDepartments] = React.useState<Set<string>>(new Set());
+    const [expandedDeptAgendas, setExpandedDeptAgendas] = React.useState<Set<string>>(new Set());
 
     // Dialog states
-    const [themeDialogOpen, setThemeDialogOpen] = React.useState(false);
-    const [subThemeDialogOpen, setSubThemeDialogOpen] = React.useState(false);
+    const [agendaDialogOpen, setAgendaDialogOpen] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
     // Form states
-    const [editingTheme, setEditingTheme] = React.useState<{
+    const [editingAgenda, setEditingAgenda] = React.useState<{
         type: 'institutional' | 'department';
         departmentIndex?: number;
-        themeIndex?: number;
-        theme: AgendaTheme | null;
-    } | null>(null);
-    const [editingSubTheme, setEditingSubTheme] = React.useState<{
-        type: 'institutional' | 'department';
-        departmentIndex?: number;
-        themeIndex: number;
-        subThemeIndex?: number;
-        value: string;
+        path: number[]; // Path to parent, empty for root level
+        agenda: AgendaItem | null; // null for new agenda
     } | null>(null);
     const [deleteTarget, setDeleteTarget] = React.useState<{
-        type: 'theme' | 'subTheme';
         label: string;
         onConfirm: () => void;
     } | null>(null);
@@ -298,20 +269,20 @@ export default function AgendasManagementPage() {
                     getUserDepartments().catch(() => []),
                 ]);
                 if (!cancelled) {
-                    // Ensure all departments have an entry in schoolResearchAgendas
+                    // Ensure all departments have an entry
                     const existingDepts = new Set(
-                        data.schoolResearchAgendas.map((d) => d.department)
+                        data.departmentalAgendas.map((d: DepartmentAgenda) => d.department)
                     );
                     for (const dept of depts) {
                         if (!existingDepts.has(dept)) {
-                            data.schoolResearchAgendas.push({
+                            data.departmentalAgendas.push({
                                 department: dept,
-                                themes: [],
+                                agenda: [],
                             });
                         }
                     }
                     // Sort departments alphabetically
-                    data.schoolResearchAgendas.sort((a, b) =>
+                    data.departmentalAgendas.sort((a, b) =>
                         a.department.localeCompare(b.department)
                     );
                     setAgendas(data);
@@ -329,39 +300,117 @@ export default function AgendasManagementPage() {
         return () => { cancelled = true; };
     }, []);
 
-    // Save agendas whenever they change
+    // Save agendas to Firestore whenever they change (debounced)
     React.useEffect(() => {
-        if (agendas) {
-            saveAgendas(agendas);
-        }
+        if (!agendas) return;
+
+        // Debounce Firestore writes to avoid excessive costs
+        const timeoutId = setTimeout(() => {
+            void saveAgendas(agendas).catch((error) => {
+                console.error('Failed to save agendas to Firestore:', error);
+            });
+        }, 1000); // 1 second debounce
+
+        return () => clearTimeout(timeoutId);
     }, [agendas]);
 
     // ========================================================================
     // Toggle expansion
     // ========================================================================
 
-    const toggleInstitutionalTheme = (themeId: string) => {
-        setExpandedInstitutional((prev) =>
-            prev.includes(themeId)
-                ? prev.filter((id) => id !== themeId)
-                : [...prev, themeId]
-        );
+    const toggleInstitutionalAgenda = (index: number) => {
+        setExpandedInstitutional((prev) => {
+            const next = new Set(prev);
+            if (next.has(index)) {
+                next.delete(index);
+            } else {
+                next.add(index);
+            }
+            return next;
+        });
     };
 
     const toggleDepartment = (department: string) => {
-        setExpandedDepartments((prev) =>
-            prev.includes(department)
-                ? prev.filter((d) => d !== department)
-                : [...prev, department]
-        );
+        setExpandedDepartments((prev) => {
+            const next = new Set(prev);
+            if (next.has(department)) {
+                next.delete(department);
+            } else {
+                next.add(department);
+            }
+            return next;
+        });
     };
 
-    const toggleDeptTheme = (deptThemeKey: string) => {
-        setExpandedDeptThemes((prev) =>
-            prev.includes(deptThemeKey)
-                ? prev.filter((k) => k !== deptThemeKey)
-                : [...prev, deptThemeKey]
-        );
+    const toggleDeptAgenda = (key: string) => {
+        setExpandedDeptAgendas((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    };
+
+    // ========================================================================
+    // Helper to navigate/modify agenda by path
+    // ========================================================================
+
+    const updateAgendaAtPath = (
+        agendas: AgendaItem[],
+        path: number[],
+        updater: (agenda: AgendaItem) => AgendaItem
+    ): AgendaItem[] => {
+        const newAgendas = [...agendas];
+        if (path.length === 1) {
+            newAgendas[path[0]] = updater(newAgendas[path[0]]);
+        } else {
+            newAgendas[path[0]] = {
+                ...newAgendas[path[0]],
+                subAgenda: updateAgendaAtPath(
+                    newAgendas[path[0]].subAgenda,
+                    path.slice(1),
+                    updater
+                ),
+            };
+        }
+        return newAgendas;
+    };
+
+    const deleteAgendaAtPath = (
+        agendas: AgendaItem[],
+        path: number[]
+    ): AgendaItem[] => {
+        const newAgendas = [...agendas];
+        if (path.length === 1) {
+            newAgendas.splice(path[0], 1);
+        } else {
+            newAgendas[path[0]] = {
+                ...newAgendas[path[0]],
+                subAgenda: deleteAgendaAtPath(
+                    newAgendas[path[0]].subAgenda,
+                    path.slice(1)
+                ),
+            };
+        }
+        return newAgendas;
+    };
+
+    const addAgendaAtPath = (
+        agendas: AgendaItem[],
+        path: number[],
+        newAgenda: AgendaItem
+    ): AgendaItem[] => {
+        if (path.length === 0) {
+            // Add at root level
+            return [...agendas, newAgenda];
+        }
+        return updateAgendaAtPath(agendas, path, (parent) => ({
+            ...parent,
+            subAgenda: [...parent.subAgenda, newAgenda],
+        }));
     };
 
     // ========================================================================
@@ -395,7 +444,7 @@ export default function AgendasManagementPage() {
             const data = JSON.parse(text) as AgendasData;
 
             // Validate structure
-            if (!data.institutionalResearchAgenda?.themes || !data.schoolResearchAgendas) {
+            if (!data.institutionalAgenda?.agenda || !data.departmentalAgendas) {
                 throw new Error('Invalid agendas file structure');
             }
 
@@ -406,15 +455,16 @@ export default function AgendasManagementPage() {
             showNotification('Failed to import agendas. Please check the file format.', 'error');
         }
 
-        // Reset input
         event.target.value = '';
     };
 
     const handleResetToDefault = async () => {
         try {
-            localStorage.removeItem(STORAGE_KEY);
             const defaultData = await import('../../../config/agendas.json');
-            setAgendas(defaultData.default as AgendasData);
+            const data = defaultData.default as unknown as AgendasData;
+            // Save default data to Firestore (overwrites existing)
+            await saveFullAgendasData(DEFAULT_YEAR, data);
+            setAgendas(data);
             showNotification('Agendas reset to default', 'success');
         } catch (error) {
             console.error('Failed to reset agendas:', error);
@@ -423,204 +473,121 @@ export default function AgendasManagementPage() {
     };
 
     // ========================================================================
-    // Theme CRUD
+    // Agenda CRUD
     // ========================================================================
 
-    const openAddThemeDialog = (type: 'institutional' | 'department', departmentIndex?: number) => {
-        setEditingTheme({
-            type,
-            departmentIndex,
-            theme: null,
-        });
-        setThemeDialogOpen(true);
-    };
-
-    const openEditThemeDialog = (
+    const openAddAgendaDialog = (
         type: 'institutional' | 'department',
-        themeIndex: number,
-        theme: AgendaTheme,
+        path: number[],
         departmentIndex?: number
     ) => {
-        setEditingTheme({
+        setEditingAgenda({
             type,
             departmentIndex,
-            themeIndex,
-            theme: { ...theme },
+            path,
+            agenda: null,
         });
-        setThemeDialogOpen(true);
+        setAgendaDialogOpen(true);
     };
 
-    const handleSaveTheme = (title: string) => {
-        if (!agendas || !editingTheme) return;
-
-        const newAgendas = { ...agendas };
-
-        if (editingTheme.type === 'institutional') {
-            const themes = newAgendas.institutionalResearchAgenda.themes;
-            if (editingTheme.themeIndex !== undefined) {
-                // Edit existing
-                themes[editingTheme.themeIndex] = {
-                    ...themes[editingTheme.themeIndex],
-                    title,
-                };
-            } else {
-                // Add new
-                themes.push({
-                    id: getNextThemeId(themes),
-                    title,
-                    subThemes: [],
-                });
-            }
-        } else if (editingTheme.departmentIndex !== undefined) {
-            const themes = newAgendas.schoolResearchAgendas[editingTheme.departmentIndex].themes;
-            if (editingTheme.themeIndex !== undefined) {
-                // Edit existing
-                themes[editingTheme.themeIndex] = {
-                    ...themes[editingTheme.themeIndex],
-                    title,
-                };
-            } else {
-                // Add new
-                themes.push({
-                    id: getNextThemeId(themes),
-                    title,
-                    subThemes: [],
-                });
-            }
-        }
-
-        setAgendas(newAgendas);
-        setThemeDialogOpen(false);
-        setEditingTheme(null);
-        showNotification(
-            editingTheme.themeIndex !== undefined ? 'Theme updated' : 'Theme added',
-            'success'
-        );
-    };
-
-    const handleDeleteTheme = (
+    const openEditAgendaDialog = (
         type: 'institutional' | 'department',
-        themeIndex: number,
-        themeTitle: string,
+        path: number[],
+        agenda: AgendaItem,
         departmentIndex?: number
     ) => {
-        setDeleteTarget({
-            type: 'theme',
-            label: themeTitle,
-            onConfirm: () => {
-                if (!agendas) return;
-                const newAgendas = { ...agendas };
-
-                if (type === 'institutional') {
-                    newAgendas.institutionalResearchAgenda.themes.splice(themeIndex, 1);
-                } else if (departmentIndex !== undefined) {
-                    newAgendas.schoolResearchAgendas[departmentIndex].themes.splice(themeIndex, 1);
-                }
-
-                setAgendas(newAgendas);
-                showNotification('Theme deleted', 'success');
-            },
-        });
-        setDeleteDialogOpen(true);
-    };
-
-    // ========================================================================
-    // Sub-theme CRUD
-    // ========================================================================
-
-    const openAddSubThemeDialog = (
-        type: 'institutional' | 'department',
-        themeIndex: number,
-        departmentIndex?: number
-    ) => {
-        setEditingSubTheme({
+        setEditingAgenda({
             type,
             departmentIndex,
-            themeIndex,
-            value: '',
+            path,
+            agenda: { ...agenda },
         });
-        setSubThemeDialogOpen(true);
+        setAgendaDialogOpen(true);
     };
 
-    const openEditSubThemeDialog = (
-        type: 'institutional' | 'department',
-        themeIndex: number,
-        subThemeIndex: number,
-        value: string,
-        departmentIndex?: number
-    ) => {
-        setEditingSubTheme({
-            type,
-            departmentIndex,
-            themeIndex,
-            subThemeIndex,
-            value,
-        });
-        setSubThemeDialogOpen(true);
-    };
+    const handleSaveAgenda = (title: string, description?: string) => {
+        if (!agendas || !editingAgenda) return;
 
-    const handleSaveSubTheme = (value: string) => {
-        if (!agendas || !editingSubTheme) return;
-
-        const newAgendas = { ...agendas };
-
-        const getThemes = () => {
-            if (editingSubTheme.type === 'institutional') {
-                return newAgendas.institutionalResearchAgenda.themes;
-            }
-            if (editingSubTheme.departmentIndex !== undefined) {
-                return newAgendas.schoolResearchAgendas[editingSubTheme.departmentIndex].themes;
-            }
-            return null;
+        const newAgenda: AgendaItem = {
+            title,
+            description: description || undefined,
+            subAgenda: editingAgenda.agenda?.subAgenda ?? [],
         };
 
-        const themes = getThemes();
-        if (!themes) return;
+        const newAgendas = { ...agendas };
 
-        const subThemes = themes[editingSubTheme.themeIndex].subThemes;
-
-        if (editingSubTheme.subThemeIndex !== undefined) {
-            // Edit existing
-            subThemes[editingSubTheme.subThemeIndex] = value;
-        } else {
-            // Add new
-            subThemes.push(value);
+        if (editingAgenda.type === 'institutional') {
+            if (editingAgenda.agenda) {
+                // Edit existing
+                newAgendas.institutionalAgenda.agenda = updateAgendaAtPath(
+                    newAgendas.institutionalAgenda.agenda,
+                    editingAgenda.path,
+                    () => newAgenda
+                );
+            } else {
+                // Add new
+                newAgendas.institutionalAgenda.agenda = addAgendaAtPath(
+                    newAgendas.institutionalAgenda.agenda,
+                    editingAgenda.path,
+                    newAgenda
+                );
+            }
+        } else if (editingAgenda.departmentIndex !== undefined) {
+            if (editingAgenda.agenda) {
+                // Edit existing
+                newAgendas.departmentalAgendas[editingAgenda.departmentIndex].agenda =
+                    updateAgendaAtPath(
+                        newAgendas.departmentalAgendas[editingAgenda.departmentIndex].agenda,
+                        editingAgenda.path,
+                        () => newAgenda
+                    );
+            } else {
+                // Add new
+                newAgendas.departmentalAgendas[editingAgenda.departmentIndex].agenda =
+                    addAgendaAtPath(
+                        newAgendas.departmentalAgendas[editingAgenda.departmentIndex].agenda,
+                        editingAgenda.path,
+                        newAgenda
+                    );
+            }
         }
 
         setAgendas(newAgendas);
-        setSubThemeDialogOpen(false);
-        setEditingSubTheme(null);
+        setAgendaDialogOpen(false);
+        setEditingAgenda(null);
         showNotification(
-            editingSubTheme.subThemeIndex !== undefined ? 'Sub-theme updated' : 'Sub-theme added',
+            editingAgenda.agenda ? 'Agenda updated' : 'Agenda added',
             'success'
         );
     };
 
-    const handleDeleteSubTheme = (
+    const handleDeleteAgenda = (
         type: 'institutional' | 'department',
-        themeIndex: number,
-        subThemeIndex: number,
-        subThemeValue: string,
+        path: number[],
+        title: string,
         departmentIndex?: number
     ) => {
         setDeleteTarget({
-            type: 'subTheme',
-            label: subThemeValue,
+            label: title,
             onConfirm: () => {
                 if (!agendas) return;
                 const newAgendas = { ...agendas };
 
                 if (type === 'institutional') {
-                    newAgendas.institutionalResearchAgenda.themes[themeIndex].subThemes.splice(
-                        subThemeIndex, 1
+                    newAgendas.institutionalAgenda.agenda = deleteAgendaAtPath(
+                        newAgendas.institutionalAgenda.agenda,
+                        path
                     );
                 } else if (departmentIndex !== undefined) {
-                    newAgendas.schoolResearchAgendas[departmentIndex].themes[themeIndex].subThemes
-                        .splice(subThemeIndex, 1);
+                    newAgendas.departmentalAgendas[departmentIndex].agenda =
+                        deleteAgendaAtPath(
+                            newAgendas.departmentalAgendas[departmentIndex].agenda,
+                            path
+                        );
                 }
 
                 setAgendas(newAgendas);
-                showNotification('Sub-theme deleted', 'success');
+                showNotification('Agenda deleted', 'success');
             },
         });
         setDeleteDialogOpen(true);
@@ -710,58 +677,62 @@ export default function AgendasManagementPage() {
                                 <Stack direction="row" spacing={1} alignItems="center">
                                     <SchoolIcon color="primary" />
                                     <Typography variant="h6">
-                                        {agendas.institutionalResearchAgenda.title}
+                                        {agendas.institutionalAgenda.title}
                                     </Typography>
+                                    <Chip
+                                        label={`${countSubAgendas(agendas.institutionalAgenda.agenda)} items`}
+                                        size="small"
+                                        variant="outlined"
+                                        color="primary"
+                                    />
                                 </Stack>
                                 <Button
                                     variant="contained"
                                     size="small"
                                     startIcon={<AddIcon />}
-                                    onClick={() => openAddThemeDialog('institutional')}
+                                    onClick={() => openAddAgendaDialog('institutional', [])}
                                 >
-                                    Add Theme
+                                    Add Agenda
                                 </Button>
                             </Box>
 
                             <List disablePadding>
-                                {agendas.institutionalResearchAgenda.themes.map((theme, themeIndex) => (
-                                    <ThemeItem
-                                        key={theme.id}
-                                        theme={theme}
-                                        themeIndex={themeIndex}
-                                        expanded={expandedInstitutional.includes(theme.id)}
-                                        onToggle={() => toggleInstitutionalTheme(theme.id)}
-                                        onAddSubTheme={() => openAddSubThemeDialog(
-                                            'institutional', themeIndex
-                                        )}
-                                        onEditTheme={() => openEditThemeDialog(
-                                            'institutional', themeIndex, theme
-                                        )}
-                                        onDeleteTheme={() => handleDeleteTheme(
-                                            'institutional', themeIndex, theme.title
-                                        )}
-                                        onEditSubTheme={(subIndex, value) => openEditSubThemeDialog(
-                                            'institutional', themeIndex, subIndex, value
-                                        )}
-                                        onDeleteSubTheme={(subIndex, value) => handleDeleteSubTheme(
-                                            'institutional', themeIndex, subIndex, value
-                                        )}
+                                {agendas.institutionalAgenda.agenda.map((agenda, index) => (
+                                    <RecursiveAgendaItem
+                                        key={index}
+                                        agenda={agenda}
+                                        path={[index]}
+                                        depth={0}
+                                        expanded={expandedInstitutional.has(index)}
+                                        onToggle={() => toggleInstitutionalAgenda(index)}
+                                        onAdd={(path) => openAddAgendaDialog('institutional', path)}
+                                        onEdit={(path, a) => openEditAgendaDialog('institutional', path, a)}
+                                        onDelete={(path, title) => handleDeleteAgenda('institutional', path, title)}
                                         chipColor="primary"
                                     />
                                 ))}
+                                {agendas.institutionalAgenda.agenda.length === 0 && (
+                                    <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                        sx={{ fontStyle: 'italic', py: 1 }}
+                                    >
+                                        No agendas added yet
+                                    </Typography>
+                                )}
                             </List>
                         </Stack>
                     </CardContent>
                 </Card>
 
-                {/* School/Department Research Agendas */}
+                {/* Department Research Agendas */}
                 <Card sx={{ borderRadius: 3 }}>
                     <CardContent>
                         <Stack spacing={2}>
                             <Stack direction="row" spacing={1} alignItems="center">
                                 <BusinessIcon color="secondary" />
                                 <Typography variant="h6">
-                                    School/Department Research Agendas
+                                    Departmental Research Agendas
                                 </Typography>
                                 <Chip
                                     label={`${departments.length} departments`}
@@ -778,10 +749,10 @@ export default function AgendasManagementPage() {
                                 </Alert>
                             )}
 
-                            {agendas.schoolResearchAgendas
+                            {agendas.departmentalAgendas
                                 .filter((dept) => departments.includes(dept.department))
                                 .map((dept) => {
-                                    const deptIndex = agendas.schoolResearchAgendas.findIndex(
+                                    const deptIndex = agendas.departmentalAgendas.findIndex(
                                         (d) => d.department === dept.department
                                     );
                                     return (
@@ -802,7 +773,7 @@ export default function AgendasManagementPage() {
                                                             size="small"
                                                             onClick={() => toggleDepartment(dept.department)}
                                                         >
-                                                            {expandedDepartments.includes(dept.department)
+                                                            {expandedDepartments.has(dept.department)
                                                                 ? <ExpandLessIcon />
                                                                 : <ExpandMoreIcon />}
                                                         </IconButton>
@@ -810,7 +781,7 @@ export default function AgendasManagementPage() {
                                                             {dept.department}
                                                         </Typography>
                                                         <Chip
-                                                            label={`${dept.themes.length} themes`}
+                                                            label={`${countSubAgendas(dept.agenda)} items`}
                                                             size="small"
                                                             variant="outlined"
                                                         />
@@ -818,56 +789,45 @@ export default function AgendasManagementPage() {
                                                     <Button
                                                         size="small"
                                                         startIcon={<AddIcon />}
-                                                        onClick={() => openAddThemeDialog('department', deptIndex)}
+                                                        onClick={() => openAddAgendaDialog('department', [], deptIndex)}
                                                     >
-                                                        Add Theme
+                                                        Add Agenda
                                                     </Button>
                                                 </Box>
 
-                                                <Collapse in={expandedDepartments.includes(dept.department)}>
+                                                <Collapse in={expandedDepartments.has(dept.department)}>
                                                     <Divider sx={{ my: 1 }} />
                                                     <List disablePadding>
-                                                        {dept.themes.map((theme, themeIndex) => {
-                                                            const deptThemeKey = `${dept.department}-${theme.id}`;
+                                                        {dept.agenda.map((agenda, agendaIndex) => {
+                                                            const key = `${dept.department}-${agendaIndex}`;
                                                             return (
-                                                                <ThemeItem
-                                                                    key={theme.id}
-                                                                    theme={theme}
-                                                                    themeIndex={themeIndex}
-                                                                    expanded={expandedDeptThemes.includes(deptThemeKey)}
-                                                                    onToggle={() => toggleDeptTheme(deptThemeKey)}
-                                                                    onAddSubTheme={() => openAddSubThemeDialog(
-                                                                        'department', themeIndex, deptIndex
+                                                                <RecursiveAgendaItem
+                                                                    key={agendaIndex}
+                                                                    agenda={agenda}
+                                                                    path={[agendaIndex]}
+                                                                    depth={0}
+                                                                    expanded={expandedDeptAgendas.has(key)}
+                                                                    onToggle={() => toggleDeptAgenda(key)}
+                                                                    onAdd={(path) => openAddAgendaDialog(
+                                                                        'department', path, deptIndex
                                                                     )}
-                                                                    onEditTheme={() => openEditThemeDialog(
-                                                                        'department', themeIndex, theme, deptIndex
+                                                                    onEdit={(path, a) => openEditAgendaDialog(
+                                                                        'department', path, a, deptIndex
                                                                     )}
-                                                                    onDeleteTheme={() => handleDeleteTheme(
-                                                                        'department', themeIndex, theme.title, deptIndex
+                                                                    onDelete={(path, title) => handleDeleteAgenda(
+                                                                        'department', path, title, deptIndex
                                                                     )}
-                                                                    onEditSubTheme={(subIndex, value) =>
-                                                                        openEditSubThemeDialog(
-                                                                            'department', themeIndex, subIndex, value,
-                                                                            deptIndex
-                                                                        )
-                                                                    }
-                                                                    onDeleteSubTheme={(subIndex, value) =>
-                                                                        handleDeleteSubTheme(
-                                                                            'department', themeIndex, subIndex, value,
-                                                                            deptIndex
-                                                                        )
-                                                                    }
                                                                     chipColor="secondary"
                                                                 />
                                                             );
                                                         })}
-                                                        {dept.themes.length === 0 && (
+                                                        {dept.agenda.length === 0 && (
                                                             <Typography
                                                                 variant="body2"
                                                                 color="text.secondary"
                                                                 sx={{ fontStyle: 'italic', py: 1 }}
                                                             >
-                                                                No themes added yet
+                                                                No agendas added yet
                                                             </Typography>
                                                         )}
                                                     </List>
@@ -881,90 +841,51 @@ export default function AgendasManagementPage() {
                 </Card>
             </Stack>
 
-            {/* Theme Dialog */}
+            {/* Agenda Dialog */}
             <Dialog
-                open={themeDialogOpen}
-                onClose={() => setThemeDialogOpen(false)}
+                open={agendaDialogOpen}
+                onClose={() => setAgendaDialogOpen(false)}
                 fullWidth
                 maxWidth="sm"
             >
                 <DialogTitle>
-                    {editingTheme?.themeIndex !== undefined ? 'Edit Theme' : 'Add Theme'}
+                    {editingAgenda?.agenda ? 'Edit Agenda' : 'Add Agenda'}
                 </DialogTitle>
                 <DialogContent>
-                    <TextField
-                        autoFocus
-                        fullWidth
-                        label="Theme Title"
-                        defaultValue={editingTheme?.theme?.title ?? ''}
-                        sx={{ mt: 1 }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                const input = e.target as HTMLInputElement;
-                                if (input.value.trim()) {
-                                    handleSaveTheme(input.value.trim());
-                                }
-                            }
-                        }}
-                        id="theme-title-input"
-                    />
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <TextField
+                            autoFocus
+                            fullWidth
+                            label="Agenda Title"
+                            defaultValue={editingAgenda?.agenda?.title ?? ''}
+                            id="agenda-title-input"
+                        />
+                        <TextField
+                            fullWidth
+                            label="Description (optional)"
+                            defaultValue={editingAgenda?.agenda?.description ?? ''}
+                            multiline
+                            rows={2}
+                            id="agenda-description-input"
+                        />
+                    </Stack>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setThemeDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={() => setAgendaDialogOpen(false)}>Cancel</Button>
                     <Button
                         variant="contained"
                         onClick={() => {
-                            const input = document.getElementById(
-                                'theme-title-input'
+                            const titleInput = document.getElementById(
+                                'agenda-title-input'
                             ) as HTMLInputElement;
-                            if (input?.value.trim()) {
-                                handleSaveTheme(input.value.trim());
-                            }
-                        }}
-                    >
-                        Save
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Sub-theme Dialog */}
-            <Dialog
-                open={subThemeDialogOpen}
-                onClose={() => setSubThemeDialogOpen(false)}
-                fullWidth
-                maxWidth="sm"
-            >
-                <DialogTitle>
-                    {editingSubTheme?.subThemeIndex !== undefined
-                        ? 'Edit Sub-theme'
-                        : 'Add Sub-theme'}
-                </DialogTitle>
-                <DialogContent>
-                    <TextField
-                        autoFocus
-                        fullWidth
-                        label="Sub-theme"
-                        defaultValue={editingSubTheme?.value ?? ''}
-                        sx={{ mt: 1 }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                const input = e.target as HTMLInputElement;
-                                if (input.value.trim()) {
-                                    handleSaveSubTheme(input.value.trim());
-                                }
-                            }
-                        }}
-                        id="subtheme-input"
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setSubThemeDialogOpen(false)}>Cancel</Button>
-                    <Button
-                        variant="contained"
-                        onClick={() => {
-                            const input = document.getElementById('subtheme-input') as HTMLInputElement;
-                            if (input?.value.trim()) {
-                                handleSaveSubTheme(input.value.trim());
+                            const descInput = document.getElementById(
+                                'agenda-description-input'
+                            ) as HTMLTextAreaElement;
+                            if (titleInput?.value.trim()) {
+                                handleSaveAgenda(
+                                    titleInput.value.trim(),
+                                    descInput?.value.trim() || undefined
+                                );
                             }
                         }}
                     >
@@ -983,9 +904,7 @@ export default function AgendasManagementPage() {
                     <Typography>
                         Are you sure you want to delete{' '}
                         <strong>{deleteTarget?.label}</strong>?
-                        {deleteTarget?.type === 'theme' && (
-                            <> This will also delete all its sub-themes.</>
-                        )}
+                        This will also delete all nested sub-agendas.
                     </Typography>
                 </DialogContent>
                 <DialogActions>

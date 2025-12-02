@@ -9,8 +9,8 @@ export interface ThesisStageMeta {
 export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = [
     { value: 'Pre-Proposal', label: 'Pre-Proposal' },
     { value: 'Post-Proposal', label: 'Post-Proposal' },
-    { value: 'Pre-Defense', label: 'Pre Defense' },
-    { value: 'Post-Defense', label: 'Post Defense' },
+    { value: 'Pre-Defense', label: 'Pre-Defense' },
+    { value: 'Post-Defense', label: 'Post-Defense' },
 ];
 
 const STAGE_SEQUENCE_ORDER = THESIS_STAGE_METADATA.map((stage) => stage.value);

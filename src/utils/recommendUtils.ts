@@ -176,7 +176,7 @@ function computeCompatibility(
     const total = baseScore + availabilityScore + skillsScore + recencyScore - penalty;
     return Math.max(0, Math.min(100, Math.round(total)));
 }
-
+// -----
 const DEFAULT_STOPWORDS = new Set([
     'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'have', 'in',
     'is', 'it', 'of', 'on', 'or', 'that', 'the', 'this', 'to', 'with',

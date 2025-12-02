@@ -1,17 +1,19 @@
 import * as React from 'react';
 import {
     Alert, Box, Card, CardContent, Chip,
-    FormControl, InputLabel,
-    MenuItem, Select, Stack, Typography, Grid, Skeleton
+    FormControl, InputLabel, MenuItem, Select,
+    Stack, Typography, Grid, Skeleton,
+    ToggleButton, ToggleButtonGroup
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { useSession } from '@toolpad/core';
 import { Dashboard as DashboardIcon } from '@mui/icons-material';
 import { AnimatedPage } from '../components/Animate';
+import { DepartmentCourseFilter, SelectFilter } from '../components/Filters';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
-import type { ThesisStageName } from '../types/thesis';
+import type { ThesisStageName, AgendaType } from '../types/thesis';
 import { SDG_VALUES, ESG_VALUES } from '../types/thesis';
 import type { UserProfile } from '../types/profile';
 import {
@@ -25,6 +27,10 @@ import type { ThesisGroup } from '../types/group';
 import { THESIS_STAGE_METADATA, deriveCurrentStage } from '../utils/thesisStageUtils';
 import { onUserProfile } from '../utils/firebase/firestore/user';
 import { devLog, devError } from '../utils/devUtils';
+import {
+    getFullAgendasData, type FullAgendasData, type FullDepartmentAgenda, type FullAgendaItem
+} from '../utils/firebase/firestore/agendas';
+import { DEFAULT_YEAR } from '../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'main',
@@ -55,68 +61,6 @@ interface SnapshotMetric {
 
 const FILTER_ALL = 'all';
 
-/** Agenda themes with their sub-themes extracted from institutional research agenda */
-const AGENDA_THEMES_MAP: Record<string, string[]> = {
-    'RESPONSIVE & CONTEXTUAL EDUCATION': [
-        'Education in changing and transforming landscapes',
-        'Education and quality assurance',
-        'Education amid Industry 4.0 and internationalization Inclusive education',
-        'Gender and development in relation to educational issues',
-        'Educational theories in the contexts of teaching and learning practices',
-    ],
-    'CORE VALUES & DOMINICAN CHARISM': [
-        'Culture and heritage',
-        'Dominican philosophy',
-        'Folk and popular religiosity',
-        'Spiritual development',
-        'Institutional identity',
-        'Inclusive nation-building',
-    ],
-    'COMMUNITY DEVELOPMENT & HEALTH ISSUES': [
-        'Environmental management',
-        'Community impact',
-        'Local responsiveness',
-        'Socio-economic development',
-        'Corporate social responsibility',
-        'Family and migration',
-        'Diversity in the workplace',
-        'Sustainable communities',
-        'Countryside development',
-        'Responsive health systems / nutrition security',
-        'Holistic approaches to health and wellness',
-        'Health resiliency',
-        'Innovation in healthcare',
-        'Global competitiveness in healthcare',
-    ],
-    'BUSINESS MANAGEMENT AND QUALITY MANAGEMENT': [
-        'Entrepreneurship and business management',
-        'Leadership and governance',
-        'Policy research and informed decision making',
-        'Human Resource Development',
-        'Social enterprise',
-        'Community/Local-based enterprise management',
-        'Tourism and hospitality management',
-        'Quality management system',
-        'Knowledge management',
-        'Internal evaluation of certifications and accreditations',
-    ],
-    'INNOVATIVE & EMERGING TECHNOLOGIES': [
-        'Engineering technologies across various sectors\n[Health; Agriculture, Aquatic and Natural Resources (AANR); and Disaster Risk Reduction and Climate Change Adaptation (DRR CCA)]',
-        'Alternative and renewable energy',
-        'Intelligent transportation solutions',
-        'Data Science',
-        'Robotics and automation',
-        'Gaming and mobile technology',
-        'Virtual and augmented reality',
-        'Cloud computing, blockchain, cryptocurrency, and cybersecurity',
-        'Software development and artificial intelligence',
-        'Technical nuances of Industry 4.0',
-    ],
-};
-
-/** Main agenda themes */
-const AGENDA_MAIN_THEMES = Object.keys(AGENDA_THEMES_MAP);
-
 /**
  * Dashboard page component displaying thesis statistics and filters.
  */
@@ -133,14 +77,22 @@ function DashboardPage(): React.ReactElement {
     const [thesisError, setThesisError] = React.useState<string | null>(null);
     const [groupMap, setGroupMap] = React.useState<Record<string, ThesisGroup>>({});
 
+    // Agendas data from Firestore
+    const [agendasData, setAgendasData] = React.useState<FullAgendasData | null>(null);
+    const [loadingAgendas, setLoadingAgendas] = React.useState(true);
+
     // Filter states
     const [departmentFilter, setDepartmentFilter] = React.useState<string>(FILTER_ALL);
     const [courseFilter, setCourseFilter] = React.useState<string>(FILTER_ALL);
-    const [stageFilter, setStageFilter] = React.useState<string>(FILTER_ALL);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [stageFilter, _setStageFilter] = React.useState<string>(FILTER_ALL);
     const [sdgFilter, setSdgFilter] = React.useState<string>(FILTER_ALL);
     const [esgFilter, setEsgFilter] = React.useState<string>(FILTER_ALL);
-    const [agendaFilter, setAgendaFilter] = React.useState<string>(FILTER_ALL);
-    const [subAgendaFilter, setSubAgendaFilter] = React.useState<string>(FILTER_ALL);
+
+    // Agenda filter states
+    const [agendaType, setAgendaType] = React.useState<AgendaType>('institutional');
+    const [agendaDepartment, setAgendaDepartment] = React.useState<string>(FILTER_ALL);
+    const [agendaPath, setAgendaPath] = React.useState<string[]>([]);
 
     // Filter options
     const [departments, setDepartments] = React.useState<string[]>([]);
@@ -170,6 +122,29 @@ function DashboardPage(): React.ReactElement {
             unsubscribe();
         };
     }, [userUid]);
+
+    // Load agendas from Firestore
+    React.useEffect(() => {
+        let cancelled = false;
+        const loadAgendas = async () => {
+            try {
+                setLoadingAgendas(true);
+                const data = await getFullAgendasData(DEFAULT_YEAR);
+                if (!cancelled) {
+                    setAgendasData(data);
+                    setLoadingAgendas(false);
+                }
+            } catch (error) {
+                devError('[Dashboard] Failed to load agendas:', error);
+                console.error('Failed to load agendas:', error);
+                if (!cancelled) {
+                    setLoadingAgendas(false);
+                }
+            }
+        };
+        void loadAgendas();
+        return () => { cancelled = true; };
+    }, []);
 
     React.useEffect(() => {
         devLog('[Dashboard] Setting up thesis listener');
@@ -274,18 +249,6 @@ function DashboardPage(): React.ReactElement {
         return () => { cancelled = true; };
     }, [departmentFilter, courseFilter]);
 
-    // Reset sub-agenda filter when agenda filter changes
-    React.useEffect(() => {
-        if (agendaFilter === FILTER_ALL) {
-            setSubAgendaFilter(FILTER_ALL);
-        } else if (
-            subAgendaFilter !== FILTER_ALL &&
-            !AGENDA_THEMES_MAP[agendaFilter]?.includes(subAgendaFilter)
-        ) {
-            setSubAgendaFilter(FILTER_ALL);
-        }
-    }, [agendaFilter, subAgendaFilter]);
-
     React.useEffect(() => {
         // Hydrate group map for theses to resolve department/course from groupId
         const groupIds = Array.from(
@@ -348,8 +311,9 @@ function DashboardPage(): React.ReactElement {
             stageFilter,
             sdgFilter,
             esgFilter,
-            agendaFilter,
-            subAgendaFilter,
+            agendaType,
+            agendaDepartment,
+            agendaPath,
             totalTheses: theses.length,
             groupMapSize: Object.keys(groupMap).length,
         });
@@ -414,25 +378,40 @@ function DashboardPage(): React.ReactElement {
             const matchesEsg =
                 esgFilter === FILTER_ALL || record.ESG === esgFilter;
 
-            // Agenda filter (mainTheme)
-            const matchesAgenda =
-                agendaFilter === FILTER_ALL ||
-                record.agenda?.mainTheme === agendaFilter;
-
-            // Sub-agenda filter (subTheme)
-            const matchesSubAgenda =
-                subAgendaFilter === FILTER_ALL ||
-                record.agenda?.subTheme === subAgendaFilter;
+            // Agenda filter - match based on agenda type and path
+            let matchesAgenda = true;
+            if (agendaPath.length > 0) {
+                // Check if thesis agenda type matches
+                if (record.agenda?.type !== agendaType) {
+                    matchesAgenda = false;
+                } else {
+                    // For departmental, also check department
+                    if (agendaType === 'departmental' && agendaDepartment !== FILTER_ALL) {
+                        if (record.agenda?.department !== agendaDepartment) {
+                            matchesAgenda = false;
+                        }
+                    }
+                    // Check if the thesis agendaPath matches our filter path
+                    if (matchesAgenda && record.agenda?.agendaPath) {
+                        for (let i = 0; i < agendaPath.length; i++) {
+                            if (record.agenda.agendaPath[i] !== agendaPath[i]) {
+                                matchesAgenda = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
             return matchesDepartment && matchesCourse && matchesStage &&
-                matchesSdg && matchesEsg && matchesAgenda && matchesSubAgenda;
+                matchesSdg && matchesEsg && matchesAgenda;
         });
 
         devLog('[Dashboard] Filtered theses result:', result.length, 'of', theses.length);
         return result;
     }, [
         departmentFilter, courseFilter, stageFilter,
-        sdgFilter, esgFilter, agendaFilter, subAgendaFilter, theses, groupMap
+        sdgFilter, esgFilter, agendaType, agendaDepartment, agendaPath, theses, groupMap
     ]);
 
     const stageBuckets = React.useMemo<StageBucket[]>(() => {
@@ -605,157 +584,228 @@ function DashboardPage(): React.ReactElement {
                         <Typography variant="h6" gutterBottom>
                             Statistics Filters
                         </Typography>
-                        <Grid container spacing={2}>
-                            {/* Department Filter */}
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                                <FormControl size="small" fullWidth>
-                                    <InputLabel>Department</InputLabel>
-                                    <Select
-                                        value={departmentFilter}
-                                        label="Department"
-                                        onChange={(e) => setDepartmentFilter(e.target.value)}
-                                    >
-                                        <MenuItem value={FILTER_ALL}>All Departments</MenuItem>
-                                        {departments.map((dept) => (
-                                            <MenuItem key={dept} value={dept}>
-                                                {dept}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-
-                            {/* Course Filter */}
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                                <FormControl
+                        <Stack spacing={2}>
+                            {/* Row 1: Department + Course */}
+                            <Box sx={{
+                                border: 1,
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                p: 2,
+                            }}>
+                                <DepartmentCourseFilter
+                                    department={departmentFilter}
+                                    departments={departments}
+                                    onDepartmentChange={(dept) => {
+                                        setDepartmentFilter(dept);
+                                        if (dept === FILTER_ALL) {
+                                            setCourseFilter(FILTER_ALL);
+                                        }
+                                    }}
+                                    course={courseFilter}
+                                    courses={courses}
+                                    onCourseChange={setCourseFilter}
+                                    allValue={FILTER_ALL}
                                     size="small"
                                     fullWidth
-                                    disabled={departmentFilter === FILTER_ALL}
-                                >
-                                    <InputLabel>Course</InputLabel>
-                                    <Select
-                                        value={courseFilter}
-                                        label="Course"
-                                        onChange={(e) => setCourseFilter(e.target.value)}
-                                    >
-                                        <MenuItem value={FILTER_ALL}>
-                                            {departmentFilter === FILTER_ALL
-                                                ? 'Select a department first'
-                                                : 'All Courses'}
-                                        </MenuItem>
-                                        {courses.map((course) => (
-                                            <MenuItem key={course} value={course}>
-                                                {course}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
+                                />
+                            </Box>
 
-                            {/* Stage Filter */}
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                                <FormControl size="small" fullWidth>
-                                    <InputLabel>Stage</InputLabel>
-                                    <Select
-                                        value={stageFilter}
-                                        label="Stage"
-                                        onChange={(e) => setStageFilter(e.target.value)}
+                            {/* Row 2: Agenda Type Toggle + Dynamic Agenda Filters */}
+                            <Box sx={{
+                                border: 1,
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                p: 2,
+                            }}>
+                                <Stack spacing={2}>
+                                    {/* Agenda Type Toggle */}
+                                    <ToggleButtonGroup
+                                        value={agendaType}
+                                        exclusive
+                                        onChange={(_, value) => {
+                                            if (value) {
+                                                setAgendaType(value);
+                                                setAgendaDepartment(FILTER_ALL);
+                                                setAgendaPath([]);
+                                            }
+                                        }}
+                                        size="small"
+                                        disabled={loadingAgendas}
+                                        fullWidth
                                     >
-                                        <MenuItem value={FILTER_ALL}>All Stages</MenuItem>
-                                        {THESIS_STAGE_METADATA.map((meta) => (
-                                            <MenuItem key={meta.value} value={meta.value}>
-                                                {meta.label}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
+                                        <ToggleButton value="institutional">
+                                            Institutional
+                                        </ToggleButton>
+                                        <ToggleButton value="departmental">
+                                            Collegiate & Departmental
+                                        </ToggleButton>
+                                    </ToggleButtonGroup>
 
-                            {/* SDG Filter */}
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                                <FormControl size="small" fullWidth>
-                                    <InputLabel>SDG</InputLabel>
-                                    <Select
-                                        value={sdgFilter}
-                                        label="SDG"
-                                        onChange={(e) => setSdgFilter(e.target.value)}
-                                    >
-                                        <MenuItem value={FILTER_ALL}>All SDGs</MenuItem>
-                                        {SDG_VALUES.map((sdg) => (
-                                            <MenuItem key={sdg} value={sdg}>
-                                                {sdg}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
+                                    {/* Dynamic Agenda Selectors */}
+                                    <Grid container spacing={2}>
+                                        {/* For Departmental: Show department selector first */}
+                                        {agendaType === 'departmental' && (
+                                            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                                                <FormControl
+                                                    size="small"
+                                                    fullWidth
+                                                    disabled={loadingAgendas || !agendasData}
+                                                >
+                                                    <InputLabel>Department</InputLabel>
+                                                    <Select
+                                                        value={agendaDepartment}
+                                                        label="Department"
+                                                        onChange={(e) => {
+                                                            setAgendaDepartment(e.target.value);
+                                                            setAgendaPath([]);
+                                                        }}
+                                                    >
+                                                        <MenuItem value={FILTER_ALL}>All Departments</MenuItem>
+                                                        {(agendasData?.departmentalAgendas ?? []).map(
+                                                            (dept: FullDepartmentAgenda) => (
+                                                                <MenuItem
+                                                                    key={dept.department}
+                                                                    value={dept.department}
+                                                                >
+                                                                    {dept.department}
+                                                                </MenuItem>
+                                                            )
+                                                        )}
+                                                    </Select>
+                                                </FormControl>
+                                            </Grid>
+                                        )}
 
-                            {/* ESG Filter */}
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                                <FormControl size="small" fullWidth>
-                                    <InputLabel>ESG</InputLabel>
-                                    <Select
-                                        value={esgFilter}
-                                        label="ESG"
-                                        onChange={(e) => setEsgFilter(e.target.value)}
-                                    >
-                                        <MenuItem value={FILTER_ALL}>All ESG</MenuItem>
-                                        {ESG_VALUES.map((esg) => (
-                                            <MenuItem key={esg} value={esg}>
-                                                {esg}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
+                                        {/* Dynamic agenda path selectors */}
+                                        {(() => {
+                                            // Get root agendas based on type
+                                            const rootAgendas: FullAgendaItem[] = agendaType === 'institutional'
+                                                ? (agendasData?.institutionalAgenda?.agenda ?? [])
+                                                : agendaDepartment !== FILTER_ALL
+                                                    ? (agendasData?.departmentalAgendas ?? [])
+                                                        .find((d) => d.department === agendaDepartment)?.agenda ?? []
+                                                    : [];
 
-                            {/* Agenda Filter */}
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                                <FormControl size="small" fullWidth>
-                                    <InputLabel>Agenda</InputLabel>
-                                    <Select
-                                        value={agendaFilter}
-                                        label="Agenda"
-                                        onChange={(e) => setAgendaFilter(e.target.value)}
-                                    >
-                                        <MenuItem value={FILTER_ALL}>All Agendas</MenuItem>
-                                        {AGENDA_MAIN_THEMES.map((agendaTheme) => (
-                                            <MenuItem key={agendaTheme} value={agendaTheme}>
-                                                {agendaTheme}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
+                                            // Calculate how many levels to show
+                                            const selectors: React.ReactNode[] = [];
+                                            let currentAgendas = rootAgendas;
+                                            let depth = 0;
+                                            const maxDepth = 10; // Safety limit
 
-                            {/* Sub-Agenda Filter */}
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                                <FormControl
-                                    size="small"
-                                    fullWidth
-                                    disabled={agendaFilter === FILTER_ALL}
-                                >
-                                    <InputLabel>Sub-Agenda</InputLabel>
-                                    <Select
-                                        value={subAgendaFilter}
-                                        label="Sub-Agenda"
-                                        onChange={(e) => setSubAgendaFilter(e.target.value)}
-                                    >
-                                        <MenuItem value={FILTER_ALL}>
-                                            {agendaFilter === FILTER_ALL
-                                                ? 'Select an agenda first'
-                                                : 'All Sub-Agendas'}
-                                        </MenuItem>
-                                        {agendaFilter !== FILTER_ALL &&
-                                            AGENDA_THEMES_MAP[agendaFilter]?.map((subTheme) => (
-                                                <MenuItem key={subTheme} value={subTheme}>
-                                                    {subTheme}
-                                                </MenuItem>
-                                            ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-                        </Grid>
+                                            // Always show at least the first selector if we have agendas
+                                            while (depth < maxDepth) {
+                                                const currentDepth = depth;
+                                                const hasOptions = currentAgendas.length > 0;
+                                                const currentValue = agendaPath[currentDepth] ?? '';
+                                                const isEnabled = !loadingAgendas && hasOptions && (
+                                                    currentDepth === 0 || agendaPath[currentDepth - 1]
+                                                );
+
+                                                // Only render if there are options or it's the first selector
+                                                if (!hasOptions && currentDepth > 0) break;
+
+                                                selectors.push(
+                                                    <Grid
+                                                        key={`agenda-${currentDepth}`}
+                                                        size={{ xs: 12, sm: 6, md: 3 }}
+                                                    >
+                                                        <FormControl
+                                                            size="small"
+                                                            fullWidth
+                                                            disabled={!isEnabled}
+                                                        >
+                                                            <InputLabel>
+                                                                {currentDepth === 0 ? 'Agenda' : 'Subagenda'}
+                                                            </InputLabel>
+                                                            <Select
+                                                                value={currentValue}
+                                                                label={currentDepth === 0 ? 'Agenda' : 'Subagenda'}
+                                                                onChange={(e) => {
+                                                                    const newPath = [
+                                                                        ...agendaPath.slice(0, currentDepth),
+                                                                        e.target.value,
+                                                                    ];
+                                                                    setAgendaPath(newPath);
+                                                                }}
+                                                            >
+                                                                <MenuItem value="">
+                                                                    {!isEnabled
+                                                                        ? 'Select previous first'
+                                                                        : currentDepth === 0
+                                                                            ? 'All Agendas'
+                                                                            : 'All Subagendas'}
+                                                                </MenuItem>
+                                                                {currentAgendas.map((item) => (
+                                                                    <MenuItem key={item.title} value={item.title}>
+                                                                        {item.title}
+                                                                    </MenuItem>
+                                                                ))}
+                                                            </Select>
+                                                        </FormControl>
+                                                    </Grid>
+                                                );
+
+                                                // Move to next level if there's a selection
+                                                if (currentValue) {
+                                                    const selected = currentAgendas.find((a) => a.title === currentValue);
+                                                    if (selected && selected.subAgenda.length > 0) {
+                                                        currentAgendas = selected.subAgenda;
+                                                        depth++;
+                                                        continue;
+                                                    }
+                                                }
+                                                break;
+                                            }
+
+                                            return selectors;
+                                        })()}
+                                    </Grid>
+                                </Stack>
+                            </Box>
+
+                            {/* Row 3: ESG + SDG */}
+                            <Box sx={{
+                                border: 1,
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                p: 2,
+                            }}>
+                                <Grid container spacing={2}>
+                                    <Grid size={{ xs: 12, sm: 6 }}>
+                                        <SelectFilter
+                                            id="esg-filter"
+                                            label="ESG"
+                                            value={esgFilter}
+                                            options={ESG_VALUES.map((esg) => ({
+                                                value: esg,
+                                                label: esg,
+                                            }))}
+                                            onChange={setEsgFilter}
+                                            allValue={FILTER_ALL}
+                                            allLabel="All ESG"
+                                            size="small"
+                                            fullWidth
+                                        />
+                                    </Grid>
+                                    <Grid size={{ xs: 12, sm: 6 }}>
+                                        <SelectFilter
+                                            id="sdg-filter"
+                                            label="SDG"
+                                            value={sdgFilter}
+                                            options={SDG_VALUES.map((sdg) => ({
+                                                value: sdg,
+                                                label: sdg,
+                                            }))}
+                                            onChange={setSdgFilter}
+                                            allValue={FILTER_ALL}
+                                            allLabel="All SDGs"
+                                            size="small"
+                                            fullWidth
+                                        />
+                                    </Grid>
+                                </Grid>
+                            </Box>
+                        </Stack>
                     </CardContent>
                 </Card>
 

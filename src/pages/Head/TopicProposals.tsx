@@ -239,7 +239,11 @@ export default function HeadTopicProposalsPage() {
                 reviewerUid: headUid,
                 decision: 'approved',
                 notes: values.notes.trim() || undefined,
-                agenda: values.agenda.mainTheme && values.agenda.subTheme ? values.agenda : undefined,
+                agenda: values.agendaPath.length > 0 ? {
+                    type: values.agendaType,
+                    department: values.department || undefined,
+                    agendaPath: values.agendaPath,
+                } : undefined,
                 ESG: values.ESG || undefined,
                 SDG: values.SDG || undefined,
             });

@@ -15,8 +15,9 @@ import type { AgendaDocument, AgendaDocumentWithId, AgendaScope } from '../../..
 import {
     buildAgendasCollectionPath, buildAgendaPath,
     buildDepartmentAgendasCollectionPath, buildDepartmentAgendaPath,
+    buildDepartmentPath,
 } from './paths';
-import { DEFAULT_YEAR } from '../../../config/firestore';
+import { DEFAULT_YEAR, YEAR_ROOT, DEPARTMENTS_SUBCOLLECTION } from '../../../config/firestore';
 
 // ============================================================================
 // Helper Functions
@@ -544,4 +545,206 @@ export function listenAgendas(
         throw new Error('Department is required for department-specific agendas');
     }
     return listenDepartmentAgendas(year, department, callback);
+}
+
+// ============================================================================
+// Full Agendas Data Structure (Nested) - Using Proper Hierarchy
+// ============================================================================
+
+/**
+ * Recursive agenda item structure used by the Agendas management page
+ */
+export interface FullAgendaItem {
+    title: string;
+    description?: string;
+    subAgenda: FullAgendaItem[];
+}
+
+/**
+ * Department agenda structure
+ */
+export interface FullDepartmentAgenda {
+    department: string;
+    agenda: FullAgendaItem[];
+}
+
+/**
+ * Full agendas data structure
+ * - Institutional agendas stored at: year/{year}/agendas/{agendaId}
+ * - Departmental agendas stored at: year/{year}/departments/{department}/departmentAgendas/{agendaId}
+ */
+export interface FullAgendasData {
+    institutionalAgenda: {
+        title: string;
+        agenda: FullAgendaItem[];
+    };
+    departmentalAgendas: FullDepartmentAgenda[];
+    updatedAt?: Date;
+}
+
+/** Document ID for the institutional agenda metadata */
+const INSTITUTIONAL_AGENDA_DOC = 'institutional';
+
+/**
+ * Convert FullAgendaItem array to Firestore-friendly format
+ */
+function agendaItemsToFirestore(items: FullAgendaItem[]): FullAgendaItem[] {
+    return items.map((item) => ({
+        title: item.title,
+        description: item.description || '',
+        subAgenda: agendaItemsToFirestore(item.subAgenda || []),
+    }));
+}
+
+/**
+ * Get the full agendas data from Firestore using proper hierarchy:
+ * - Institutional: year/{year}/agendas/institutional
+ * - Departmental: year/{year}/departments/{department}/departmentAgendas/agendas
+ * @param year - Academic year (defaults to current)
+ * @returns Full agendas data or null if not found
+ */
+export async function getFullAgendasData(
+    year: string = DEFAULT_YEAR
+): Promise<FullAgendasData | null> {
+    try {
+        // Get institutional agenda from year/{year}/agendas/institutional
+        const institutionalPath = buildAgendaPath(year, INSTITUTIONAL_AGENDA_DOC);
+        const institutionalRef = doc(firebaseFirestore, institutionalPath);
+        const institutionalSnap = await getDoc(institutionalRef);
+
+        // Get all departments first to fetch their agendas
+        const deptCollectionPath = `${YEAR_ROOT}/${year}/${DEPARTMENTS_SUBCOLLECTION}`;
+        const deptsRef = collection(firebaseFirestore, deptCollectionPath);
+        const deptsSnap = await getDocs(deptsRef);
+
+        // Fetch departmental agendas for each department
+        const departmentalAgendas: FullDepartmentAgenda[] = [];
+        for (const deptDoc of deptsSnap.docs) {
+            const deptId = deptDoc.id;
+            const deptData = deptDoc.data();
+            const departmentName = deptData.name || deptId;
+
+            // Get agendas from year/{year}/departments/{dept}/departmentAgendas/agendas
+            const deptAgendasPath = buildDepartmentAgendaPath(year, deptId, 'agendas');
+            const deptAgendasRef = doc(firebaseFirestore, deptAgendasPath);
+            const deptAgendasSnap = await getDoc(deptAgendasRef);
+
+            if (deptAgendasSnap.exists()) {
+                const agendaData = deptAgendasSnap.data();
+                departmentalAgendas.push({
+                    department: departmentName,
+                    agenda: agendaData.agenda || [],
+                });
+            }
+        }
+
+        // If no institutional agenda exists, return null (first time load)
+        if (!institutionalSnap.exists() && departmentalAgendas.length === 0) {
+            return null;
+        }
+
+        const institutionalData = institutionalSnap.exists() ? institutionalSnap.data() : null;
+
+        return {
+            institutionalAgenda: {
+                title: institutionalData?.title || 'Institutional Research Agenda',
+                agenda: institutionalData?.agenda || [],
+            },
+            departmentalAgendas,
+            updatedAt: institutionalData?.updatedAt?.toDate?.() || new Date(),
+        };
+    } catch (error) {
+        console.error('Failed to get full agendas data:', error);
+        return null;
+    }
+}
+
+/**
+ * Save the full agendas data to Firestore using proper hierarchy:
+ * - Institutional: year/{year}/agendas/institutional
+ * - Departmental: year/{year}/departments/{department}/departmentAgendas/agendas
+ * @param year - Academic year
+ * @param data - Full agendas data to save
+ */
+export async function saveFullAgendasData(
+    year: string,
+    data: Omit<FullAgendasData, 'updatedAt'>
+): Promise<void> {
+    const batch = writeBatch(firebaseFirestore);
+
+    // Save institutional agenda to year/{year}/agendas/institutional
+    const institutionalPath = buildAgendaPath(year, INSTITUTIONAL_AGENDA_DOC);
+    const institutionalRef = doc(firebaseFirestore, institutionalPath);
+    batch.set(institutionalRef, {
+        title: data.institutionalAgenda.title,
+        agenda: agendaItemsToFirestore(data.institutionalAgenda.agenda),
+        updatedAt: serverTimestamp(),
+    });
+
+    // Save departmental agendas to year/{year}/departments/{dept}/departmentAgendas/agendas
+    for (const deptAgenda of data.departmentalAgendas) {
+        // Create or ensure department document exists
+        const deptPath = buildDepartmentPath(year, deptAgenda.department);
+        const deptRef = doc(firebaseFirestore, deptPath);
+        batch.set(deptRef, { name: deptAgenda.department }, { merge: true });
+
+        // Save agendas under the department
+        const deptAgendasPath = buildDepartmentAgendaPath(year, deptAgenda.department, 'agendas');
+        const deptAgendasRef = doc(firebaseFirestore, deptAgendasPath);
+        batch.set(deptAgendasRef, {
+            agenda: agendaItemsToFirestore(deptAgenda.agenda),
+            updatedAt: serverTimestamp(),
+        });
+    }
+
+    await batch.commit();
+}
+
+/**
+ * Listen to full agendas data in real-time
+ * Note: This listens to the institutional agenda document only.
+ * For full real-time updates including departmental agendas,
+ * consider using separate listeners or polling.
+ * @param year - Academic year
+ * @param callback - Function to call when data changes
+ * @returns Unsubscribe function
+ */
+export function listenFullAgendasData(
+    year: string,
+    callback: (data: FullAgendasData | null) => void
+): Unsubscribe {
+    const institutionalPath = buildAgendaPath(year, INSTITUTIONAL_AGENDA_DOC);
+    const institutionalRef = doc(firebaseFirestore, institutionalPath);
+
+    return onSnapshot(institutionalRef, async () => {
+        // Fetch full data when institutional agenda changes
+        const fullData = await getFullAgendasData(year);
+        callback(fullData);
+    });
+}
+
+/**
+ * Seed full agendas data from JSON file if Firestore is empty
+ * @param year - Academic year
+ * @param defaultData - Default data to seed (from agendas.json)
+ * @returns The loaded or seeded agendas data
+ */
+export async function loadOrSeedFullAgendasData(
+    year: string,
+    defaultData: Omit<FullAgendasData, 'updatedAt'>
+): Promise<FullAgendasData> {
+    const existing = await getFullAgendasData(year);
+
+    if (existing) {
+        return existing;
+    }
+
+    // Firestore is empty, seed with default data
+    await saveFullAgendasData(year, defaultData);
+
+    // Return the seeded data with current timestamp
+    return {
+        ...defaultData,
+        updatedAt: new Date(),
+    };
 }

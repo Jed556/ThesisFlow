@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { TopicProposalEntry, TopicProposalSet, TopicProposalReviewEvent } from '../../../types/proposal';
-import type { ESG, SDG } from '../../../types/thesis';
+import type { ESG, SDG, ThesisAgenda } from '../../../types/thesis';
 import { PROPOSALS_SUBCOLLECTION, GROUPS_SUBCOLLECTION } from '../../../config/firestore';
 import { buildProposalsCollectionPath, buildProposalDocPath, extractPathParams } from './paths';
 import { updateGroupById } from './groups';
@@ -56,10 +56,7 @@ export interface ProposalDecisionPayload {
  * Extended decision payload for head approval with agenda and sustainability classification
  */
 export interface HeadDecisionPayload extends ProposalDecisionPayload {
-    agenda?: {
-        mainTheme: string;
-        subTheme: string;
-    };
+    agenda?: ThesisAgenda;
     ESG?: ESG;
     SDG?: SDG;
 }
@@ -830,10 +827,7 @@ export interface ContextFreeDecisionPayload {
  */
 export interface HeadApprovalPayload extends ContextFreeDecisionPayload {
     /** Research agenda classification */
-    agenda?: {
-        mainTheme: string;
-        subTheme: string;
-    };
+    agenda?: ThesisAgenda;
     /** ESG category */
     ESG?: ESG;
     /** Sustainable Development Goal */
@@ -914,7 +908,7 @@ export async function recordHeadDecision(payload: HeadApprovalPayload): Promise<
     if (payload.notes !== undefined) {
         decisionPayload.notes = payload.notes;
     }
-    if (payload.agenda?.mainTheme && payload.agenda?.subTheme) {
+    if (payload.agenda?.agendaPath && payload.agenda.agendaPath.length > 0) {
         decisionPayload.agenda = payload.agenda;
     }
     if (payload.ESG) {
