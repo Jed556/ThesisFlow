@@ -19,6 +19,7 @@ import {
     updatePanelCommentStudentFields, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
+import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
@@ -85,7 +86,7 @@ export default function StudentPanelCommentsPage() {
         setThesisLoading(true);
         setThesisError(null);
 
-        // Load group first, then get thesis from group context
+        // Load group first, then fetch thesis from subcollection
         (async () => {
             try {
                 // Try to find group where user is leader first, then as member
@@ -96,8 +97,14 @@ export default function StudentPanelCommentsPage() {
                 const preferredGroup = allGroups.find((g) => g.members.leader === userUid) ?? allGroups[0] ?? null;
                 setGroup(preferredGroup);
 
-                if (preferredGroup?.thesis) {
-                    setThesis({ ...preferredGroup.thesis, id: preferredGroup.thesis.id ?? preferredGroup.id });
+                // Thesis is stored in a subcollection, fetch it using findThesisByGroupId
+                if (preferredGroup) {
+                    const thesisData = await findThesisByGroupId(preferredGroup.id);
+                    if (thesisData) {
+                        setThesis({ ...thesisData, id: thesisData.id ?? preferredGroup.id });
+                    } else {
+                        setThesis(null);
+                    }
                 } else {
                     setThesis(null);
                 }
