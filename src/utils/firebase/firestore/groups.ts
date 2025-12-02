@@ -1181,6 +1181,22 @@ export async function getGroupDepartments(): Promise<string[]> {
 }
 
 /**
+ * Get unique courses that have groups.
+ *
+ * @returns Array of unique course identifiers
+ */
+export async function getGroupCourses(): Promise<string[]> {
+    const groups = await getAllGroups();
+    const courses = new Set<string>();
+    for (const group of groups) {
+        if (group.course) {
+            courses.add(group.course);
+        }
+    }
+    return Array.from(courses);
+}
+
+/**
  * Get all theses from all groups.
  *
  * @returns Array of all thesis references with their group context

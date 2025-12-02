@@ -1,31 +1,31 @@
 /**
  * Firestore collection names and constants
  * Centralized configuration for all Firestore collections
- *
- * Configuration Hierarchy:
- * configuration/
- *   ├── departments/{department}/courses/{course}/chapters/{chapter} {document with chapter details}
- *   └── terminal/{requirement} {document with requirement details}
  * 
  * Group Hierarchical Structure:
- * year/{year}/departments/{department}
- *   ├── adviserSkills/{skill}
- *   └── courses/{course}
- *       ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
- *       ├── templates/"terminalRequirements" (parent doc with metadata)
- *       │   └── entries/{requirementId} (individual terminal requirement entries)
- *       └── groups/{group}
- *           ├── audits/{audit}
- *           ├── expertRequests/{request}
- *           ├── proposals/{proposal}
- *           ├── panelComments/{comment}
- *           ├── join/
- *           │   ├── invites (document with userIds array)
- *           │   └── requests (document with userIds array)
- *           └── thesis/{thesis}
- *               └── stages/{stage}/chapters/{chapter}
- *                   └── submissions/{attachment}/chats/{chat}
- *                       └── attachments/{attachment}
+ * year/{year}
+ *   ├── agendas/{agenda} (institution-wide research agendas)
+ *   ├── ESGs/{esg}
+ *   ├── SDGs/{sdg}
+ *   └── departments/{department}
+ *       ├── departmentAgendas/{agenda}
+ *       ├── adviserSkills/{skill}
+ *       └── courses/{course}
+ *           ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
+ *           ├── templates/"terminalRequirements" (parent doc with metadata)
+ *           │   └── entries/{requirementId} (individual terminal requirement entries)
+ *           └── groups/{group}
+ *               ├── audits/{audit}
+ *               ├── expertRequests/{request}
+ *               ├── proposals/{proposal}
+ *               ├── panelComments/{comment}
+ *               ├── join/
+ *               │   ├── invites (document with userIds array)
+ *               │   └── requests (document with userIds array)
+ *               └── thesis/{thesis}
+ *                   └── stages/{stage}/chapters/{chapter}
+ *                       └── submissions/{attachment}/chats/{chat}
+ *                           └── attachments/{attachment}
  * 
  * User Hierarchical Structure:
  * year/{year}
@@ -65,8 +65,14 @@ export const DEFAULT_COURSE_SEGMENT = 'common';
 /** Root year collection */
 export const YEAR_ROOT = 'year';
 
+/** Institution-wide agendas subcollection under year */
+export const AGENDAS_SUBCOLLECTION = 'agendas';
+
 /** Departments subcollection */
 export const DEPARTMENTS_SUBCOLLECTION = 'departments';
+
+/** Department-specific agendas subcollection under department */
+export const DEPARTMENT_AGENDAS_SUBCOLLECTION = 'departmentAgendas';
 
 /** Courses subcollection */
 export const COURSES_SUBCOLLECTION = 'courses';
