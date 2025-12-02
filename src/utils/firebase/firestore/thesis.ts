@@ -22,6 +22,7 @@ import type { ThesisData } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
 import { THESIS_SUBCOLLECTION, GROUPS_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
 import { buildThesisCollectionPath, buildThesisDocPath, extractPathParams } from './paths';
+import { devLog, devError } from '../../../utils/devUtils';
 
 // Re-export from specialized modules for backward compatibility
 export * from './stages';
@@ -123,7 +124,53 @@ function docToThesisData(docSnap: DocumentSnapshot): ThesisData | null {
         lastUpdated: data.lastUpdated?.toDate?.() || new Date(),
         stages: data.stages || [],
         chapters: data.chapters,
+        agenda: data.agenda,
+        ESG: data.ESG,
+        SDG: data.SDG,
     } as ThesisData;
+}
+
+/**
+ * Convert Firestore document data to ThesisWithGroupContext
+ * Extracts path parameters (year, department, course, groupId) from the document path
+ */
+function docToThesisWithContext(docSnap: DocumentSnapshot): ThesisWithGroupContext | null {
+    if (!docSnap.exists()) {
+        devLog('[thesis.ts] docToThesisWithContext: Document does not exist');
+        return null;
+    }
+    const data = docSnap.data();
+    const pathParams = extractPathParams(docSnap.ref.path);
+
+    devLog('[thesis.ts] docToThesisWithContext: Parsing document', {
+        docId: docSnap.id,
+        refPath: docSnap.ref.path,
+        pathParams,
+        rawData: {
+            title: data.title,
+            agenda: data.agenda,
+            ESG: data.ESG,
+            SDG: data.SDG,
+            stagesCount: data.stages?.length ?? 0,
+        },
+    });
+
+    return {
+        id: docSnap.id,
+        title: data.title || '',
+        submissionDate: data.submissionDate?.toDate?.() || new Date(),
+        lastUpdated: data.lastUpdated?.toDate?.() || new Date(),
+        stages: data.stages || [],
+        chapters: data.chapters,
+        agenda: data.agenda,
+        ESG: data.ESG,
+        SDG: data.SDG,
+        // Path context
+        groupId: pathParams.groupId,
+        year: pathParams.year,
+        department: pathParams.department,
+        course: pathParams.course,
+    } as ThesisWithGroupContext;
 }
 
 /**
@@ -266,8 +313,9 @@ export async function getLatestThesisForGroup(ctx: ThesisContext): Promise<Thesi
 
 /**
  * Get all theses across all groups using collectionGroup query
+ * Returns theses with path context (year, department, course, groupId) extracted from document paths
  * @param constraints - Optional query constraints
- * @returns Array of all thesis records
+ * @returns Array of all thesis records with path context
  */
 export async function getAllTheses(constraints?: QueryConstraint[]): Promise<ThesisRecord[]> {
     const thesisQuery = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
@@ -277,7 +325,7 @@ export async function getAllTheses(constraints?: QueryConstraint[]): Promise<The
 
     const snapshot = await getDocs(q);
     return snapshot.docs.map((docSnap) => {
-        const data = docToThesisData(docSnap);
+        const data = docToThesisWithContext(docSnap);
         if (!data) return null;
         return {
             ...data,
@@ -547,6 +595,7 @@ export function listenThesesForGroup(
 
 /**
  * Listen to all theses across all groups (collectionGroup)
+ * Returns theses with path context (year, department, course, groupId) extracted from document paths
  * @param constraints - Optional query constraints
  * @param options - Callbacks for data and errors
  * @returns Unsubscribe function
@@ -555,6 +604,7 @@ export function listenAllTheses(
     constraints: QueryConstraint[] | undefined,
     options: ThesisListenerOptions
 ): () => void {
+    devLog('[thesis.ts] listenAllTheses: Setting up listener with constraints:', constraints);
     const thesisQuery = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
     const q = constraints?.length
         ? query(thesisQuery, ...constraints)
@@ -563,13 +613,25 @@ export function listenAllTheses(
     return onSnapshot(
         q,
         (snapshot) => {
+            devLog('[thesis.ts] listenAllTheses: Received snapshot with', snapshot.docs.length, 'documents');
             const theses = snapshot.docs.map((docSnap) => {
-                const data = docToThesisData(docSnap);
+                const data = docToThesisWithContext(docSnap);
                 return data ? { ...data, id: docSnap.id } as ThesisRecord : null;
             }).filter((t): t is ThesisRecord => t !== null);
+            devLog('[thesis.ts] listenAllTheses: Parsed', theses.length, 'theses. Sample:', theses.slice(0, 2).map(t => ({
+                id: t.id,
+                title: t.title,
+                groupId: (t as ThesisWithGroupContext).groupId,
+                department: (t as ThesisWithGroupContext).department,
+                course: (t as ThesisWithGroupContext).course,
+                agenda: (t as ThesisWithGroupContext).agenda,
+                ESG: (t as ThesisWithGroupContext).ESG,
+                SDG: (t as ThesisWithGroupContext).SDG,
+            })));
             options.onData(theses);
         },
         (error) => {
+            devError('[thesis.ts] listenAllTheses: Listener error:', error);
             if (options.onError) options.onError(error);
             else console.error('Thesis listener error:', error);
         }

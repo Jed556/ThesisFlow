@@ -184,6 +184,57 @@ export async function findAllUsers(): Promise<UserProfile[]> {
     return snap.docs.map(d => d.data() as UserProfile);
 }
 
+/**
+ * Get unique departments from all users in the system.
+ * This is useful for populating department dropdowns or filters.
+ * @returns Array of unique department names, sorted alphabetically
+ */
+export async function getUserDepartments(): Promise<string[]> {
+    const users = await findAllUsers();
+    const departments = new Set<string>();
+    for (const user of users) {
+        const dept = user.department?.trim();
+        if (dept) {
+            departments.add(dept);
+        }
+    }
+    return Array.from(departments).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Get unique courses from all users in the system.
+ * This is useful for populating course dropdowns or filters.
+ * @returns Array of unique course names, sorted alphabetically
+ */
+export async function getUserCourses(): Promise<string[]> {
+    const users = await findAllUsers();
+    const courses = new Set<string>();
+    for (const user of users) {
+        const course = user.course?.trim();
+        if (course) {
+            courses.add(course);
+        }
+    }
+    return Array.from(courses).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Get unique courses from users in a specific department.
+ * This is useful for filtering courses based on selected department.
+ * @param department - The department to filter by
+ * @returns Array of unique course names in the department, sorted alphabetically
+ */
+export async function getUserCoursesByDepartment(department: string): Promise<string[]> {
+    const users = await findAllUsers();
+    const courses = new Set<string>();
+    for (const user of users) {
+        if (user.department?.trim() === department && user.course?.trim()) {
+            courses.add(user.course.trim());
+        }
+    }
+    return Array.from(courses).sort((a, b) => a.localeCompare(b));
+}
+
 // ============================================================================
 // User Filter Options and Queries
 // ============================================================================

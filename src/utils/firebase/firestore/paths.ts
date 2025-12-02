@@ -7,7 +7,7 @@ import {
     CHAPTER_TEMPLATES_KEY, JOIN_SUBCOLLECTION, INVITES_DOC, REQUESTS_DOC, SLOT_REQUESTS_SUBCOLLECTION,
     CHAPTER_SLOTS_SUBCOLLECTION, SALARY_SUBCOLLECTION,
     GROUP_CONFIGURATION_SUBCOLLECTION, GROUP_CONFIGURATION_CHAPTER_DOC,
-    TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION,
+    TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION, AGENDAS_SUBCOLLECTION, DEPARTMENT_AGENDAS_SUBCOLLECTION,
 } from '../../../config/firestore';
 
 
@@ -73,6 +73,44 @@ export function buildCoursePath(year: string, department: string, course: string
     const deptKey = sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT);
     const courseKey = sanitizePathSegment(course, DEFAULT_COURSE_SEGMENT);
     return `${YEAR_ROOT}/${year}/${DEPARTMENTS_SUBCOLLECTION}/${deptKey}/${COURSES_SUBCOLLECTION}/${courseKey}`;
+}
+
+// ============================================================================
+// Agenda Path Builders
+// ============================================================================
+
+/**
+ * Build path to institution-wide agendas collection
+ * Path: year/{year}/agendas
+ */
+export function buildAgendasCollectionPath(year: string = DEFAULT_YEAR): string {
+    return `${YEAR_ROOT}/${year}/${AGENDAS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific institution-wide agenda document
+ * Path: year/{year}/agendas/{agendaId}
+ */
+export function buildAgendaPath(year: string, agendaId: string): string {
+    return `${YEAR_ROOT}/${year}/${AGENDAS_SUBCOLLECTION}/${agendaId}`;
+}
+
+/**
+ * Build path to department-specific agendas collection
+ * Path: year/{year}/departments/{department}/departmentAgendas
+ */
+export function buildDepartmentAgendasCollectionPath(year: string, department: string): string {
+    const deptKey = sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT);
+    return `${YEAR_ROOT}/${year}/${DEPARTMENTS_SUBCOLLECTION}/${deptKey}/${DEPARTMENT_AGENDAS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific department agenda document
+ * Path: year/{year}/departments/{department}/departmentAgendas/{agendaId}
+ */
+export function buildDepartmentAgendaPath(year: string, department: string, agendaId: string): string {
+    const deptKey = sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT);
+    return `${YEAR_ROOT}/${year}/${DEPARTMENTS_SUBCOLLECTION}/${deptKey}/${DEPARTMENT_AGENDAS_SUBCOLLECTION}/${agendaId}`;
 }
 
 // ============================================================================

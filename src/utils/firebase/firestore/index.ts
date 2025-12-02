@@ -1,3 +1,4 @@
+export * from './agendas';
 export * from './calendars';
 export * from './chapter';
 export * from './chapters';
