@@ -28,6 +28,17 @@ export function devWarn(...args: unknown[]): void {
 }
 
 /**
+ * Development-only error function.
+ * Only logs when in development environment, no-op in production.
+ * @param args - Arguments to pass to console.error
+ */
+export function devError(...args: unknown[]): void {
+    if (isDevelopmentEnvironment()) {
+        console.error(...args);
+    }
+}
+
+/**
  * Stores the current routes for development access
  */
 export function setCurrentRoutes(routes: any[]) {
