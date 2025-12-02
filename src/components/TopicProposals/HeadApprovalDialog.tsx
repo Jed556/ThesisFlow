@@ -8,7 +8,7 @@ import type { SelectChangeEvent } from '@mui/material';
 import type { TopicProposalEntry } from '../../types/proposal';
 import type { ESG, SDG } from '../../types/thesis';
 import { ESG_VALUES, SDG_VALUES } from '../../types/thesis';
-import agendasData from '../../../mock/agendas.json';
+import agendasData from '../../config/agendas.json';
 
 /**
  * Theme structure from agendas.json

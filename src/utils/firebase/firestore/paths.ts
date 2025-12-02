@@ -461,20 +461,22 @@ export function buildPanelCommentsCollectionPath(
 
 /**
  * Build path to a specific panel comment document (group-level release state)
+ * Structure: .../groups/{groupId}/panelComments/meta
  */
 export function buildPanelCommentDocPath(
     year: string, department: string, course: string, groupId: string
 ): string {
-    return `${buildPanelCommentsCollectionPath(year, department, course, groupId)}/release`;
+    return `${buildPanelCommentsCollectionPath(year, department, course, groupId)}/meta`;
 }
 
 /**
  * Build path to panel comment entries collection under a group
+ * Structure: .../groups/{groupId}/panelComments/meta/entries
  */
 export function buildPanelCommentEntriesCollectionPath(
     year: string, department: string, course: string, groupId: string
 ): string {
-    return `${buildPanelCommentsCollectionPath(year, department, course, groupId)}/entries`;
+    return `${buildPanelCommentDocPath(year, department, course, groupId)}/entries`;
 }
 
 /**

@@ -510,8 +510,8 @@ service cloud.firestore {
 
                         // ================================
                         // PANEL COMMENTS (under group)
-                        // Path: panelComments/release - release state document
-                        // Path: panelComments/entries/{entryId} - individual comment entries
+                        // Path: panelComments/meta - metadata/release state document
+                        // Path: panelComments/meta/entries/{entryId} - individual comment entries
                         // ================================
 
                         match /panelComments/{docId} {
