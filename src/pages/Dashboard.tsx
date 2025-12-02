@@ -101,7 +101,7 @@ const AGENDA_THEMES_MAP: Record<string, string[]> = {
         'Internal evaluation of certifications and accreditations',
     ],
     'INNOVATIVE & EMERGING TECHNOLOGIES': [
-        'Engineering technologies across various sectors [Health; Agriculture, Aquatic and Natural Resources (AANR); and Disaster Risk Reduction and Climate Change Adaptation (DRR CCA)]',
+        'Engineering technologies across various sectors\n[Health; Agriculture, Aquatic and Natural Resources (AANR); and Disaster Risk Reduction and Climate Change Adaptation (DRR CCA)]',
         'Alternative and renewable energy',
         'Intelligent transportation solutions',
         'Data Science',
