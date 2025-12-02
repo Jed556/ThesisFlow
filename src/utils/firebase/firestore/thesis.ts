@@ -152,6 +152,8 @@ function docToThesisWithContext(docSnap: DocumentSnapshot): ThesisWithGroupConte
             ESG: data.ESG,
             SDG: data.SDG,
             stagesCount: data.stages?.length ?? 0,
+            stagesRaw: data.stages,
+            lastStage: data.stages?.[data.stages?.length - 1],
         },
     });
 

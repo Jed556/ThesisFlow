@@ -1,4 +1,4 @@
-import type { ThesisChapter, ThesisStageName } from '../types/thesis';
+import type { ThesisChapter, ThesisData, ThesisStageName, ThesisStage } from '../types/thesis';
 
 export interface ThesisStageMeta {
     value: ThesisStageName;
@@ -14,6 +14,9 @@ export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = [
 ];
 
 const STAGE_SEQUENCE_ORDER = THESIS_STAGE_METADATA.map((stage) => stage.value);
+
+/** Default stage when none can be determined */
+const DEFAULT_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
 
 const normalizeStageKey = (value: string): string => value
     .toLowerCase()
@@ -41,8 +44,6 @@ export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = [
     { stage: 'Post-Defense', target: 'chapters' },
     { stage: 'Post-Defense', target: 'terminal' },
 ] as const;
-
-const DEFAULT_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
 
 function canonicalizeStageValue(value?: ThesisStageName | string | null): ThesisStageName | null {
     if (!value) {
@@ -270,4 +271,76 @@ export function filterChaptersByStage(
         return [];
     }
     return chapters.filter((chapter) => chapterHasStage(chapter, stage));
+}
+
+/**
+ * Derives the current stage of a thesis from its data.
+ * 
+ * Priority:
+ * 1. If stages array exists and has entries, use the last stage's name
+ * 2. If chapters exist, determine the highest stage that has activity
+ * 3. Default to 'Pre-Proposal'
+ * 
+ * @param thesis - Thesis data object
+ * @returns The derived current stage name
+ */
+export function deriveCurrentStage(thesis: ThesisData | null | undefined): ThesisStageName {
+    if (!thesis) {
+        return DEFAULT_STAGE;
+    }
+
+    // Method 1: Check stages array (if properly populated)
+    if (thesis.stages && thesis.stages.length > 0) {
+        const lastStage = thesis.stages[thesis.stages.length - 1];
+        if (lastStage?.name && STAGE_SEQUENCE_ORDER.includes(lastStage.name)) {
+            return lastStage.name;
+        }
+    }
+
+    // Method 2: Derive from chapters - find the highest stage with any chapter activity
+    if (thesis.chapters && thesis.chapters.length > 0) {
+        // Check stages in reverse order (highest first)
+        for (let i = STAGE_SEQUENCE_ORDER.length - 1; i >= 0; i--) {
+            const stage = STAGE_SEQUENCE_ORDER[i];
+            const stageChapters = filterChaptersByStage(thesis.chapters, stage);
+            if (stageChapters.length > 0) {
+                // Found chapters for this stage - check if they have any submissions or activity
+                const hasActivity = stageChapters.some(ch =>
+                    (ch.submissions && ch.submissions.length > 0) ||
+                    ch.status !== 'none' && ch.status !== 'not_submitted'
+                );
+                if (hasActivity) {
+                    return stage;
+                }
+            }
+        }
+
+        // No activity found, check for any chapters assigned to stages
+        for (let i = STAGE_SEQUENCE_ORDER.length - 1; i >= 0; i--) {
+            const stage = STAGE_SEQUENCE_ORDER[i];
+            const stageChapters = filterChaptersByStage(thesis.chapters, stage);
+            if (stageChapters.length > 0) {
+                return stage;
+            }
+        }
+    }
+
+    // Method 3: Check if stages array exists but stages have different structure
+    // (stages might be stored as objects with different property names)
+    if (thesis.stages && thesis.stages.length > 0) {
+        const lastStage = thesis.stages[thesis.stages.length - 1] as unknown as Record<string, unknown>;
+        // Try common property name variations
+        const possibleNameProps = ['name', 'stageName', 'stage', 'title'];
+        for (const prop of possibleNameProps) {
+            const value = lastStage[prop];
+            if (typeof value === 'string') {
+                const canonical = canonicalizeStageValue(value);
+                if (canonical) {
+                    return canonical;
+                }
+            }
+        }
+    }
+
+    return DEFAULT_STAGE;
 }

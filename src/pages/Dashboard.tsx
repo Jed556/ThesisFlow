@@ -22,7 +22,7 @@ import {
     getUserDepartments, getUserCoursesByDepartment
 } from '../utils/firebase/firestore/user';
 import type { ThesisGroup } from '../types/group';
-import { THESIS_STAGE_METADATA } from '../utils/thesisStageUtils';
+import { THESIS_STAGE_METADATA, deriveCurrentStage } from '../utils/thesisStageUtils';
 import { onUserProfile } from '../utils/firebase/firestore/user';
 import { devLog, devError } from '../utils/devUtils';
 
@@ -101,7 +101,7 @@ const AGENDA_THEMES_MAP: Record<string, string[]> = {
         'Internal evaluation of certifications and accreditations',
     ],
     'INNOVATIVE & EMERGING TECHNOLOGIES': [
-        'Engineering technologies across various sectors',
+        'Engineering technologies across various sectors [Health; Agriculture, Aquatic and Natural Resources (AANR); and Disaster Risk Reduction and Climate Change Adaptation (DRR CCA)]',
         'Alternative and renewable energy',
         'Intelligent transportation solutions',
         'Data Science',
@@ -372,6 +372,12 @@ function DashboardPage(): React.ReactElement {
                     pathCourse: record.course,
                     groupCourse: group?.course,
                     resolvedCourse: recordCourse,
+                    // Stage debugging
+                    stagesArray: record.stages,
+                    stagesLength: record.stages?.length,
+                    lastStage: record.stages?.[record.stages.length - 1],
+                    lastStageName: record.stages?.[record.stages.length - 1]?.name,
+                    stageFilter,
                 });
             }
 
@@ -383,10 +389,22 @@ function DashboardPage(): React.ReactElement {
             const matchesCourse =
                 courseFilter === FILTER_ALL || recordCourse === courseFilter;
 
-            // Stage filter (based on current thesis stage)
-            const currentStageName = record.stages?.[record.stages.length - 1]?.name;
+            // Stage filter - derive current stage from thesis data (stages array or chapters)
+            const currentStageName = deriveCurrentStage(record);
             const matchesStage =
                 stageFilter === FILTER_ALL || currentStageName === stageFilter;
+
+            // Log stage derivation for first record
+            if (theses.indexOf(record) === 0) {
+                devLog('[Dashboard] Stage derivation for first record:', {
+                    thesisId: record.id,
+                    stagesArray: record.stages,
+                    chaptersCount: record.chapters?.length ?? 0,
+                    derivedStage: currentStageName,
+                    stageFilter,
+                    matchesStage,
+                });
+            }
 
             // SDG filter
             const matchesSdg =
@@ -826,16 +844,10 @@ function deriveDashboardStats(
     });
 
     theses.forEach((record) => {
-        // Determine stage from the thesis stages array (most recent stage)
-        const currentStage = record.stages?.[record.stages.length - 1]?.name;
-        if (currentStage && stageTotals.has(currentStage)) {
+        // Derive current stage using the utility function
+        const currentStage = deriveCurrentStage(record);
+        if (stageTotals.has(currentStage)) {
             stageTotals.set(currentStage, (stageTotals.get(currentStage) ?? 0) + 1);
-        } else {
-            // Default to first stage if no stage is set
-            const defaultStage = stageBuckets[0]?.key;
-            if (defaultStage) {
-                stageTotals.set(defaultStage, (stageTotals.get(defaultStage) ?? 0) + 1);
-            }
         }
     });
 
