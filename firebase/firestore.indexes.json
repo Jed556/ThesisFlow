@@ -5,7 +5,47 @@
             "queryScope": "COLLECTION_GROUP",
             "fields": [
                 {
+                    "fieldPath": "templateType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "year",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "templates",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
                     "fieldPath": "departmentKey",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "templateType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "year",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "templates",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "department",
                     "order": "ASCENDING"
                 },
                 {

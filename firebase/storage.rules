@@ -154,7 +154,7 @@ service firebase.storage {
             allow write: if request.auth != null;
         }
 
-        // Expert requests attachments
+        // Service Requests attachments
         match /{year}/{department}/{course}/{groupId}/expertRequests/{filename} {
             allow read: if request.auth != null;
             allow write: if request.auth != null;

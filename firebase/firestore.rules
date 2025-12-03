@@ -482,7 +482,7 @@ service cloud.firestore {
                         }
 
                         // ================================
-                        // EXPERT REQUESTS (under group)
+                        // SERVICE REQUESTS (under group)
                         // ================================
 
                         match /expertRequests/{requestId} {
@@ -494,7 +494,7 @@ service cloud.firestore {
                                 return req.data.expertUid == request.auth.uid;
                             }
 
-                            // Expert requests - group members and staff can read
+                            // Service Requests - group members and staff can read
                             allow read: if isAuthenticated() && hasGroupAccess();
                             // Members can create, adviser/admin can manage
                             allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
