@@ -9,12 +9,12 @@
 
 import {
     collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-    query, serverTimestamp, writeBatch, onSnapshot, type QueryConstraint,
+    query, serverTimestamp, writeBatch, onSnapshot, orderBy, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type { ThesisChapter, ThesisStageName } from '../../../types/thesis';
+import type { ThesisChapter, ThesisStageName, ChapterSubmissionEntry } from '../../../types/thesis';
 import { CHAPTERS_SUBCOLLECTION, THESIS_STAGE_SLUGS } from '../../../config/firestore';
-import { buildChaptersCollectionPath, buildChapterDocPath } from './paths';
+import { buildChaptersCollectionPath, buildChapterDocPath, buildSubmissionsCollectionPath } from './paths';
 import StagesConfig from '../../../config/stages.json';
 
 // ============================================================================
@@ -202,7 +202,56 @@ export async function deleteChapter(ctx: ChapterContext, chapterId: string): Pro
 // ============================================================================
 
 /**
+ * Fetch submissions for a chapter (one-time read for stage completion checks)
+ */
+async function fetchSubmissionsForChapter(
+    ctx: ChapterContext,
+    chapterId: string
+): Promise<ChapterSubmissionEntry[]> {
+    const submissionsPath = buildSubmissionsCollectionPath(
+        ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, chapterId
+    );
+    const submissionsRef = collection(firebaseFirestore, submissionsPath);
+    const q = query(submissionsRef, orderBy('createdAt', 'desc'));
+
+    try {
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            // Derive status from expertApprovals if not directly stored
+            let status = data.submissionStatus ?? data.status ?? 'under_review';
+
+            // Check if all required experts have approved
+            const expertApprovals = data.expertApprovals ?? [];
+            if (Array.isArray(expertApprovals) && expertApprovals.length > 0) {
+                const allApproved = expertApprovals.every(
+                    (a: { decision?: string }) => a.decision === 'approved' || a.decision === undefined
+                );
+                const hasRevisionRequired = expertApprovals.some(
+                    (a: { decision?: string }) => a.decision === 'revision_required'
+                );
+                if (hasRevisionRequired) {
+                    status = 'revision_required';
+                } else if (allApproved && expertApprovals.length >= 2) {
+                    // At least adviser and editor approved
+                    status = 'approved';
+                }
+            }
+
+            return {
+                id: docSnap.id,
+                status,
+            } as ChapterSubmissionEntry;
+        });
+    } catch (error) {
+        console.error('[fetchSubmissionsForChapter] Error:', error);
+        return [];
+    }
+}
+
+/**
  * Listen to chapters for a specific stage
+ * Also fetches submission status for each chapter to determine approval state
  * @param ctx - Chapter context containing path information
  * @param options - Callbacks for data and errors
  * @returns Unsubscribe function
@@ -223,23 +272,42 @@ export function listenChaptersForStage(
 
     return onSnapshot(
         chaptersRef,
-        (snapshot) => {
+        async (snapshot) => {
             console.log('[listenChaptersForStage] Received', snapshot.docs.length, 'chapters for stage:', ctx.stage);
 
             // Convert stage slug back to stage name for filtering
             const stageConfig = StagesConfig.stages.find(s => s.slug === ctx.stage);
             const stageName = stageConfig?.name as ThesisStageName | undefined;
 
-            const chapters = snapshot.docs
-                .map((docSnap) => ({
-                    id: Number(docSnap.id) || 0,
-                    ...docSnap.data(),
-                    // Add stage as array with the stage name this chapter belongs to
-                    // This is derived from the subcollection path, not stored in the document
-                    stage: stageName ? [stageName] : [],
-                } as unknown as ThesisChapter))
-                .sort((a, b) => a.id - b.id); // Sort by numeric ID
-            options.onData(chapters);
+            // Build chapters with their submissions for status checks
+            const chaptersWithSubmissions = await Promise.all(
+                snapshot.docs.map(async (docSnap) => {
+                    const chapterData = docSnap.data();
+                    const chapterId = docSnap.id;
+
+                    // Check if chapter already has isApproved flag set
+                    const isApproved = chapterData.isApproved === true;
+
+                    // Only fetch submissions if not already marked as approved
+                    let submissions: ChapterSubmissionEntry[] = [];
+                    if (!isApproved) {
+                        submissions = await fetchSubmissionsForChapter(ctx, chapterId);
+                    } else {
+                        // If approved, create a synthetic approved submission entry
+                        submissions = [{ id: chapterData.approvedSubmissionId ?? 'approved', status: 'approved' }];
+                    }
+
+                    return {
+                        id: Number(chapterId) || 0,
+                        ...chapterData,
+                        stage: stageName ? [stageName] : [],
+                        submissions,
+                    } as unknown as ThesisChapter;
+                })
+            );
+
+            const sortedChapters = chaptersWithSubmissions.sort((a, b) => a.id - b.id);
+            options.onData(sortedChapters);
         },
         (error) => {
             console.error('[listenChaptersForStage] Error for stage:', ctx.stage, error);
@@ -328,7 +396,6 @@ export async function seedChaptersFromTemplate(
 
         // Remove 'stage' field - it's only used for routing during seeding
         // The stage is determined by the subcollection path, not stored in the document
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { stage: _stage, ...chapterWithoutStage } = chapterData as ThesisChapter & { stage?: unknown };
 
         batch.set(docRef, {
@@ -395,7 +462,6 @@ export async function seedAllChaptersForThesis(
             };
             console.log('[seedAllChaptersForThesis] Seeding', stageChapters.length, 'chapters to stage:', stageSlug);
             // Strip 'id' from chapters for seeding (seedChaptersFromTemplate generates new IDs)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const chaptersWithoutId = stageChapters.map(({ id: _id, ...rest }) => rest);
             return seedChaptersFromTemplate(chapterContext, chaptersWithoutId);
         }

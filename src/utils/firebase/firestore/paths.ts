@@ -5,7 +5,7 @@ import {
     SUBMISSIONS_SUBCOLLECTION, CHATS_SUBCOLLECTION, AUDITS_SUBCOLLECTION, PANEL_COMMENTS_SUBCOLLECTION,
     USERS_SUBCOLLECTION, TERMINAL_SUBCOLLECTION, CONFIGURATION_ROOT, TERMINAL_REQUIREMENTS_KEY,
     CHAPTER_TEMPLATES_KEY, JOIN_SUBCOLLECTION, INVITES_DOC, REQUESTS_DOC, SLOT_REQUESTS_SUBCOLLECTION,
-    CHAPTER_SLOTS_SUBCOLLECTION, SALARY_SUBCOLLECTION,
+    CHAPTER_SLOTS_SUBCOLLECTION, SALARY_SUBCOLLECTION, CALENDAR_SUBCOLLECTION, EVENTS_SUBCOLLECTION,
     GROUP_CONFIGURATION_SUBCOLLECTION, GROUP_CONFIGURATION_CHAPTER_DOC,
     TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION, AGENDAS_SUBCOLLECTION, DEPARTMENT_AGENDAS_SUBCOLLECTION,
 } from '../../../config/firestore';
@@ -760,4 +760,259 @@ export function buildCourseUserSalaryDocPath(
     year: string, department: string, course: string, userId: string, salaryId: string
 ): string {
     return `${buildCourseUserSalaryCollectionPath(year, department, course, userId)}/${salaryId}`;
+}
+
+// ============================================================================
+// Calendar Path Builders
+// ============================================================================
+
+/**
+ * Calendar hierarchy levels for access control and path building
+ */
+export type CalendarLevel = 'global' | 'department' | 'course' | 'group' | 'user';
+
+/**
+ * Context for building calendar paths
+ */
+export interface CalendarPathContext {
+    year: string;
+    department?: string;
+    course?: string;
+    groupId?: string;
+    userId?: string;
+}
+
+/**
+ * Build path to global (year-level) calendar collection
+ * Path: year/{year}/calendar
+ */
+export function buildGlobalCalendarCollectionPath(year: string = DEFAULT_YEAR): string {
+    return `${buildYearPath(year)}/${CALENDAR_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to global calendar events collection
+ * Path: year/{year}/calendar/events
+ */
+export function buildGlobalCalendarEventsPath(year: string = DEFAULT_YEAR): string {
+    return `${buildGlobalCalendarCollectionPath(year)}/${EVENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific global calendar event document
+ * Path: year/{year}/calendar/events/{eventId}
+ */
+export function buildGlobalCalendarEventDocPath(year: string, eventId: string): string {
+    return `${buildGlobalCalendarEventsPath(year)}/${eventId}`;
+}
+
+/**
+ * Build path to department-level calendar collection
+ * Path: year/{year}/departments/{department}/calendar
+ */
+export function buildDepartmentCalendarCollectionPath(year: string, department: string): string {
+    return `${buildDepartmentPath(year, department)}/${CALENDAR_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to department calendar events collection
+ * Path: year/{year}/departments/{department}/calendar/events
+ */
+export function buildDepartmentCalendarEventsPath(year: string, department: string): string {
+    return `${buildDepartmentCalendarCollectionPath(year, department)}/${EVENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific department calendar event document
+ * Path: year/{year}/departments/{department}/calendar/events/{eventId}
+ */
+export function buildDepartmentCalendarEventDocPath(
+    year: string, department: string, eventId: string
+): string {
+    return `${buildDepartmentCalendarEventsPath(year, department)}/${eventId}`;
+}
+
+/**
+ * Build path to course-level calendar collection
+ * Path: year/{year}/departments/{department}/courses/{course}/calendar
+ */
+export function buildCourseCalendarCollectionPath(
+    year: string, department: string, course: string
+): string {
+    return `${buildCoursePath(year, department, course)}/${CALENDAR_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to course calendar events collection
+ * Path: year/{year}/departments/{department}/courses/{course}/calendar/events
+ */
+export function buildCourseCalendarEventsPath(
+    year: string, department: string, course: string
+): string {
+    return `${buildCourseCalendarCollectionPath(year, department, course)}/${EVENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific course calendar event document
+ * Path: year/{year}/departments/{department}/courses/{course}/calendar/events/{eventId}
+ */
+export function buildCourseCalendarEventDocPath(
+    year: string, department: string, course: string, eventId: string
+): string {
+    return `${buildCourseCalendarEventsPath(year, department, course)}/${eventId}`;
+}
+
+/**
+ * Build path to group-level calendar collection
+ * Path: year/{year}/departments/{department}/courses/{course}/groups/{groupId}/calendar
+ */
+export function buildGroupCalendarCollectionPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildGroupDocPath(year, department, course, groupId)}/${CALENDAR_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to group calendar events collection
+ * Path: year/{year}/departments/{department}/courses/{course}/groups/{groupId}/calendar/events
+ */
+export function buildGroupCalendarEventsPath(
+    year: string, department: string, course: string, groupId: string
+): string {
+    return `${buildGroupCalendarCollectionPath(year, department, course, groupId)}/${EVENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific group calendar event document
+ * Path: year/{year}/depts/{dept}/courses/{course}/groups/{groupId}/calendar/events/{eventId}
+ */
+export function buildGroupCalendarEventDocPath(
+    year: string, department: string, course: string, groupId: string, eventId: string
+): string {
+    return `${buildGroupCalendarEventsPath(year, department, course, groupId)}/${eventId}`;
+}
+
+/**
+ * Build path to user's personal calendar collection (year-level user)
+ * Path: year/{year}/users/{userId}/calendar
+ */
+export function buildYearUserCalendarCollectionPath(year: string, userId: string): string {
+    return `${buildYearUserDocPath(year, userId)}/${CALENDAR_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to user's personal calendar events (year-level user)
+ * Path: year/{year}/users/{userId}/calendar/events
+ */
+export function buildYearUserCalendarEventsPath(year: string, userId: string): string {
+    return `${buildYearUserCalendarCollectionPath(year, userId)}/${EVENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific user calendar event (year-level user)
+ * Path: year/{year}/users/{userId}/calendar/events/{eventId}
+ */
+export function buildYearUserCalendarEventDocPath(
+    year: string, userId: string, eventId: string
+): string {
+    return `${buildYearUserCalendarEventsPath(year, userId)}/${eventId}`;
+}
+
+/**
+ * Build path to user's personal calendar collection (department-level user)
+ * Path: year/{year}/departments/{department}/users/{userId}/calendar
+ */
+export function buildDepartmentUserCalendarCollectionPath(
+    year: string, department: string, userId: string
+): string {
+    return `${buildDepartmentUserDocPath(year, department, userId)}/${CALENDAR_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to user's personal calendar events (department-level user)
+ * Path: year/{year}/departments/{department}/users/{userId}/calendar/events
+ */
+export function buildDepartmentUserCalendarEventsPath(
+    year: string, department: string, userId: string
+): string {
+    return `${buildDepartmentUserCalendarCollectionPath(year, department, userId)}/${EVENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific user calendar event (department-level user)
+ * Path: year/{year}/departments/{department}/users/{userId}/calendar/events/{eventId}
+ */
+export function buildDepartmentUserCalendarEventDocPath(
+    year: string, department: string, userId: string, eventId: string
+): string {
+    return `${buildDepartmentUserCalendarEventsPath(year, department, userId)}/${eventId}`;
+}
+
+/**
+ * Build path to user's personal calendar collection (course-level user)
+ * Path: year/{year}/departments/{department}/courses/{course}/users/{userId}/calendar
+ */
+export function buildCourseUserCalendarCollectionPath(
+    year: string, department: string, course: string, userId: string
+): string {
+    return `${buildCourseUserDocPath(year, department, course, userId)}/${CALENDAR_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to user's personal calendar events (course-level user)
+ * Path: year/{year}/departments/{department}/courses/{course}/users/{userId}/calendar/events
+ */
+export function buildCourseUserCalendarEventsPath(
+    year: string, department: string, course: string, userId: string
+): string {
+    return `${buildCourseUserCalendarCollectionPath(year, department, course, userId)}/${EVENTS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific user calendar event (course-level user)
+ * Path: year/{year}/depts/{dept}/courses/{course}/users/{userId}/calendar/events/{eventId}
+ */
+export function buildCourseUserCalendarEventDocPath(
+    year: string, department: string, course: string, userId: string, eventId: string
+): string {
+    return `${buildCourseUserCalendarEventsPath(year, department, course, userId)}/${eventId}`;
+}
+
+/**
+ * Determine the appropriate calendar path based on user role
+ * @param userId - User ID
+ * @param role - User role (determines path level)
+ * @param context - Calendar path context with year/department/course
+ * @returns Path to user's personal calendar collection
+ */
+export function buildUserCalendarCollectionPathByRole(
+    userId: string,
+    role: 'admin' | 'developer' | 'head' | 'statistician' | 'editor' | 'adviser' | 'panel' |
+        'moderator' | 'student',
+    context: { year: string; department?: string; course?: string }
+): string {
+    // Year-level roles (admin, developer)
+    if (role === 'admin' || role === 'developer') {
+        return buildYearUserCalendarCollectionPath(context.year, userId);
+    }
+
+    // Department-level roles
+    if (['head', 'statistician', 'editor', 'adviser', 'panel', 'moderator'].includes(role)) {
+        if (!context.department) {
+            throw new Error('Department is required for department-level user calendar path');
+        }
+        return buildDepartmentUserCalendarCollectionPath(context.year, context.department, userId);
+    }
+
+    // Course-level roles (student)
+    if (role === 'student') {
+        if (!context.department || !context.course) {
+            throw new Error('Department and course are required for course-level user calendar path');
+        }
+        return buildCourseUserCalendarCollectionPath(
+            context.year, context.department, context.course, userId
+        );
+    }
+
+    throw new Error(`Unknown role: ${role}`);
 }

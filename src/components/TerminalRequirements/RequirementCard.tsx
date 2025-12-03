@@ -1,6 +1,6 @@
 import * as React from 'react';
 import {
-    Box, Button, Card, CardContent, Chip, LinearProgress, Skeleton, Stack, Typography,
+    Box, Button, Card, CardContent, Chip, LinearProgress, Skeleton, Stack, Tooltip, Typography,
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon, Download as DownloadIcon } from '@mui/icons-material';
 import type { FileAttachment } from '../../types/file';
@@ -25,6 +25,7 @@ export interface TerminalRequirementCardProps {
     error?: string | null;
     onUpload?: (files: FileList) => void;
     onDeleteFile?: (file: FileAttachment) => void;
+    onViewFile?: (file: FileAttachment) => void;
 }
 
 export function TerminalRequirementCard({
@@ -37,6 +38,7 @@ export function TerminalRequirementCard({
     error,
     onUpload,
     onDeleteFile,
+    onViewFile,
 }: TerminalRequirementCardProps) {
     const inputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -159,12 +161,35 @@ export function TerminalRequirementCard({
                     {hasFiles ? (
                         <Stack spacing={1}>
                             {files!.map((file) => (
-                                <FileCard
+                                <Tooltip
                                     key={file.id ?? file.url}
-                                    file={file}
-                                    showDeleteButton={Boolean(onDeleteFile)}
-                                    onDelete={onDeleteFile ? () => handleDeleteFile(file) : undefined}
-                                />
+                                    title={onViewFile ? 'Click to view' : ''}
+                                    placement="top"
+                                    arrow
+                                >
+                                    <Box
+                                        onClick={onViewFile ? () => onViewFile(file) : undefined}
+                                        sx={{
+                                            cursor: onViewFile ? 'pointer' : 'default',
+                                            borderRadius: 1,
+                                            transition: (theme) => theme.transitions.create(
+                                                ['background-color', 'box-shadow'],
+                                                { duration: theme.transitions.duration.short }
+                                            ),
+                                            ...(onViewFile && {
+                                                '&:hover': {
+                                                    bgcolor: 'action.hover',
+                                                },
+                                            }),
+                                        }}
+                                    >
+                                        <FileCard
+                                            file={file}
+                                            showDeleteButton={Boolean(onDeleteFile)}
+                                            onDelete={onDeleteFile ? () => handleDeleteFile(file) : undefined}
+                                        />
+                                    </Box>
+                                </Tooltip>
                             ))}
                         </Stack>
                     ) : (

@@ -1,11 +1,10 @@
 [
     {
         "origin": [
-            "localhost",
-            "thesisflow.vercel.app",
-            "thesisflow-beta.vercel.app",
-            "thesisflow-letran.web.app",
-            "thesisflow-letran.firebaseapp.com"
+            "https://thesisflow.vercel.app",
+            "https://thesisflow-beta.vercel.app",
+            "https://thesisflow-letran.web.app",
+            "https://thesisflow-letran.firebaseapp.com"
         ],
         "method": [
             "GET",
@@ -15,6 +14,11 @@
             "DELETE",
             "PATCH",
             "OPTIONS"
+        ],
+        "responseHeader": [
+            "Content-Type",
+            "Content-Disposition",
+            "Content-Length"
         ],
         "maxAgeSeconds": 3600
     }

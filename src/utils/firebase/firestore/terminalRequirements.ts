@@ -22,7 +22,6 @@ import {
     DEFAULT_COURSE_SEGMENT,
     COURSE_TEMPLATES_SUBCOLLECTION,
     TERMINAL_REQUIREMENTS_KEY,
-    TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION,
 } from '../../../config/firestore';
 import {
     buildTerminalCollectionPath,
@@ -635,9 +634,6 @@ function normalizeConfigEntry(entry: TerminalRequirementConfigEntry): TerminalRe
     if (entry.description?.trim()) {
         cleanEntry.description = entry.description.trim();
     }
-    if (entry.requireAttachment !== undefined) {
-        cleanEntry.requireAttachment = entry.requireAttachment;
-    }
     if (entry.fileTemplate) {
         cleanEntry.fileTemplate = { ...entry.fileTemplate };
     }
@@ -716,7 +712,7 @@ function mapConfigSnapshot(
     };
 }
 
-export interface TerminalRequirementConfigQuery extends CourseTemplateContextInput { }
+export type TerminalRequirementConfigQuery = CourseTemplateContextInput
 
 export interface SaveTerminalRequirementConfigPayload extends CourseTemplateContextInput {
     name?: string;
@@ -1214,4 +1210,108 @@ export async function findAndRecordTerminalRequirementDecision(
 
     // Return the first result for backward compatibility
     return results[0];
+}
+
+// ============================================================================
+// Seeding Functions
+// ============================================================================
+
+/**
+ * Default terminal requirements data structure from JSON config
+ */
+export interface DefaultTerminalRequirementsData {
+    defaultRequirements: {
+        stage: ThesisStageName;
+        requirements: {
+            requirementId: string;
+            title: string;
+            description?: string;
+            required: boolean;
+        }[];
+    }[];
+}
+
+/**
+ * Result of load or seed operation
+ */
+export interface LoadOrSeedTerminalRequirementsResult {
+    config: TerminalRequirementConfigDocument | null;
+    seeded: boolean;
+}
+
+/**
+ * Load existing terminal requirement config or seed with defaults if none exists.
+ * Used for auto-initializing a course's terminal requirements.
+ * 
+ * @param context Course template context (year, department, course)
+ * @param defaultData Default requirements data from JSON config
+ * @returns The loaded or seeded config with seeding status
+ */
+export async function loadOrSeedTerminalRequirementConfig(
+    context: CourseTemplateContextInput,
+    defaultData: DefaultTerminalRequirementsData
+): Promise<LoadOrSeedTerminalRequirementsResult> {
+    const normalized = normalizeCourseTemplateContext(context);
+
+    // Check if config already exists
+    const existing = await getTerminalRequirementConfig(normalized);
+    if (existing) {
+        return { config: existing, seeded: false };
+    }
+
+    // Build requirements from default data
+    const requirements: TerminalRequirementConfigEntry[] = [];
+    for (const stageData of defaultData.defaultRequirements) {
+        for (const req of stageData.requirements) {
+            requirements.push({
+                stage: stageData.stage,
+                requirementId: req.requirementId,
+                title: req.title,
+                description: req.description,
+                required: req.required,
+            });
+        }
+    }
+
+    // Save the new config
+    await setTerminalRequirementConfig({
+        year: normalized.year,
+        department: normalized.department,
+        course: normalized.course,
+        name: `${normalized.department} - ${normalized.course}`,
+        requirements,
+    });
+
+    // Fetch the newly created config
+    const newConfig = await getTerminalRequirementConfig(normalized);
+    return { config: newConfig, seeded: true };
+}
+
+/**
+ * Seed missing terminal requirement configs for multiple department/course pairs.
+ * Returns the count of newly seeded configs.
+ * 
+ * @param year Academic year
+ * @param pairs Array of department/course pairs to check
+ * @param defaultData Default requirements data from JSON config
+ * @returns Number of configs that were seeded
+ */
+export async function seedMissingTerminalRequirementConfigs(
+    year: string,
+    pairs: { department: string; course: string }[],
+    defaultData: DefaultTerminalRequirementsData
+): Promise<number> {
+    let seededCount = 0;
+
+    for (const pair of pairs) {
+        const result = await loadOrSeedTerminalRequirementConfig(
+            { year, department: pair.department, course: pair.course },
+            defaultData
+        );
+        if (result.seeded) {
+            seededCount++;
+        }
+    }
+
+    return seededCount;
 }

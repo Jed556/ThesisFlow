@@ -385,8 +385,8 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                             versionLabel={versionLabel ?? `v${versionIndex + 1}`}
                             sizeLabel={buildFileSizeLabel(file)}
                             metaLabel={buildSubmissionMeta(file, participants)}
-                            statusChipLabel={statusChipLabel}
-                            statusChipColor={statusChipColor}
+                            statusChipLabel={isDraft ? undefined : statusChipLabel}
+                            statusChipColor={isDraft ? undefined : statusChipColor}
                             isDraft={isDraft}
                             selected={selected}
                             disabled={disabled || isProcessing}
@@ -474,7 +474,7 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
 
                 {/* Student actions */}
                 {isStudent && isDraft && onSubmit && (
-                    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} justifyContent="flex-end">
                         <Button
                             size="small"
                             variant="contained"

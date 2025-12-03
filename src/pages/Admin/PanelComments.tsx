@@ -48,7 +48,46 @@ export default function AdminPanelCommentsPage() {
 
     const [groups, setGroups] = React.useState<ThesisGroup[]>([]);
     const [groupsLoading, setGroupsLoading] = React.useState(true);
+
+    // Cascading filters: department > course > group
+    const [selectedDepartment, setSelectedDepartment] = React.useState<string>('');
+    const [selectedCourse, setSelectedCourse] = React.useState<string>('');
     const [selectedGroupId, setSelectedGroupId] = React.useState<string>('');
+
+    // Derive unique departments from all groups
+    const departments = React.useMemo(() => {
+        const uniqueDepts = new Set<string>();
+        groups.forEach((group) => {
+            if (group.department) {
+                uniqueDepts.add(group.department);
+            }
+        });
+        return Array.from(uniqueDepts).sort((a, b) => a.localeCompare(b));
+    }, [groups]);
+
+    // Derive courses for the selected department
+    const courses = React.useMemo(() => {
+        if (!selectedDepartment) return [];
+        const uniqueCourses = new Set<string>();
+        groups
+            .filter((group) => group.department === selectedDepartment)
+            .forEach((group) => {
+                if (group.course) {
+                    uniqueCourses.add(group.course);
+                }
+            });
+        return Array.from(uniqueCourses).sort((a, b) => a.localeCompare(b));
+    }, [groups, selectedDepartment]);
+
+    // Filter groups by selected department and course
+    const filteredGroups = React.useMemo(() => {
+        return groups.filter((group) => {
+            if (selectedDepartment && group.department !== selectedDepartment) return false;
+            if (selectedCourse && group.course !== selectedCourse) return false;
+            return true;
+        });
+    }, [groups, selectedDepartment, selectedCourse]);
+
     const selectedGroup = React.useMemo(
         () => groups.find((group) => group.id === selectedGroupId) ?? null,
         [groups, selectedGroupId]
@@ -88,7 +127,6 @@ export default function AdminPanelCommentsPage() {
                 if (cancelled) return;
                 setGroups(result);
                 setGroupsLoading(false);
-                setSelectedGroupId((prev) => (prev ? prev : (result[0]?.id ?? '')));
             })
             .catch((error) => {
                 console.error('Failed to load groups for admin panel comments:', error);
@@ -101,6 +139,38 @@ export default function AdminPanelCommentsPage() {
             cancelled = true;
         };
     }, []);
+
+    // Auto-select first department when groups load
+    React.useEffect(() => {
+        if (departments.length > 0 && !selectedDepartment) {
+            setSelectedDepartment(departments[0]);
+        }
+    }, [departments, selectedDepartment]);
+
+    // Reset course and group when department changes
+    React.useEffect(() => {
+        setSelectedCourse('');
+        setSelectedGroupId('');
+    }, [selectedDepartment]);
+
+    // Auto-select first course when courses change
+    React.useEffect(() => {
+        if (courses.length > 0 && !selectedCourse) {
+            setSelectedCourse(courses[0]);
+        }
+    }, [courses, selectedCourse]);
+
+    // Reset group when course changes
+    React.useEffect(() => {
+        setSelectedGroupId('');
+    }, [selectedCourse]);
+
+    // Auto-select first group when filtered groups change
+    React.useEffect(() => {
+        if (filteredGroups.length > 0 && !selectedGroupId) {
+            setSelectedGroupId(filteredGroups[0].id);
+        }
+    }, [filteredGroups, selectedGroupId]);
 
     React.useEffect(() => {
         if (!selectedGroupId) {
@@ -275,6 +345,14 @@ export default function AdminPanelCommentsPage() {
         setActivePanelUid(value);
     }, []);
 
+    const handleSelectDepartment = (_: unknown, value: string | null) => {
+        setSelectedDepartment(value ?? '');
+    };
+
+    const handleSelectCourse = (_: unknown, value: string | null) => {
+        setSelectedCourse(value ?? '');
+    };
+
     const handleSelectGroup = (_: unknown, value: ThesisGroup | null) => {
         setSelectedGroupId(value?.id ?? '');
     };
@@ -327,20 +405,52 @@ export default function AdminPanelCommentsPage() {
                     </Typography>
                 </Box>
 
-                <Autocomplete
-                    options={groups}
-                    value={selectedGroup}
-                    onChange={handleSelectGroup}
-                    loading={groupsLoading}
-                    getOptionLabel={(option) => option.name || option.id}
-                    renderInput={(params) => (
-                        <TextField
-                            {...params}
-                            label="Thesis groups"
-                            placeholder={groupsLoading ? 'Loading groups…' : 'Select group'}
-                        />
-                    )}
-                />
+                {/* Cascading filters: Department > Course > Group */}
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                    <Autocomplete
+                        options={departments}
+                        value={selectedDepartment || null}
+                        onChange={handleSelectDepartment}
+                        loading={groupsLoading}
+                        sx={{ flex: 1 }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label="Department"
+                                placeholder={groupsLoading ? 'Loading…' : 'Select department'}
+                            />
+                        )}
+                    />
+                    <Autocomplete
+                        options={courses}
+                        value={selectedCourse || null}
+                        onChange={handleSelectCourse}
+                        disabled={!selectedDepartment}
+                        sx={{ flex: 1 }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label="Course"
+                                placeholder={!selectedDepartment ? 'Select department first' : 'Select course'}
+                            />
+                        )}
+                    />
+                    <Autocomplete
+                        options={filteredGroups}
+                        value={selectedGroup}
+                        onChange={handleSelectGroup}
+                        disabled={!selectedCourse}
+                        getOptionLabel={(option) => option.name || option.id}
+                        sx={{ flex: 1 }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label="Group"
+                                placeholder={!selectedCourse ? 'Select course first' : 'Select group'}
+                            />
+                        )}
+                    />
+                </Stack>
 
                 {!selectedGroup && !groupsLoading && (
                     <Alert severity="info">

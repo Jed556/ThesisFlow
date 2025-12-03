@@ -15,7 +15,6 @@ import {
     Close as CloseIcon,
     Send as SendIcon,
 } from '@mui/icons-material';
-import type { ChatMessage } from '../../types/chat';
 import type { AttachmentPreview, MessageComposerProps } from './types';
 import { formatFileSize } from '../../utils/fileUtils';
 
@@ -118,7 +117,7 @@ export default function MessageComposer({
     };
 
     return (
-        <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', p: 2 }}>
+        <Box>
             {(replyTo || editingMessage) && (
                 <Paper
                     elevation={0}
@@ -167,22 +166,12 @@ export default function MessageComposer({
                 minRows={2}
                 maxRows={6}
                 disabled={disabled || isSending}
+                notched={false}
                 sx={{
                     borderRadius: 2,
                     bgcolor: 'action.hover',
-                    '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'divider',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'primary.main',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'primary.main',
-                        borderWidth: 2,
-                    },
-                    '&.Mui-disabled': {
-                        bgcolor: 'action.disabledBackground',
-                    },
+                    '& .MuiOutlinedInput-notchedOutline': { display: 'none' },
+                    '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
                 }}
                 endAdornment={(
                     <InputAdornment position="end">
@@ -234,6 +223,6 @@ export default function MessageComposer({
                 </Stack>
             )}
 
-        </Paper>
+        </Box>
     );
 }

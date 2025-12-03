@@ -30,7 +30,6 @@ import {
     buildStageCompletionMap,
     buildInterleavedStageLockMap,
     chapterHasStage,
-    resolveChapterStage,
     describeStageSequenceStep,
     getPreviousSequenceStep,
     getCurrentInProgressStage,
@@ -152,8 +151,8 @@ export default function ThesisWorkspace({
     const fileViewerContainerRef = React.useRef<HTMLDivElement>(null);
     /** Chat messages for the currently selected submission (loaded from Firestore subcollection) */
     const [submissionChats, setSubmissionChats] = React.useState<ChatMessage[]>([]);
-    /** Whether chats are currently loading */
-    const [isLoadingChats, setIsLoadingChats] = React.useState(false);
+    /** Whether chats are currently loading (reserved for future loading states) */
+    const [_isLoadingChats, setIsLoadingChats] = React.useState(false);
 
     React.useEffect(() => {
         setChapterFiles({});
@@ -399,16 +398,13 @@ export default function ThesisWorkspace({
         };
     }, [isResizing, MAX_CONVERSATION_WIDTH, MIN_CONVERSATION_WIDTH]);
 
-    const determineChapterStage = React.useCallback((chapterId: number): ThesisStageName => {
-        const chapter = allChapters.find((entry) => entry.id === chapterId);
-        return resolveChapterStage(chapter);
-    }, [allChapters]);
-
     const handleChapterUpload = React.useCallback((chapterId: number, file: File) => {
         if (!onUploadChapter || !thesisId) {
             return;
         }
-        const chapterStage = determineChapterStage(chapterId);
+        // Use the currently active stage tab, not the chapter's default stage
+        // This ensures uploads go to the correct stage when viewing a chapter in multiple stages
+        const chapterStage = activeStage;
         setUploadError(null);
         setUploadingChapterId(chapterId);
         setActiveChapterId(chapterId);
@@ -437,7 +433,7 @@ export default function ThesisWorkspace({
                 setUploadingChapterId((current) => (current === chapterId ? null : current));
             }
         })();
-    }, [onUploadChapter, thesisId, groupId, year, department, course, determineChapterStage]);
+    }, [onUploadChapter, thesisId, groupId, year, department, course, activeStage]);
 
     React.useEffect(() => {
         if (isStageLocked || stageChapters.length === 0) {
@@ -764,7 +760,7 @@ export default function ThesisWorkspace({
         const request: WorkspaceCommentPayload = {
             thesisId,
             chapterId: activeChapter.id,
-            chapterStage: resolveChapterStage(activeChapter),
+            chapterStage: activeStage,
             submissionId: activeVersionOption?.id,
             versionIndex: activeVersionIndex,
             content: payload.content,
@@ -772,7 +768,7 @@ export default function ThesisWorkspace({
             replyToId: payload.replyToId,
         };
         await onCreateComment(request);
-    }, [allowCommenting, onCreateComment, thesisId, activeChapter, activeVersionIndex, versionOptions]);
+    }, [allowCommenting, onCreateComment, thesisId, activeChapter, activeVersionIndex, versionOptions, activeStage]);
 
     const handleEditMessage = React.useCallback(async (payload: {
         content: string;
@@ -786,23 +782,25 @@ export default function ThesisWorkspace({
         await onEditComment({
             thesisId,
             chapterId: activeChapter.id,
-            chapterStage: resolveChapterStage(activeChapter),
+            chapterStage: activeStage,
             versionIndex: activeVersionIndex,
             content: payload.content,
             files: payload.files,
             replyToId: payload.replyToId,
             commentId: payload.messageId,
         });
-    }, [onEditComment, thesisId, activeChapter, activeVersionIndex]);
+    }, [onEditComment, thesisId, activeChapter, activeVersionIndex, activeStage]);
 
     // Expert review flow - used in SubmissionsRail onApprove/onReject
     const handleRequestDecision = React.useCallback((chapterId: number, decision: WorkspaceChapterDecision) => {
-        if (!enableChapterDecisions || !expertRole || _chapterDecisionHelperText || pendingDecision || isSubmittingDecision) {
+        // Only check core conditions - don't check _chapterDecisionHelperText here
+        // because the version may have just been set in the same click handler
+        if (!enableChapterDecisions || !expertRole || pendingDecision || isSubmittingDecision) {
             return;
         }
         setPendingDecision({ chapterId, decision });
         setDecisionError(null);
-    }, [enableChapterDecisions, expertRole, _chapterDecisionHelperText, pendingDecision, isSubmittingDecision]);
+    }, [enableChapterDecisions, expertRole, pendingDecision, isSubmittingDecision]);
 
     /**
      * Handler for approving a submission from SubmissionsRail
@@ -947,16 +945,14 @@ export default function ThesisWorkspace({
 
     if (!thesisSource || allChapters.length === 0) {
         return (
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '90%', minHeight: 0 }}>
                 <WorkspaceFilters filters={filters} />
                 {uploadErrorBanner}
-                <Card>
-                    <CardContent>
-                        <Typography variant="body2" color="text.secondary">
-                            {emptyStateMessage}
-                        </Typography>
-                    </CardContent>
-                </Card>
+                <UnauthorizedNotice
+                    title="No chapters available"
+                    description={emptyStateMessage}
+                    variant='box'
+                />
             </Box>
         );
     }
@@ -1066,7 +1062,6 @@ export default function ThesisWorkspace({
                                     gap: 3,
                                     height: { xs: 'auto', md: '100%' },
                                     minHeight: { xs: viewingFile ? 0 : 'auto', md: 0 },
-                                    pr: { xs: 0, md: 1.5 },
                                 }}
                             >
                                 {/* Chapter Rail */}
@@ -1074,8 +1069,10 @@ export default function ThesisWorkspace({
                                     flex: 1,
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    minHeight: { xs: 280, md: 0 },
-                                    maxHeight: { xs: '45vh', md: 'none' },
+                                    minHeight: { xs: 280, md: 500 },
+                                    maxHeight: { xs: '45vh', md: 'calc(100vh - 200px)' },
+                                    height: { xs: 'auto', md: 'calc(100vh - 200px)' },
+                                    overflow: 'hidden',
                                 }}>
                                     <CardContent sx={{
                                         flexGrow: 1,
@@ -1113,7 +1110,10 @@ export default function ThesisWorkspace({
                                     flex: 1,
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    minHeight: { xs: 280, md: 0 },
+                                    minHeight: { xs: 280, md: 500 },
+                                    maxHeight: { xs: '45vh', md: 'calc(100vh - 200px)' },
+                                    height: { xs: 'auto', md: 'calc(100vh - 200px)' },
+                                    overflow: 'hidden',
                                 }}>
                                     <CardContent sx={{
                                         flexGrow: 1,
@@ -1167,7 +1167,6 @@ export default function ThesisWorkspace({
                                     gap: { xs: 2, md: 0 },
                                     height: { xs: 'auto', md: '100%' },
                                     minHeight: { xs: viewingFile ? 'auto' : 0, md: 0 },
-                                    pl: { xs: 0, md: 1.5 },
                                 }}
                             >
                                 {/* File Viewer Panel */}
@@ -1177,8 +1176,10 @@ export default function ThesisWorkspace({
                                         display: 'flex',
                                         flexDirection: 'column',
                                         flexShrink: 0,
-                                        minHeight: { xs: 350, md: 0 },
+                                        minHeight: { xs: 350, md: 500 },
                                         maxHeight: { xs: '55vh', md: 'none' },
+                                        height: { xs: 'auto', md: 'calc(100vh - 200px)' },
+                                        overflow: 'hidden',
                                     }}
                                 >
                                     <CardContent sx={{
@@ -1248,8 +1249,10 @@ export default function ThesisWorkspace({
                                         display: 'flex',
                                         flexDirection: 'column',
                                         flexShrink: 0,
-                                        minHeight: { xs: 350, md: 0 },
+                                        minHeight: { xs: 350, md: 500 },
                                         flex: { xs: 1, md: 'none' },
+                                        height: { xs: 'auto', md: 'calc(100vh - 200px)' },
+                                        overflow: 'hidden',
                                     }}
                                 >
                                     <CardContent sx={{

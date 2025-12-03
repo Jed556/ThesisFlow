@@ -1,12 +1,5 @@
 import * as React from 'react';
-import {
-    Box,
-    Card,
-    CardContent,
-    Chip,
-    Stack,
-    Typography,
-} from '@mui/material';
+import { Box, Card, CardContent, Chip, Stack, Typography } from '@mui/material';
 import type { ChipProps } from '@mui/material';
 import type { ChapterSubmissionStatus, ThesisChapter, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
@@ -20,6 +13,7 @@ const statusMeta: Record<string, { label: string; chipColor: 'default' | 'succes
     approved: { label: 'Approved', chipColor: 'success' },
     under_review: { label: 'Under review', chipColor: 'info' },
     revision_required: { label: 'Needs revision', chipColor: 'warning' },
+    draft: { label: 'Draft', chipColor: 'default' },
     not_submitted: { label: 'Not submitted', chipColor: 'default' },
 };
 
@@ -179,13 +173,16 @@ export const buildVersionOptions = (
     return [];
 };
 
+/** Derived chapter status from file submissions */
+type DerivedChapterStatus = 'approved' | 'under_review' | 'revision_required' | 'draft' | 'not_submitted';
+
 /**
  * Derive chapter status from its file submissions
  * Priority: any approved = approved, any under_review = under_review, any revision = revision, any draft = draft, else not_submitted
  * If ANY version is approved, the chapter is considered approved (best version wins)
  * Note: 'ignored' status is not considered for chapter-level status (it's a derived display state)
  */
-export const deriveChapterStatus = (files?: FileAttachment[]): 'approved' | 'under_review' | 'revision_required' | 'draft' | 'not_submitted' => {
+export const deriveChapterStatus = (files?: FileAttachment[]): DerivedChapterStatus => {
     if (!files || files.length === 0) {
         return 'not_submitted';
     }

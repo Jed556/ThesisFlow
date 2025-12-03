@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Chip, Stack, Typography } from '@mui/material';
+import { CheckCircle as ApprovedIcon, Pending as PendingIcon, Cancel as ReturnedIcon } from '@mui/icons-material';
 import type {
-    TerminalRequirementApprovalRole,
-    TerminalRequirementSubmissionRecord,
+    TerminalRequirementApprovalRole, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
 
 export const TERMINAL_REQUIREMENT_ROLE_LABELS: Record<TerminalRequirementApprovalRole, string> = {
@@ -15,9 +15,9 @@ export const TERMINAL_REQUIREMENT_ROLE_LABELS: Record<TerminalRequirementApprova
 const APPROVAL_FLOW: TerminalRequirementApprovalRole[] = ['panel', 'adviser', 'editor', 'statistician'];
 
 const STATUS_META = {
-    pending: { label: 'Pending', color: 'default' as const },
-    approved: { label: 'Approved', color: 'success' as const },
-    returned: { label: 'Returned', color: 'error' as const },
+    pending: { label: 'Pending', color: 'default' as const, icon: PendingIcon },
+    approved: { label: 'Approved', color: 'success' as const, icon: ApprovedIcon },
+    returned: { label: 'Returned', color: 'error' as const, icon: ReturnedIcon },
 };
 
 export interface SubmissionStatusProps {
@@ -54,33 +54,22 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
     return (
         <Stack spacing={1.5}>
             <Typography variant="subtitle2">{title}</Typography>
-            <Stack spacing={1}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 {orderedRoles.map((role) => {
                     const approval = submission.approvals[role];
                     const meta = approval ? STATUS_META[approval.status] : STATUS_META.pending;
-                    const isActive = highlightRole && highlightRole === role;
+                    const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role];
+                    const chipLabel = `${roleLabel} ${meta.label}`;
+                    const IconComponent = meta.icon;
                     return (
-                        <Stack
+                        <Chip
                             key={role}
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            justifyContent="space-between"
-                        >
-                            <Typography
-                                variant="body2"
-                                color={isActive ? 'text.primary' : 'text.secondary'}
-                                fontWeight={isActive ? 600 : undefined}
-                            >
-                                {TERMINAL_REQUIREMENT_ROLE_LABELS[role]}
-                            </Typography>
-                            <Chip
-                                label={meta.label}
-                                color={meta.color}
-                                size="small"
-                                variant={isActive ? 'filled' : 'outlined'}
-                            />
-                        </Stack>
+                            icon={<IconComponent fontSize="small" />}
+                            label={chipLabel}
+                            color={meta.color}
+                            size="small"
+                            variant="filled"
+                        />
                     );
                 })}
             </Stack>

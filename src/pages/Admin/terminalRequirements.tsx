@@ -22,12 +22,15 @@ import { findUserById, findAllUsers } from '../../utils/firebase/firestore/user'
 import { getGroupsByDepartment, getGroupDepartments } from '../../utils/firebase/firestore/groups';
 import { listDepartmentsForYear, listCoursesForDepartment } from '../../utils/firebase/firestore/courseTemplateHelpers';
 import {
-    getAllTerminalRequirementConfigs, getTerminalRequirementConfig, setTerminalRequirementConfig
+    getAllTerminalRequirementConfigs, setTerminalRequirementConfig,
+    loadOrSeedTerminalRequirementConfig, seedMissingTerminalRequirementConfigs,
+    type DefaultTerminalRequirementsData,
 } from '../../utils/firebase/firestore/terminalRequirements';
+import defaultTerminalRequirementsJson from '../../config/terminalRequirements.json';
 import {
     uploadTerminalRequirementTemplate, deleteTerminalRequirementTemplate
 } from '../../utils/firebase/storage/terminalRequirements';
-import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
+import { THESIS_STAGE_METADATA, canonicalizeStageValue } from '../../utils/thesisStageUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
 
 type RequirementStateMap = Record<string, TerminalRequirementConfigEntry>;
@@ -41,6 +44,7 @@ function createEmptyRequirementState(): RequirementStateMap {
 
 /**
  * Convert entries array from Firestore to a map
+ * Normalizes stage values to canonical slug format
  */
 function entriesToState(entries?: TerminalRequirementConfigEntry[]): RequirementStateMap {
     if (!entries || entries.length === 0) {
@@ -50,13 +54,14 @@ function entriesToState(entries?: TerminalRequirementConfigEntry[]): Requirement
         if (!entry.requirementId) {
             return acc;
         }
+        // Normalize stage to canonical slug format
+        const canonicalStage = canonicalizeStageValue(entry.stage) ?? entry.stage;
         acc[entry.requirementId] = {
-            stage: entry.stage,
+            stage: canonicalStage as ThesisStageName,
             requirementId: entry.requirementId,
             required: Boolean(entry.required),
             ...(entry.title ? { title: entry.title } : {}),
             ...(entry.description ? { description: entry.description } : {}),
-            ...(entry.requireAttachment !== undefined ? { requireAttachment: entry.requireAttachment } : {}),
             ...(entry.fileTemplate ? { fileTemplate: { ...entry.fileTemplate } } : {}),
         };
         return acc;
@@ -72,7 +77,6 @@ function cloneRequirementState(state: RequirementStateMap): RequirementStateMap 
             required: entry.required,
             ...(entry.title ? { title: entry.title } : {}),
             ...(entry.description ? { description: entry.description } : {}),
-            ...(entry.requireAttachment !== undefined ? { requireAttachment: entry.requireAttachment } : {}),
             ...(entry.fileTemplate ? { fileTemplate: { ...entry.fileTemplate } } : {}),
         };
         return acc;
@@ -100,7 +104,6 @@ function areRequirementStatesEqual(a: RequirementStateMap, b: RequirementStateMa
             && entryA.stage === entryB.stage
             && entryA.title === entryB.title
             && entryA.description === entryB.description
-            && entryA.requireAttachment === entryB.requireAttachment
             && sameTemplate;
     });
 }
@@ -123,6 +126,8 @@ export default function AdminTerminalRequirementsPage() {
     const canManage = session?.user?.role === 'admin' || session?.user?.role === 'developer';
 
     const [selectedYear] = React.useState(DEFAULT_YEAR);
+    const [initialLoading, setInitialLoading] = React.useState(true);
+    const [isSeeding, setIsSeeding] = React.useState(false);
     const [profileLoading, setProfileLoading] = React.useState(true);
     const [departments, setDepartments] = React.useState<string[]>([]);
     const [selectedDepartment, setSelectedDepartment] = React.useState('');
@@ -159,6 +164,57 @@ export default function AdminTerminalRequirementsPage() {
     const hasUnsavedChanges = React.useMemo(() => {
         return !areRequirementStatesEqual(requirementState, syncedStateRef.current);
     }, [requirementState]);
+
+    // Initial load: seed terminal requirement templates for all courses if none exist
+    const initializeTerminalRequirements = React.useCallback(async () => {
+        try {
+            const defaultData = defaultTerminalRequirementsJson as DefaultTerminalRequirementsData;
+
+            // Get all users to extract department/course pairs
+            const allUsers = await findAllUsers();
+
+            // Extract unique department/course pairs from users
+            const pairsMap = new Map<string, { department: string; course: string }>();
+            for (const user of allUsers) {
+                if (user.department && user.course) {
+                    const key = `${user.department}|${user.course}`;
+                    if (!pairsMap.has(key)) {
+                        pairsMap.set(key, { department: user.department, course: user.course });
+                    }
+                }
+            }
+            const departmentCoursePairs = Array.from(pairsMap.values());
+
+            // Seed missing templates with default requirements
+            if (departmentCoursePairs.length > 0 && defaultData.defaultRequirements.length > 0) {
+                const seededCount = await seedMissingTerminalRequirementConfigs(
+                    selectedYear,
+                    departmentCoursePairs,
+                    defaultData
+                );
+                if (seededCount > 0) {
+                    setIsSeeding(true);
+                    // Small delay to show the seeding message
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+                    setIsSeeding(false);
+                    showNotification(
+                        `Added default terminal requirements for ${seededCount} department/course combination(s).`,
+                        'info'
+                    );
+                }
+            }
+        } catch (error) {
+            console.error('Error initializing terminal requirements:', error);
+            showNotification('Failed to initialize terminal requirements.', 'error');
+        } finally {
+            setInitialLoading(false);
+        }
+    }, [selectedYear, showNotification]);
+
+    // Initialize templates on mount
+    React.useEffect(() => {
+        void initializeTerminalRequirements();
+    }, [initializeTerminalRequirements]);
 
     React.useEffect(() => {
         if (!canManage || !userUid) {
@@ -347,16 +403,25 @@ export default function AdminTerminalRequirementsPage() {
         setConfigLoading(true);
         setConfigError(null);
 
-        void getTerminalRequirementConfig({
-            year: selectedYear,
-            department: selectedDepartment,
-            course: selectedCourse,
-        })
-            .then((config) => {
+        void loadOrSeedTerminalRequirementConfig(
+            {
+                year: selectedYear,
+                department: selectedDepartment,
+                course: selectedCourse,
+            },
+            defaultTerminalRequirementsJson as DefaultTerminalRequirementsData,
+        )
+            .then((result) => {
                 if (cancelled) {
                     return;
                 }
-                const nextState = entriesToState(config?.requirements);
+                if (result.seeded) {
+                    showNotification(
+                        `Default terminal requirements seeded for ${selectedCourse}`,
+                        'info',
+                    );
+                }
+                const nextState = entriesToState(result.config?.requirements);
                 setRequirementState(nextState);
                 syncedStateRef.current = cloneRequirementState(nextState);
             })
@@ -378,7 +443,7 @@ export default function AdminTerminalRequirementsPage() {
         return () => {
             cancelled = true;
         };
-    }, [selectedCourse, selectedDepartment, selectedYear]);
+    }, [selectedCourse, selectedDepartment, selectedYear, showNotification]);
 
     const persistConfig = React.useCallback(async (
         nextRequirements: RequirementStateMap,
@@ -617,24 +682,44 @@ export default function AdminTerminalRequirementsPage() {
         return (
             <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Stack direction="row" justifyContent="space-between" spacing={2}>
-                        <Box sx={{ flexGrow: 1 }}>
-                            <Typography variant="subtitle1" fontWeight={600}>{displayTitle}</Typography>
+                    <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="flex-start">
+                        <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'hidden' }}>
+                            <Typography
+                                variant="subtitle1"
+                                fontWeight={600}
+                                noWrap
+                                sx={{ cursor: 'default' }}
+                                onMouseEnter={(e) => {
+                                    const el = e.currentTarget;
+                                    if (el.scrollWidth > el.clientWidth) {
+                                        el.setAttribute('title', displayTitle);
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.removeAttribute('title');
+                                }}
+                            >
+                                {displayTitle}
+                            </Typography>
                             {entry.description && (
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" color="text.secondary" sx={{
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                }}>
                                     {entry.description}
                                 </Typography>
                             )}
-                            <Typography variant="caption" color="text.disabled">
+                            <Typography variant="caption" color="text.disabled" noWrap>
                                 ID: {entry.requirementId}
                             </Typography>
                         </Box>
-                        <Stack direction="row" spacing={0.5}>
+                        <Stack direction="row" spacing={0.5} flexShrink={0}>
                             <IconButton
                                 size="small"
                                 onClick={() => handleOpenEditDialog(entry)}
-                                title="Edit requirement"
-                                sx={{ bgcolor: 'action.hover' }}
+                                aria-label="Edit requirement"
                             >
                                 <EditIcon fontSize="small" />
                             </IconButton>
@@ -642,8 +727,7 @@ export default function AdminTerminalRequirementsPage() {
                                 size="small"
                                 color="error"
                                 onClick={() => handleDeleteRequirement(entry.requirementId)}
-                                title="Delete requirement"
-                                sx={{ bgcolor: 'action.hover' }}
+                                aria-label="Delete requirement"
                             >
                                 <DeleteIcon fontSize="small" />
                             </IconButton>
@@ -724,6 +808,30 @@ export default function AdminTerminalRequirementsPage() {
 
     if (!canManage) {
         return <UnauthorizedNotice title="Terminal Requirements" variant="box" />;
+    }
+
+    if (initialLoading || isSeeding) {
+        return (
+            <AnimatedPage variant="slideUp">
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: 300,
+                        gap: 2,
+                    }}
+                >
+                    <CircularProgress />
+                    <Typography color="text.secondary">
+                        {isSeeding
+                            ? 'Seeding default terminal requirements for courses...'
+                            : 'Checking terminal requirement templates...'}
+                    </Typography>
+                </Box>
+            </AnimatedPage>
+        );
     }
 
     return (

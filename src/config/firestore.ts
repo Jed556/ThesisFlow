@@ -4,16 +4,20 @@
  * 
  * Firestore Hierarchical Structure:
  * year/{year}
+ *   ├── calendar/{events} (global events for the year)
  *   ├── agendas/{agenda} (institution-wide research agendas)
  *   ├── ESGs/{esg}
  *   ├── SDGs/{sdg}
  *   ├── users/{user}
- *   │   └── salary/{salaryDistribution}
+ *   │   ├── salary/{salaryDistribution}
+ *   │   └── calendar/{events}
  *   └── departments/{department}
  *       ├── departmentAgendas/{agenda}
+ *       ├── calendar/{events} (department-wide events)
  *       ├── adviserSkills/{skill}
  *       ├── users/{user}
- *       │   └── salary/{salaryDistribution}
+ *       │   ├── salary/{salaryDistribution}
+ *       │   └── calendar/{events} 
  *       └── courses/{course}
  *           ├── agendas/{agenda} (departamental research agendas)
  *           ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
@@ -21,11 +25,13 @@
  *           │   └── entries/{requirementId} (individual terminal requirement entries)
  *           ├── users/{user}
  *           │   └── salary/{salaryDistribution}
+ *           │   └── calendar/{events} (course-wide events)
  *           └── groups/{group}
  *               ├── audits/{audit}
+ *               ├── calendar/{events} (group-specific events)
  *               ├── expertRequests/{request}
- *               ├── proposals/{proposal}
  *               ├── panelComments/{comment}
+ *               ├── proposals/{proposal}
  *               ├── join/
  *               │   ├── invites (document with userIds array)
  *               │   └── requests (document with userIds array)
@@ -130,6 +136,12 @@ export const CHAPTER_SLOTS_SUBCOLLECTION = 'chapterSlots';
 
 /** Salary subcollection under user documents */
 export const SALARY_SUBCOLLECTION = 'salary';
+
+/** Calendar subcollection - used at all hierarchy levels (year, department, course, group, user) */
+export const CALENDAR_SUBCOLLECTION = 'calendar';
+
+/** Events subcollection under calendar */
+export const EVENTS_SUBCOLLECTION = 'events';
 
 // ============================================================================
 // Configuration Collection (Global settings)

@@ -613,7 +613,9 @@ service cloud.firestore {
                                         allow create: if isGroupMember() || isAssignedExpert();
                                         // Members and reviewers can update
                                         allow update: if isGroupMember() || isAssignedExpert() || isThesisReviewer() || isModeratorOrAbove();
-                                        allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
+                                        // Group members can delete their own draft submissions, advisers/admins can delete any
+                                        allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser() 
+                                            || (isGroupMember() && resource.data.status == 'draft');
 
                                         // ================================
                                         // CHATS (under submission)

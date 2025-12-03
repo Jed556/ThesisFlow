@@ -9,6 +9,7 @@ import {
     buildCourseUsersCollectionPath, buildCourseUserDocPath, buildDepartmentUsersCollectionPath,
     buildDepartmentUserDocPath, buildYearUsersCollectionPath, buildYearUserDocPath,
 } from './paths';
+import { createPersonalCalendarForUser } from './calendars';
 
 import type { UserProfile, UserRole } from '../../../types/profile';
 
@@ -445,6 +446,7 @@ export async function updateUserProfile(
 
 /**
  * Create a new user profile in Firestore using hierarchical path.
+ * Also creates a personal calendar for the user.
  * @param userId - User ID
  * @param role - User's role (determines path level)
  * @param context - Context containing year, department, course
@@ -470,6 +472,14 @@ export async function createUserProfile(
     }, 'create');
 
     await setDoc(docRef, cleanedData);
+
+    // Create personal calendar for the user
+    try {
+        await createPersonalCalendarForUser(userId, role, context);
+    } catch (calendarError) {
+        console.error('Failed to create personal calendar for user:', calendarError);
+        // Don't throw - user profile was created successfully, calendar is secondary
+    }
 }
 
 /**

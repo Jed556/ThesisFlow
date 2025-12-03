@@ -281,7 +281,7 @@ export function exportCalendarsToCsv(calendars: Calendar[]): string {
             calendar.id || '',
             calendar.name,
             calendar.description ?? '',
-            calendar.type,
+            calendar.type ?? calendar.level ?? '',
             calendar.color,
             calendar.ownerUid,
             calendar.createdBy,
@@ -293,7 +293,7 @@ export function exportCalendarsToCsv(calendars: Calendar[]): string {
             calendar.isDefault ? 'true' : 'false',
             (calendar.eventIds ?? []).join(';'),
             serializedPermissions,
-        ];
+        ] as string[];
     });
 
     return generateCsvText(headers, rows);

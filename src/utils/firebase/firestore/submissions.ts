@@ -14,7 +14,7 @@ import type {
 } from '../../../types/thesis';
 import type { WorkspaceChapterDecision } from '../../../types/workspace';
 import { SUBMISSIONS_SUBCOLLECTION, THESIS_STAGE_SLUGS } from '../../../config/firestore';
-import { buildSubmissionDocPath, buildSubmissionsCollectionPath } from './paths';
+import { buildSubmissionDocPath, buildSubmissionsCollectionPath, buildChapterDocPath } from './paths';
 
 // ============================================================================
 // Types
@@ -416,6 +416,24 @@ export async function updateSubmissionDecision(
         expertApprovals,
         updatedAt: serverTimestamp(),
     });
+
+    // If the submission is now fully approved, update the parent chapter document
+    // This allows chapter listeners to know a chapter has an approved submission
+    // without needing to fetch all submissions
+    if (status === 'approved') {
+        const stageSlug = normalizeStageKey(ctx.stage);
+        const chapterDocPath = buildChapterDocPath(
+            ctx.year, ctx.department, ctx.course, ctx.groupId,
+            ctx.thesisId, stageSlug, String(ctx.chapterId)
+        );
+        const chapterDocRef = doc(firebaseFirestore, chapterDocPath);
+        await updateDoc(chapterDocRef, {
+            isApproved: true,
+            approvedSubmissionId: submissionId,
+            approvedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+    }
 
     return { status, expertApprovals };
 }

@@ -546,8 +546,13 @@ export default function CalendarPage() {
             const newCalendar: Omit<CalendarType, 'id'> = {
                 name: newCalendarName,
                 description: newCalendarDescription,
-                type: 'custom',
+                level: 'personal', // Custom calendars are treated as personal level
+                type: 'custom', // Legacy compatibility
                 color: newCalendarColor,
+                pathContext: {
+                    year: new Date().getFullYear().toString(),
+                    userId: session?.user?.uid || '',
+                },
                 eventIds: [],
                 ownerUid: session?.user?.uid || '',
                 createdBy: session?.user?.uid || '',

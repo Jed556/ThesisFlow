@@ -1,6 +1,6 @@
 /**
  * PDF Viewer Component
- * Uses react-pdf to render PDF documents with pagination and zoom controls
+ * Uses react-pdf to render PDF documents with continuous scrolling and zoom controls
  */
 
 import * as React from 'react';
@@ -11,10 +11,7 @@ import {
 import {
     ZoomIn as ZoomInIcon,
     ZoomOut as ZoomOutIcon,
-    NavigateBefore as PrevPageIcon,
-    NavigateNext as NextPageIcon,
-    FirstPage as FirstPageIcon,
-    LastPage as LastPageIcon,
+    FitScreen as FitScreenIcon,
 } from '@mui/icons-material';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -31,17 +28,48 @@ export interface PDFViewerProps {
 }
 
 /**
- * PDF Viewer component with pagination, zoom, and responsive scaling
+ * PDF Viewer component with continuous scrolling and zoom controls
  */
 export const PDFViewer: React.FC<PDFViewerProps> = ({ url, height = '100%' }) => {
     const theme = useTheme();
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+    const pageRefs = React.useRef<Map<number, HTMLDivElement>>(new Map());
     const [numPages, setNumPages] = React.useState<number>(0);
-    const [pageNumber, setPageNumber] = React.useState<number>(1);
+    const [currentPage, setCurrentPage] = React.useState<number>(1);
     const [scale, setScale] = React.useState<number>(1.0);
     const [isLoading, setIsLoading] = React.useState<boolean>(true);
     const [error, setError] = React.useState<string | null>(null);
     const [containerWidth, setContainerWidth] = React.useState<number>(600);
+
+    // Track current page based on scroll position using Intersection Observer
+    React.useEffect(() => {
+        if (numPages === 0 || !scrollContainerRef.current) return;
+
+        const options: IntersectionObserverInit = {
+            root: scrollContainerRef.current,
+            rootMargin: '-50% 0px -50% 0px', // Trigger when page center crosses viewport center
+            threshold: 0,
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    const pageNum = Number(entry.target.getAttribute('data-page'));
+                    if (!isNaN(pageNum)) {
+                        setCurrentPage(pageNum);
+                    }
+                }
+            });
+        }, options);
+
+        // Observe all page elements
+        pageRefs.current.forEach((element) => {
+            observer.observe(element);
+        });
+
+        return () => observer.disconnect();
+    }, [numPages]);
 
     // Observe container width for responsive scaling
     React.useEffect(() => {
@@ -69,16 +97,16 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, height = '100%' }) =>
         setIsLoading(false);
     }, []);
 
-    const goToPage = React.useCallback((page: number) => {
-        setPageNumber(Math.max(1, Math.min(page, numPages)));
-    }, [numPages]);
-
     const zoomIn = React.useCallback(() => {
         setScale((prev) => Math.min(prev + 0.25, 3.0));
     }, []);
 
     const zoomOut = React.useCallback(() => {
         setScale((prev) => Math.max(prev - 0.25, 0.5));
+    }, []);
+
+    const resetZoom = React.useCallback(() => {
+        setScale(1.0);
     }, []);
 
     if (error) {
@@ -122,53 +150,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, height = '100%' }) =>
                     bgcolor: 'background.paper',
                 }}
             >
-                <Tooltip title="First page">
-                    <span>
-                        <IconButton
-                            size="small"
-                            onClick={() => goToPage(1)}
-                            disabled={pageNumber <= 1}
-                        >
-                            <FirstPageIcon fontSize="small" />
-                        </IconButton>
-                    </span>
-                </Tooltip>
-                <Tooltip title="Previous page">
-                    <span>
-                        <IconButton
-                            size="small"
-                            onClick={() => goToPage(pageNumber - 1)}
-                            disabled={pageNumber <= 1}
-                        >
-                            <PrevPageIcon fontSize="small" />
-                        </IconButton>
-                    </span>
-                </Tooltip>
-                <Typography variant="body2" sx={{ mx: 1, minWidth: 80, textAlign: 'center' }}>
-                    {numPages > 0 ? `${pageNumber} / ${numPages}` : '–'}
+                <Typography variant="body2" sx={{ mx: 1 }}>
+                    {numPages > 0 ? `Page ${currentPage}/${numPages}` : '–'}
                 </Typography>
-                <Tooltip title="Next page">
-                    <span>
-                        <IconButton
-                            size="small"
-                            onClick={() => goToPage(pageNumber + 1)}
-                            disabled={pageNumber >= numPages}
-                        >
-                            <NextPageIcon fontSize="small" />
-                        </IconButton>
-                    </span>
-                </Tooltip>
-                <Tooltip title="Last page">
-                    <span>
-                        <IconButton
-                            size="small"
-                            onClick={() => goToPage(numPages)}
-                            disabled={pageNumber >= numPages}
-                        >
-                            <LastPageIcon fontSize="small" />
-                        </IconButton>
-                    </span>
-                </Tooltip>
 
                 <Box sx={{ mx: 1, borderLeft: 1, borderColor: 'divider', height: 24 }} />
 
@@ -189,46 +173,79 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, height = '100%' }) =>
                         </IconButton>
                     </span>
                 </Tooltip>
+                <Tooltip title="Reset zoom">
+                    <span>
+                        <IconButton size="small" onClick={resetZoom} disabled={scale === 1.0}>
+                            <FitScreenIcon fontSize="small" />
+                        </IconButton>
+                    </span>
+                </Tooltip>
             </Paper>
 
-            {/* PDF Content */}
+            {/* PDF Content - Scrollable */}
             <Box
+                ref={scrollContainerRef}
                 sx={{
-                    flexGrow: 1,
+                    flex: 1,
+                    minHeight: 0,
                     overflow: 'auto',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: isLoading ? 'center' : 'flex-start',
                     p: 2,
                 }}
             >
-                {isLoading && (
-                    <Stack spacing={2} alignItems="center">
-                        <CircularProgress />
-                        <Typography variant="body2" color="text.secondary">
-                            Loading PDF...
-                        </Typography>
-                    </Stack>
-                )}
-                <Document
-                    file={url}
-                    onLoadSuccess={onDocumentLoadSuccess}
-                    onLoadError={onDocumentLoadError}
-                    loading={null}
+                <Stack
+                    spacing={2}
+                    sx={{
+                        alignItems: 'center',
+                        minWidth: 'fit-content',
+                    }}
                 >
-                    <Page
-                        pageNumber={pageNumber}
-                        scale={scale}
-                        width={containerWidth}
-                        loading={
-                            <Skeleton
-                                variant="rectangular"
-                                width={containerWidth}
-                                height={containerWidth * 1.414}
-                            />
-                        }
-                    />
-                </Document>
+                    {isLoading && (
+                        <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
+                            <CircularProgress />
+                            <Typography variant="body2" color="text.secondary">
+                                Loading PDF...
+                            </Typography>
+                        </Stack>
+                    )}
+                    <Document
+                        file={url}
+                        onLoadSuccess={onDocumentLoadSuccess}
+                        onLoadError={onDocumentLoadError}
+                        loading={null}
+                    >
+                        {Array.from(new Array(numPages), (_, index) => (
+                            <Box
+                                key={`page_${index + 1}`}
+                                ref={(el: HTMLDivElement | null) => {
+                                    if (el) {
+                                        pageRefs.current.set(index + 1, el);
+                                    } else {
+                                        pageRefs.current.delete(index + 1);
+                                    }
+                                }}
+                                data-page={index + 1}
+                                sx={{
+                                    mb: 2,
+                                    boxShadow: 2,
+                                    bgcolor: 'background.paper',
+                                }}
+                            >
+                                <Page
+                                    pageNumber={index + 1}
+                                    scale={scale}
+                                    width={containerWidth}
+                                    loading={
+                                        <Skeleton
+                                            variant="rectangular"
+                                            width={containerWidth}
+                                            height={containerWidth * 1.414}
+                                        />
+                                    }
+                                />
+                            </Box>
+                        ))}
+                    </Document>
+                </Stack>
             </Box>
         </Box>
     );

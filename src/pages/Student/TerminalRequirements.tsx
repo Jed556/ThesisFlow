@@ -1,10 +1,12 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
+    Alert, Box, Button, Card, CardContent, Dialog, Grid, LinearProgress,
+    Skeleton, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import { FactCheck as FactCheckIcon, TaskAlt as TaskAltIcon } from '@mui/icons-material';
 import { AnimatedPage } from '../../components/Animate';
 import { SubmissionStatus, TerminalRequirementCard, TERMINAL_REQUIREMENT_ROLE_LABELS } from '../../components/TerminalRequirements';
+import { FileViewer } from '../../components/File';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
@@ -26,7 +28,8 @@ import {
 } from '../../utils/firebase/firestore/terminalRequirements';
 import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import {
-    THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap, describeStageSequenceStep, getPreviousSequenceStep,
+    THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap,
+    describeStageSequenceStep, getPreviousSequenceStep, canonicalizeStageValue,
 } from '../../utils/thesisStageUtils';
 import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
@@ -70,6 +73,7 @@ export default function TerminalRequirementsPage() {
     const [submitLoading, setSubmitLoading] = React.useState(false);
     /** Chapters fetched from subcollection (new hierarchical structure) */
     const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
+    const [viewingFile, setViewingFile] = React.useState<FileAttachment | null>(null);
 
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
@@ -266,11 +270,15 @@ export default function TerminalRequirementsPage() {
                 acc[stageMeta.value] = [];
             } else {
                 // Build requirements from config entries for this stage
+                // Use canonicalizeStageValue to handle both slug and full name formats
                 acc[stageMeta.value] = Object.values(configRequirementMap)
-                    .filter((entry) => entry.stage === stageMeta.value && entry.required)
+                    .filter((entry) => {
+                        const canonicalEntryStage = canonicalizeStageValue(entry.stage);
+                        return canonicalEntryStage === stageMeta.value && entry.required;
+                    })
                     .map((entry): TerminalRequirement => ({
                         id: entry.requirementId,
-                        stage: entry.stage,
+                        stage: stageMeta.value, // Use canonical slug
                         title: entry.title ?? entry.requirementId,
                         description: entry.description ?? '',
                         ...(entry.fileTemplate && {
@@ -619,7 +627,7 @@ export default function TerminalRequirementsPage() {
                 value={activeStage}
                 onChange={handleStageChange}
                 variant="scrollable"
-                scrollButtons
+                scrollButtons="auto"
                 allowScrollButtonsMobile
             >
                 {THESIS_STAGE_METADATA.map((stageMeta) => (
@@ -778,6 +786,7 @@ export default function TerminalRequirementsPage() {
                                                         onDeleteFile={allowFileActions
                                                             ? (file) => handleDeleteFile(requirement, file)
                                                             : undefined}
+                                                        onViewFile={setViewingFile}
                                                     />
                                                 </Grid>
                                             ))}
@@ -789,6 +798,24 @@ export default function TerminalRequirementsPage() {
                     </>
                 )}
             </Stack>
+
+            {/* File Viewer Dialog */}
+            <Dialog
+                open={Boolean(viewingFile)}
+                onClose={() => setViewingFile(null)}
+                maxWidth="xl"
+                fullWidth
+                slotProps={{
+                    paper: { sx: { height: '90vh' } },
+                }}
+            >
+                <FileViewer
+                    file={viewingFile}
+                    onBack={() => setViewingFile(null)}
+                    height="100%"
+                    showToolbar
+                />
+            </Dialog>
         </AnimatedPage>
     );
 }

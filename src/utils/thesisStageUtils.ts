@@ -9,10 +9,11 @@ export interface ThesisStageMeta {
 
 /**
  * Metadata for thesis stages derived from JSON config
+ * Uses slug as the value (for database operations) and name as the label (for display)
  */
 export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = StagesConfig.stages.map(
     (stage) => ({
-        value: stage.name as ThesisStageName,
+        value: stage.slug as ThesisStageName,
         label: stage.name,
     })
 );
@@ -26,8 +27,16 @@ const normalizeStageKey = (value: string): string => value
     .toLowerCase()
     .replace(/[^a-z]/g, '');
 
-const STAGE_LOOKUP = STAGE_SEQUENCE_ORDER.reduce<Map<string, ThesisStageName>>((acc, stage) => {
-    acc.set(normalizeStageKey(stage), stage);
+/**
+ * Lookup map for stage canonicalization.
+ * Maps both slugs and full names to their canonical slug values.
+ */
+const STAGE_LOOKUP = StagesConfig.stages.reduce<Map<string, ThesisStageName>>((acc, stage) => {
+    const slug = stage.slug as ThesisStageName;
+    // Map normalized slug (e.g., "preproposal" -> "pre-proposal")
+    acc.set(normalizeStageKey(stage.slug), slug);
+    // Map normalized full name (e.g., "preproposaloraldefense" -> "pre-proposal")
+    acc.set(normalizeStageKey(stage.name), slug);
     return acc;
 }, new Map());
 
@@ -44,12 +53,17 @@ export interface StageSequenceStep {
  */
 export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = StagesConfig.stages.flatMap(
     (stage) => [
-        { stage: stage.name as ThesisStageName, target: 'chapters' as const },
-        { stage: stage.name as ThesisStageName, target: 'terminal' as const },
+        { stage: stage.slug as ThesisStageName, target: 'chapters' as const },
+        { stage: stage.slug as ThesisStageName, target: 'terminal' as const },
     ]
 );
 
-function canonicalizeStageValue(value?: ThesisStageName | string | null): ThesisStageName | null {
+/**
+ * Canonicalizes a stage value to its slug form.
+ * Handles both slug format ("pre-proposal") and full name format ("Pre-Proposal Oral Defense").
+ * Returns null if the value cannot be canonicalized.
+ */
+export function canonicalizeStageValue(value?: ThesisStageName | string | null): ThesisStageName | null {
     if (!value) {
         return null;
     }
@@ -121,10 +135,18 @@ export interface StageCompletionOptions {
 }
 
 /**
- * Determines if a chapter is approved based on its submissions.
- * A chapter is considered approved if it has at least one approved submission.
+ * Determines if a chapter is approved based on its submissions or isApproved flag.
+ * A chapter is considered approved if:
+ * 1. It has the isApproved flag set to true (set when a submission is approved), OR
+ * 2. It has at least one approved submission in its submissions array
  */
 function isChapterApproved(chapter: ThesisChapter): boolean {
+    // Check the isApproved flag first (set by updateSubmissionDecision)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((chapter as any).isApproved === true) {
+        return true;
+    }
+    // Fallback: check submissions array for approved status
     if (!chapter.submissions || chapter.submissions.length === 0) {
         return false;
     }

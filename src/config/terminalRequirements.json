@@ -1,0 +1,318 @@
+{
+    "defaultRequirements": [
+        {
+            "stage": "Pre-Proposal Oral Defense",
+            "requirements": [
+                {
+                    "requirementId": "pre-proposal-1",
+                    "title": "E-Copy of completed Research Proposal (PDF FILE)",
+                    "description": "Final PDF version of the completed research proposal. Example: HM 1 Final.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-2",
+                    "title": "E-Copy of completed Research Proposal (WORD FILE)",
+                    "description": "Final Word document version of the completed research proposal. Example: HM 1 Final.docx",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-3",
+                    "title": "Turnitin Digital Receipt (PDF file)",
+                    "description": "Digital receipt from Turnitin submission. Example: HM 1 Digital Receipt.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-4",
+                    "title": "Turnitin Similarity Check Result (PDF file)",
+                    "description": "Similarity check result from Turnitin. Example: HM 1 Similarity Check Result.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-5",
+                    "title": "SIGNED Student Requirements Grading Sheet (PDF file)",
+                    "description": "Signed grading sheet based on the program requirements. Example: HM 1 Signed Advisers Criteria for Grading.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-6",
+                    "title": "SIGNED Pre-Proposal Defense Approval Sheet (PDF file)",
+                    "description": "Signed approval sheet for pre-proposal defense. Example: HM 1 Signed PD Approval Sheet.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-7",
+                    "title": "Proof of Adviser and Editor's Approval (PDF file)",
+                    "description": "Compile in one file only of screenshot conversations showing adviser and editor approval. Example: HM 1 Proof of Adviser and Editor.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-8",
+                    "title": "SIGNED Mock Defense Form (PDF file)",
+                    "description": "Signed mock defense form. Example: HM 1 Signed Mock Defense Form.PDF",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-9",
+                    "title": "Proof of Payment for Proposal Defense (JPEG)",
+                    "description": "Payment receipt for proposal defense. Example: HM 1 Proof of Payment.jpeg",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-proposal-10",
+                    "title": "Letter of Extension",
+                    "description": "If applicable, hard copy of extension letter. Example: Letter of Extension",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "stage": "Post-Proposal Oral Defense",
+            "requirements": [
+                {
+                    "requirementId": "post-proposal-1",
+                    "title": "E-Copy of completed Research Proposal PDF FILE (FINAL)",
+                    "description": "Final PDF version of the completed research proposal after defense. Example: HM 1 Final.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-2",
+                    "title": "E-Copy of completed Research Proposal WORD FILE (FINAL)",
+                    "description": "Final Word document version of the completed research proposal after defense. Example: HM 1 Final.docx",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-3",
+                    "title": "Turnitin Digital Receipt (PDF file)",
+                    "description": "Digital receipt from Turnitin submission. Example: HM 1 Digital Receipt.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-4",
+                    "title": "Turnitin Similarity Check Result (PDF file)",
+                    "description": "Similarity check result from Turnitin. Example: HM 1 Similarity Check Result.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-5",
+                    "title": "SIGNED Post Proposal Defense Approval Sheet (PDF file)",
+                    "description": "Signed approval sheet for post-proposal defense. Example: HM 1 Signed Post PD Approval Sheet.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-6",
+                    "title": "Proof of Adviser, Editor and 3 Panelists' Approval (PDF file)",
+                    "description": "Screenshots of conversations compiled in one file showing approval from adviser, editor, and 3 panelists. Example: HM 1 Proof of Adviser, Editor, and 3 Panelists.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-7",
+                    "title": "Proof of accomplished evaluation forms for Proposal Defense (PDF file)",
+                    "description": "Compile in one file only. Example: Proof of evaluations for PD.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-8-1",
+                    "title": "SIGNED Accomplished comment sheet - Panel 1 (PDF file)",
+                    "description": "Signed comment sheet from Panel 1. Example: HM 1 Comment Sheet Panel 1.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-8-2",
+                    "title": "SIGNED Accomplished comment sheet - Panel 2 (PDF file)",
+                    "description": "Signed comment sheet from Panel 2. Example: HM 1 Comment Sheet Panel 2.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-8-3",
+                    "title": "SIGNED Accomplished comment sheet - Panel 3 (PDF file)",
+                    "description": "Signed comment sheet from Panel 3. Example: HM 1 Comment Sheet Panel 3.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-9",
+                    "title": "SIGNED Compilation/Summary of Panelists' Comment Sheets",
+                    "description": "Compiled summary of all panelists' comment sheets. Example: HM1 Compilation of Panelists' Comment Sheets",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-10",
+                    "title": "SIGNED Adviser's Consultation Form",
+                    "description": "Signed consultation form from adviser. Example: HM 1 Adviser's Consultation Form.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-proposal-11",
+                    "title": "Evaluation for the Continuous Improvement for Student Research Program",
+                    "description": "All members per group who undergo change of grade (if applicable) - screenshot. Example: HM 1_SRP Continuous Improvement",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "stage": "Pre-Final Oral Defense",
+            "requirements": [
+                {
+                    "requirementId": "pre-final-1",
+                    "title": "E-Copy of completed Research Paper (PDF file)",
+                    "description": "Final PDF version of the completed research paper. Example: HM 1 Final.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-2",
+                    "title": "E-Copy of completed Research Paper (WORD file)",
+                    "description": "Final Word document version of the completed research paper. Example: HM 1 Final.docx",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-3",
+                    "title": "Turnitin Digital Receipt (PDF file)",
+                    "description": "Digital receipt from Turnitin submission. Example: HM 1 Digital Receipt.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-4",
+                    "title": "Turnitin Similarity Check Result (PDF file)",
+                    "description": "Similarity check result from Turnitin. Example: HM 1 Similarity Check Result.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-5",
+                    "title": "SIGNED Adviser's Criteria for Grading (PDF file)",
+                    "description": "Signed grading criteria from adviser. Example: HM 1 Signed Adviser's Criteria for Grading.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-6",
+                    "title": "SIGNED Editor's Criteria for Grading (PDF file)",
+                    "description": "Signed grading criteria from editor. Example: HM 1 Signed Editor's Criteria for Grading.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-7",
+                    "title": "SIGNED Pre-Final Oral Defense Approval Sheet (PDF file)",
+                    "description": "Signed approval sheet for pre-final oral defense. Example: HM 1 Signed Pre-FOD Approval Sheet.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-8",
+                    "title": "Proof of Adviser and Editor's Approval (PDF file)",
+                    "description": "Screenshot conversations compiled in one file showing adviser and editor approval for defense. Example: HM 1 Proof of Adviser and Editor for Defense.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-9",
+                    "title": "SIGNED Mock Defense Form (PDF file)",
+                    "description": "Signed mock defense form. Example: HM 1 Signed Mock Defense Form.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-10",
+                    "title": "Proof of Payment for Final Oral Defense (JPEG)",
+                    "description": "Payment receipt for final oral defense. Example: HM 1 Proof of Payment.jpeg",
+                    "required": true
+                },
+                {
+                    "requirementId": "pre-final-11",
+                    "title": "Letter of Extension",
+                    "description": "If applicable, hard copy of extension letter. Example: Letter of Extension",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "stage": "Post-Final Oral Defense",
+            "requirements": [
+                {
+                    "requirementId": "post-final-1",
+                    "title": "E-Copy of completed Research Paper PDF FILE (Final)",
+                    "description": "Final PDF version of the completed research paper after defense. Example: HM 1 Final.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-2",
+                    "title": "E-Copy of completed Research Paper WORD FILE (Final)",
+                    "description": "Final Word document version of the completed research paper after defense. Example: HM 1 Final.docx",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-3",
+                    "title": "Turnitin Digital Receipt (PDF file)",
+                    "description": "Digital receipt from Turnitin submission. Example: HM 1 Digital Receipt.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-4",
+                    "title": "Turnitin Similarity Check Result (PDF file)",
+                    "description": "Similarity check result from Turnitin. Example: HM 1 Similarity Check Result.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-5",
+                    "title": "SIGNED Post Final Oral Defense Approval Sheet (PDF file)",
+                    "description": "Signed approval sheet for post-final oral defense. Example: HM 1 Signed Post FOD Approval Sheet.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-6",
+                    "title": "Proof of Adviser, Editor and 3 Panelists' Approval (PDF file)",
+                    "description": "Screenshots of conversations compiled in one file. Example: HM 1 Proof of Adviser, Editor and 3 Panelists.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-7",
+                    "title": "Proof of accomplished evaluation forms for Final Oral Defense (PDF file)",
+                    "description": "Compile in one file only. Example: Proof of Evaluations for FOD.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-8-1",
+                    "title": "Signed Accomplished comment sheet - Panel 1 (PDF file)",
+                    "description": "Signed comment sheet from Panel 1. Example: HM 1 Comment Sheet Panel 1.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-8-2",
+                    "title": "Signed Accomplished comment sheet - Panel 2 (PDF file)",
+                    "description": "Signed comment sheet from Panel 2. Example: HM 1 Comment Sheet Panel 2.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-8-3",
+                    "title": "Signed Accomplished comment sheet - Panel 3 (PDF file)",
+                    "description": "Signed comment sheet from Panel 3. Example: HM 1 Comment Sheet Panel 3.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-9",
+                    "title": "SIGNED Compilation/Summary of Panelists' Comment Sheets",
+                    "description": "Compiled summary of all panelists' comment sheets. Example: HM1 Compilation of Panelists' Comment Sheets",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-10",
+                    "title": "SIGNED Adviser's Consultation Form",
+                    "description": "Signed consultation form from adviser. Example: HM 1 Adviser's Consultation Form.pdf",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-11",
+                    "title": "IMRAD Format for ANI Publication (texts only) (Word file)",
+                    "description": "IMRAD format document for ANI publication. Example: HM 1 IMRAD Format for ANI Publication.docx",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-12",
+                    "title": "IMRAD Format for Poster Presentation (8.5 x 11) (Portrait) (Picture file)",
+                    "description": "Poster presentation in IMRAD format. Example: HM 1_Poster.png or HM 1_Poster.jpeg",
+                    "required": true
+                },
+                {
+                    "requirementId": "post-final-13",
+                    "title": "Evaluation for the Continuous Improvement for Student Research Program",
+                    "description": "All members per group who undergo change of grade (if applicable) - screenshot. Example: HM 1_SRP Continuous Improvement",
+                    "required": false
+                }
+            ]
+        }
+    ]
+}
