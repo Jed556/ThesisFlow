@@ -11,11 +11,14 @@ import {
 } from '@mui/material';
 import Skeleton from '@mui/material/Skeleton';
 import type { ThesisGroup } from '../../types/group';
+import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import { GROUP_STATUS_COLORS, formatGroupStatus } from './constants';
 
 interface GroupCardProps {
     group: ThesisGroup;
+    /** Optional thesis data. When provided, thesis title is shown instead of placeholder. */
+    thesis?: ThesisData | null;
     usersByUid: Map<string, UserProfile>;
     onClick?: (group: ThesisGroup) => void;
     footer?: React.ReactNode;
@@ -37,7 +40,7 @@ const getUserDisplayName = (profile: UserProfile | undefined): string => {
  * Displays a thesis group summary inside a clickable card.
  * Actions (edit/delete) have been moved to the group view page.
  */
-export default function GroupCard({ group, usersByUid, onClick, footer, actions }: GroupCardProps) {
+export default function GroupCard({ group, thesis, usersByUid, onClick, footer, actions }: GroupCardProps) {
     const leaderProfile = usersByUid.get(group.members.leader);
     // Count leader + members for total team size
     const memberCount = 1 + (group.members?.members.length ?? 0);
@@ -70,7 +73,7 @@ export default function GroupCard({ group, usersByUid, onClick, footer, actions 
                         </Stack>
 
                         <Typography variant="body2" color="text.secondary" noWrap>
-                            {group.thesis?.title || 'No thesis title yet'}
+                            {thesis?.title || 'No thesis title yet'}
                         </Typography>
 
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>

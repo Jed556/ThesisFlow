@@ -723,20 +723,27 @@ export function listenFullAgendasData(
     });
 }
 
+/** Result of loading or seeding agendas data */
+export interface LoadOrSeedAgendasResult {
+    data: FullAgendasData;
+    /** Whether new agendas were seeded (true) or existing ones loaded (false) */
+    seeded: boolean;
+}
+
 /**
  * Seed full agendas data from JSON file if Firestore is empty
  * @param year - Academic year
  * @param defaultData - Default data to seed (from agendas.json)
- * @returns The loaded or seeded agendas data
+ * @returns The loaded or seeded agendas data with seeding status
  */
 export async function loadOrSeedFullAgendasData(
     year: string,
     defaultData: Omit<FullAgendasData, 'updatedAt'>
-): Promise<FullAgendasData> {
+): Promise<LoadOrSeedAgendasResult> {
     const existing = await getFullAgendasData(year);
 
     if (existing) {
-        return existing;
+        return { data: existing, seeded: false };
     }
 
     // Firestore is empty, seed with default data
@@ -744,7 +751,10 @@ export async function loadOrSeedFullAgendasData(
 
     // Return the seeded data with current timestamp
     return {
-        ...defaultData,
-        updatedAt: new Date(),
+        data: {
+            ...defaultData,
+            updatedAt: new Date(),
+        },
+        seeded: true,
     };
 }

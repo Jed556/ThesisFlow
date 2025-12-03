@@ -1,4 +1,4 @@
-// Expert Requests Components
+// Service Requests Components
 export { default as ExpertRequestCard } from './ExpertRequestCard';
 export type { ExpertRequestCardProps } from './ExpertRequestCard';
 

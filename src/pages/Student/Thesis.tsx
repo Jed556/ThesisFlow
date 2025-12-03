@@ -12,7 +12,7 @@ import {
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ThesisChapter, ThesisData } from '../../types/thesis';
+import type { ThesisChapter, ThesisData, ThesisStatus } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import type { TopicProposalSetRecord } from '../../utils/firebase/firestore/topicProposals';
@@ -20,6 +20,7 @@ import type { ScheduleEvent } from '../../types/schedule';
 import type { GroupNotificationDoc } from '../../types/notification';
 import { AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
+import { deriveChapterStatus } from '../../components/ThesisWorkspace/ChapterRail';
 import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
@@ -55,11 +56,43 @@ function formatUserName(name: UserProfile['name']): string {
     return parts.join(' ');
 }
 
-function getStatusColor(status: ThesisChapter['status']): 'success' | 'warning' | 'error' | 'default' {
+/**
+ * Get color for chapter status display
+ */
+function getStatusColor(status: ThesisStatus | ReturnType<typeof deriveChapterStatus>): 'success' | 'warning' | 'error' | 'default' {
     if (status === 'approved') return 'success';
     if (status === 'under_review') return 'warning';
     if (status === 'revision_required') return 'error';
     return 'default';
+}
+
+/**
+ * Derive chapter status from its submissions
+ * Priority: latest submission status, or check if any approved/under_review/revision
+ */
+function getChapterStatusFromSubmissions(chapter: ThesisChapter): ReturnType<typeof deriveChapterStatus> {
+    const submissions = chapter.submissions ?? [];
+    if (submissions.length === 0) {
+        return 'not_submitted';
+    }
+
+    // Check the latest submission's status
+    const latestSubmission = submissions[submissions.length - 1];
+    if (latestSubmission?.status === 'approved') return 'approved';
+    if (latestSubmission?.status === 'under_review') return 'under_review';
+    if (latestSubmission?.status === 'revision_required') return 'revision_required';
+
+    // Fallback: check if any submission has a status
+    const hasApproved = submissions.some((s) => s.status === 'approved');
+    if (hasApproved) return 'approved';
+
+    const hasUnderReview = submissions.some((s) => s.status === 'under_review');
+    if (hasUnderReview) return 'under_review';
+
+    const hasRevision = submissions.some((s) => s.status === 'revision_required');
+    if (hasRevision) return 'revision_required';
+
+    return 'not_submitted';
 }
 
 /**
@@ -255,8 +288,12 @@ function buildThesisWorkflowSteps(
     // Topic is approved if proposal is head_approved OR thesis record indicates approval
     const topicApproved = proposalApproved || isTopicApproved(record);
     const displayTitle = approvedTitle || record.title;
-    const chaptersSubmitted = chapters.some((chapter) => chapter.status !== 'not_submitted');
-    const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
+    const chaptersSubmitted = chapters.some(
+        (chapter) => getChapterStatusFromSubmissions(chapter) !== 'not_submitted'
+    );
+    const approvedCount = chapters.filter(
+        (chapter) => getChapterStatusFromSubmissions(chapter) === 'approved'
+    ).length;
     const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
 
     // Build group description based on current status
@@ -393,7 +430,9 @@ function computeThesisProgressPercent(record: ThesisRecord): number {
     if (chapters.length === 0) {
         return 0;
     }
-    const approvedCount = chapters.filter((chapter) => chapter.status === 'approved').length;
+    const approvedCount = chapters.filter(
+        (chapter) => getChapterStatusFromSubmissions(chapter) === 'approved'
+    ).length;
     return (approvedCount / chapters.length) * 100;
 }
 

@@ -1,6 +1,6 @@
 /**
- * Firebase Firestore - Expert Requests (Expert Requests)
- * CRUD operations for Expert Request documents using hierarchical structure:
+ * Firebase Firestore - Service Requests (Service Requests)
+ * CRUD operations for Service Request documents using hierarchical structure:
  * year/{year}/departments/{department}/courses/{course}/groups/{groupId}/expertRequests/{requestId}
  */
 
@@ -88,7 +88,7 @@ function docToExpertRequest(docSnap: ExpertRequestSnapshot): ExpertRequestRecord
 // ============================================================================
 
 /**
- * Create a new expert request
+ * Create a new service request
  */
 export async function createExpertRequest(
     ctx: ExpertRequestContext,
@@ -134,7 +134,7 @@ export async function createExpertRequest(
 }
 
 /**
- * Create an expert request with a specific ID
+ * Create an service request with a specific ID
  */
 export async function createExpertRequestWithId(
     ctx: ExpertRequestContext,
@@ -166,7 +166,7 @@ export async function createExpertRequestWithId(
 // ============================================================================
 
 /**
- * Get an expert request by ID
+ * Get an service request by ID
  */
 export async function getExpertRequest(
     ctx: ExpertRequestContext,
@@ -179,7 +179,7 @@ export async function getExpertRequest(
 }
 
 /**
- * Get expert request document reference
+ * Get service request document reference
  */
 export function getExpertRequestDocRef(ctx: ExpertRequestContext, requestId: string): DocumentReference {
     const docPath = buildExpertRequestDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, requestId);
@@ -187,7 +187,7 @@ export function getExpertRequestDocRef(ctx: ExpertRequestContext, requestId: str
 }
 
 /**
- * Get all expert requests for a group
+ * Get all service requests for a group
  */
 export async function getExpertRequestsForGroup(
     ctx: ExpertRequestContext,
@@ -206,7 +206,7 @@ export async function getExpertRequestsForGroup(
 }
 
 /**
- * Get all expert requests across all groups using collectionGroup query
+ * Get all service requests across all groups using collectionGroup query
  */
 export async function getAllExpertRequests(constraints?: QueryConstraint[]): Promise<ExpertRequestRecord[]> {
     const requestsQuery = collectionGroup(firebaseFirestore, EXPERT_REQUESTS_SUBCOLLECTION);
@@ -241,7 +241,7 @@ export async function getPendingExpertRequest(
 }
 
 /**
- * Get expert requests by expert UID across all groups
+ * Get service requests by expert UID across all groups
  */
 export async function getExpertRequestsByExpert(
     expertUid: string,
@@ -260,7 +260,7 @@ export async function getExpertRequestsByExpert(
 }
 
 /**
- * Get pending expert requests for an expert
+ * Get pending service requests for an expert
  */
 export async function getPendingRequestsForExpert(
     expertUid: string,
@@ -284,7 +284,7 @@ export async function getPendingRequestsForExpert(
 // ============================================================================
 
 /**
- * Update an expert request
+ * Update an service request
  */
 export async function updateExpertRequest(
     ctx: ExpertRequestContext,
@@ -301,7 +301,7 @@ export async function updateExpertRequest(
 }
 
 /**
- * Respond to an expert request (approve or reject)
+ * Respond to an service request (approve or reject)
  */
 export async function respondToExpertRequest(
     ctx: ExpertRequestContext,
@@ -326,7 +326,7 @@ export async function respondToExpertRequest(
 }
 
 /**
- * Approve an expert request
+ * Approve an service request
  */
 export async function approveExpertRequest(
     ctx: ExpertRequestContext,
@@ -337,7 +337,7 @@ export async function approveExpertRequest(
 }
 
 /**
- * Reject an expert request
+ * Reject an service request
  */
 export async function rejectExpertRequest(
     ctx: ExpertRequestContext,
@@ -352,7 +352,7 @@ export async function rejectExpertRequest(
 // ============================================================================
 
 /**
- * Delete an expert request
+ * Delete an service request
  */
 export async function deleteExpertRequest(ctx: ExpertRequestContext, requestId: string): Promise<void> {
     const docPath = buildExpertRequestDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, requestId);
@@ -361,7 +361,7 @@ export async function deleteExpertRequest(ctx: ExpertRequestContext, requestId: 
 }
 
 /**
- * Delete multiple expert requests in a batch
+ * Delete multiple service requests in a batch
  */
 export async function bulkDeleteExpertRequests(
     requests: { ctx: ExpertRequestContext; requestId: string }[]
@@ -382,7 +382,7 @@ export async function bulkDeleteExpertRequests(
 // ============================================================================
 
 /**
- * Listen to expert requests for a specific group
+ * Listen to service requests for a specific group
  */
 export function listenExpertRequestsForGroup(
     ctx: ExpertRequestContext,
@@ -402,13 +402,13 @@ export function listenExpertRequestsForGroup(
         },
         (error) => {
             if (options.onError) options.onError(error);
-            else console.error('Expert request listener error:', error);
+            else console.error('Service Request listener error:', error);
         }
     );
 }
 
 /**
- * Listen to expert requests for a specific expert (across all groups)
+ * Listen to service requests for a specific expert (across all groups)
  */
 export function listenExpertRequestsByExpert(
     expertUid: string,
@@ -442,13 +442,13 @@ export function listenExpertRequestsByExpert(
         },
         (error) => {
             if (options.onError) options.onError(error);
-            else console.error('Expert request listener error:', error);
+            else console.error('Service Request listener error:', error);
         }
     );
 }
 
 /**
- * Listen to pending expert requests for a specific expert
+ * Listen to pending service requests for a specific expert
  */
 export function listenPendingRequestsForExpert(
     expertUid: string,
@@ -483,13 +483,13 @@ export function listenPendingRequestsForExpert(
         },
         (error) => {
             if (options.onError) options.onError(error);
-            else console.error('Pending expert request listener error:', error);
+            else console.error('Pending service request listener error:', error);
         }
     );
 }
 
 /**
- * Listen to all expert requests (collectionGroup)
+ * Listen to all service requests (collectionGroup)
  */
 export function listenAllExpertRequests(
     constraints: QueryConstraint[] | undefined,
@@ -510,17 +510,17 @@ export function listenAllExpertRequests(
         },
         (error) => {
             if (options.onError) options.onError(error);
-            else console.error('Expert request listener error:', error);
+            else console.error('Service Request listener error:', error);
         }
     );
 }
 
 // ============================================================================
-// Alias Functions (Expert Request terminology)
+// Alias Functions (Service Request terminology)
 // ============================================================================
 
 /**
- * Listen to expert/expert requests for a specific group by group ID.
+ * Listen to expert/service requests for a specific group by group ID.
  * Uses collectionGroup query to find requests regardless of path.
  *
  * @param groupId The group's document ID
@@ -558,13 +558,13 @@ export function listenExpertRequestsByGroup(
         },
         (error) => {
             if (options.onError) options.onError(error);
-            else console.error('Expert request by group listener error:', error);
+            else console.error('Service Request by group listener error:', error);
         }
     );
 }
 
 /**
- * Respond to a expert/expert request by request ID (context-free version).
+ * Respond to a expert/service request by request ID (context-free version).
  * Finds the request via collectionGroup and updates it.
  *
  * @param requestId The request document ID
@@ -588,7 +588,7 @@ export async function respondToExpertRequestById(
 
     if (snapshot.empty) {
         // Fall back to fetching all and filtering by document ID
-        console.warn(`Falling back to full scan to find expert request by ID: ${requestId}`);
+        console.warn(`Falling back to full scan to find service request by ID: ${requestId}`);
         const allSnapshot = await getDocs(requestsQuery);
         const matchingDoc = allSnapshot.docs.find((docSnap) => docSnap.id === requestId);
         if (!matchingDoc) {
@@ -609,7 +609,7 @@ export async function respondToExpertRequestById(
 }
 
 /**
- * Create a expert/expert request by group ID (context-free version).
+ * Create a expert/service request by group ID (context-free version).
  * Finds group context from groupId and creates the request.
  *
  * @param groupId The group document ID
@@ -657,7 +657,7 @@ export async function createExpertRequestByGroup(
 }
 
 /**
- * Get pending expert request by group ID, expert UID and role (context-free version).
+ * Get pending service request by group ID, expert UID and role (context-free version).
  * Uses collectionGroup to search across all groups.
  *
  * @param groupId The group document ID

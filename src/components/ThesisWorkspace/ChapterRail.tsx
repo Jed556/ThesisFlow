@@ -1,25 +1,18 @@
 import * as React from 'react';
 import {
     Box,
-    Button,
     Card,
     CardContent,
     Chip,
-    CircularProgress,
     Stack,
     Typography,
 } from '@mui/material';
 import type { ChipProps } from '@mui/material';
-import {
-    Upload as UploadIcon,
-} from '@mui/icons-material';
-import type { ChapterSubmissionStatus, ExpertRole, ThesisChapter, ThesisStageName } from '../../types/thesis';
+import type { ChapterSubmissionStatus, ThesisChapter, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ConversationParticipant } from '../Conversation';
-import { FileCard } from '../File';
 import { formatFileSize } from '../../utils/fileUtils';
-import type { ChapterVersionMap, VersionOption } from '../../types/workspace';
-import { expertRoleLabels } from '../../utils/expertUtils';
+import type { VersionOption } from '../../types/workspace';
 import { normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import { resolveChapterStage } from '../../utils/thesisStageUtils';
 
@@ -79,6 +72,10 @@ const formatSubmissionStatus = (status?: ChapterSubmissionStatus) => {
             return 'Needs revision';
         case 'under_review':
             return 'Under review';
+        case 'draft':
+            return 'Draft';
+        case 'ignored':
+            return 'Ignored';
         default:
             return undefined;
     }
@@ -118,6 +115,10 @@ export const buildSubmissionStatusChip = (
         color = 'warning';
     } else if (status === 'under_review') {
         color = 'info';
+    } else if (status === 'draft') {
+        color = 'default';
+    } else if (status === 'ignored') {
+        color = 'default';
     }
     return { label, color };
 };
@@ -178,94 +179,84 @@ export const buildVersionOptions = (
     return [];
 };
 
+/**
+ * Derive chapter status from its file submissions
+ * Priority: any approved = approved, any under_review = under_review, any revision = revision, any draft = draft, else not_submitted
+ * If ANY version is approved, the chapter is considered approved (best version wins)
+ * Note: 'ignored' status is not considered for chapter-level status (it's a derived display state)
+ */
+export const deriveChapterStatus = (files?: FileAttachment[]): 'approved' | 'under_review' | 'revision_required' | 'draft' | 'not_submitted' => {
+    if (!files || files.length === 0) {
+        return 'not_submitted';
+    }
+
+    // Priority 1: If ANY file is approved, chapter is approved (best version wins)
+    const hasApproved = files.some((f) => f.submissionStatus === 'approved');
+    if (hasApproved) return 'approved';
+
+    // Priority 2: If any file is under review, chapter is under review
+    const hasUnderReview = files.some((f) => f.submissionStatus === 'under_review');
+    if (hasUnderReview) return 'under_review';
+
+    // Priority 3: If any file has revision required, chapter needs revision
+    const hasRevision = files.some((f) => f.submissionStatus === 'revision_required');
+    if (hasRevision) return 'revision_required';
+
+    // Priority 4: If any file is draft (uploaded but not submitted)
+    const hasDraft = files.some((f) => f.submissionStatus === 'draft' || !f.submissionStatus);
+    if (hasDraft) return 'draft';
+
+    return 'not_submitted';
+};
+
+/**
+ * Simplified ChapterRail Props - Only for showing chapter list
+ */
 interface ChapterRailProps {
     chapters: ThesisChapter[];
     selectedChapterId: number | null;
-    selectedVersionIndex: number | null;
     onSelectChapter: (chapterId: number) => void;
-    onSelectVersion: (versionIndex: number) => void;
-    onUploadChapter?: (chapterId: number, file: File) => void;
-    uploadingChapterId?: number | null;
-    enableUploads?: boolean;
-    expertRoles?: ExpertRole[];
-    currentExpertRole?: ExpertRole;
-    versionOptionsByChapter: ChapterVersionMap;
-    participants?: Record<string, ConversationParticipant>;
-    loadingChapterId?: number | null;
-    loadingMessage?: string;
-    activeStage: ThesisStageName;
-    reviewActions?: {
-        onApprove: (chapterId: number) => void;
-        onRequestRevision: (chapterId: number) => void;
-        disabled?: boolean;
-        helperText?: string;
-        processingChapterId?: number | null;
-    };
+    /** Count of versions per chapter for display */
+    versionCounts?: Record<number, number>;
+    /** Files per chapter for deriving status */
+    chapterFiles?: Record<number, FileAttachment[]>;
+    /** Whether loading is in progress */
+    isLoading?: boolean;
 }
 
+/**
+ * Simplified ChapterRail - Only shows chapter list without versions
+ * Versions are shown in a separate SubmissionsRail component
+ * Status is derived from individual file submissions
+ */
 export const ChapterRail: React.FC<ChapterRailProps> = ({
     chapters,
     selectedChapterId,
-    selectedVersionIndex,
     onSelectChapter,
-    onSelectVersion,
-    onUploadChapter,
-    uploadingChapterId,
-    enableUploads,
-    expertRoles,
-    currentExpertRole,
-    versionOptionsByChapter,
-    participants,
-    loadingChapterId,
-    loadingMessage,
-    activeStage,
-    reviewActions,
+    versionCounts,
+    chapterFiles,
+    isLoading,
 }) => {
-    const handleUploadChange = React.useCallback((chapterId: number, event: React.ChangeEvent<HTMLInputElement>) => {
-        event.stopPropagation();
-        const file = event.target.files?.[0];
-        if (!file) {
-            return;
-        }
-        onUploadChapter?.(chapterId, file);
-        event.target.value = '';
-    }, [onUploadChapter]);
+    if (chapters.length === 0) {
+        return (
+            <Card variant="outlined">
+                <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                        No chapters available for this stage.
+                    </Typography>
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Stack spacing={1.5}>
             {chapters.map((chapter) => {
                 const isActive = chapter.id === selectedChapterId;
-                const meta = statusMeta[chapter.status] ?? statusMeta.not_submitted;
-                const versions = versionOptionsByChapter[chapter.id]
-                    ?? buildVersionOptions(chapter, undefined, activeStage);
-                const isUploading = uploadingChapterId === chapter.id;
-                const isDecisionInFlight = reviewActions?.processingChapterId === chapter.id;
-                const showReviewActions = !enableUploads && Boolean(reviewActions);
-                const uploadsLockedByStatus = chapter.status === 'approved' || chapter.status === 'under_review';
-                const allowUploadsForChapter = Boolean(enableUploads && onUploadChapter && !uploadsLockedByStatus);
-                const uploadHelperText = enableUploads && uploadsLockedByStatus
-                    ? (chapter.status === 'approved'
-                        ? 'This chapter is approved. Upload a new version only after it is reopened.'
-                        : 'Uploads are disabled while this chapter is under review.')
-                    : undefined;
-                const reviewLockedByStatus = chapter.status === 'approved';
-                const resolveApprovalForRole = (role: ExpertRole) => (
-                    reviewLockedByStatus ? true : Boolean(chapter.expertApprovals?.[role])
-                );
-                const alreadyApprovedByCurrent = currentExpertRole
-                    ? resolveApprovalForRole(currentExpertRole)
-                    : reviewLockedByStatus;
-                const baseReviewDisabled = Boolean(reviewActions?.disabled) || isDecisionInFlight || reviewLockedByStatus;
-                const approveDisabled = baseReviewDisabled || alreadyApprovedByCurrent;
-                const revisionDisabled = baseReviewDisabled;
-                const reviewHelperText = showReviewActions
-                    ? reviewLockedByStatus
-                        ? 'This chapter is already approved.'
-                        : alreadyApprovedByCurrent
-                            ? 'You already approved this chapter.'
-                            : reviewActions?.helperText
-                    : undefined;
-                const showVersionLoader = chapter.id === loadingChapterId;
+                const files = chapterFiles?.[chapter.id];
+                const derivedStatus = deriveChapterStatus(files);
+                const meta = statusMeta[derivedStatus];
+                const versionCount = versionCounts?.[chapter.id] ?? 0;
 
                 return (
                     <Card
@@ -277,145 +268,27 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                             cursor: 'pointer',
                             transition: 'border-color 120ms ease',
                             '&:hover': { borderColor: 'primary.main' },
+                            opacity: isLoading ? 0.7 : 1,
                         }}
                         onClick={() => onSelectChapter(chapter.id)}
                     >
-                        <CardContent>
+                        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                             <Stack direction="row" spacing={2} alignItems="center">
                                 <Box sx={{ flexGrow: 1 }}>
                                     <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                                         {formatChapterLabel(chapter)}
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                        {chapter.stage ?? meta.label}
+                                        {versionCount} version{versionCount !== 1 ? 's' : ''}
                                     </Typography>
                                 </Box>
-                                <Stack spacing={1} alignItems="flex-end">
-                                    <Chip label={meta.label} color={meta.chipColor} size="small" variant="outlined" />
-                                </Stack>
+                                <Chip
+                                    label={meta.label}
+                                    color={meta.chipColor}
+                                    size="small"
+                                    variant="outlined"
+                                />
                             </Stack>
-
-                            {expertRoles && expertRoles.length > 0 && (
-                                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-                                    {expertRoles.map((role) => {
-                                        const approved = resolveApprovalForRole(role);
-                                        return (
-                                            <Chip
-                                                key={`${chapter.id}-${role}`}
-                                                label={`${expertRoleLabels[role]} · ${approved ? 'Approved' : 'Pending'}`}
-                                                size="small"
-                                                color={approved ? 'success' : 'default'}
-                                                variant={approved ? 'filled' : 'outlined'}
-                                            />
-                                        );
-                                    })}
-                                </Stack>
-                            )}
-
-                            {isActive && (
-                                <Stack spacing={1.25} sx={{ mt: 2 }}>
-                                    {showVersionLoader && (
-                                        <Stack direction="row" spacing={1} alignItems="center">
-                                            <CircularProgress size={16} />
-                                            <Typography variant="body2" color="text.secondary">
-                                                {loadingMessage ?? 'Loading versions…'}
-                                            </Typography>
-                                        </Stack>
-                                    )}
-                                    {versions.length === 0 && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            {enableUploads
-                                                ? 'No versions yet. Upload a file to start the conversation.'
-                                                : 'No versions have been uploaded for this chapter.'}
-                                        </Typography>
-                                    )}
-                                    {versions.map((version) => {
-                                        const isVersionActive = version.versionIndex === selectedVersionIndex;
-                                        const { label: statusChipLabel, color: statusChipColor } = buildSubmissionStatusChip(version.status);
-                                        return (
-                                            <FileCard
-                                                key={version.id}
-                                                file={version.file}
-                                                title={version.label}
-                                                sizeLabel={buildFileSizeLabel(version.file)}
-                                                metaLabel={buildSubmissionMeta(version.file, participants)}
-                                                versionLabel={`v${version.versionIndex + 1}`}
-                                                statusChipLabel={statusChipLabel}
-                                                statusChipColor={statusChipColor}
-                                                selected={isVersionActive}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    onSelectVersion(version.versionIndex);
-                                                }}
-                                                showDeleteButton={false}
-                                            />
-                                        );
-                                    })}
-
-                                    {enableUploads && onUploadChapter && (
-                                        <Stack spacing={0.5}>
-                                            <Button
-                                                variant="outlined"
-                                                size="small"
-                                                startIcon={isUploading ? <CircularProgress size={16} /> : <UploadIcon fontSize="small" />}
-                                                disabled={isUploading || !allowUploadsForChapter}
-                                                component="label"
-                                                onClick={(event) => event.stopPropagation()}
-                                            >
-                                                {isUploading ? 'Uploading…' : 'Upload version'}
-                                                <input
-                                                    type="file"
-                                                    hidden
-                                                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                                    onChange={(event) => handleUploadChange(chapter.id, event)}
-                                                />
-                                            </Button>
-                                            {uploadHelperText && (
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {uploadHelperText}
-                                                </Typography>
-                                            )}
-                                        </Stack>
-                                    )}
-
-                                    {showReviewActions && reviewActions && (
-                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                                            <Button
-                                                variant="contained"
-                                                color="success"
-                                                size="small"
-                                                disabled={approveDisabled}
-                                                startIcon={isDecisionInFlight ? <CircularProgress size={16} /> : undefined}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    reviewActions.onApprove(chapter.id);
-                                                }}
-                                            >
-                                                Approve
-                                            </Button>
-                                            <Button
-                                                variant="outlined"
-                                                color="warning"
-                                                size="small"
-                                                disabled={revisionDisabled}
-                                                startIcon={isDecisionInFlight ? <CircularProgress size={16} /> : undefined}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    reviewActions.onRequestRevision(chapter.id);
-                                                }}
-                                            >
-                                                Request revision
-                                            </Button>
-                                        </Stack>
-                                    )}
-
-                                    {showReviewActions && reviewHelperText && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            {reviewHelperText}
-                                        </Typography>
-                                    )}
-                                </Stack>
-                            )}
                         </CardContent>
                     </Card>
                 );

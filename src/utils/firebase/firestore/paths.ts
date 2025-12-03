@@ -232,11 +232,11 @@ export function buildGroupConfigurationDocPath(
 }
 
 // ============================================================================
-// Expert Requests Path Builders
+// Service Requests Path Builders
 // ============================================================================
 
 /**
- * Build path to expert requests collection under a group
+ * Build path to service requests collection under a group
  */
 export function buildExpertRequestsCollectionPath(
     year: string, department: string, course: string, groupId: string
@@ -245,7 +245,7 @@ export function buildExpertRequestsCollectionPath(
 }
 
 /**
- * Build path to a specific expert request document
+ * Build path to a specific service request document
  */
 export function buildExpertRequestDocPath(
     year: string, department: string, course: string, groupId: string, requestId: string

@@ -41,7 +41,6 @@ const emptyFormData: ThesisGroupFormData = {
     adviser: '',
     editor: '',
     status: 'active',
-    thesis: undefined,
     department: '',
     course: '',
 };
@@ -334,7 +333,6 @@ export default function AdminGroupManagementPage() {
                     adviser: groupToEdit.members.adviser ?? '',
                     editor: groupToEdit.members.editor ?? '',
                     status: groupToEdit.status,
-                    thesis: groupToEdit.thesis,
                     department: groupToEdit.department,
                     course: groupToEdit.course || derivedCourse || '',
                 });
@@ -668,10 +666,6 @@ export default function AdminGroupManagementPage() {
                         adviser: formData.adviser || undefined,
                         editor: formData.editor || undefined,
                         status: formData.status,
-                        thesis: formData.thesis?.title?.trim() ? {
-                            ...formData.thesis,
-                            title: formData.thesis.title.trim(),
-                        } : undefined,
                         department: normalizedDepartment || '',
                         course: normalizedCourse,
                     }
@@ -687,10 +681,6 @@ export default function AdminGroupManagementPage() {
                         editor: formData.editor || undefined,
                     },
                     status: formData.status,
-                    thesis: formData.thesis?.title?.trim() ? {
-                        ...formData.thesis,
-                        title: formData.thesis.title.trim(),
-                    } : undefined,
                     department: normalizedDepartment || '',
                     course: normalizedCourse,
                     createdAt: new Date().toISOString(),
@@ -713,10 +703,6 @@ export default function AdminGroupManagementPage() {
                     adviser: formData.adviser || undefined,
                     editor: formData.editor || undefined,
                     status: formData.status,
-                    thesis: formData.thesis?.title?.trim() ? {
-                        ...formData.thesis,
-                        title: formData.thesis.title.trim(),
-                    } : undefined,
                     department: normalizedDepartment || '',
                     course: normalizedCourse,
                 });
@@ -732,10 +718,6 @@ export default function AdminGroupManagementPage() {
                         editor: formData.editor || undefined,
                     },
                     status: formData.status,
-                    thesis: formData.thesis?.title?.trim() ? {
-                        ...formData.thesis,
-                        title: formData.thesis.title.trim(),
-                    } : undefined,
                     department: normalizedDepartment || '',
                     course: normalizedCourse,
                     updatedAt: new Date().toISOString(),

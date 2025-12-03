@@ -24,6 +24,9 @@ export interface WorkspaceCommentPayload {
     thesisId: string;
     chapterId: number;
     chapterStage: ThesisStageName;
+    /** Submission ID for chat messages */
+    submissionId?: string;
+    /** @deprecated Use submissionId instead */
     versionIndex: number | null;
     content: string;
     files: File[];
@@ -53,9 +56,16 @@ export type WorkspaceChapterDecision = 'approved' | 'revision_required';
 export interface WorkspaceChapterDecisionPayload {
     thesisId: string;
     chapterId: number;
+    /** The stage of the chapter (from stages.json config) */
+    stage?: ThesisStageName;
+    /** Specific submission/version ID to update */
+    submissionId?: string;
+    /** @deprecated Use submissionId instead */
     versionIndex?: number | null;
     decision: WorkspaceChapterDecision;
     role?: ExpertRole;
+    /** Required expert roles for this thesis (determines approval flow) */
+    requiredRoles?: ExpertRole[];
 }
 
 export interface VersionOption {

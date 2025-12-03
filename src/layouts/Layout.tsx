@@ -66,7 +66,10 @@ export default function Layout() {
             </Fade>
 
             <DashboardLayout slots={{ toolbarActions: CustomActions, toolbarAccount: CustomAccount }}>
-                <PageContainer sx={{ pb: 0, mb: '2 !important', maxWidth: '100% !important', width: '100%', height: '100vh' }}>
+                <PageContainer sx={{
+                    mb: '2 !important', maxWidth: '100% !important', width: '100%', height: '100%',
+                    display: 'flex', flexDirection: 'column'
+                }}>
                     {hasUser && hasAccess ? <Outlet /> : null}
                     {showUnauthorized ? (
                         <UnauthorizedNotice

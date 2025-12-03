@@ -52,7 +52,6 @@ export default function GroupManageDialog({
     const [localFormDetails, setLocalFormDetails] = React.useState({
         name: formData.name,
         description: formData.description || '',
-        thesisTitle: formData.thesis?.title || '',
         department: formData.department || '',
         status: formData.status,
     });
@@ -63,12 +62,11 @@ export default function GroupManageDialog({
             setLocalFormDetails({
                 name: formData.name,
                 description: formData.description || '',
-                thesisTitle: formData.thesis?.title || '',
                 department: formData.department || '',
                 status: formData.status,
             });
         }
-    }, [open, formData.name, formData.description, formData.thesis?.title, formData.department, formData.status]);
+    }, [open, formData.name, formData.description, formData.department, formData.status]);
 
     const handleNext = React.useCallback(() => {
         let pendingChanges: Partial<ThesisGroupFormData> | undefined;
@@ -77,12 +75,6 @@ export default function GroupManageDialog({
             pendingChanges = {
                 name: localFormDetails.name,
                 description: localFormDetails.description,
-                thesis: formData.thesis ? {
-                    ...formData.thesis,
-                    title: localFormDetails.thesisTitle,
-                } : localFormDetails.thesisTitle ? {
-                    title: localFormDetails.thesisTitle,
-                } as ThesisGroupFormData['thesis'] : undefined,
                 department: localFormDetails.department,
                 status: localFormDetails.status,
             };
@@ -91,7 +83,7 @@ export default function GroupManageDialog({
         }
 
         void onNext(pendingChanges);
-    }, [activeStep, localFormDetails, formData.thesis, onFieldChange, onNext]);
+    }, [activeStep, localFormDetails, onFieldChange, onNext]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slots={{ transition: GrowTransition }}>
@@ -124,13 +116,6 @@ export default function GroupManageDialog({
                                 onChange={(event) => setLocalFormDetails(prev => ({ ...prev, description: event.target.value }))}
                                 multiline
                                 rows={2}
-                                fullWidth
-                            />
-
-                            <TextField
-                                label="Thesis Title"
-                                value={localFormDetails.thesisTitle}
-                                onChange={(event) => setLocalFormDetails(prev => ({ ...prev, thesisTitle: event.target.value }))}
                                 fullWidth
                             />
 
@@ -290,9 +275,6 @@ export default function GroupManageDialog({
                                     </Typography>
                                     <Typography>
                                         <strong>Description:</strong> {formData.description || '—'}
-                                    </Typography>
-                                    <Typography>
-                                        <strong>Thesis Title:</strong> {formData.thesis?.title || '—'}
                                     </Typography>
                                     {isAdmin && (
                                         <Typography>

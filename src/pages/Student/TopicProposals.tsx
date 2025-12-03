@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
-    DialogContent, DialogContentText, DialogTitle, Skeleton, Stack, Typography
+    DialogContent, DialogContentText, DialogTitle, Skeleton, Stack, Tooltip, Typography
 } from '@mui/material';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import { useSession } from '@toolpad/core';
@@ -18,13 +18,13 @@ import {
     createProposalSetByGroup, listenTopicProposalSetsByGroup, markProposalAsThesisBySetId,
     submitProposalSetBySetId, updateDraftEntriesBySetId,
 } from '../../utils/firebase/firestore/topicProposals';
-import { getGroupsByLeader, getGroupsByMember, updateGroupById } from '../../utils/firebase/firestore/groups';
+import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import {
     areAllProposalsRejected, canEditProposalSet, getProposalSetMeta, pickActiveProposalSet
 } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
-import { findThesisById } from '../../utils/firebase/firestore/thesis';
+
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -105,24 +105,6 @@ function computeNextTopicSequence(groupId: string | undefined, sets: TopicPropos
     return maxSequence + 1;
 }
 
-async function ensureGroupThesisReference(group: ThesisGroup): Promise<ThesisGroup> {
-    if (!group.thesis?.id) {
-        return group;
-    }
-
-    try {
-        const thesis = await findThesisById(group.thesis.id);
-        if (thesis) {
-            return group;
-        }
-        await updateGroupById(group.id, { thesis: undefined });
-        return { ...group, thesis: undefined };
-    } catch (error) {
-        console.error('Failed to verify thesis reference for group:', error);
-        return group;
-    }
-}
-
 /**
  * Student-facing topic proposal workspace for drafting, submitting, and tracking proposal cycles.
  */
@@ -177,11 +159,10 @@ export default function StudentTopicProposalsPage() {
                 const combined = [...leaderGroups, ...memberGroups];
                 const unique = Array.from(new Map(combined.map((item) => [item.id, item])).values());
                 const primary = pickPrimaryGroup(unique);
-                const safeGroup = primary ? await ensureGroupThesisReference(primary) : null;
                 if (cancelled) {
                     return;
                 }
-                setGroup(safeGroup);
+                setGroup(primary);
             } catch (error) {
                 console.error('Failed to load student groups:', error);
                 if (!cancelled) {
@@ -298,12 +279,12 @@ export default function StudentTopicProposalsPage() {
                 : 'Draft in progress';
 
     const activeSetChipLabel = activeSetMeta.hasApproved
-        ? 'approved'
+        ? 'Approved'
         : activeSetMeta.allRejected
-            ? 'rejected'
+            ? 'Rejected'
             : (activeSetMeta.awaitingModerator || activeSetMeta.awaitingHead)
-                ? 'under review'
-                : 'draft';
+                ? 'Under Review'
+                : 'Draft';
 
     let activeSetChipColor: 'success' | 'error' | 'default' = 'default';
     if (activeSetMeta.hasApproved) activeSetChipColor = 'success';
@@ -621,80 +602,106 @@ export default function StudentTopicProposalsPage() {
                                     </Button>
                                 </Stack>
                             )}
+
+                            {activeSet.entries.length > 0 && (
+                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap" sx={{ mt: 3 }}>
+                                    {activeSet.entries.map((entry) => {
+                                        const author = memberProfiles.get(entry.proposedBy);
+                                        const isEntryInUse = entry.usedAsThesis === true;
+                                        const lockedByAnotherEntry = Boolean(usedThesisEntry && !isEntryInUse);
+                                        const entryActions: React.ReactNode[] = [];
+                                        if (editable) {
+                                            entryActions.push(
+                                                <Button key="edit" size="small" onClick={() => handleOpenForm(entry)}>
+                                                    Edit
+                                                </Button>,
+                                                <Button key="remove" size="small" color="error" onClick={() => setDeleteDialog(entry)}>
+                                                    Remove
+                                                </Button>,
+                                            );
+                                        }
+
+                                        if (entry.status === 'head_approved') {
+                                            entryActions.push(
+                                                <Button
+                                                    key="use-topic"
+                                                    variant="contained"
+                                                    color="success"
+                                                    size="small"
+                                                    disabled={lockedByAnotherEntry || isEntryInUse || useTopicLoading}
+                                                    onClick={() => setUseTopicDialog(entry)}
+                                                >
+                                                    {isEntryInUse ? 'In use' : 'Use this topic'}
+                                                </Button>
+                                            );
+                                        }
+
+                                        // Get decision info from the proposal set audits
+                                        const entryAudits = activeSet?.audits?.filter(
+                                            audit => audit.proposalId === entry.id
+                                        ) || [];
+                                        const moderatorAudit = entryAudits.find(a => a.stage === 'moderator');
+                                        const headAudit = entryAudits.find(a => a.stage === 'head');
+
+                                        const getAuditChipConfig = (stage: string, status: string) => {
+                                            const label = stage === 'moderator' ? 'Moderator' : 'Head';
+                                            const statusLabel = status === 'approved' ? 'Approved'
+                                                : status === 'rejected' ? 'Rejected'
+                                                    : status;
+                                            const color: 'success' | 'error' | 'warning' | 'default' =
+                                                status === 'approved' ? 'success'
+                                                    : status === 'rejected' ? 'error'
+                                                        : 'default';
+                                            return { label: `${label}: ${statusLabel}`, color };
+                                        };
+
+                                        const footer = moderatorAudit || headAudit ? (
+                                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                                {moderatorAudit && (() => {
+                                                    const config = getAuditChipConfig('moderator', moderatorAudit.status);
+                                                    return (
+                                                        <Tooltip title={moderatorAudit.notes || ''} arrow>
+                                                            <Chip
+                                                                label={config.label}
+                                                                color={config.color}
+                                                                size="small"
+                                                                variant="outlined"
+                                                            />
+                                                        </Tooltip>
+                                                    );
+                                                })()}
+                                                {headAudit && (() => {
+                                                    const config = getAuditChipConfig('head', headAudit.status);
+                                                    return (
+                                                        <Tooltip title={headAudit.notes || ''} arrow>
+                                                            <Chip
+                                                                label={config.label}
+                                                                color={config.color}
+                                                                size="small"
+                                                                variant="outlined"
+                                                            />
+                                                        </Tooltip>
+                                                    );
+                                                })()}
+                                            </Stack>
+                                        ) : undefined;
+
+                                        return (
+                                            <Box key={entry.id} sx={{ flex: '1 1 320px', minWidth: 280 }}>
+                                                <TopicProposalEntryCard
+                                                    entry={entry}
+                                                    author={author}
+                                                    highlight={entry.status === 'head_approved'}
+                                                    actions={entryActions.length > 0 ? entryActions : undefined}
+                                                    footer={footer}
+                                                />
+                                            </Box>
+                                        );
+                                    })}
+                                </Stack>
+                            )}
                         </CardContent>
                     </Card>
-                )}
-
-                {activeSet && activeSet.entries.length > 0 && (
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
-                        {activeSet.entries.map((entry) => {
-                            const author = memberProfiles.get(entry.proposedBy);
-                            const isEntryInUse = entry.usedAsThesis === true;
-                            const lockedByAnotherEntry = Boolean(usedThesisEntry && !isEntryInUse);
-                            const entryActions: React.ReactNode[] = [];
-                            if (editable) {
-                                entryActions.push(
-                                    <Button key="edit" size="small" onClick={() => handleOpenForm(entry)}>
-                                        Edit
-                                    </Button>,
-                                    <Button key="remove" size="small" color="error" onClick={() => setDeleteDialog(entry)}>
-                                        Remove
-                                    </Button>,
-                                );
-                            }
-
-                            if (entry.status === 'head_approved') {
-                                entryActions.push(
-                                    <Button
-                                        key="use-topic"
-                                        variant="contained"
-                                        color="success"
-                                        size="small"
-                                        disabled={lockedByAnotherEntry || isEntryInUse || useTopicLoading}
-                                        onClick={() => setUseTopicDialog(entry)}
-                                    >
-                                        {isEntryInUse ? 'In use' : 'Use this topic'}
-                                    </Button>
-                                );
-                            }
-
-                            // Get decision info from the proposal set audits
-                            const entryAudits = activeSet?.audits?.filter(
-                                audit => audit.proposalId === entry.id
-                            ) || [];
-                            const moderatorAudit = entryAudits.find(a => a.stage === 'moderator');
-                            const headAudit = entryAudits.find(a => a.stage === 'head');
-
-                            const footer = moderatorAudit || headAudit ? (
-                                <Stack spacing={1}>
-                                    {moderatorAudit && (
-                                        <Typography variant="caption" color="text.secondary">
-                                            Moderator: {moderatorAudit.status}
-                                            {moderatorAudit.notes ? ` – ${moderatorAudit.notes}` : ''}
-                                        </Typography>
-                                    )}
-                                    {headAudit && (
-                                        <Typography variant="caption" color="text.secondary">
-                                            Head: {headAudit.status}
-                                            {headAudit.notes ? ` – ${headAudit.notes}` : ''}
-                                        </Typography>
-                                    )}
-                                </Stack>
-                            ) : undefined;
-
-                            return (
-                                <Box key={entry.id} sx={{ flex: '1 1 320px', minWidth: 280 }}>
-                                    <TopicProposalEntryCard
-                                        entry={entry}
-                                        author={author}
-                                        highlight={entry.status === 'head_approved'}
-                                        actions={entryActions.length > 0 ? entryActions : undefined}
-                                        footer={footer}
-                                    />
-                                </Box>
-                            );
-                        })}
-                    </Stack>
                 )}
 
                 {historySets.length > 0 && (
@@ -710,12 +717,12 @@ export default function StudentTopicProposalsPage() {
                                         ? 'Under review'
                                         : 'Draft in progress';
                             const chipLabel = meta.hasApproved
-                                ? 'approved'
+                                ? 'Approved'
                                 : meta.allRejected
-                                    ? 'rejected'
+                                    ? 'Rejected'
                                     : (meta.awaitingModerator || meta.awaitingHead)
-                                        ? 'under review'
-                                        : 'draft';
+                                        ? 'Under Review'
+                                        : 'Draft';
                             let chipColor: 'success' | 'error' | 'default' = 'default';
                             if (meta.hasApproved) chipColor = 'success';
                             else if (meta.allRejected) chipColor = 'error';

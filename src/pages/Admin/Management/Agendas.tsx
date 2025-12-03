@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Collapse, Dialog, DialogActions,
-    DialogContent, DialogTitle, Divider, IconButton, List, ListItem,
+    DialogContent, DialogTitle, Divider, IconButton, LinearProgress, List, ListItem,
     ListItemText, Skeleton, Stack, TextField, Tooltip, Typography
 } from '@mui/material';
 import {
@@ -52,30 +52,22 @@ interface AgendasData {
 }
 
 import {
-    getFullAgendasData, saveFullAgendasData,
-    type FullAgendasData,
+    getFullAgendasData, saveFullAgendasData, loadOrSeedFullAgendasData,
+    type FullAgendasData, type LoadOrSeedAgendasResult,
 } from '../../../utils/firebase/firestore/agendas';
 import { DEFAULT_YEAR } from '../../../config/firestore';
 
 /**
  * Load agendas from Firestore, or seed with default data if empty
+ * @returns Object containing agendas data and whether seeding occurred
  */
-async function loadAgendas(): Promise<AgendasData> {
-    // Try to load from Firestore first
-    const firestoreData = await getFullAgendasData(DEFAULT_YEAR);
-
-    if (firestoreData) {
-        return firestoreData as AgendasData;
-    }
-
-    // Firestore is empty, load default data from JSON and seed Firestore
+async function loadAgendas(): Promise<LoadOrSeedAgendasResult> {
+    // Load default data from JSON
     const defaultData = await import('../../../config/agendas.json');
     const data = defaultData.default as unknown as FullAgendasData;
 
-    // Save default data to Firestore
-    await saveFullAgendasData(DEFAULT_YEAR, data);
-
-    return data as AgendasData;
+    // Load from Firestore or seed with defaults
+    return loadOrSeedFullAgendasData(DEFAULT_YEAR, data);
 }
 
 /**
@@ -236,6 +228,7 @@ export default function AgendasManagementPage() {
     const [agendas, setAgendas] = React.useState<AgendasData | null>(null);
     const [departments, setDepartments] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
+    const [isSeeding, setIsSeeding] = React.useState(false);
     const [expandedInstitutional, setExpandedInstitutional] = React.useState<Set<number>>(new Set());
     const [expandedDepartments, setExpandedDepartments] = React.useState<Set<string>>(new Set());
     const [expandedDeptAgendas, setExpandedDeptAgendas] = React.useState<Set<string>>(new Set());
@@ -264,11 +257,24 @@ export default function AgendasManagementPage() {
         let cancelled = false;
         const load = async () => {
             try {
-                const [data, depts] = await Promise.all([
+                const [result, depts] = await Promise.all([
                     loadAgendas(),
                     getUserDepartments().catch(() => []),
                 ]);
                 if (!cancelled) {
+                    const { data, seeded } = result;
+
+                    // Show seeding indicator if data was seeded
+                    if (seeded) {
+                        setIsSeeding(true);
+                        // Small delay to show the seeding message
+                        await new Promise((resolve) => setTimeout(resolve, 1500));
+                        if (!cancelled) {
+                            setIsSeeding(false);
+                            showNotification('Default agendas have been added to the database.', 'success');
+                        }
+                    }
+
                     // Ensure all departments have an entry
                     const existingDepts = new Set(
                         data.departmentalAgendas.map((d: DepartmentAgenda) => d.department)
@@ -285,7 +291,7 @@ export default function AgendasManagementPage() {
                     data.departmentalAgendas.sort((a, b) =>
                         a.department.localeCompare(b.department)
                     );
-                    setAgendas(data);
+                    setAgendas(data as AgendasData);
                     setDepartments(depts.sort());
                     setLoading(false);
                 }
@@ -298,7 +304,7 @@ export default function AgendasManagementPage() {
         };
         void load();
         return () => { cancelled = true; };
-    }, []);
+    }, [showNotification]);
 
     // Save agendas to Firestore whenever they change (debounced)
     React.useEffect(() => {
@@ -597,14 +603,28 @@ export default function AgendasManagementPage() {
     // Render
     // ========================================================================
 
-    if (loading) {
+    if (loading || isSeeding) {
         return (
             <AnimatedPage variant="slideUp">
-                <Stack spacing={3}>
-                    <Skeleton variant="text" width={300} height={50} />
-                    <Skeleton variant="rounded" height={200} />
-                    <Skeleton variant="rounded" height={200} />
-                </Stack>
+                {isSeeding ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 10, gap: 2 }}>
+                        <Typography variant="h6" color="text.secondary">
+                            Pushing default agendas to database...
+                        </Typography>
+                        <Box sx={{ width: '100%', maxWidth: 400 }}>
+                            <LinearProgress />
+                        </Box>
+                        <Typography variant="body2" color="text.secondary">
+                            Setting up institutional and departmental research agendas
+                        </Typography>
+                    </Box>
+                ) : (
+                    <Stack spacing={3}>
+                        <Skeleton variant="text" width={300} height={50} />
+                        <Skeleton variant="rounded" height={200} />
+                        <Skeleton variant="rounded" height={200} />
+                    </Stack>
+                )}
             </AnimatedPage>
         );
     }

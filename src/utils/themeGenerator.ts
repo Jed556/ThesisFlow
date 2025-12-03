@@ -145,8 +145,8 @@ function buildPalette(
             contrastText: colors.onTertiary,
         },
         background: {
-            default: colors.background,
-            paper: colors.surface,
+            default: (isDark ? colors.background : colors.surface),
+            paper: (isDark ? colors.surface : colors.background),
         },
         text: {
             primary: colors.onBackground,

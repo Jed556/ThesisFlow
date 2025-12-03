@@ -9,7 +9,7 @@
 import { collection, doc, getDoc, getDocs, onSnapshot, Timestamp } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { FileAttachment } from '../../../types/file';
-import type { ThesisStageName } from '../../../types/thesis';
+import type { ChapterSubmissionStatus, ExpertApprovalState, ThesisStageName } from '../../../types/thesis';
 import { THESIS_STAGE_SLUGS } from '../../../config/firestore';
 import { buildSubmissionsCollectionPath, buildSubmissionDocPath } from './paths';
 
@@ -81,6 +81,39 @@ function resolveSubmissionDocPath(ctx: FileQueryContext, submissionId: string): 
 // ============================================================================
 // Metadata Helpers
 // ============================================================================
+
+/**
+ * Derive submission status from expertApprovals array
+ * Status is not stored separately - it's derived from the approval entries
+ * @param expertApprovals - Array of expert approvals/decisions
+ * @param requiredRoles - Roles that need to approve (defaults to adviser + editor)
+ */
+function deriveStatusFromExpertApprovals(
+    expertApprovals: ExpertApprovalState | undefined,
+    requiredRoles: Array<'adviser' | 'editor' | 'statistician'> = ['adviser', 'editor']
+): ChapterSubmissionStatus {
+    if (!expertApprovals || !Array.isArray(expertApprovals) || expertApprovals.length === 0) {
+        return 'under_review';
+    }
+
+    // Check if any role requested revision
+    const hasRevisionRequest = expertApprovals.some((a) => a.decision === 'revision_required');
+    if (hasRevisionRequest) {
+        return 'revision_required';
+    }
+
+    // Check if all required roles have approved
+    const allApproved = requiredRoles.every((role) =>
+        expertApprovals.some((a) =>
+            a.role === role && (a.decision === 'approved' || a.decision === undefined)
+        )
+    );
+    if (allApproved) {
+        return 'approved';
+    }
+
+    return 'under_review';
+}
 
 function coerceString(value: unknown): string | undefined {
     if (typeof value === 'string') {
@@ -224,6 +257,17 @@ function buildFileAttachment(
     const chapterStage = (primary.chapterStage ?? fallback.chapterStage) as ThesisStageName | undefined;
     const category = (primary.category ?? fallback.category ?? 'submission') as FileAttachment['category'];
 
+    // Extract expert approvals from the submission document
+    const expertApprovals = (fallback.expertApprovals ?? primary.expertApprovals) as ExpertApprovalState | undefined;
+
+    // Check if there's a stored submissionStatus (for draft status)
+    const storedStatus = coerceString(fallback.submissionStatus ?? primary.submissionStatus) as ChapterSubmissionStatus | undefined;
+
+    // Use stored status if 'draft', otherwise derive from expertApprovals
+    const submissionStatus = storedStatus === 'draft'
+        ? 'draft'
+        : deriveStatusFromExpertApprovals(expertApprovals);
+
     // Always use the Firestore submission doc ID to ensure matching with ChapterSubmissionEntry
     return {
         id: submissionId,
@@ -240,6 +284,8 @@ function buildFileAttachment(
         chapterStage,
         author,
         metadata: (primary.metadata ?? fallback.metadata) as FileAttachment['metadata'],
+        submissionStatus,
+        expertApprovals,
     };
 }
 

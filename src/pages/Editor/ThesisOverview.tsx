@@ -11,8 +11,8 @@ import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import type { WorkspaceChapterDecisionPayload, WorkspaceCommentPayload, WorkspaceFilterConfig } from '../../types/workspace';
 import { getReviewerAssignmentsForUser, findThesisById } from '../../utils/firebase/firestore/thesis';
-import { appendChapterComment } from '../../utils/firebase/firestore/chat';
-import { updateChapterDecision } from '../../utils/firebase/firestore/chapters';
+import { createChat } from '../../utils/firebase/firestore/chat';
+import { updateSubmissionDecision } from '../../utils/firebase/firestore/submissions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
 
@@ -201,13 +201,13 @@ export default function EditorThesisOverviewPage() {
     const handleCreateComment = React.useCallback(async ({
         chapterId,
         chapterStage,
-        versionIndex,
+        submissionId,
         content,
         files,
     }: WorkspaceCommentPayload) => {
         if (!editorUid || !selectedThesisId || !thesis?.groupId || !thesis.year ||
-            !thesis.department || !thesis.course) {
-            throw new Error('Missing editor context.');
+            !thesis.department || !thesis.course || !submissionId) {
+            throw new Error('Missing editor context or submission ID.');
         }
 
         let attachments: FileAttachment[] = [];
@@ -221,44 +221,33 @@ export default function EditorThesisOverviewPage() {
             });
         }
 
-        const savedComment = await appendChapterComment({
-            ctx: {
-                year: thesis.year,
-                department: thesis.department,
-                course: thesis.course,
-                groupId: thesis.groupId,
-                thesisId: selectedThesisId,
-            },
-            chapterId,
-            comment: {
-                author: editorUid,
-                comment: content,
-                attachments,
-                version: typeof versionIndex === 'number' ? versionIndex : undefined,
-            },
-        });
-
-        setThesis((prev) => {
-            if (!prev) {
-                return prev;
-            }
-            return {
-                ...prev,
-                chapters: (prev.chapters ?? []).map((chapter) =>
-                    chapter.id === chapterId
-                        ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
-                        : chapter
-                ),
-            };
+        await createChat({
+            year: thesis.year,
+            department: thesis.department,
+            course: thesis.course,
+            groupId: thesis.groupId,
+            thesisId: selectedThesisId,
+            stage: chapterStage,
+            chapterId: String(chapterId),
+            submissionId,
+        }, {
+            author: editorUid,
+            comment: content,
+            date: new Date().toISOString(),
+            attachments,
         });
     }, [editorUid, selectedThesisId, thesis]);
 
     const handleChapterDecision = React.useCallback(async (
-        { thesisId: targetThesisId, chapterId, decision }: WorkspaceChapterDecisionPayload
+        { thesisId: targetThesisId, chapterId, stage, submissionId, decision, requiredRoles }: WorkspaceChapterDecisionPayload
     ) => {
         if (!targetThesisId || !thesis?.year || !thesis.department ||
             !thesis.course || !thesis.groupId) {
             throw new Error('Missing thesis context for decision.');
+        }
+
+        if (!stage || !submissionId) {
+            throw new Error('Missing stage or submissionId for decision.');
         }
 
         // Only handle decisions for the currently selected thesis
@@ -266,38 +255,23 @@ export default function EditorThesisOverviewPage() {
             throw new Error('Cannot make decisions for a different thesis.');
         }
 
-        const result = await updateChapterDecision({
+        await updateSubmissionDecision({
             ctx: {
                 year: thesis.year,
                 department: thesis.department,
                 course: thesis.course,
                 groupId: thesis.groupId,
                 thesisId: targetThesisId,
+                stage,
+                chapterId: String(chapterId),
             },
-            chapterId,
+            submissionId,
             decision,
             role: 'editor',
+            requiredRoles,
         });
 
-        setThesis((prev) => {
-            if (!prev) {
-                return prev;
-            }
-            return {
-                ...prev,
-                lastUpdated: result.decidedAt,
-                chapters: (prev.chapters ?? []).map((chapter) =>
-                    chapter.id === chapterId
-                        ? {
-                            ...chapter,
-                            status: result.status,
-                            lastModified: result.decidedAt,
-                            expertApprovals: result.expertApprovals,
-                        }
-                        : chapter
-                ),
-            };
-        });
+        // Submission status is updated in Firestore, ThesisWorkspace will refresh via listener
     }, [selectedThesisId, thesis]);
 
     const isLoading = assignmentsLoading || thesisLoading;

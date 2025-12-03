@@ -1,4 +1,5 @@
 import type { ThesisGroup, GroupStatus } from '../types/group';
+import type { ThesisData } from '../types/thesis';
 import type { HistoricalThesisEntry } from '../types/profile';
 
 const COMPLETED_STATUS_TOKENS: GroupStatus[] = ['completed', 'archived'];
@@ -21,10 +22,15 @@ export function filterActiveGroups(groups: ThesisGroup[]): ThesisGroup[] {
 }
 
 /**
- * Derive a chronological thesis history for a expert across completed groups.
+ * Derive a chronological thesis history for an expert across completed groups.
+ * @param allGroups - All groups to filter
+ * @param thesesByGroupId - Map of group ID to thesis data (since thesis is now in subcollection)
+ * @param userUid - The expert's user ID
+ * @param role - The expert role to filter by
  */
 export function deriveExpertThesisHistory(
     allGroups: ThesisGroup[],
+    thesesByGroupId: Map<string, ThesisData | null>,
     userUid: string,
     role: 'adviser' | 'editor' | 'statistician'
 ): HistoricalThesisEntry[] {
@@ -39,7 +45,7 @@ export function deriveExpertThesisHistory(
     });
 
     return completed.map((group) => {
-        const thesis = group.thesis;
+        const thesis = thesesByGroupId.get(group.id);
         const rawDate = thesis?.submissionDate ? new Date(thesis.submissionDate) : null;
         const year = rawDate && !Number.isNaN(rawDate.getTime())
             ? rawDate.getFullYear().toString()

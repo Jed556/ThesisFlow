@@ -206,24 +206,24 @@ export default function ModeratorGroupApprovalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="h4" gutterBottom>
-                        Group approvals
-                    </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Review pending group requests for the sections assigned to you. Only groups within your
                         courses appear here.
                     </Typography>
                 </Box>
 
-                <Chip
-                    label={
-                        moderatorSections.length === 0
-                            ? 'No sections assigned'
-                            : moderatorSections.join(', ')
-                    }
-                    color={moderatorSections.length > 0 ? 'info' : 'default'}
-                    variant={moderatorSections.length > 0 ? 'filled' : 'outlined'}
-                />
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Typography variant="body2" color="text.secondary">
+                        Courses:
+                    </Typography>
+                    {moderatorSections.length === 0 ? (
+                        <Chip label="No sections assigned" color="default" variant="outlined" size="small" />
+                    ) : (
+                        moderatorSections.map((section) => (
+                            <Chip key={section} label={section} color="info" size="small" />
+                        ))
+                    )}
+                </Stack>
 
                 {profileError && <Alert severity="error">{profileError}</Alert>}
                 {groupsError && <Alert severity="error">{groupsError}</Alert>}

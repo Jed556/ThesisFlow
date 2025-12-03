@@ -169,11 +169,20 @@ export default function MessageComposer({
                 disabled={disabled || isSending}
                 sx={{
                     borderRadius: 2,
+                    bgcolor: 'action.hover',
                     '& .MuiOutlinedInput-notchedOutline': {
-                        border: 'none',
+                        borderColor: 'divider',
                     },
-                    bgcolor: 'background.paper',
-                    width: '100%',
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                        borderWidth: 2,
+                    },
+                    '&.Mui-disabled': {
+                        bgcolor: 'action.disabledBackground',
+                    },
                 }}
                 endAdornment={(
                     <InputAdornment position="end">

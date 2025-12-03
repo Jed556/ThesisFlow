@@ -208,13 +208,18 @@ export async function createProposalSet(
     const proposalsRef = collection(firebaseFirestore, collectionPath);
     const newDocRef = doc(proposalsRef);
 
-    const proposalData = {
+    const proposalData: Record<string, unknown> = {
         createdBy: payload.createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         entries: [],
         audits: [],
     };
+
+    // Include set number if provided
+    if (typeof payload.set === 'number') {
+        proposalData.set = payload.set;
+    }
 
     await setDoc(newDocRef, proposalData);
     return newDocRef.id;
@@ -231,13 +236,18 @@ export async function createProposalSetWithId(
     const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, proposalId);
     const docRef = doc(firebaseFirestore, docPath);
 
-    const proposalData = {
+    const proposalData: Record<string, unknown> = {
         createdBy: payload.createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         entries: [],
         audits: [],
     };
+
+    // Include set number if provided
+    if (typeof payload.set === 'number') {
+        proposalData.set = payload.set;
+    }
 
     await setDoc(docRef, proposalData);
 }
@@ -525,6 +535,7 @@ export async function markProposalAsThesis(
 
     // Import thesis utilities dynamically to avoid circular dependencies
     const { createThesisForGroup } = await import('./thesis');
+    const { seedAllChaptersForThesis } = await import('./chapters');
     const { getChapterConfigByCourse } = await import('./chapter');
     const { templatesToThesisChapters, buildDefaultThesisChapters } = await import('../../thesisChapterTemplates');
 
@@ -540,14 +551,14 @@ export async function markProposalAsThesis(
         chapters = buildDefaultThesisChapters();
     }
 
-    // Create thesis document with chapters and proposal metadata
+    // Create thesis document WITHOUT chapters (chapters stored in subcollection)
     // Build base thesis data
     const baseThesisData = {
         title: entry.title,
         submissionDate: nowISO,
         lastUpdated: nowISO,
         stages: [],
-        chapters,
+        // Note: chapters are NOT stored here - they are seeded to subcollection below
         groupId: ctx.groupId,
         overallStatus: 'draft' as const,
     };
@@ -565,10 +576,14 @@ export async function markProposalAsThesis(
         thesisData
     );
 
-    // Update group with thesis reference for backward compatibility
-    await updateGroupById(ctx.groupId, {
-        thesis: { ...thesisData, id: thesisId },
-    });
+    // Seed chapters to the hierarchical subcollection: stages/{stageSlug}/chapters/{chapterId}
+    await seedAllChaptersForThesis(
+        { year: ctx.year, department: ctx.department, course: ctx.course, groupId: ctx.groupId, thesisId },
+        chapters
+    );
+
+    // Note: thesis is now stored as a separate document linked by groupId
+    // No need to update group with thesis reference - the thesis document is found via the group path
 
     // Update entry with usedAsThesis flag
     const updatedEntries = proposal.entries.map((e) =>

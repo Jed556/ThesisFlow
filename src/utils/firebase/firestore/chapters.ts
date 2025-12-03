@@ -9,13 +9,13 @@
 
 import {
     collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-    query, orderBy, serverTimestamp, writeBatch, onSnapshot, type QueryConstraint,
+    query, serverTimestamp, writeBatch, onSnapshot, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type { ThesisChapter, ThesisData, ThesisStatus, ExpertRole, ExpertApprovalState } from '../../../types/thesis';
-import type { WorkspaceChapterDecision } from '../../../types/workspace';
-import { CHAPTERS_SUBCOLLECTION } from '../../../config/firestore';
-import { buildChaptersCollectionPath, buildChapterDocPath, buildThesisDocPath } from './paths';
+import type { ThesisChapter, ThesisStageName } from '../../../types/thesis';
+import { CHAPTERS_SUBCOLLECTION, THESIS_STAGE_SLUGS } from '../../../config/firestore';
+import { buildChaptersCollectionPath, buildChapterDocPath } from './paths';
+import StagesConfig from '../../../config/stages.json';
 
 // ============================================================================
 // Types
@@ -28,6 +28,17 @@ export interface ChapterContext {
     groupId: string;
     thesisId: string;
     stage: string;
+}
+
+/**
+ * Context for fetching all chapters across all stages for a thesis
+ */
+export interface ThesisChaptersContext {
+    year: string;
+    department: string;
+    course: string;
+    groupId: string;
+    thesisId: string;
 }
 
 export interface ChapterListenerOptions {
@@ -114,13 +125,21 @@ export async function getChaptersForStage(ctx: ChapterContext): Promise<ThesisCh
         ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage
     );
     const chaptersRef = collection(firebaseFirestore, collectionPath);
-    const q = query(chaptersRef, orderBy('id', 'asc'));
-    const snapshot = await getDocs(q);
+    // Note: We don't use orderBy('id') because id is the document ID, not a field
+    const snapshot = await getDocs(chaptersRef);
 
-    return snapshot.docs.map((docSnap) => ({
-        id: Number(docSnap.id) || 0,
-        ...docSnap.data(),
-    } as unknown as ThesisChapter));
+    // Convert stage slug back to stage name for filtering
+    const stageConfig = StagesConfig.stages.find(s => s.slug === ctx.stage);
+    const stageName = stageConfig?.name as ThesisStageName | undefined;
+
+    return snapshot.docs
+        .map((docSnap) => ({
+            id: Number(docSnap.id) || 0,
+            ...docSnap.data(),
+            // Add stage as array with the stage name this chapter belongs to
+            stage: stageName ? [stageName] : [],
+        } as unknown as ThesisChapter))
+        .sort((a, b) => a.id - b.id); // Sort by numeric ID
 }
 
 /**
@@ -195,23 +214,91 @@ export function listenChaptersForStage(
     const collectionPath = buildChaptersCollectionPath(
         ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage
     );
+
+    console.log('[listenChaptersForStage] Listening to path:', collectionPath);
+
     const chaptersRef = collection(firebaseFirestore, collectionPath);
-    const q = query(chaptersRef, orderBy('id', 'asc'));
+    // Note: We don't use orderBy('id') because id is the document ID, not a field
+    // Documents are fetched and then sorted by their numeric document ID
 
     return onSnapshot(
-        q,
+        chaptersRef,
         (snapshot) => {
-            const chapters = snapshot.docs.map((docSnap) => ({
-                id: Number(docSnap.id) || 0,
-                ...docSnap.data(),
-            } as unknown as ThesisChapter));
+            console.log('[listenChaptersForStage] Received', snapshot.docs.length, 'chapters for stage:', ctx.stage);
+
+            // Convert stage slug back to stage name for filtering
+            const stageConfig = StagesConfig.stages.find(s => s.slug === ctx.stage);
+            const stageName = stageConfig?.name as ThesisStageName | undefined;
+
+            const chapters = snapshot.docs
+                .map((docSnap) => ({
+                    id: Number(docSnap.id) || 0,
+                    ...docSnap.data(),
+                    // Add stage as array with the stage name this chapter belongs to
+                    // This is derived from the subcollection path, not stored in the document
+                    stage: stageName ? [stageName] : [],
+                } as unknown as ThesisChapter))
+                .sort((a, b) => a.id - b.id); // Sort by numeric ID
             options.onData(chapters);
         },
         (error) => {
+            console.error('[listenChaptersForStage] Error for stage:', ctx.stage, error);
             if (options.onError) options.onError(error);
             else console.error('Chapter listener error:', error);
         }
     );
+}
+
+/**
+ * Stage values for thesis chapters (derived from JSON config)
+ */
+const THESIS_STAGES = StagesConfig.stages.map(s => s.name) as ThesisStageName[];
+
+/**
+ * Stage slugs for Firestore paths (derived from JSON config)
+ */
+const THESIS_STAGE_SLUG_VALUES = StagesConfig.stages.map(s => s.slug);
+
+/**
+ * Listen to all chapters across all stages for a thesis
+ * Sets up listeners for each stage and combines results
+ * @param ctx - Thesis chapters context (without stage)
+ * @param options - Callbacks for data and errors
+ * @returns Unsubscribe function that cleans up all listeners
+ */
+export function listenAllChaptersForThesis(
+    ctx: ThesisChaptersContext,
+    options: ChapterListenerOptions
+): () => void {
+    const stageChapters: Record<string, ThesisChapter[]> = {};
+    const unsubscribers: (() => void)[] = [];
+
+    console.log('[listenAllChaptersForThesis] Context:', ctx);
+    console.log('[listenAllChaptersForThesis] Stage slugs to listen:', THESIS_STAGE_SLUG_VALUES);
+
+    const emitCombinedChapters = () => {
+        // Combine chapters from all stage slugs
+        const allChapters = THESIS_STAGE_SLUG_VALUES.flatMap((slug) => stageChapters[slug] ?? []);
+        console.log('[listenAllChaptersForThesis] Emitting combined chapters:', allChapters.length);
+        options.onData(allChapters);
+    };
+
+    // Iterate over stage slugs (used in Firestore paths)
+    for (const stageSlug of THESIS_STAGE_SLUG_VALUES) {
+        const stageCtx: ChapterContext = { ...ctx, stage: stageSlug };
+        const unsubscribe = listenChaptersForStage(stageCtx, {
+            onData: (chapters) => {
+                stageChapters[stageSlug] = chapters;
+                emitCombinedChapters();
+            },
+            onError: options.onError,
+        });
+        unsubscribers.push(unsubscribe);
+    }
+
+    return () => {
+        unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
 }
 
 // ============================================================================
@@ -229,137 +316,91 @@ export async function seedChaptersFromTemplate(
 ): Promise<void> {
     const batch = writeBatch(firebaseFirestore);
 
+    console.log('[seedChaptersFromTemplate] Seeding', chapters.length, 'chapters to stage:', ctx.stage);
+
     chapters.forEach((chapterData, index) => {
         const chapterId = String(index + 1);
         const docPath = buildChapterDocPath(
             ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, chapterId
         );
+        console.log('[seedChaptersFromTemplate] Writing chapter to path:', docPath);
         const docRef = doc(firebaseFirestore, docPath);
+
+        // Remove 'stage' field - it's only used for routing during seeding
+        // The stage is determined by the subcollection path, not stored in the document
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { stage: _stage, ...chapterWithoutStage } = chapterData as ThesisChapter & { stage?: unknown };
+
         batch.set(docRef, {
-            ...chapterData,
+            ...chapterWithoutStage,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
     });
 
     await batch.commit();
-}
-
-// ============================================================================
-// ============================================================================
-// Chapter Decision Operations (Thesis document embedded chapters)
-// ============================================================================
-
-/** Context for chapter decision operations */
-export interface ChapterDecisionContext {
-    year: string;
-    department: string;
-    course: string;
-    groupId: string;
-    thesisId: string;
-}
-
-/** Input for updating chapter decision */
-export interface UpdateChapterDecisionInput {
-    ctx: ChapterDecisionContext;
-    chapterId: number;
-    decision: WorkspaceChapterDecision;
-    role: ExpertRole;
-}
-
-/** Result from chapter decision update */
-export interface ChapterDecisionResult {
-    status: ThesisStatus;
-    decidedAt: string;
-    expertApprovals: ExpertApprovalState;
+    console.log('[seedChaptersFromTemplate] Batch committed for stage:', ctx.stage);
 }
 
 /**
- * Calculate overall chapter status from expert approvals
+ * Seed all chapters for a thesis, organized by their respective stages
+ * Groups chapters by their stage property and seeds them to the appropriate subcollections:
+ * year/{year}/departments/{department}/courses/{course}/groups/{groupId}/thesis/{thesisId}/stages/{stageSlug}/chapters/{chapterId}
+ * 
+ * @param ctx - Thesis chapters context (without stage)
+ * @param chapters - Array of thesis chapters with stage arrays
  */
-function calculateOverallStatus(
-    expertApprovals: ExpertApprovalState,
-    currentDecision: WorkspaceChapterDecision
-): ThesisStatus {
-    // If current decision is revision required, chapter needs revision
-    if (currentDecision === 'revision_required') {
-        return 'revision_required';
+export async function seedAllChaptersForThesis(
+    ctx: ThesisChaptersContext,
+    chapters: ThesisChapter[]
+): Promise<void> {
+    console.log('[seedAllChaptersForThesis] Context:', ctx);
+    console.log('[seedAllChaptersForThesis] Chapters to seed:', chapters.length);
+
+    // Group chapters by stage slug
+    const chaptersByStage = new Map<string, ThesisChapter[]>();
+
+    for (const chapter of chapters) {
+        // Get stages for this chapter (defaults to first stage if not specified)
+        const chapterStages = Array.isArray(chapter.stage) && chapter.stage.length > 0
+            ? chapter.stage
+            : [THESIS_STAGES[0]];
+
+        console.log('[seedAllChaptersForThesis] Chapter', chapter.id, 'stages:', chapterStages);
+
+        for (const stageName of chapterStages) {
+            // Convert stage name to slug
+            const stageSlug = THESIS_STAGE_SLUGS[stageName as ThesisStageName] ?? stageName
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+
+            console.log('[seedAllChaptersForThesis] Stage name:', stageName, '-> slug:', stageSlug);
+
+            if (!chaptersByStage.has(stageSlug)) {
+                chaptersByStage.set(stageSlug, []);
+            }
+            chaptersByStage.get(stageSlug)!.push(chapter);
+        }
     }
 
-    // Check if all required experts have approved
-    const approvalValues = Object.values(expertApprovals);
-    if (approvalValues.length > 0 && approvalValues.every(Boolean)) {
-        return 'approved';
-    }
+    console.log('[seedAllChaptersForThesis] Chapters by stage:', Object.fromEntries(chaptersByStage));
 
-    // Otherwise under review
-    return 'under_review';
-}
+    // Seed chapters for each stage
+    const seedPromises = Array.from(chaptersByStage.entries()).map(
+        ([stageSlug, stageChapters]) => {
+            const chapterContext: ChapterContext = {
+                ...ctx,
+                stage: stageSlug,
+            };
+            console.log('[seedAllChaptersForThesis] Seeding', stageChapters.length, 'chapters to stage:', stageSlug);
+            // Strip 'id' from chapters for seeding (seedChaptersFromTemplate generates new IDs)
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const chaptersWithoutId = stageChapters.map(({ id: _id, ...rest }) => rest);
+            return seedChaptersFromTemplate(chapterContext, chaptersWithoutId);
+        }
+    );
 
-/**
- * Update chapter decision in the thesis document
- * @param input - The thesis context, chapter ID, decision, and role
- * @returns Decision result with updated status and approvals
- */
-export async function updateChapterDecision(
-    input: UpdateChapterDecisionInput
-): Promise<ChapterDecisionResult> {
-    const { ctx, chapterId, decision, role } = input;
-    const { year, department, course, groupId, thesisId } = ctx;
-
-    if (!thesisId) {
-        throw new Error('thesisId is required to update chapter decision');
-    }
-
-    const docPath = buildThesisDocPath(year, department, course, groupId, thesisId);
-    const ref = doc(firebaseFirestore, docPath);
-    const snapshot = await getDoc(ref);
-    if (!snapshot.exists()) {
-        throw new Error(`Thesis ${thesisId} not found`);
-    }
-
-    const thesis = snapshot.data() as ThesisData;
-    const chapters = thesis.chapters ?? [];
-    const chapterIndex = chapters.findIndex((ch) => ch.id === chapterId);
-
-    if (chapterIndex === -1) {
-        throw new Error(`Chapter ${chapterId} not found in thesis ${thesisId}`);
-    }
-
-    const chapter = chapters[chapterIndex];
-    const decidedAt = new Date().toISOString();
-    const isApproved = decision === 'approved';
-
-    // Update expert approvals
-    const expertApprovals: ExpertApprovalState = {
-        ...(chapter.expertApprovals ?? {}),
-        [role]: isApproved,
-    };
-
-    // Calculate overall status
-    const status = calculateOverallStatus(expertApprovals, decision);
-
-    // Create updated chapter
-    const updatedChapter: ThesisChapter = {
-        ...chapter,
-        status,
-        lastModified: decidedAt,
-        expertApprovals,
-    };
-
-    // Update the chapters array
-    const updatedChapters = [...chapters];
-    updatedChapters[chapterIndex] = updatedChapter;
-
-    // Save to Firestore
-    await setDoc(ref, {
-        chapters: updatedChapters,
-        lastUpdated: decidedAt,
-    }, { merge: true });
-
-    return {
-        status,
-        decidedAt,
-        expertApprovals,
-    };
+    await Promise.all(seedPromises);
+    console.log('[seedAllChaptersForThesis] Seeding complete');
 }

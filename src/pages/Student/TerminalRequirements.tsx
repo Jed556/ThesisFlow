@@ -16,9 +16,11 @@ import type { FileAttachment } from '../../types/file';
 import type {
     TerminalRequirementApproverAssignments, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
+import type { ThesisChapter } from '../../types/thesis';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
+import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
 import {
     getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
@@ -66,6 +68,8 @@ export default function TerminalRequirementsPage() {
         Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
     const [submitLoading, setSubmitLoading] = React.useState(false);
+    /** Chapters fetched from subcollection (new hierarchical structure) */
+    const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
 
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
@@ -147,6 +151,36 @@ export default function TerminalRequirementsPage() {
             cancelled = true;
         };
     }, [userUid]);
+
+    // Fetch chapters from subcollection (new hierarchical structure)
+    React.useEffect(() => {
+        if (!thesis?.id || !groupMeta?.id || !groupMeta?.department || !groupMeta?.course) {
+            setChapters([]);
+            return;
+        }
+
+        const chaptersCtx: ThesisChaptersContext = {
+            year: groupMeta.year ?? DEFAULT_YEAR,
+            department: groupMeta.department,
+            course: groupMeta.course,
+            groupId: groupMeta.id,
+            thesisId: thesis.id,
+        };
+
+        const unsubscribe = listenAllChaptersForThesis(chaptersCtx, {
+            onData: (allChapters) => {
+                setChapters(allChapters);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to load chapters:', listenerError);
+                setChapters([]);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesis?.id, groupMeta?.id, groupMeta?.department, groupMeta?.course, groupMeta?.year]);
 
     React.useEffect(() => {
         if (!groupMeta?.department || !groupMeta?.course) {
@@ -286,25 +320,12 @@ export default function TerminalRequirementsPage() {
 
     const isConfigInitializing = configLoading && !requirementsConfig;
 
-    // FIX: ThesisData doesn't have chapters directly - it has stages which can contain chapters.
-    // When extracting chapters from stages, we need to ensure each chapter has its stage
-    // property set so that filtering by stage works correctly.
-    const normalizedChapters = React.useMemo(() => {
-        if (!thesis?.stages) return [];
-        return thesis.stages.flatMap((stage) =>
-            (stage.chapters ?? []).map((chapter) => ({
-                ...chapter,
-                // Ensure chapter has stage property set from parent stage
-                stage: chapter.stage ?? [stage.name],
-            }))
-        );
-    }, [thesis?.stages]);
     // FIX: Use treatEmptyAsComplete: true so that stages without chapters don't block
     // terminal requirements. If no chapters are defined for a stage, students should
     // still be able to access terminal requirements for that stage.
     const chapterCompletionMap = React.useMemo(
-        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: true }),
-        [normalizedChapters],
+        () => buildStageCompletionMap(chapters, { treatEmptyAsComplete: true }),
+        [chapters],
     );
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
@@ -564,7 +585,7 @@ export default function TerminalRequirementsPage() {
         if (activeSubmission.status === 'returned') {
             return (
                 <Alert severity="warning">
-                    {activeSubmission.returnNote ?? 'A expert requested changes to your submission.'}
+                    {activeSubmission.returnNote ?? 'A service requested changes to your submission.'}
                     {activeSubmission.returnedBy && (
                         <Typography variant="body2" sx={{ mt: 1 }}>
                             Returned by{' '}

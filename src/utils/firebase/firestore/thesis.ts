@@ -18,11 +18,12 @@ import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import { findUserById, findUsersByIds } from './user';
 import { getGroup } from './groups';
-import type { ThesisData } from '../../../types/thesis';
+import type { ThesisData, ThesisChapter, ChapterSubmission, ChapterSubmissionEntry, THESIS_STAGE_VALUES } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
 import { THESIS_SUBCOLLECTION, GROUPS_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
 import { buildThesisCollectionPath, buildThesisDocPath, extractPathParams } from './paths';
 import { devLog, devError } from '../../../utils/devUtils';
+import { THESIS_STAGE_METADATA } from '../../thesisStageUtils';
 
 // Re-export from specialized modules for backward compatibility
 export * from './stages';
@@ -113,6 +114,7 @@ export interface ThesisDocumentListenerOptions {
 
 /**
  * Convert Firestore document data to ThesisData
+ * Note: Chapters are now stored in a subcollection, not embedded in thesis
  */
 function docToThesisData(docSnap: DocumentSnapshot): ThesisData | null {
     if (!docSnap.exists()) return null;
@@ -123,7 +125,6 @@ function docToThesisData(docSnap: DocumentSnapshot): ThesisData | null {
         submissionDate: data.submissionDate?.toDate?.() || new Date(),
         lastUpdated: data.lastUpdated?.toDate?.() || new Date(),
         stages: data.stages || [],
-        chapters: data.chapters,
         agenda: data.agenda,
         ESG: data.ESG,
         SDG: data.SDG,
@@ -430,47 +431,33 @@ export async function createThesisForGroup(ctx: ThesisContext, data: Omit<Thesis
 // ============================================================================
 
 /**
- * Calculate thesis progress based on approved chapters
- * @param ctx - Thesis context containing path information
- * @param thesisId - Thesis document ID
- * @returns Progress percentage (0-100)
+ * Derive chapter status from its submissions
+ * Priority: latest submission status, or check if any approved/under_review/revision
  */
-export async function calculateThesisProgress(ctx: ThesisContext, thesisId: string): Promise<number> {
-    const thesis = await getThesisById(ctx, thesisId);
-    if (!thesis?.stages || thesis.stages.length === 0) return 0;
-
-    let totalChapters = 0;
-    let approvedChapters = 0;
-
-    for (const stage of thesis.stages) {
-        if (stage.chapters) {
-            totalChapters += stage.chapters.length;
-            approvedChapters += stage.chapters.filter((ch) => ch.status === 'approved').length;
-        }
+function deriveChapterStatusFromSubmissions(chapter: ThesisChapter):
+    'approved' | 'under_review' | 'revision_required' | 'not_submitted' {
+    const submissions: (ChapterSubmission | ChapterSubmissionEntry)[] = chapter.submissions ?? [];
+    if (submissions.length === 0) {
+        return 'not_submitted';
     }
 
-    return totalChapters > 0 ? (approvedChapters / totalChapters) * 100 : 0;
-}
+    // Check the latest submission's status
+    const latestSubmission = submissions[submissions.length - 1];
+    if (latestSubmission?.status === 'approved') return 'approved';
+    if (latestSubmission?.status === 'under_review') return 'under_review';
+    if (latestSubmission?.status === 'revision_required') return 'revision_required';
 
-/**
- * Compute thesis progress ratio (0-1)
- * @param thesis - Thesis data
- * @returns Progress ratio (0-1)
- */
-export function computeThesisProgressRatio(thesis: ThesisData): number {
-    if (!thesis.stages || thesis.stages.length === 0) return 0;
+    // Fallback: check if any submission has a status
+    const hasApproved = submissions.some((s: ChapterSubmission | ChapterSubmissionEntry) => s.status === 'approved');
+    if (hasApproved) return 'approved';
 
-    let totalChapters = 0;
-    let approvedChapters = 0;
+    const hasUnderReview = submissions.some((s: ChapterSubmission | ChapterSubmissionEntry) => s.status === 'under_review');
+    if (hasUnderReview) return 'under_review';
 
-    for (const stage of thesis.stages) {
-        if (stage.chapters) {
-            totalChapters += stage.chapters.length;
-            approvedChapters += stage.chapters.filter((ch) => ch.status === 'approved').length;
-        }
-    }
+    const hasRevision = submissions.some((s: ChapterSubmission | ChapterSubmissionEntry) => s.status === 'revision_required');
+    if (hasRevision) return 'revision_required';
 
-    return totalChapters > 0 ? approvedChapters / totalChapters : 0;
+    return 'not_submitted';
 }
 
 // ============================================================================
@@ -1072,7 +1059,8 @@ export async function findThesisByGroupId(
             const data = docToThesisData(docSnap);
             if (data) {
                 // Fetch group to get member information
-                let groupMembers: Pick<ThesisWithGroupContext, 'leader' | 'members' | 'adviser' | 'editor' | 'statistician' | 'panels'> = {};
+                let groupMembers: Pick<ThesisWithGroupContext,
+                    'leader' | 'members' | 'adviser' | 'editor' | 'statistician' | 'panels'> = {};
                 if (params.year && params.department && params.course && params.groupId) {
                     try {
                         const group = await getGroup(params.year, params.department, params.course, params.groupId);
@@ -1159,7 +1147,7 @@ export async function getReviewerAssignmentsForUser(
             thesisId: thesisDoc.id,
             thesisTitle: thesisData.title || groupData.name || groupId,
             role,
-            stage: currentStage?.name || 'Pre-Proposal',
+            stage: currentStage?.name || THESIS_STAGE_METADATA[0]?.value,
             progress,
             assignedTo: [userId],
             priority: determinePriority(

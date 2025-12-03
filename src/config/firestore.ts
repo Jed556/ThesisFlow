@@ -80,7 +80,7 @@ export const COURSE_TEMPLATES_SUBCOLLECTION = 'templates';
 /** Groups subcollection */
 export const GROUPS_SUBCOLLECTION = 'groups';
 
-/** Expert requests subcollection under group */
+/** Service Requests subcollection under group */
 export const EXPERT_REQUESTS_SUBCOLLECTION = 'expertRequests';
 
 /** Proposals subcollection under group */
@@ -157,14 +157,21 @@ export const GROUP_CONFIGURATION_CHAPTER_DOC = 'chapters';
 // Thesis Stage Slugs
 // ============================================================================
 
-export const THESIS_STAGE_SLUGS = {
-    'Pre-Proposal': 'pre-proposal',
-    'Post-Proposal': 'post-proposal',
-    'Pre-Defense': 'pre-defense',
-    'Post-Defense': 'post-defense',
-} as const;
+import StagesConfig from './stages.json';
+import type { ThesisStageName } from '../types/thesis';
 
-export type ThesisStageSlug = typeof THESIS_STAGE_SLUGS[keyof typeof THESIS_STAGE_SLUGS];
+/**
+ * Map stage names to their URL-friendly slugs (derived from JSON config)
+ */
+export const THESIS_STAGE_SLUGS = StagesConfig.stages.reduce(
+    (acc, stage) => {
+        acc[stage.name as ThesisStageName] = stage.slug;
+        return acc;
+    },
+    {} as Record<ThesisStageName, string>
+);
+
+export type ThesisStageSlug = typeof StagesConfig.stages[number]['slug'];
 
 // ============================================================================
 // Firestore Query Limits

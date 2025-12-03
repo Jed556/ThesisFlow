@@ -1,12 +1,12 @@
 import type { UserRole } from './profile';
 
 /**
- * Expert request status - limited to request workflow states
+ * Service Request status - limited to request workflow states
  */
 export type ExpertRequestStatus = 'pending' | 'approved' | 'rejected';
 
 /**
- * Expert request role - subset of UserRole for expert-specific operations
+ * Service Request role - subset of UserRole for expert-specific operations
  */
 export type ExpertRequestRole = 'adviser' | 'editor' | 'statistician';
 

@@ -33,6 +33,10 @@ function getChapterTemplateDocRef(context: NormalizedCourseTemplateContext) {
 
 interface ChapterTemplateDocument extends Omit<ThesisChapterConfig, 'id'> {
     templateType: typeof CHAPTER_TEMPLATES_KEY;
+    /** Sanitized department key for collection group queries */
+    departmentKey?: string;
+    /** Sanitized course key for collection group queries */
+    courseKey?: string;
 }
 
 function mapChapterSnapshot(
@@ -250,14 +254,27 @@ export async function getChapterConfigsByDepartment(
     if (!trimmed) {
         return [];
     }
+
+    // First try querying by departmentKey (new format)
     const departmentKey = sanitizePathSegment(trimmed, DEFAULT_DEPARTMENT_SEGMENT);
-    const templatesQuery = query(
+    let templatesQuery = query(
         collectionGroup(firebaseFirestore, COURSE_TEMPLATES_SUBCOLLECTION),
         where('templateType', '==', CHAPTER_TEMPLATES_KEY),
         where('year', '==', year),
         where('departmentKey', '==', departmentKey)
     );
-    const snap = await getDocs(templatesQuery);
+    let snap = await getDocs(templatesQuery);
+
+    // If no results, try querying by department name (legacy format)
+    if (snap.empty) {
+        templatesQuery = query(
+            collectionGroup(firebaseFirestore, COURSE_TEMPLATES_SUBCOLLECTION),
+            where('templateType', '==', CHAPTER_TEMPLATES_KEY),
+            where('year', '==', year),
+            where('department', '==', trimmed)
+        );
+        snap = await getDocs(templatesQuery);
+    }
 
     return snap.docs
         .map((docSnap) => mapChapterSnapshot(docSnap))
@@ -284,6 +301,9 @@ export async function setChapterConfig(data: SaveChapterConfigPayload): Promise<
         year: context.year,
         department: context.department,
         course: context.course,
+        // Include sanitized keys for collection group queries
+        departmentKey: sanitizePathSegment(context.department, DEFAULT_DEPARTMENT_SEGMENT),
+        courseKey: sanitizePathSegment(context.course, DEFAULT_COURSE_SEGMENT),
         chapters: normalizeChaptersForWrite(data.chapters),
         createdAt: previous?.createdAt ?? now,
         updatedAt: now,
@@ -469,4 +489,283 @@ export function listenChapterConfig(
             }
         }
     );
+}
+
+// ============================================================================
+// Full Chapter Templates Data Types (for Import/Export)
+// ============================================================================
+
+/**
+ * Course-level chapter template configuration
+ */
+export interface CourseChapterTemplate {
+    course: string;
+    chapters: ChapterTemplate[];
+}
+
+/**
+ * Department-level chapter templates containing multiple courses
+ */
+export interface DepartmentChapterTemplates {
+    department: string;
+    courses: CourseChapterTemplate[];
+}
+
+/**
+ * Full chapter templates data structure for import/export
+ */
+export interface FullChapterTemplatesData {
+    /** Default chapters for courses without specific templates */
+    defaultChapters: ChapterTemplate[];
+    /** Department-specific chapter templates */
+    departmentTemplates: DepartmentChapterTemplates[];
+    /** Last update timestamp */
+    updatedAt?: Date;
+}
+
+// ============================================================================
+// Full Chapter Templates Operations
+// ============================================================================
+
+/**
+ * Check if any chapter templates exist in Firestore
+ * @param year - Academic year (defaults to current)
+ * @returns True if at least one chapter template exists
+ */
+export async function hasChapterTemplates(year: string = DEFAULT_YEAR): Promise<boolean> {
+    const templatesQuery = query(
+        collectionGroup(firebaseFirestore, COURSE_TEMPLATES_SUBCOLLECTION),
+        where('templateType', '==', CHAPTER_TEMPLATES_KEY),
+        where('year', '==', year)
+    );
+    const snap = await getDocs(templatesQuery);
+    return !snap.empty;
+}
+
+/**
+ * Get all chapter templates grouped by department and course
+ * @param year - Academic year (defaults to current)
+ * @returns Full chapter templates data structure
+ */
+export async function getFullChapterTemplatesData(
+    year: string = DEFAULT_YEAR
+): Promise<FullChapterTemplatesData | null> {
+    try {
+        const allConfigs = await getAllChapterConfigs(year);
+
+        if (allConfigs.length === 0) {
+            return null;
+        }
+
+        // Group by department
+        const departmentMap = new Map<string, CourseChapterTemplate[]>();
+
+        for (const config of allConfigs) {
+            const courses = departmentMap.get(config.department) ?? [];
+            courses.push({
+                course: config.course,
+                chapters: config.chapters,
+            });
+            departmentMap.set(config.department, courses);
+        }
+
+        // Convert map to array and sort
+        const departmentTemplates: DepartmentChapterTemplates[] = Array.from(departmentMap.entries())
+            .map(([department, courses]) => ({
+                department,
+                courses: courses.sort((a, b) => a.course.localeCompare(b.course)),
+            }))
+            .sort((a, b) => a.department.localeCompare(b.department));
+
+        return {
+            defaultChapters: [],
+            departmentTemplates,
+            updatedAt: new Date(),
+        };
+    } catch (error) {
+        console.error('Failed to get full chapter templates data:', error);
+        return null;
+    }
+}
+
+/**
+ * Save full chapter templates data to Firestore
+ * @param year - Academic year
+ * @param data - Full chapter templates data to save
+ */
+export async function saveFullChapterTemplatesData(
+    year: string,
+    data: Omit<FullChapterTemplatesData, 'updatedAt'>
+): Promise<void> {
+    const now = new Date().toISOString();
+
+    // Process each department and course
+    for (const deptTemplate of data.departmentTemplates) {
+        for (const courseTemplate of deptTemplate.courses) {
+            await setChapterConfig({
+                year,
+                department: deptTemplate.department,
+                course: courseTemplate.course,
+                chapters: courseTemplate.chapters,
+            });
+        }
+    }
+
+    console.log(`Saved chapter templates at ${now}`);
+}
+
+/** Result of loading or seeding chapter templates */
+export interface LoadOrSeedChapterTemplatesResult {
+    data: FullChapterTemplatesData;
+    /** Whether new templates were seeded (true) or existing ones loaded (false) */
+    seeded: boolean;
+    /** Number of new templates seeded for missing department/course combinations */
+    missingSeededCount?: number;
+}
+
+/** Department/course pair for identifying unique combinations */
+export interface DepartmentCoursePair {
+    department: string;
+    course: string;
+}
+
+/**
+ * Seed chapter templates from default data if Firestore is empty
+ * @param year - Academic year
+ * @param defaultData - Default data to seed (from chapters.json)
+ * @returns The loaded or seeded chapter templates data with seeding status
+ */
+export async function loadOrSeedChapterTemplates(
+    year: string,
+    defaultData: Omit<FullChapterTemplatesData, 'updatedAt'>
+): Promise<LoadOrSeedChapterTemplatesResult> {
+    // Check if any templates exist
+    const templatesExist = await hasChapterTemplates(year);
+
+    if (templatesExist) {
+        // Load existing data from Firestore
+        const existing = await getFullChapterTemplatesData(year);
+        if (existing) {
+            return { data: existing, seeded: false };
+        }
+    }
+
+    // Firestore is empty, seed with default data
+    await saveFullChapterTemplatesData(year, defaultData);
+
+    // Return the seeded data with current timestamp
+    return {
+        data: {
+            ...defaultData,
+            updatedAt: new Date(),
+        },
+        seeded: true,
+    };
+}
+
+/**
+ * Seed default chapter templates for department/course combinations that don't have templates
+ * @param year - Academic year
+ * @param departmentCoursePairs - Array of department/course pairs to check
+ * @param defaultChapters - Default chapters to use for missing templates
+ * @returns Number of templates that were seeded
+ */
+export async function seedMissingChapterTemplates(
+    year: string,
+    departmentCoursePairs: DepartmentCoursePair[],
+    defaultChapters: ChapterTemplate[]
+): Promise<number> {
+    if (departmentCoursePairs.length === 0 || defaultChapters.length === 0) {
+        return 0;
+    }
+
+    // Get all existing templates
+    const existingConfigs = await getAllChapterConfigs(year);
+
+    // Build a set of existing department+course keys for quick lookup
+    const existingKeys = new Set(
+        existingConfigs.map((config) => `${config.department.trim().toLowerCase()}|${config.course.trim().toLowerCase()}`)
+    );
+
+    // Find pairs that don't have templates
+    const missingPairs = departmentCoursePairs.filter((pair) => {
+        const key = `${pair.department.trim().toLowerCase()}|${pair.course.trim().toLowerCase()}`;
+        return !existingKeys.has(key);
+    });
+
+    if (missingPairs.length === 0) {
+        return 0;
+    }
+
+    // Seed templates for missing pairs
+    let seededCount = 0;
+    for (const pair of missingPairs) {
+        try {
+            await setChapterConfig({
+                year,
+                department: pair.department.trim(),
+                course: pair.course.trim(),
+                chapters: defaultChapters,
+            });
+            seededCount++;
+        } catch (error) {
+            console.error(`Failed to seed chapter template for ${pair.department}/${pair.course}:`, error);
+        }
+    }
+
+    return seededCount;
+}
+
+/**
+ * Clear all chapter templates for a given year
+ * Use with caution - this deletes all chapter configurations
+ * @param year - Academic year
+ */
+export async function clearAllChapterTemplates(year: string = DEFAULT_YEAR): Promise<void> {
+    const allConfigs = await getAllChapterConfigs(year);
+
+    // Batch delete in chunks
+    const chunks = chunkArray(allConfigs, FIRESTORE_BATCH_WRITE_LIMIT);
+
+    for (const chunk of chunks) {
+        const batch = writeBatch(firebaseFirestore);
+        for (const config of chunk) {
+            const context = normalizeCourseTemplateContext({
+                year,
+                department: config.department,
+                course: config.course,
+            });
+            const ref = getChapterTemplateDocRef(context);
+            batch.delete(ref);
+        }
+        await batch.commit();
+    }
+}
+
+/**
+ * Import chapter templates from JSON data, replacing existing templates
+ * @param year - Academic year
+ * @param data - Chapter templates data to import
+ * @param clearExisting - Whether to clear existing templates before import (default: true)
+ */
+export async function importChapterTemplates(
+    year: string,
+    data: Omit<FullChapterTemplatesData, 'updatedAt'>,
+    clearExisting: boolean = true
+): Promise<void> {
+    if (clearExisting) {
+        await clearAllChapterTemplates(year);
+    }
+    await saveFullChapterTemplatesData(year, data);
+}
+
+/**
+ * Export chapter templates to a downloadable format
+ * @param year - Academic year
+ * @returns Exportable chapter templates data or null if none exist
+ */
+export async function exportChapterTemplates(
+    year: string = DEFAULT_YEAR
+): Promise<FullChapterTemplatesData | null> {
+    return getFullChapterTemplatesData(year);
 }

@@ -1,5 +1,10 @@
-import type { ExpertApprovalState, ExpertRole, ThesisChapter, ThesisData } from '../types/thesis';
+import type { ExpertApprovalState, ExpertRole, ThesisChapter } from '../types/thesis';
+import type { ThesisWithGroupContext } from './firebase/firestore/thesis';
 
+/** Approval flow order: Statistician (if exists) → Adviser → Editor */
+export const EXPERT_APPROVAL_ORDER: ExpertRole[] = ['statistician', 'adviser', 'editor'];
+
+/** Legacy order for UI display */
 export const EXPERT_ROLE_ORDER: ExpertRole[] = ['adviser', 'editor', 'statistician'];
 
 export const expertRoleLabels: Record<ExpertRole, string> = {
@@ -8,59 +13,61 @@ export const expertRoleLabels: Record<ExpertRole, string> = {
     statistician: 'Statistician',
 };
 
-export const getAssignedExpertRoles = (thesis?: ThesisData | null): ExpertRole[] => {
+/**
+ * Get assigned expert roles from a thesis with group context
+ * Expert assignments are stored on the group, not the thesis itself
+ */
+export const getAssignedExpertRoles = (thesis?: ThesisWithGroupContext | null): ExpertRole[] => {
     if (!thesis) {
         return [];
     }
-    return EXPERT_ROLE_ORDER.filter((role) => Boolean(thesis[role]));
+    // Use approval order for consistency
+    return EXPERT_APPROVAL_ORDER.filter((role) => Boolean(thesis[role]));
 };
 
-export const createEmptyExpertApprovals = (thesis?: ThesisData | null): ExpertApprovalState | undefined => {
-    const assigned = getAssignedExpertRoles(thesis);
-    if (!assigned.length) {
-        return undefined;
-    }
-    return assigned.reduce<ExpertApprovalState>((state, role) => {
-        state[role] = false;
-        return state;
-    }, {} as ExpertApprovalState);
+/**
+ * Create empty expert approvals array (new format)
+ * @deprecated Expert approvals are now an array, use empty array [] instead
+ */
+export const createEmptyExpertApprovals = (): ExpertApprovalState => {
+    return [];
 };
 
-export const hydrateExpertApprovals = (
-    thesis?: ThesisData | null,
-    approvals?: ExpertApprovalState,
-): ExpertApprovalState | undefined => {
-    const base = createEmptyExpertApprovals(thesis);
-    if (!base) {
-        return approvals ? { ...approvals } : undefined;
-    }
-    return {
-        ...base,
-        ...(approvals ?? {}),
-    };
+/**
+ * Check if a role has approved in the expertApprovals array
+ */
+export const hasRoleApproved = (
+    approvals: ExpertApprovalState | undefined,
+    role: ExpertRole
+): boolean => {
+    if (!approvals || !Array.isArray(approvals)) return false;
+    return approvals.some((approval) => approval.role === role);
 };
 
-const mapValues = (
-    approvals: ExpertApprovalState,
-    value: boolean,
-): ExpertApprovalState => Object.keys(approvals).reduce<ExpertApprovalState>((acc, key) => {
-    acc[key as ExpertRole] = value;
-    return acc;
-}, {} as ExpertApprovalState);
+/**
+ * Get all approved roles from expertApprovals
+ */
+export const getApprovedRoles = (approvals: ExpertApprovalState | undefined): ExpertRole[] => {
+    if (!approvals || !Array.isArray(approvals)) return [];
+    return approvals.map((approval) => approval.role);
+};
+
+/**
+ * Check if all required roles have approved
+ */
+export const areAllRolesApproved = (
+    approvals: ExpertApprovalState | undefined,
+    requiredRoles: ExpertRole[]
+): boolean => {
+    return requiredRoles.every((role) => hasRoleApproved(approvals, role));
+};
 
 export const resolveChapterExpertApprovals = (
-    chapter: Pick<ThesisChapter, 'expertApprovals' | 'status'>,
-    thesis?: ThesisData | null,
+    chapter: Pick<ThesisChapter, 'submissions'>,
+    _thesis?: ThesisWithGroupContext | null,
 ): ExpertApprovalState | undefined => {
-    const hydrated = hydrateExpertApprovals(thesis, chapter.expertApprovals);
-    if (!hydrated) {
-        return undefined;
-    }
-    if (chapter.status === 'approved') {
-        return mapValues(hydrated, true);
-    }
-    if (chapter.status === 'revision_required' || chapter.status === 'not_submitted') {
-        return mapValues(hydrated, false);
-    }
-    return hydrated;
+    // Note: expertApprovals are now stored per-file (FileAttachment.expertApprovals)
+    // Return empty array as base state
+    void chapter; // Mark as used
+    return [];
 };

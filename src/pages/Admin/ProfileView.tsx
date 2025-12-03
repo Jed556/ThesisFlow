@@ -127,18 +127,19 @@ export default function AdminProfileViewPage() {
         if (!profile) return [];
 
         if (expertRole) {
-            return deriveExpertThesisHistory(assignments, profile.uid, expertRole);
+            // Pass empty map - deriveExpertThesisHistory falls back to group.name if thesis not found
+            // TODO: Consider fetching theses for completed groups if accurate title is needed
+            return deriveExpertThesisHistory(assignments, new Map(), profile.uid, expertRole);
         }
 
         // For student accounts treat participant groups as history once completed
         const completed = assignments.filter((g) => isCompletedGroupStatus(g.status));
         return completed.map((group) => {
-            const thesis = group.thesis;
-            const rawDate = thesis?.submissionDate ? new Date(thesis.submissionDate) : null;
-            const year = rawDate && !Number.isNaN(rawDate.getTime()) ? rawDate.getFullYear().toString() : '—';
+            // Thesis data is in subcollection, fall back to group name for display
+            // TODO: Fetch theses if accurate title/date is needed
             return {
-                year,
-                title: thesis?.title ?? group.name,
+                year: '—',
+                title: group.name,
                 role: 'Student',
                 outcome: group.status ?? '—',
             } as HistoricalThesisEntry;

@@ -21,11 +21,13 @@ import type { UserProfile } from '../../../types/profile';
 import type { ThesisGroup, ThesisGroupMembers } from '../../../types/group';
 import {
     bulkDeleteThesesByIds, deleteThesisById, getAllTheses, listenTheses,
-    setThesisById, createThesisForGroupById, computeThesisProgressRatio, type ThesisRecord,
+    setThesisById, createThesisForGroupById,
+    type ThesisWithGroupContext,
 } from '../../../utils/firebase/firestore/thesis';
 import { getAllGroups, findGroupById, updateGroupById } from '../../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByIds, listenUsersByFilter } from '../../../utils/firebase/firestore/user';
-import { importThesesFromCsv, exportThesesToCsv } from '../../../utils/csv/thesis';
+// TODO: Create thesis CSV import/export utilities
+// import { importThesesFromCsv, exportThesesToCsv } from '../../../utils/csv/thesis';
 import { formatProfileLabel } from '../../../utils/userUtils';
 import { formatDateShort, fromDateInputString, toDateInputString } from '../../../utils/dateUtils';
 
@@ -44,7 +46,7 @@ const EMPTY_GROUP_MEMBERS: ThesisGroupMembers = {
     members: [],
 };
 
-type AdminThesisRow = ThesisRecord & {
+type AdminThesisRow = ThesisWithGroupContext & {
     groupName: string;
     groupMembers: ThesisGroupMembers;
     leaderUid: string;
@@ -56,6 +58,8 @@ type AdminThesisRow = ThesisRecord & {
     editorName: string;
     memberNames: string[];
     progress: number;
+    /** Overall thesis status */
+    overallStatus?: string;
 };
 
 interface ThesisFormState {
@@ -127,7 +131,6 @@ function parseChapters(input: string): ThesisChapter[] {
         return {
             id: typeof candidate.id === 'number' ? candidate.id : index + 1,
             title: typeof candidate.title === 'string' && candidate.title.trim() ? candidate.title : `Chapter ${index + 1}`,
-            status: typeof candidate.status === 'string' ? candidate.status : 'not_submitted',
             submissionDate: typeof candidate.submissionDate === 'string' ? candidate.submissionDate : null,
             lastModified: typeof candidate.lastModified === 'string' ? candidate.lastModified : null,
             submissions: Array.isArray(candidate.submissions)
@@ -182,7 +185,7 @@ export default function AdminThesisManagementPage() {
     const isMountedRef = React.useRef(true);
     const profileCacheRef = React.useRef(new Map<string, UserProfile>());
     const groupCacheRef = React.useRef(new Map<string, ThesisGroup>());
-    const latestRecordsRef = React.useRef<ThesisRecord[]>([]);
+    const latestRecordsRef = React.useRef<ThesisWithGroupContext[]>([]);
 
     React.useEffect(() => () => {
         isMountedRef.current = false;
@@ -201,130 +204,133 @@ export default function AdminThesisManagementPage() {
     /**
      * Map thesis records to grid rows, hydrating user profiles as needed.
      */
-    const mapThesisRecords = React.useCallback(async (records: ThesisRecord[]): Promise<AdminThesisRow[]> => {
-        const profileCache = profileCacheRef.current;
-        const groupCache = groupCacheRef.current;
+    const mapThesisRecords = React.useCallback(
+        async (records: ThesisWithGroupContext[]): Promise<AdminThesisRow[]> => {
+            const profileCache = profileCacheRef.current;
+            const groupCache = groupCacheRef.current;
 
-        const groupIds = new Set<string>();
-        records.forEach((record) => {
-            if (record.groupId) {
-                groupIds.add(record.groupId);
+            const groupIds = new Set<string>();
+            records.forEach((record) => {
+                if (record.groupId) {
+                    groupIds.add(record.groupId);
+                }
+            });
+
+            const missingGroupIds = Array.from(groupIds).filter((groupId) => !groupCache.has(groupId));
+            if (missingGroupIds.length > 0) {
+                const fetchedGroups = await Promise.all(missingGroupIds.map(async (groupId) => {
+                    try {
+                        return await findGroupById(groupId);
+                    } catch (error) {
+                        console.error(`Failed to fetch thesis group ${groupId}:`, error);
+                        return null;
+                    }
+                }));
+
+                fetchedGroups.forEach((group, index) => {
+                    if (group) {
+                        groupCache.set(missingGroupIds[index], group);
+                    }
+                });
             }
-        });
 
-        const missingGroupIds = Array.from(groupIds).filter((groupId) => !groupCache.has(groupId));
-        if (missingGroupIds.length > 0) {
-            const fetchedGroups = await Promise.all(missingGroupIds.map(async (groupId) => {
+            const uids = new Set<string>();
+            records.forEach((record) => {
+                const group = record.groupId ? groupCache.get(record.groupId) : undefined;
+                if (!group) {
+                    return;
+                }
+
+                const { leader, members, adviser, editor } = group.members;
+                if (leader) {
+                    uids.add(leader);
+                }
+                members.forEach((uid) => {
+                    if (uid) {
+                        uids.add(uid);
+                    }
+                });
+                if (adviser) {
+                    uids.add(adviser);
+                }
+                if (editor) {
+                    uids.add(editor);
+                }
+            });
+
+            const missingProfiles = Array.from(uids).filter((uid) => !profileCache.has(uid));
+            if (missingProfiles.length > 0) {
                 try {
-                    return await findGroupById(groupId);
+                    const fetchedProfiles = await findUsersByIds(missingProfiles);
+                    fetchedProfiles.forEach((profile) => {
+                        profileCache.set(profile.uid, profile);
+                    });
+
+                    const unresolved = missingProfiles.filter((uid) => !profileCache.has(uid));
+                    if (unresolved.length > 0) {
+                        const fallbackProfiles = await Promise.all(unresolved.map(async (uid) => findUserById(uid)));
+                        fallbackProfiles.forEach((profile) => {
+                            if (profile) {
+                                profileCache.set(profile.uid, profile);
+                            }
+                        });
+                    }
                 } catch (error) {
-                    console.error(`Failed to fetch thesis group ${groupId}:`, error);
-                    return null;
+                    console.error('Failed hydrating thesis user profiles:', error);
+                    throw error;
                 }
-            }));
-
-            fetchedGroups.forEach((group, index) => {
-                if (group) {
-                    groupCache.set(missingGroupIds[index], group);
-                }
-            });
-        }
-
-        const uids = new Set<string>();
-        records.forEach((record) => {
-            const group = record.groupId ? groupCache.get(record.groupId) : undefined;
-            if (!group) {
-                return;
             }
 
-            const { leader, members, adviser, editor } = group.members;
-            if (leader) {
-                uids.add(leader);
-            }
-            members.forEach((uid) => {
-                if (uid) {
-                    uids.add(uid);
-                }
-            });
-            if (adviser) {
-                uids.add(adviser);
-            }
-            if (editor) {
-                uids.add(editor);
-            }
-        });
+            return records.map((record) => {
+                const group = record.groupId ? groupCache.get(record.groupId) ?? null : null;
+                const groupMembers: ThesisGroupMembers = group
+                    ? {
+                        leader: group.members.leader ?? '',
+                        members: [...(group.members.members ?? [])],
+                        adviser: group.members.adviser,
+                        editor: group.members.editor,
+                        panels: group.members.panels,
+                    }
+                    : { ...EMPTY_GROUP_MEMBERS };
 
-        const missingProfiles = Array.from(uids).filter((uid) => !profileCache.has(uid));
-        if (missingProfiles.length > 0) {
-            try {
-                const fetchedProfiles = await findUsersByIds(missingProfiles);
-                fetchedProfiles.forEach((profile) => {
-                    profileCache.set(profile.uid, profile);
+                const leaderUid = groupMembers.leader ?? '';
+                const memberUids = groupMembers.members ?? [];
+                const adviserUid = groupMembers.adviser ?? '';
+                const editorUid = groupMembers.editor ?? '';
+
+                const leaderProfile = leaderUid ? profileCache.get(leaderUid) : undefined;
+                const adviserProfile = adviserUid ? profileCache.get(adviserUid) : undefined;
+                const editorProfile = editorUid ? profileCache.get(editorUid) : undefined;
+                const memberNames = memberUids.map((uid) => {
+                    const profile = profileCache.get(uid);
+                    const label = formatProfileLabel(profile);
+                    return label || profile?.email || uid;
                 });
 
-                const unresolved = missingProfiles.filter((uid) => !profileCache.has(uid));
-                if (unresolved.length > 0) {
-                    const fallbackProfiles = await Promise.all(unresolved.map(async (uid) => findUserById(uid)));
-                    fallbackProfiles.forEach((profile) => {
-                        if (profile) {
-                            profileCache.set(profile.uid, profile);
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Failed hydrating thesis user profiles:', error);
-                throw error;
-            }
-        }
+                const leaderLabel = formatProfileLabel(leaderProfile);
+                const adviserLabel = formatProfileLabel(adviserProfile);
+                const editorLabel = formatProfileLabel(editorProfile);
+                // Note: Progress calculation requires fetching chapters from subcollection
+                // For now, use 0 as placeholder - chapters are stored separately
+                const progressRatio = 0; // TODO: Calculate from chapters subcollection
+                const progressPercent = Math.round(Math.min(1, Math.max(0, progressRatio)) * 100);
 
-        return records.map((record) => {
-            const group = record.groupId ? groupCache.get(record.groupId) ?? null : null;
-            const groupMembers: ThesisGroupMembers = group
-                ? {
-                    leader: group.members.leader ?? '',
-                    members: [...(group.members.members ?? [])],
-                    adviser: group.members.adviser,
-                    editor: group.members.editor,
-                    panels: group.members.panels,
-                }
-                : { ...EMPTY_GROUP_MEMBERS };
-
-            const leaderUid = groupMembers.leader ?? '';
-            const memberUids = groupMembers.members ?? [];
-            const adviserUid = groupMembers.adviser ?? '';
-            const editorUid = groupMembers.editor ?? '';
-
-            const leaderProfile = leaderUid ? profileCache.get(leaderUid) : undefined;
-            const adviserProfile = adviserUid ? profileCache.get(adviserUid) : undefined;
-            const editorProfile = editorUid ? profileCache.get(editorUid) : undefined;
-            const memberNames = memberUids.map((uid) => {
-                const profile = profileCache.get(uid);
-                const label = formatProfileLabel(profile);
-                return label || profile?.email || uid;
+                return {
+                    ...record,
+                    groupName: group?.name ?? 'Unassigned',
+                    groupMembers,
+                    leaderUid,
+                    memberUids,
+                    adviserUid: adviserUid || undefined,
+                    editorUid: editorUid || undefined,
+                    leaderName: leaderLabel || leaderUid || '—',
+                    adviserName: adviserLabel || adviserUid || '—',
+                    editorName: editorLabel || editorUid || '—',
+                    memberNames,
+                    progress: progressPercent,
+                } satisfies AdminThesisRow;
             });
-
-            const leaderLabel = formatProfileLabel(leaderProfile);
-            const adviserLabel = formatProfileLabel(adviserProfile);
-            const editorLabel = formatProfileLabel(editorProfile);
-            const progressRatio = computeThesisProgressRatio(record);
-            const progressPercent = Math.round(Math.min(1, Math.max(0, progressRatio)) * 100);
-
-            return {
-                ...record,
-                groupName: group?.name ?? 'Unassigned',
-                groupMembers,
-                leaderUid,
-                memberUids,
-                adviserUid: adviserUid || undefined,
-                editorUid: editorUid || undefined,
-                leaderName: leaderLabel || leaderUid || '—',
-                adviserName: adviserLabel || adviserUid || '—',
-                editorName: editorLabel || editorUid || '—',
-                memberNames,
-                progress: progressPercent,
-            } satisfies AdminThesisRow;
-        });
-    }, []);
+        }, []);
 
     const reloadTheses = React.useCallback(async () => {
         try {
@@ -381,11 +387,13 @@ export default function AdminThesisManagementPage() {
         }
 
         const unsubscribe = listenTheses({
-            onData: (records: ThesisRecord[]) => {
-                latestRecordsRef.current = records;
+            onData: (records) => {
+                // Cast to ThesisWithGroupContext since getAllTheses returns context data
+                const recordsWithContext = records as ThesisWithGroupContext[];
+                latestRecordsRef.current = recordsWithContext;
                 void (async () => {
                     try {
-                        const mapped = await mapThesisRecords(records);
+                        const mapped = await mapThesisRecords(recordsWithContext);
                         if (isMountedRef.current) {
                             setRows(mapped);
                             setLoading(false);
@@ -550,7 +558,7 @@ export default function AdminThesisManagementPage() {
     }, []);
 
     const handleDelete = React.useCallback(async () => {
-        if (!selectedThesis) return;
+        if (!selectedThesis?.id) return;
         try {
             await deleteThesisById(selectedThesis.id);
             showNotification(`Thesis "${selectedThesis.title}" deleted successfully`, 'success');
@@ -565,7 +573,10 @@ export default function AdminThesisManagementPage() {
     const handleMultiDelete = React.useCallback(async (thesesToDelete: AdminThesisRow[]) => {
         if (thesesToDelete.length === 0) return;
         try {
-            await bulkDeleteThesesByIds(thesesToDelete.map((row) => row.id));
+            const idsToDelete = thesesToDelete
+                .map((row) => row.id)
+                .filter((id): id is string => Boolean(id));
+            await bulkDeleteThesesByIds(idsToDelete);
             showNotification(`Deleted ${thesesToDelete.length} thesis record(s)`, 'success');
         } catch (error) {
             console.error('Failed to delete multiple theses:', error);
@@ -574,6 +585,7 @@ export default function AdminThesisManagementPage() {
         }
     }, [showNotification]);
 
+    // TODO: Implement thesis CSV export when csv/thesis.ts is created
     const handleExport = React.useCallback((selected: AdminThesisRow[]) => {
         try {
             const source = selected.length > 0 ? selected : rows;
@@ -581,18 +593,20 @@ export default function AdminThesisManagementPage() {
                 if (!value) return '';
                 return value instanceof Date ? value.toISOString() : value;
             };
-            const csv = exportThesesToCsv(source.map((row) => ({
-                title: row.title,
-                groupId: row.groupId ?? '',
-                submissionDate: formatDateStr(row.submissionDate),
-                lastUpdated: formatDateStr(row.lastUpdated),
-                overallStatus: row.overallStatus ?? 'not_submitted',
-                chapters: row.chapters ?? [],
-                leader: row.leaderUid,
-                members: row.memberUids,
-                adviser: row.adviserUid ?? '',
-                editor: row.editorUid ?? '',
-            })));
+            // Basic CSV export without dedicated thesis CSV utility
+            const headers = ['title', 'groupId', 'submissionDate', 'lastUpdated', 'overallStatus', 'leader', 'members', 'adviser', 'editor'];
+            const csvRows = source.map((row) => [
+                `"${(row.title || '').replace(/"/g, '""')}"`,
+                row.groupId ?? '',
+                formatDateStr(row.submissionDate),
+                formatDateStr(row.lastUpdated),
+                row.overallStatus ?? 'not_submitted',
+                row.leaderUid,
+                `"${row.memberUids.join(',')}"`,
+                row.adviserUid ?? '',
+                row.editorUid ?? '',
+            ].join(','));
+            const csv = [headers.join(','), ...csvRows].join('\n');
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
@@ -609,7 +623,13 @@ export default function AdminThesisManagementPage() {
         }
     }, [rows, showNotification]);
 
-    const handleImport = React.useCallback(async (file: File) => {
+    // TODO: Implement thesis CSV import when csv/thesis.ts is created
+    const handleImport = React.useCallback(async (_file: File) => {
+        showNotification('Thesis CSV import is not yet implemented.', 'warning');
+    }, [showNotification]);
+
+    /* Original handleImport implementation - kept for reference
+    const handleImportOriginal = React.useCallback(async (file: File) => {
         startJob(
             `Importing theses from ${file.name}`,
             async (updateProgress, signal) => {
@@ -733,6 +753,7 @@ export default function AdminThesisManagementPage() {
 
         showNotification('Thesis import started in the background.', 'info', 5000);
     }, [showNotification, startJob]);
+    */
 
     const handleSave = React.useCallback(async () => {
         if (!validateForm()) return;
@@ -748,16 +769,11 @@ export default function AdminThesisManagementPage() {
 
         const uniqueMembers = Array.from(new Set(formState.members.filter((uid) => uid && uid !== formState.leader)));
 
+        // ThesisData only contains thesis-specific fields, not group member data
         const thesisPayload: Omit<ThesisData, 'id'> = {
             title: formState.title.trim(),
-            groupId: formState.groupId,
-            leader: formState.leader,
-            members: uniqueMembers,
-            adviser: formState.adviser,
-            editor: formState.editor,
             submissionDate: fromDateInputString(formState.submissionDate),
             lastUpdated: fromDateInputString(formState.lastUpdated),
-            overallStatus: (formState.overallStatus || 'draft') as ThesisStatus,
             chapters,
             stages: [],
         };
@@ -780,7 +796,7 @@ export default function AdminThesisManagementPage() {
 
         setSaving(true);
         try {
-            if (editMode && selectedThesis) {
+            if (editMode && selectedThesis?.id) {
                 await setThesisById(selectedThesis.id, thesisPayload as ThesisData);
             } else {
                 await createThesisForGroupById(formState.groupId, thesisPayload as ThesisData);

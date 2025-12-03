@@ -8,12 +8,14 @@ import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisGroup } from '../../types/group';
+import type { ThesisChapter } from '../../types/thesis';
 import type { PanelCommentEntry, PanelCommentReleaseMap, PanelCommentStage } from '../../types/panelComment';
 import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable } from '../../components/PanelComments';
 import { useSnackbar } from '../../components/Snackbar';
 import { getAllGroups } from '../../utils/firebase/firestore/groups';
 import { listenThesisByGroupId, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
+import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
 import {
     listenPanelCommentEntries,
     listenPanelCommentRelease,
@@ -75,6 +77,8 @@ export default function AdminPanelCommentsPage() {
     const [panelistsLoading, setPanelistsLoading] = React.useState(false);
     const [panelistsError, setPanelistsError] = React.useState<string | null>(null);
     const [activePanelUid, setActivePanelUid] = React.useState<string | null>(null);
+    /** Chapters fetched from subcollection (new hierarchical structure) */
+    const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -118,6 +122,36 @@ export default function AdminPanelCommentsPage() {
         });
         return () => unsubscribe();
     }, [selectedGroupId]);
+
+    // Fetch chapters from subcollection (new hierarchical structure)
+    React.useEffect(() => {
+        if (!thesis?.id || !selectedGroup?.id || !selectedGroup?.department || !selectedGroup?.course) {
+            setChapters([]);
+            return;
+        }
+
+        const chaptersCtx: ThesisChaptersContext = {
+            year: selectedGroup.year ?? DEFAULT_YEAR,
+            department: selectedGroup.department,
+            course: selectedGroup.course,
+            groupId: selectedGroup.id,
+            thesisId: thesis.id,
+        };
+
+        const unsubscribe = listenAllChaptersForThesis(chaptersCtx, {
+            onData: (allChapters) => {
+                setChapters(allChapters);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to load chapters:', listenerError);
+                setChapters([]);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesis?.id, selectedGroup?.id, selectedGroup?.department, selectedGroup?.course, selectedGroup?.year]);
 
     React.useEffect(() => {
         if (!panelCommentCtx) {
@@ -220,8 +254,8 @@ export default function AdminPanelCommentsPage() {
     }, [selectedGroup]);
 
     const stageCompletionMap = React.useMemo(() => (
-        buildStageCompletionMap(thesis?.chapters ?? [], { treatEmptyAsComplete: false })
-    ), [thesis?.chapters]);
+        buildStageCompletionMap(chapters, { treatEmptyAsComplete: false })
+    ), [chapters]);
 
     const activeStageMeta = React.useMemo(
         () => PANEL_COMMENT_STAGE_METADATA.find((meta) => meta.id === activeStage),

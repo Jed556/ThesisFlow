@@ -1,5 +1,8 @@
 import type { FileAttachment } from './file';
 import type { UserRole } from './profile';
+import ESGsConfig from '../config/ESGs.json';
+import SDGsConfig from '../config/SDGs.json';
+import StagesConfig from '../config/stages.json';
 
 
 /**
@@ -25,9 +28,24 @@ export type ThesisStatus =
 export type ExpertRole = 'adviser' | 'editor' | 'statistician';
 
 /**
- * State of expert approvals (maps expert role to approval status)
+ * Decision made by an expert
  */
-export type ExpertApprovalState = Partial<Record<ExpertRole, boolean>>;
+export type ExpertDecision = 'approved' | 'revision_required';
+
+/**
+ * Individual expert approval entry
+ */
+export interface ExpertApproval {
+    role: ExpertRole;
+    decidedAt: string;
+    /** The decision made - defaults to 'approved' for backward compatibility */
+    decision?: ExpertDecision;
+}
+
+/**
+ * State of expert approvals (array of approval entries)
+ */
+export type ExpertApprovalState = ExpertApproval[];
 
 /**
  * Thesis role for access control
@@ -71,56 +89,53 @@ export type ThesisAgenda = {
 export type ThesisAgendas = ThesisAgenda[];
 
 /**
- * Supported thesis progress stages
+ * Stage configuration from JSON
  */
-export type ThesisStageName = 'Pre-Proposal' | 'Post-Proposal' | 'Pre-Defense' | 'Post-Defense';
+export interface StageConfigItem {
+    name: string;
+    slug: string;
+}
+
+/**
+ * Supported thesis progress stages (derived from JSON config)
+ */
+export type ThesisStageName = typeof StagesConfig.stages[number]['name'];
+
+/**
+ * Array of all stage values for selection
+ */
+export const THESIS_STAGE_VALUES: readonly ThesisStageName[] = StagesConfig.stages.map(s => s.name) as ThesisStageName[];
 
 /**
  * Environmental, Social, and Governance (ESG) categories
  */
-export type ESG = 'Environment' | 'Social' | 'Governance';
+export type ESG = typeof ESGsConfig.values[number];
 
 /**
  * Array of all ESG values for selection
  */
-export const ESG_VALUES: ESG[] = ['Environment', 'Social', 'Governance'];
+export const ESG_VALUES: readonly ESG[] = ESGsConfig.values as ESG[];
 
 /**
  * Sustainable Development Goals (SDG)
  */
-export type SDG = 'No Poverty' | 'Zero Hunger' | 'Good Health and Well-being' | 'Quality Education' | 'Gender Equality' |
-    'Clean Water and Sanitation' | 'Affordable and Clean Energy' | 'Decent Work and Economic Growth' |
-    'Industry, Innovation and Infrastructure' | 'Reduced Inequalities' | 'Sustainable Cities and Communities' |
-    'Responsible Consumption and Production' | 'Climate Action' | 'Life Below Water' | 'Life on Land' |
-    'Peace, Justice and Strong Institutions' | 'Partnerships for the Goals';
+export type SDG = typeof SDGsConfig.values[number];
 
 /**
  * Array of all SDG values for selection
  */
-export const SDG_VALUES: SDG[] = [
-    'No Poverty',
-    'Zero Hunger',
-    'Good Health and Well-being',
-    'Quality Education',
-    'Gender Equality',
-    'Clean Water and Sanitation',
-    'Affordable and Clean Energy',
-    'Decent Work and Economic Growth',
-    'Industry, Innovation and Infrastructure',
-    'Reduced Inequalities',
-    'Sustainable Cities and Communities',
-    'Responsible Consumption and Production',
-    'Climate Action',
-    'Life Below Water',
-    'Life on Land',
-    'Peace, Justice and Strong Institutions',
-    'Partnerships for the Goals',
-];
+export const SDG_VALUES: readonly SDG[] = SDGsConfig.values as SDG[];
 
 /**
  * Chapter submission status for review workflow
+ * - draft: Uploaded but not yet submitted for review
+ * - under_review: Submitted and awaiting expert approval
+ * - approved: Fully approved by all required experts
+ * - rejected: Rejected (legacy, may not be used)
+ * - revision_required: Expert requested changes
+ * - ignored: Superseded by an approved version (hidden from expert actions)
  */
-export type ChapterSubmissionStatus = 'under_review' | 'approved' | 'rejected' | 'revision_required';
+export type ChapterSubmissionStatus = 'draft' | 'under_review' | 'approved' | 'rejected' | 'revision_required' | 'ignored';
 
 /**
  * Chapter submission entry with decision metadata
@@ -128,8 +143,6 @@ export type ChapterSubmissionStatus = 'under_review' | 'approved' | 'rejected' |
 export interface ChapterSubmissionEntry {
     id: string;
     status: ChapterSubmissionStatus;
-    decidedAt?: string;
-    decidedBy?: ExpertRole | 'system';
 }
 
 /**
@@ -141,10 +154,8 @@ export interface ChapterSubmission {
     submittedAt?: Date;
     submittedBy?: UserRole;
     files?: FileAttachment[];
-    /** Decision timestamp */
-    decidedAt?: string;
-    /** Who made the decision */
-    decidedBy?: ExpertRole | 'system';
+    /** Expert approval states for this submission */
+    expertApprovals?: ExpertApprovalState;
 }
 
 /**
@@ -165,27 +176,26 @@ export interface ThesisStage {
     name: ThesisStageName;
     startedAt: Date;
     completedAt?: Date;
-    chapters?: ThesisChapter[];
 }
 
 /**
  * Thesis chapter details
+ * Note: Status and expertApprovals are now per-submission (on FileAttachment)
  */
 export interface ThesisChapter {
     id: number;
     title: string;
-    status: ThesisStatus;
     submissionDate?: Date | string | null;
     lastModified?: Date | string | null;
     submissions: (ChapterSubmission | ChapterSubmissionEntry)[];
     comments: ThesisComment[];
     stage?: ThesisStageName[];
-    approvalStatus?: ThesisStatus;
-    expertApprovals?: ExpertApprovalState;
 }
 
 /**
  * Main thesis data
+ * Note: Status and expertApprovals are now per-submission (on FileAttachment), not per-chapter
+ * Note: Chapters are stored in a subcollection, not embedded in thesis document
  */
 export interface ThesisData {
     id?: string;
@@ -193,13 +203,18 @@ export interface ThesisData {
     submissionDate: Date | string;
     lastUpdated: Date | string;
     stages: ThesisStage[];
-    chapters?: ThesisChapter[];
     /** Research agenda classification */
     agenda?: ThesisAgenda;
     /** ESG category */
     ESG?: ESG;
     /** Sustainable Development Goal */
     SDG?: SDG;
+    /**
+     * @deprecated Chapters are stored in subcollection.
+     * Use listenChaptersForStage or getChaptersForStage from chapters.ts instead.
+     * This field may be populated for backward compatibility but should not be relied upon.
+     */
+    chapters?: ThesisChapter[];
 }
 
 /**

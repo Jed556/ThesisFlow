@@ -1,5 +1,3 @@
-import type { ThesisData } from './thesis';
-
 /**
  * Group-specific status values
  */
@@ -17,12 +15,6 @@ export interface ThesisGroup {
     updatedAt: string;
     status: GroupStatus;
     year?: string;
-    /**
-     * @deprecated Thesis is now stored as a subcollection under the group.
-     * This field remains for backward compatibility with existing documents.
-     * Use findThesisByGroupId() to fetch thesis data instead.
-     */
-    thesis?: ThesisData;
     department?: string;
     course?: string;
     /** Rejection reason (only populated when status is 'rejected') */
@@ -54,11 +46,6 @@ export interface ThesisGroupFormData {
     editor?: string;
     statistician?: string;
     panels?: string[];
-    /**
-     * @deprecated Thesis is now stored as a subcollection under the group.
-     * Do not use for new group creation.
-     */
-    thesis?: ThesisData;
     status: GroupStatus;
     year?: string;
     department?: string;

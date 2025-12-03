@@ -24,7 +24,7 @@ export interface ExpertRequestGroupViewProps {
 }
 
 /**
- * Shared expert request group view that injects decision buttons beside the back button.
+ * Shared service request group view that injects decision buttons beside the back button.
  */
 export default function ExpertRequestGroupView({ groupId, role, roleLabel, hint }: ExpertRequestGroupViewProps) {
     const session = useSession<Session>();
@@ -77,7 +77,7 @@ export default function ExpertRequestGroupView({ groupId, role, roleLabel, hint 
                 if (ignore) {
                     return;
                 }
-                console.error('Failed to fetch pending expert request:', error);
+                console.error('Failed to fetch pending service request:', error);
                 setRequest(null);
                 setRequestError('Unable to load the request for this group.');
             })
@@ -140,7 +140,7 @@ export default function ExpertRequestGroupView({ groupId, role, roleLabel, hint 
         return (
             <AnimatedPage variant="fade">
                 <Alert severity="warning">
-                    You need to sign in again to review expert requests.
+                    You need to sign in again to review service requests.
                 </Alert>
             </AnimatedPage>
         );

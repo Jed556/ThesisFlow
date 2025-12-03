@@ -1,4 +1,5 @@
-import type { ThesisChapter, ThesisData, ThesisStageName, ThesisStage } from '../types/thesis';
+import type { ThesisChapter, ThesisData, ThesisStageName } from '../types/thesis';
+import StagesConfig from '../config/stages.json';
 
 export interface ThesisStageMeta {
     value: ThesisStageName;
@@ -6,17 +7,20 @@ export interface ThesisStageMeta {
     helper?: string;
 }
 
-export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = [
-    { value: 'Pre-Proposal', label: 'Pre-Proposal' },
-    { value: 'Post-Proposal', label: 'Post-Proposal' },
-    { value: 'Pre-Defense', label: 'Pre-Defense' },
-    { value: 'Post-Defense', label: 'Post-Defense' },
-];
+/**
+ * Metadata for thesis stages derived from JSON config
+ */
+export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = StagesConfig.stages.map(
+    (stage) => ({
+        value: stage.name as ThesisStageName,
+        label: stage.name,
+    })
+);
 
 const STAGE_SEQUENCE_ORDER = THESIS_STAGE_METADATA.map((stage) => stage.value);
 
 /** Default stage when none can be determined */
-const DEFAULT_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
+const DEFAULT_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value as ThesisStageName;
 
 const normalizeStageKey = (value: string): string => value
     .toLowerCase()
@@ -34,16 +38,16 @@ export interface StageSequenceStep {
     target: StageSequenceTarget;
 }
 
-export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = [
-    { stage: 'Pre-Proposal', target: 'chapters' },
-    { stage: 'Pre-Proposal', target: 'terminal' },
-    { stage: 'Post-Proposal', target: 'chapters' },
-    { stage: 'Post-Proposal', target: 'terminal' },
-    { stage: 'Pre-Defense', target: 'chapters' },
-    { stage: 'Pre-Defense', target: 'terminal' },
-    { stage: 'Post-Defense', target: 'chapters' },
-    { stage: 'Post-Defense', target: 'terminal' },
-] as const;
+/**
+ * Thesis stage unlock sequence derived from JSON config
+ * Each stage has chapters and terminal requirements
+ */
+export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = StagesConfig.stages.flatMap(
+    (stage) => [
+        { stage: stage.name as ThesisStageName, target: 'chapters' as const },
+        { stage: stage.name as ThesisStageName, target: 'terminal' as const },
+    ]
+);
 
 function canonicalizeStageValue(value?: ThesisStageName | string | null): ThesisStageName | null {
     if (!value) {
@@ -117,7 +121,20 @@ export interface StageCompletionOptions {
 }
 
 /**
+ * Determines if a chapter is approved based on its submissions.
+ * A chapter is considered approved if it has at least one approved submission.
+ */
+function isChapterApproved(chapter: ThesisChapter): boolean {
+    if (!chapter.submissions || chapter.submissions.length === 0) {
+        return false;
+    }
+    // Check if any submission has status 'approved'
+    return chapter.submissions.some((submission) => submission.status === 'approved');
+}
+
+/**
  * Builds a map describing whether each thesis stage has all chapters approved.
+ * Status is now derived from chapter submissions (per-file approval status).
  */
 export function buildStageCompletionMap(
     chapters: ThesisChapter[] | undefined,
@@ -130,7 +147,7 @@ export function buildStageCompletionMap(
         if (stageChapters.length === 0) {
             acc[stageMeta.value] = treatEmptyAsComplete;
         } else {
-            acc[stageMeta.value] = stageChapters.every((chapter) => chapter.status === 'approved');
+            acc[stageMeta.value] = stageChapters.every((chapter) => isChapterApproved(chapter));
         }
         return acc;
     }, {} as Record<ThesisStageName, boolean>);
@@ -278,8 +295,11 @@ export function filterChaptersByStage(
  * 
  * Priority:
  * 1. If stages array exists and has entries, use the last stage's name
- * 2. If chapters exist, determine the highest stage that has activity
- * 3. Default to 'Pre-Proposal'
+ * 2. Default to first stage from config
+ * 
+ * Note: Chapters are now stored in a subcollection, not embedded in thesis.
+ * Use buildStageCompletionMap with separately-fetched chapters if chapter-based
+ * stage derivation is needed.
  * 
  * @param thesis - Thesis data object
  * @returns The derived current stage name
@@ -297,35 +317,7 @@ export function deriveCurrentStage(thesis: ThesisData | null | undefined): Thesi
         }
     }
 
-    // Method 2: Derive from chapters - find the highest stage with any chapter activity
-    if (thesis.chapters && thesis.chapters.length > 0) {
-        // Check stages in reverse order (highest first)
-        for (let i = STAGE_SEQUENCE_ORDER.length - 1; i >= 0; i--) {
-            const stage = STAGE_SEQUENCE_ORDER[i];
-            const stageChapters = filterChaptersByStage(thesis.chapters, stage);
-            if (stageChapters.length > 0) {
-                // Found chapters for this stage - check if they have any submissions or activity
-                const hasActivity = stageChapters.some(ch =>
-                    (ch.submissions && ch.submissions.length > 0) ||
-                    ch.status !== 'none' && ch.status !== 'not_submitted'
-                );
-                if (hasActivity) {
-                    return stage;
-                }
-            }
-        }
-
-        // No activity found, check for any chapters assigned to stages
-        for (let i = STAGE_SEQUENCE_ORDER.length - 1; i >= 0; i--) {
-            const stage = STAGE_SEQUENCE_ORDER[i];
-            const stageChapters = filterChaptersByStage(thesis.chapters, stage);
-            if (stageChapters.length > 0) {
-                return stage;
-            }
-        }
-    }
-
-    // Method 3: Check if stages array exists but stages have different structure
+    // Method 2: Check if stages array exists but stages have different structure
     // (stages might be stored as objects with different property names)
     if (thesis.stages && thesis.stages.length > 0) {
         const lastStage = thesis.stages[thesis.stages.length - 1] as unknown as Record<string, unknown>;

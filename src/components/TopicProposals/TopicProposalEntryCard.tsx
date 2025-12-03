@@ -22,10 +22,12 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
 
     return (
         <Card
-            variant={highlight ? 'outlined' : undefined}
+            elevation={2}
             sx={{
                 borderColor: highlight ? 'success.main' : undefined,
+                border: highlight ? 1 : undefined,
                 height: '100%',
+                bgcolor: 'background.paper',
             }}
         >
             <CardContent>
