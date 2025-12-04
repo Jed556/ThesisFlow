@@ -17,7 +17,7 @@ import type { NavigationItem } from '../../../types/navigation';
 export const metadata: NavigationItem = {
     group: 'management',
     index: 5,
-    title: 'Agendas',
+    title: 'Agenda',
     segment: 'agenda-management',
     icon: <ArticleIcon />,
     roles: ['admin', 'developer', 'head'],
@@ -52,8 +52,7 @@ interface AgendasData {
 }
 
 import {
-    getFullAgendasData, saveFullAgendasData, loadOrSeedFullAgendasData,
-    type FullAgendasData, type LoadOrSeedAgendasResult,
+    saveFullAgendasData, loadOrSeedFullAgendasData, type FullAgendasData, type LoadOrSeedAgendasResult
 } from '../../../utils/firebase/firestore/agendas';
 import { DEFAULT_YEAR } from '../../../config/firestore';
 
