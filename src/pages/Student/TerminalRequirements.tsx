@@ -19,6 +19,8 @@ import type {
     TerminalRequirementApproverAssignments, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
 import type { ThesisChapter } from '../../types/thesis';
+import type { PanelCommentReleaseMap } from '../../types/panelComment';
+import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
@@ -26,6 +28,9 @@ import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../ut
 import {
     getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
+import {
+    listenPanelCommentRelease, type PanelCommentContext
+} from '../../utils/firebase/firestore/panelComments';
 import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import {
     THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap,
@@ -74,6 +79,10 @@ export default function TerminalRequirementsPage() {
     /** Chapters fetched from subcollection (new hierarchical structure) */
     const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
     const [viewingFile, setViewingFile] = React.useState<FileAttachment | null>(null);
+    /** Panel comment release status for sequence locking */
+    const [panelCommentReleaseMap, setPanelCommentReleaseMap] = React.useState<PanelCommentReleaseMap>(
+        createDefaultPanelCommentReleaseMap()
+    );
 
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
@@ -302,9 +311,14 @@ export default function TerminalRequirementsPage() {
         const assignments: TerminalRequirementApproverAssignments = {};
         const members = groupMeta?.members;
 
-        const panels = members?.panels?.filter((uid): uid is string => Boolean(uid)) ?? [];
-        if (panels.length) {
-            assignments.panel = panels;
+        // Panel approval is only required for "Post" stages, not "Pre" stages
+        // Pre stages slugs: "pre-proposal", "pre-defense"
+        const isPreStage = activeStage.startsWith('pre-');
+        if (!isPreStage) {
+            const panels = members?.panels?.filter((uid): uid is string => Boolean(uid)) ?? [];
+            if (panels.length) {
+                assignments.panel = panels;
+            }
         }
 
         // FIX: adviser, editor, statistician are on group.members, not on thesis
@@ -324,7 +338,7 @@ export default function TerminalRequirementsPage() {
         }
 
         return assignments;
-    }, [groupMeta?.members]);
+    }, [groupMeta?.members, activeStage]);
 
     const isConfigInitializing = configLoading && !requirementsConfig;
 
@@ -345,10 +359,60 @@ export default function TerminalRequirementsPage() {
         }, {} as Record<ThesisStageName, boolean>);
     }, [submissionByStage]);
 
+    /** Build panel comment context from group metadata */
+    const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
+        if (!groupMeta) return null;
+        return {
+            year: groupMeta.year ?? DEFAULT_YEAR,
+            department: groupMeta.department ?? '',
+            course: groupMeta.course ?? '',
+            groupId: groupMeta.id,
+        };
+    }, [groupMeta]);
+
+    /** Listen for panel comment release status */
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setPanelCommentReleaseMap(createDefaultPanelCommentReleaseMap());
+            return;
+        }
+
+        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
+            onData: (releaseMap) => {
+                setPanelCommentReleaseMap(releaseMap);
+            },
+            onError: (err) => {
+                console.error('Failed to load panel comment release status:', err);
+                setPanelCommentReleaseMap(createDefaultPanelCommentReleaseMap());
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [panelCommentCtx]);
+
+    /**
+     * Panel comment completion map for sequence locking.
+     * Maps thesis stage slugs to whether panel comments are complete.
+     * Panel comments are tied to pre-proposal (unlocks post-proposal) and pre-defense (unlocks post-defense).
+     * For sequence purposes, we consider panel comments "complete" when they've been released.
+     */
+    const panelCommentCompletionMap = React.useMemo((): Partial<Record<ThesisStageName, boolean>> => {
+        // Map stage slugs that have panel comments to their release status
+        // pre-proposal's panel comments (proposal stage) must be released for post-proposal to unlock
+        // pre-defense's panel comments (defense stage) must be released for post-defense to unlock
+        return {
+            'pre-proposal': panelCommentReleaseMap.proposal?.sent ?? false,
+            'pre-defense': panelCommentReleaseMap.defense?.sent ?? false,
+        };
+    }, [panelCommentReleaseMap]);
+
     const stageLockMaps = React.useMemo(() => buildInterleavedStageLockMap({
         chapters: chapterCompletionMap,
         terminalRequirements: terminalRequirementCompletionMap,
-    }), [chapterCompletionMap, terminalRequirementCompletionMap]);
+        panelComments: panelCommentCompletionMap,
+    }), [chapterCompletionMap, terminalRequirementCompletionMap, panelCommentCompletionMap]);
 
     const terminalStageLockMap = stageLockMaps.terminalRequirements;
 
@@ -577,11 +641,34 @@ export default function TerminalRequirementsPage() {
     ]);
 
     const workflowAlert = React.useMemo(() => {
-        if (!activeSubmission) {
+        if (activeSubmissions.length === 0 || !activeSubmission) {
             return null;
         }
 
-        if (activeSubmission.status === 'in_review') {
+        // Check if ALL submissions in the stage are approved (required for unlock)
+        const allApproved = activeSubmissions.every((s) => s.status === 'approved');
+        const someInReview = activeSubmissions.some((s) => s.status === 'in_review');
+        const someReturned = activeSubmissions.some((s) => s.status === 'returned');
+
+        // Show returned status if any submission is returned
+        if (someReturned) {
+            const returnedSubmission = activeSubmissions.find((s) => s.status === 'returned');
+            return (
+                <Alert severity="warning">
+                    {returnedSubmission?.returnNote ?? 'A service requested changes to your submission.'}
+                    {returnedSubmission?.returnedBy && (
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                            Returned by{' '}
+                            {TERMINAL_REQUIREMENT_ROLE_LABELS[returnedSubmission.returnedBy]} on{' '}
+                            {formatDateTime(returnedSubmission.returnedAt)}.
+                        </Typography>
+                    )}
+                </Alert>
+            );
+        }
+
+        // Show in_review status if any submission is still being reviewed
+        if (someInReview) {
             return (
                 <Alert severity="info">
                     Submitted {formatDateTime(activeSubmission.submittedAt)}. Uploads are locked while{' '}
@@ -590,22 +677,8 @@ export default function TerminalRequirementsPage() {
             );
         }
 
-        if (activeSubmission.status === 'returned') {
-            return (
-                <Alert severity="warning">
-                    {activeSubmission.returnNote ?? 'A service requested changes to your submission.'}
-                    {activeSubmission.returnedBy && (
-                        <Typography variant="body2" sx={{ mt: 1 }}>
-                            Returned by{' '}
-                            {TERMINAL_REQUIREMENT_ROLE_LABELS[activeSubmission.returnedBy]} on{' '}
-                            {formatDateTime(activeSubmission.returnedAt)}.
-                        </Typography>
-                    )}
-                </Alert>
-            );
-        }
-
-        if (activeSubmission.status === 'approved') {
+        // Only show approved if ALL submissions are approved
+        if (allApproved) {
             const approvedAt = formatDateTime(
                 activeSubmission.completedAt
                 ?? activeSubmission.updatedAt
@@ -619,7 +692,7 @@ export default function TerminalRequirementsPage() {
         }
 
         return null;
-    }, [activeSubmission, formatDateTime, pendingRoleLabel]);
+    }, [activeSubmissions, activeSubmission, formatDateTime, pendingRoleLabel]);
 
     const renderTabs = () => (
         <Card variant="outlined" sx={{ mb: 3 }}>
