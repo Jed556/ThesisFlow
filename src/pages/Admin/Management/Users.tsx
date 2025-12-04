@@ -434,7 +434,7 @@ export default function AdminUsersPage() {
             }
 
             // Delete Firestore profile
-            await deleteUserProfile(selectedUser.email);
+            await deleteUserProfile(selectedUser.uid);
             showNotification(
                 `User ${selectedUser?.name?.first ?? selectedUser?.email} ${selectedUser?.name?.last ?? ''} deleted successfully`,
                 'success');
@@ -468,7 +468,7 @@ export default function AdminUsersPage() {
                         errors.push(`${user.email}: ${authResult.message}`);
                     }
                     // Delete Firestore profile
-                    return deleteUserProfile(user.email);
+                    return deleteUserProfile(user.uid);
                 })
             );
 
@@ -691,7 +691,7 @@ export default function AdminUsersPage() {
                     if (authResult.success) {
                         // Handle email change in Firestore
                         if (emailChanged) {
-                            await deleteUserProfile(oldRow.email);
+                            await deleteUserProfile(oldRow.uid);
                         }
 
                         updatedUser = {
