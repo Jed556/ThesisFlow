@@ -6,7 +6,7 @@ import ExpertRequestsPage from '../../../components/ExpertRequests/ExpertRequest
 export const metadata: NavigationItem = {
     group: 'experts',
     index: 5,
-    title: 'Expert Requests',
+    title: 'Service Requests',
     segment: 'adviser-requests',
     icon: <AssignmentIndIcon />,
     roles: ['adviser'],

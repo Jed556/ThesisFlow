@@ -44,7 +44,10 @@ export default defineConfig(
                 "comments": 200,
             }],
             "no-unused-vars": "off",
-            "@typescript-eslint/no-unused-vars": "warn",
+            "@typescript-eslint/no-unused-vars": ["warn", {
+                "argsIgnorePattern": "^_",
+                "varsIgnorePattern": "^_",
+            }],
             "no-lonely-if": "error",
             "no-lone-blocks": "error",
             "dot-notation": "off",

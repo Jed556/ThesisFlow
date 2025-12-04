@@ -4,14 +4,16 @@ import {
     type WithFieldValue, type QueryConstraint, type QuerySnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import { addEventToCalendar, removeEventFromCalendar } from './calendars';
 import { cleanData } from './firestore';
 
-import type { ScheduleEvent } from '../../../types/schedule';
+import type { ScheduleEvent, CalendarLevel, CalendarPathContext, Calendar } from '../../../types/schedule';
 
 type EventRecord = ScheduleEvent & { id: string };
 
-export interface EventsListenerOptions {
+/**
+ * @deprecated Use EventsListenerOptions from calendarEvents instead
+ */
+export interface GlobalEventsListenerOptions {
     onData: (events: EventRecord[]) => void;
     onError?: (error: Error) => void;
 }
@@ -20,7 +22,8 @@ export interface EventsListenerOptions {
 const EVENTS_COLLECTION = 'events';
 
 /**
- * Create or update a schedule event
+ * Create or update a schedule event in the global events collection
+ * @deprecated Use setCalendarEvent from calendarEvents for hierarchical calendar storage
  */
 export async function setEvent(id: string | null, event: ScheduleEvent): Promise<string> {
     let eventId: string;
@@ -41,9 +44,6 @@ export async function setEvent(id: string | null, event: ScheduleEvent): Promise
             cleanedData as WithFieldValue<ScheduleEvent>
         );
         eventId = ref.id;
-
-        // Add event ID to calendar's eventIds array
-        await addEventToCalendar(event.calendarId, eventId);
     }
 
     return eventId;
@@ -84,96 +84,95 @@ export function onEvent(
 }
 
 /**
+ * Helper to check if an event matches a calendar's pathContext
+ */
+function eventMatchesCalendar(event: ScheduleEvent, calendar: Calendar): boolean {
+    if (event.calendarLevel !== calendar.level) return false;
+    const eventCtx = event.calendarPathContext;
+    const calCtx = calendar.pathContext;
+    if (!eventCtx || !calCtx) return false;
+    if (eventCtx.year !== calCtx.year) return false;
+    if (eventCtx.department !== calCtx.department) return false;
+    if (eventCtx.course !== calCtx.course) return false;
+    if (eventCtx.groupId !== calCtx.groupId) return false;
+    if (eventCtx.userId !== calCtx.userId) return false;
+    return true;
+}
+
+/**
  * Get all events from the events collection.
- * Optionally filter by calendar IDs.
+ * Optionally filter by calendars (using their level and pathContext).
  * Note: For large collections this should be paginated or limited.
- * @param calendarIds - Optional array of calendar IDs to filter by
+ * @param calendars - Optional array of calendars to filter by (uses level and pathContext matching)
  * @returns Array of ScheduleEvent with their Firestore document IDs
  */
-export async function getAllEvents(calendarIds?: string[]): Promise<(ScheduleEvent & { id: string })[]> {
-    let q;
+export async function getAllEvents(calendars?: Calendar[]): Promise<(ScheduleEvent & { id: string })[]> {
+    // Get all events from the collection
+    const snap = await getDocs(collection(firebaseFirestore, EVENTS_COLLECTION));
+    const allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() } as ScheduleEvent & { id: string }));
 
-    if (calendarIds && calendarIds.length > 0) {
-        // Filter by calendar IDs (Firestore 'in' supports up to 30 values)
-        if (calendarIds.length <= 30) {
-            q = query(
-                collection(firebaseFirestore, EVENTS_COLLECTION),
-                where('calendarId', 'in', calendarIds)
-            );
-        } else {
-            // If more than 30 calendars, we need to batch the queries
-            const batches = [];
-            for (let i = 0; i < calendarIds.length; i += 30) {
-                const batch = calendarIds.slice(i, i + 30);
-                const batchQuery = query(
-                    collection(firebaseFirestore, EVENTS_COLLECTION),
-                    where('calendarId', 'in', batch)
-                );
-                batches.push(getDocs(batchQuery));
-            }
-
-            const results = await Promise.all(batches);
-            const allDocs = results.flatMap(snap => snap.docs);
-            return allDocs.map(d => ({ id: d.id, ...d.data() } as ScheduleEvent & { id: string }));
-        }
-    } else {
-        // Get all events if no filter
-        q = collection(firebaseFirestore, EVENTS_COLLECTION);
+    // If no calendars filter, return all events
+    if (!calendars || calendars.length === 0) {
+        return allEvents;
     }
 
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ScheduleEvent & { id: string }));
+    // Filter events that match any of the provided calendars
+    return allEvents.filter(event =>
+        calendars.some(cal => eventMatchesCalendar(event, cal))
+    );
 }
 
 /**
- * Get all events for a specific calendar
- * @param calendarId - Calendar ID to filter by
+ * Get all events for a specific calendar using hierarchical path
+ * @param level - Calendar level
+ * @param pathContext - Calendar path context
  * @returns Array of ScheduleEvent with their Firestore document IDs
  */
-export async function getEventsByCalendar(calendarId: string): Promise<(ScheduleEvent & { id: string })[]> {
+export async function getEventsByCalendar(
+    level: CalendarLevel,
+    pathContext: CalendarPathContext
+): Promise<(ScheduleEvent & { id: string })[]> {
+    // Query by calendarLevel first
     const q = query(
         collection(firebaseFirestore, EVENTS_COLLECTION),
-        where('calendarId', '==', calendarId)
+        where('calendarLevel', '==', level)
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ScheduleEvent & { id: string }));
+    const events = snap.docs.map(d => ({ id: d.id, ...d.data() } as ScheduleEvent & { id: string }));
+
+    // Filter by pathContext matching
+    return events.filter(event => {
+        const ctx = event.calendarPathContext;
+        if (!ctx) return false;
+        if (ctx.year !== pathContext.year) return false;
+        if (ctx.department !== pathContext.department) return false;
+        if (ctx.course !== pathContext.course) return false;
+        if (ctx.groupId !== pathContext.groupId) return false;
+        if (ctx.userId !== pathContext.userId) return false;
+        return true;
+    });
 }
 
 /**
- * Delete an event by id
+ * Delete an event by id from the global events collection
+ * @deprecated Use deleteCalendarEvent from calendarEvents for hierarchical calendar storage
  * @param id - Event document ID
  */
 export async function deleteEvent(id: string): Promise<void> {
     if (!id) throw new Error('Event ID required');
 
-    // Get event to find its calendar ID
-    const event = await getEventById(id);
-    if (event) {
-        // Remove event ID from calendar
-        await removeEventFromCalendar(event.calendarId, id);
-    }
-
-    // Delete the event
+    // Delete the event from global collection
     const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
     await deleteDoc(ref);
 }
 
 /**
- * Delete multiple events by their IDs
+ * Delete multiple events by their IDs from the global events collection
+ * @deprecated Use deleteCalendarEvent from calendarEvents for hierarchical calendar storage
  * @param ids - Array of event document IDs to delete
  */
 export async function bulkDeleteEvents(ids: string[]): Promise<void> {
     if (!ids || ids.length === 0) throw new Error('Event IDs required');
-
-    // Fetch all events to get their calendar IDs
-    const events = await Promise.all(ids.map(id => getEventById(id)));
-
-    // Remove event IDs from calendars
-    const calendarUpdates = events
-        .filter(event => event !== null)
-        .map(event => removeEventFromCalendar(event!.calendarId, event!.id!));
-
-    await Promise.all(calendarUpdates);
 
     // Batch-delete event documents atomically
     const batch = writeBatch(firebaseFirestore);
@@ -194,7 +193,7 @@ export async function bulkDeleteEvents(ids: string[]): Promise<void> {
  */
 export function listenEvents(
     constraints: QueryConstraint[] | undefined,
-    options: EventsListenerOptions
+    options: GlobalEventsListenerOptions
 ): () => void {
     const { onData, onError } = options;
     const baseCollection = collection(firebaseFirestore, EVENTS_COLLECTION);
@@ -252,7 +251,7 @@ export async function getEventsByIds(eventIds: string[]): Promise<(ScheduleEvent
  */
 export function listenEventsByThesisIds(
     thesisIds: string[] | undefined,
-    options: EventsListenerOptions
+    options: GlobalEventsListenerOptions
 ): () => void {
     const uniqueIds = Array.from(new Set((thesisIds ?? []).filter((id): id is string => Boolean(id))));
 

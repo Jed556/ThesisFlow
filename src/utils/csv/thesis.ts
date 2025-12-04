@@ -63,15 +63,12 @@ export function importThesesFromCsv(csvText: string): { parsed: ThesisCsvRow[]; 
                                 return {
                                     id: String((item as ChapterSubmissionEntry).id ?? `sub-${Date.now()}`),
                                     status: (item as ChapterSubmissionEntry).status ?? 'under_review',
-                                    decidedAt: (item as ChapterSubmissionEntry).decidedAt,
-                                    decidedBy: (item as ChapterSubmissionEntry).decidedBy,
                                 } satisfies ChapterSubmissionEntry;
                             })
                             : [];
                         return {
                             id: typeof chapter.id === 'number' ? chapter.id : i + 1,
                             title: typeof chapter.title === 'string' ? chapter.title : `Chapter ${i + 1}`,
-                            status: typeof chapter.status === 'string' ? chapter.status : 'not_submitted',
                             submissionDate: typeof chapter.submissionDate === 'string' ? chapter.submissionDate : null,
                             lastModified: typeof chapter.lastModified === 'string' ? chapter.lastModified : null,
                             submissions,
@@ -86,7 +83,6 @@ export function importThesesFromCsv(csvText: string): { parsed: ThesisCsvRow[]; 
                 chapters = splitArrayField(chaptersRaw).map((t, i) => ({
                     id: i + 1,
                     title: t,
-                    status: 'not_submitted',
                     submissionDate: null,
                     lastModified: null,
                     submissions: [],

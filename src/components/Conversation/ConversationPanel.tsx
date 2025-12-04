@@ -1,5 +1,8 @@
 import * as React from 'react';
-import { Box, Divider, Skeleton, Stack, Typography } from '@mui/material';
+import {
+    Box, Divider, Fab, Skeleton, Stack, Tooltip, Typography, Zoom,
+} from '@mui/material';
+import { KeyboardArrowDown as ScrollDownIcon } from '@mui/icons-material';
 import type { ChatMessage } from '../../types/chat';
 import MessageBubble from './MessageBubble';
 import MessageComposer from './MessageComposer';
@@ -34,11 +37,53 @@ export default function ConversationPanel({
 }: ConversationPanelProps) {
     const [replyTo, setReplyTo] = React.useState<ChatMessage | null>(null);
     const [editingMessage, setEditingMessage] = React.useState<ChatMessage | null>(null);
+    const [showScrollButton, setShowScrollButton] = React.useState(false);
+    const messagesContainerRef = React.useRef<HTMLDivElement>(null);
 
     const sortedMessages = React.useMemo(() => sortMessages(messages), [messages]);
     const messageMap = React.useMemo(() => new Map(
         sortedMessages.map((msg) => [msg.id ?? `${msg.senderId}-${msg.timestamp}`, msg])
     ), [sortedMessages]);
+
+    /** Scroll to the bottom of the messages */
+    const scrollToBottom = React.useCallback((behavior: ScrollBehavior = 'smooth') => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        if (behavior === 'smooth') {
+            container.scrollTo({
+                top: container.scrollHeight,
+                behavior: 'smooth',
+            });
+        } else {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, []);
+
+    /** Handle scroll events to show/hide the scroll-to-bottom button */
+    const handleScroll = React.useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        // Show button when scrolled up more than 100px from bottom
+        setShowScrollButton(distanceFromBottom > 100);
+    }, []);
+
+    // Auto-scroll to bottom when new messages arrive (if already near bottom)
+    React.useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+        // Only auto-scroll if user is near the bottom (within 150px)
+        if (distanceFromBottom < 150) {
+            scrollToBottom('instant');
+        }
+    }, [sortedMessages.length, scrollToBottom]);
 
     const handleReply = (message: ChatMessage) => {
         setEditingMessage(null);
@@ -109,8 +154,30 @@ export default function ConversationPanel({
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height, px: 3, overflowY: 'auto' }}>
-            <Box sx={{ flex: 1, overflowY: 'auto', pr: 1 }}>
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                height,
+                minHeight: 0,
+                overflow: 'hidden',
+                position: 'relative',
+                px: 3,
+                boxSizing: 'border-box',
+            }}
+        >
+            {/* Scrollable messages area */}
+            <Box
+                ref={messagesContainerRef}
+                onScroll={handleScroll}
+                sx={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    pr: 1,
+                    py: 1,
+                    minHeight: 0,
+                }}
+            >
                 {isLoading ? (
                     <Stack spacing={2}>
                         {Array.from({ length: 4 }).map((_, index) => (
@@ -122,9 +189,29 @@ export default function ConversationPanel({
                 )}
             </Box>
 
+            {/* Floating scroll-to-bottom button */}
+            <Zoom in={showScrollButton}>
+                <Tooltip title="Scroll to latest" placement="left">
+                    <Fab
+                        size="small"
+                        color="primary"
+                        onClick={() => scrollToBottom('smooth')}
+                        sx={{
+                            position: 'absolute',
+                            bottom: disableComposer ? 16 : 100,
+                            right: 24,
+                            zIndex: 1,
+                        }}
+                    >
+                        <ScrollDownIcon />
+                    </Fab>
+                </Tooltip>
+            </Zoom>
+
+            {/* Fixed composer at bottom */}
             {!disableComposer && (
-                <>
-                    <Divider sx={{ my: 2 }} />
+                <Box sx={{ flexShrink: 0, pt: 1, pb: 1, bgcolor: 'background.paper' }}>
+                    <Divider sx={{ mb: 2 }} />
                     <MessageComposer
                         placeholder={composerPlaceholder}
                         allowAttachments={allowAttachments}
@@ -135,7 +222,7 @@ export default function ConversationPanel({
                         onCancelEdit={() => setEditingMessage(null)}
                         onSend={handleSend}
                     />
-                </>
+                </Box>
             )}
         </Box>
     );

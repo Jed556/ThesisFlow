@@ -1,4 +1,4 @@
-import type { ThesisStageName } from './thesis';
+import type { ThesisStageName, ChapterSubmissionStatus, ExpertApprovalState } from './thesis';
 
 /**
  * File-related type definitions for the ThesisFlow application
@@ -83,6 +83,10 @@ export interface FileAttachment {
     chapterStage?: ThesisStageName;
     terminalStage?: ThesisStageName;
     terminalRequirementId?: string;
+    /** Submission status for review workflow (per-file) */
+    submissionStatus?: ChapterSubmissionStatus;
+    /** Expert approval states for this specific submission (per-file) */
+    expertApprovals?: ExpertApprovalState;
 }
 
 /**

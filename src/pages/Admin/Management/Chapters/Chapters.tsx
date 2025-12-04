@@ -1,6 +1,12 @@
 import * as React from 'react';
-import { Autocomplete, Box, Button, CircularProgress, Stack, TextField, Typography, Grid } from '@mui/material';
-import { Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import {
+    Autocomplete, Box, Button, CircularProgress, Dialog, DialogActions,
+    DialogContent, DialogTitle, LinearProgress, Stack, TextField, Typography, Grid
+} from '@mui/material';
+import {
+    Add as AddIcon, Refresh as RefreshIcon, FileDownload as ExportIcon,
+    FileUpload as ImportIcon, RestartAlt as ResetIcon
+} from '@mui/icons-material';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
@@ -13,9 +19,13 @@ import type { ThesisChapterConfig, ChapterConfigFormData, ChapterFormErrorKey } 
 import type { UserProfile } from '../../../../types/profile';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
 import {
-    getAllChapterConfigs, getChapterConfigsByDepartment, findAllUsers, setChapterConfig
+    getAllChapterConfigs, getChapterConfigsByDepartment, findAllUsers, setChapterConfig,
+    loadOrSeedChapterTemplates, exportChapterTemplates, importChapterTemplates,
+    seedMissingChapterTemplates,
+    type FullChapterTemplatesData, type LoadOrSeedChapterTemplatesResult, type DepartmentCoursePair
 } from '../../../../utils/firebase/firestore';
 import { normalizeChapterOrder } from '../../../../utils/chapterUtils';
+import { DEFAULT_YEAR } from '../../../../config/firestore';
 
 const emptyFormData: ChapterConfigFormData = {
     department: '',
@@ -51,13 +61,19 @@ export default function AdminChapterManagementPage() {
     const [users, setUsers] = React.useState<UserProfile[]>([]);
     const [configs, setConfigs] = React.useState<ThesisChapterConfig[]>([]);
     const [loading, setLoading] = React.useState(false);
+    const [initialLoading, setInitialLoading] = React.useState(true);
+    const [isSeeding, setIsSeeding] = React.useState(false);
     const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
+    const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
 
     const [selectedDepartment, setSelectedDepartment] = React.useState('');
 
     const [formData, setFormData] = React.useState<ChapterConfigFormData>({ ...emptyFormData });
     const [formErrors, setFormErrors] = React.useState<Partial<Record<ChapterFormErrorKey, string>>>({});
+
+    // File input ref for import
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
 
     const filtersApplied = Boolean(selectedDepartment);
@@ -97,13 +113,58 @@ export default function AdminChapterManagementPage() {
         [formData.department, getCoursesForDepartment]
     );
 
-    const loadUsers = React.useCallback(async () => {
+    // Initial load: seed chapter templates from default data if none exist
+    const initializeChapterTemplates = React.useCallback(async () => {
         try {
+            const defaultData = await import('../../../../config/chapters.json');
+            const data = defaultData.default as unknown as Omit<FullChapterTemplatesData, 'updatedAt'>;
+
+            // Check if we need to seed and show appropriate UI
+            const result: LoadOrSeedChapterTemplatesResult = await loadOrSeedChapterTemplates(DEFAULT_YEAR, data);
+
+            if (result.seeded) {
+                setIsSeeding(true);
+                // Small delay to show the seeding message
+                await new Promise((resolve) => setTimeout(resolve, 1500));
+                setIsSeeding(false);
+                showNotification('Default chapter templates have been added to the database.', 'success');
+            }
+
+            // Also seed missing templates for department/course pairs from existing users
             const allUsers = await findAllUsers();
             setUsers(allUsers);
+
+            // Extract unique department/course pairs from users
+            const pairsMap = new Map<string, { department: string; course: string }>();
+            for (const user of allUsers) {
+                if (user.department && user.course) {
+                    const key = `${user.department}|${user.course}`;
+                    if (!pairsMap.has(key)) {
+                        pairsMap.set(key, { department: user.department, course: user.course });
+                    }
+                }
+            }
+            const departmentCoursePairs = Array.from(pairsMap.values());
+
+            // Seed missing templates with default chapters
+            if (departmentCoursePairs.length > 0 && data.defaultChapters.length > 0) {
+                const seededCount = await seedMissingChapterTemplates(
+                    DEFAULT_YEAR,
+                    departmentCoursePairs,
+                    data.defaultChapters
+                );
+                if (seededCount > 0) {
+                    showNotification(
+                        `Added default chapter templates for ${seededCount} department/course combination(s).`,
+                        'info'
+                    );
+                }
+            }
         } catch (error) {
-            console.error('Error loading users:', error);
-            showNotification('Failed to load users for filters.', 'error');
+            console.error('Error initializing chapter templates:', error);
+            showNotification('Failed to initialize chapter templates.', 'error');
+        } finally {
+            setInitialLoading(false);
         }
     }, [showNotification]);
 
@@ -131,9 +192,10 @@ export default function AdminChapterManagementPage() {
         }
     }, [filtersApplied, selectedDepartment, showNotification]);
 
+    // Initialize templates on mount
     React.useEffect(() => {
-        void loadUsers();
-    }, [loadUsers]);
+        void initializeChapterTemplates();
+    }, [initializeChapterTemplates]);
 
     React.useEffect(() => {
         void loadConfigs();
@@ -238,13 +300,115 @@ export default function AdminChapterManagementPage() {
         navigate(`/chapter-management/${path}`);
     }, [navigate]);
 
+    // ========================================================================
+    // Import/Export Handlers
+    // ========================================================================
+
+    const handleExport = React.useCallback(async () => {
+        try {
+            const data = await exportChapterTemplates(DEFAULT_YEAR);
+            if (!data) {
+                showNotification('No chapter templates to export.', 'warning');
+                return;
+            }
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'chapter-templates.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showNotification('Chapter templates exported successfully.', 'success');
+        } catch (error) {
+            console.error('Error exporting chapter templates:', error);
+            showNotification('Failed to export chapter templates.', 'error');
+        }
+    }, [showNotification]);
+
+    const handleImportClick = React.useCallback(() => {
+        fileInputRef.current?.click();
+    }, []);
+
+    const handleFileChange = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text) as FullChapterTemplatesData;
+
+            // Validate structure
+            if (!data.departmentTemplates || !Array.isArray(data.departmentTemplates)) {
+                throw new Error('Invalid chapter templates file structure');
+            }
+
+            await importChapterTemplates(DEFAULT_YEAR, data, true);
+            showNotification('Chapter templates imported successfully.', 'success');
+            void loadConfigs();
+        } catch (error) {
+            console.error('Failed to import chapter templates:', error);
+            showNotification('Failed to import chapter templates. Please check the file format.', 'error');
+        }
+
+        event.target.value = '';
+    }, [loadConfigs, showNotification]);
+
+    const handleResetToDefault = React.useCallback(async () => {
+        try {
+            const defaultData = await import('../../../../config/chapters.json');
+            const data = defaultData.default as unknown as Omit<FullChapterTemplatesData, 'updatedAt'>;
+            await importChapterTemplates(DEFAULT_YEAR, data, true);
+            showNotification('Chapter templates reset to default.', 'success');
+            setResetDialogOpen(false);
+            void loadConfigs();
+        } catch (error) {
+            console.error('Failed to reset chapter templates:', error);
+            showNotification('Failed to reset chapter templates.', 'error');
+        }
+    }, [loadConfigs, showNotification]);
+
     if (!canManage) {
         return <UnauthorizedNotice title="Chapter Management" variant="box" />;
+    }
+
+    if (initialLoading || isSeeding) {
+        return (
+            <AnimatedPage variant="fade">
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 10, gap: 2 }}>
+                    {isSeeding ? (
+                        <>
+                            <Typography variant="h6" color="text.secondary">
+                                Pushing default chapters to database...
+                            </Typography>
+                            <Box sx={{ width: '100%', maxWidth: 400 }}>
+                                <LinearProgress />
+                            </Box>
+                            <Typography variant="body2" color="text.secondary">
+                                Setting up chapter templates for all courses
+                            </Typography>
+                        </>
+                    ) : (
+                        <CircularProgress />
+                    )}
+                </Box>
+            </AnimatedPage>
+        );
     }
 
     return (
         <AnimatedPage variant="fade">
             <Box>
+                {/* Hidden file input for import */}
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".json"
+                    style={{ display: 'none' }}
+                    onChange={handleFileChange}
+                />
+
                 <Stack
                     direction={{ xs: 'column', md: 'row' }}
                     spacing={2}
@@ -257,7 +421,7 @@ export default function AdminChapterManagementPage() {
                             Define the thesis chapters each course must submit.
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                         <Autocomplete
                             options={departmentOptions}
                             value={selectedDepartment}
@@ -271,6 +435,20 @@ export default function AdminChapterManagementPage() {
 
                         <Button startIcon={<RefreshIcon />} variant="outlined" onClick={loadConfigs}>
                             Refresh
+                        </Button>
+                        <Button startIcon={<ExportIcon />} variant="outlined" onClick={handleExport}>
+                            Export
+                        </Button>
+                        <Button startIcon={<ImportIcon />} variant="outlined" onClick={handleImportClick}>
+                            Import
+                        </Button>
+                        <Button
+                            startIcon={<ResetIcon />}
+                            variant="outlined"
+                            color="warning"
+                            onClick={() => setResetDialogOpen(true)}
+                        >
+                            Reset
                         </Button>
                         <Button startIcon={<AddIcon />} variant="contained" onClick={handleOpenCreateDialog}>
                             New Template
@@ -323,6 +501,23 @@ export default function AdminChapterManagementPage() {
                     onFieldChange={handleFormFieldChange}
                     onSubmit={handleSave}
                 />
+
+                {/* Reset Confirmation Dialog */}
+                <Dialog open={resetDialogOpen} onClose={() => setResetDialogOpen(false)}>
+                    <DialogTitle>Reset Chapter Templates</DialogTitle>
+                    <DialogContent>
+                        <Typography>
+                            Are you sure you want to reset all chapter templates to the default configuration?
+                            This will <strong>delete all existing templates</strong> and replace them with the defaults.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setResetDialogOpen(false)}>Cancel</Button>
+                        <Button variant="contained" color="error" onClick={handleResetToDefault}>
+                            Reset to Default
+                        </Button>
+                    </DialogActions>
+                </Dialog>
 
             </Box>
         </AnimatedPage>

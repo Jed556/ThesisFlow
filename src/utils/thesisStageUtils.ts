@@ -1,4 +1,5 @@
-import type { ThesisChapter, ThesisStageName } from '../types/thesis';
+import type { ThesisChapter, ThesisData, ThesisStageName } from '../types/thesis';
+import StagesConfig from '../config/stages.json';
 
 export interface ThesisStageMeta {
     value: ThesisStageName;
@@ -6,21 +7,36 @@ export interface ThesisStageMeta {
     helper?: string;
 }
 
-export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = [
-    { value: 'Pre-Proposal', label: 'Pre-Proposal' },
-    { value: 'Post-Proposal', label: 'Post-Proposal' },
-    { value: 'Pre-Defense', label: 'Pre Defense' },
-    { value: 'Post-Defense', label: 'Post Defense' },
-];
+/**
+ * Metadata for thesis stages derived from JSON config
+ * Uses slug as the value (for database operations) and name as the label (for display)
+ */
+export const THESIS_STAGE_METADATA: readonly ThesisStageMeta[] = StagesConfig.stages.map(
+    (stage) => ({
+        value: stage.slug as ThesisStageName,
+        label: stage.name,
+    })
+);
 
 const STAGE_SEQUENCE_ORDER = THESIS_STAGE_METADATA.map((stage) => stage.value);
+
+/** Default stage when none can be determined */
+const DEFAULT_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value as ThesisStageName;
 
 const normalizeStageKey = (value: string): string => value
     .toLowerCase()
     .replace(/[^a-z]/g, '');
 
-const STAGE_LOOKUP = STAGE_SEQUENCE_ORDER.reduce<Map<string, ThesisStageName>>((acc, stage) => {
-    acc.set(normalizeStageKey(stage), stage);
+/**
+ * Lookup map for stage canonicalization.
+ * Maps both slugs and full names to their canonical slug values.
+ */
+const STAGE_LOOKUP = StagesConfig.stages.reduce<Map<string, ThesisStageName>>((acc, stage) => {
+    const slug = stage.slug as ThesisStageName;
+    // Map normalized slug (e.g., "preproposal" -> "pre-proposal")
+    acc.set(normalizeStageKey(stage.slug), slug);
+    // Map normalized full name (e.g., "preproposaloraldefense" -> "pre-proposal")
+    acc.set(normalizeStageKey(stage.name), slug);
     return acc;
 }, new Map());
 
@@ -31,20 +47,23 @@ export interface StageSequenceStep {
     target: StageSequenceTarget;
 }
 
-export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = [
-    { stage: 'Pre-Proposal', target: 'chapters' },
-    { stage: 'Pre-Proposal', target: 'terminal' },
-    { stage: 'Post-Proposal', target: 'chapters' },
-    { stage: 'Post-Proposal', target: 'terminal' },
-    { stage: 'Pre-Defense', target: 'chapters' },
-    { stage: 'Pre-Defense', target: 'terminal' },
-    { stage: 'Post-Defense', target: 'chapters' },
-    { stage: 'Post-Defense', target: 'terminal' },
-] as const;
+/**
+ * Thesis stage unlock sequence derived from JSON config
+ * Each stage has chapters and terminal requirements
+ */
+export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = StagesConfig.stages.flatMap(
+    (stage) => [
+        { stage: stage.slug as ThesisStageName, target: 'chapters' as const },
+        { stage: stage.slug as ThesisStageName, target: 'terminal' as const },
+    ]
+);
 
-const DEFAULT_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
-
-function canonicalizeStageValue(value?: ThesisStageName | string | null): ThesisStageName | null {
+/**
+ * Canonicalizes a stage value to its slug form.
+ * Handles both slug format ("pre-proposal") and full name format ("Pre-Proposal Oral Defense").
+ * Returns null if the value cannot be canonicalized.
+ */
+export function canonicalizeStageValue(value?: ThesisStageName | string | null): ThesisStageName | null {
     if (!value) {
         return null;
     }
@@ -116,7 +135,28 @@ export interface StageCompletionOptions {
 }
 
 /**
+ * Determines if a chapter is approved based on its submissions or isApproved flag.
+ * A chapter is considered approved if:
+ * 1. It has the isApproved flag set to true (set when a submission is approved), OR
+ * 2. It has at least one approved submission in its submissions array
+ */
+function isChapterApproved(chapter: ThesisChapter): boolean {
+    // Check the isApproved flag first (set by updateSubmissionDecision)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((chapter as any).isApproved === true) {
+        return true;
+    }
+    // Fallback: check submissions array for approved status
+    if (!chapter.submissions || chapter.submissions.length === 0) {
+        return false;
+    }
+    // Check if any submission has status 'approved'
+    return chapter.submissions.some((submission) => submission.status === 'approved');
+}
+
+/**
  * Builds a map describing whether each thesis stage has all chapters approved.
+ * Status is now derived from chapter submissions (per-file approval status).
  */
 export function buildStageCompletionMap(
     chapters: ThesisChapter[] | undefined,
@@ -129,10 +169,50 @@ export function buildStageCompletionMap(
         if (stageChapters.length === 0) {
             acc[stageMeta.value] = treatEmptyAsComplete;
         } else {
-            acc[stageMeta.value] = stageChapters.every((chapter) => chapter.status === 'approved');
+            acc[stageMeta.value] = stageChapters.every((chapter) => isChapterApproved(chapter));
         }
         return acc;
     }, {} as Record<ThesisStageName, boolean>);
+}
+
+/**
+ * Determines the current "in progress" stage based on completion and lock maps.
+ * Returns the first stage that is unlocked and not yet completed.
+ * If all unlocked stages are complete, returns the last unlocked stage.
+ * If all stages are locked, returns the first stage.
+ * @param completionMap - A map of stage to completion status
+ * @param lockMap - Optional map of stage to locked status (true = locked)
+ * @returns The stage name that is currently in progress
+ */
+export function getCurrentInProgressStage(
+    completionMap?: Partial<Record<ThesisStageName, boolean>> | null,
+    lockMap?: Partial<Record<ThesisStageName, boolean>> | null
+): ThesisStageName {
+    if (!completionMap) {
+        return DEFAULT_STAGE;
+    }
+
+    // Find the first stage that is unlocked and not completed
+    let lastUnlockedStage: ThesisStageName | null = null;
+    for (const stageMeta of THESIS_STAGE_METADATA) {
+        const isLocked = lockMap?.[stageMeta.value] ?? false;
+        const isComplete = completionMap[stageMeta.value] ?? false;
+
+        if (!isLocked) {
+            lastUnlockedStage = stageMeta.value;
+            if (!isComplete) {
+                return stageMeta.value;
+            }
+        }
+    }
+
+    // All unlocked stages are complete - return the last unlocked stage
+    if (lastUnlockedStage) {
+        return lastUnlockedStage;
+    }
+
+    // All stages locked - return first stage
+    return DEFAULT_STAGE;
 }
 
 /**
@@ -230,4 +310,51 @@ export function filterChaptersByStage(
         return [];
     }
     return chapters.filter((chapter) => chapterHasStage(chapter, stage));
+}
+
+/**
+ * Derives the current stage of a thesis from its data.
+ * 
+ * Priority:
+ * 1. If stages array exists and has entries, use the last stage's name
+ * 2. Default to first stage from config
+ * 
+ * Note: Chapters are now stored in a subcollection, not embedded in thesis.
+ * Use buildStageCompletionMap with separately-fetched chapters if chapter-based
+ * stage derivation is needed.
+ * 
+ * @param thesis - Thesis data object
+ * @returns The derived current stage name
+ */
+export function deriveCurrentStage(thesis: ThesisData | null | undefined): ThesisStageName {
+    if (!thesis) {
+        return DEFAULT_STAGE;
+    }
+
+    // Method 1: Check stages array (if properly populated)
+    if (thesis.stages && thesis.stages.length > 0) {
+        const lastStage = thesis.stages[thesis.stages.length - 1];
+        if (lastStage?.name && STAGE_SEQUENCE_ORDER.includes(lastStage.name)) {
+            return lastStage.name;
+        }
+    }
+
+    // Method 2: Check if stages array exists but stages have different structure
+    // (stages might be stored as objects with different property names)
+    if (thesis.stages && thesis.stages.length > 0) {
+        const lastStage = thesis.stages[thesis.stages.length - 1] as unknown as Record<string, unknown>;
+        // Try common property name variations
+        const possibleNameProps = ['name', 'stageName', 'stage', 'title'];
+        for (const prop of possibleNameProps) {
+            const value = lastStage[prop];
+            if (typeof value === 'string') {
+                const canonical = canonicalizeStageValue(value);
+                if (canonical) {
+                    return canonical;
+                }
+            }
+        }
+    }
+
+    return DEFAULT_STAGE;
 }

@@ -4,6 +4,7 @@ import { createTheme } from '@mui/material/styles';
 import type { Theme, PaletteOptions } from '@mui/material/styles';
 import { deepmerge } from '@mui/utils';
 import baseTheme from '../theme';
+import { devLog } from './devUtils';
 
 type Material3PaletteOptions = PaletteOptions & {
     tertiary?: PaletteOptions['primary'];
@@ -144,8 +145,8 @@ function buildPalette(
             contrastText: colors.onTertiary,
         },
         background: {
-            default: colors.background,
-            paper: colors.surface,
+            default: (isDark ? colors.background : colors.surface),
+            paper: (isDark ? colors.surface : colors.background),
         },
         text: {
             primary: colors.onBackground,
@@ -175,7 +176,7 @@ function buildPalette(
  */
 export function generateThemeFromSeedColor(seedColor: string): Theme {
     try {
-        console.log('themeGenerator: Generating theme from seed color:', seedColor);
+        devLog('themeGenerator: Generating theme from seed color:', seedColor);
 
         // Generate Material 3 theme from seed color
         const materialTheme = themeFromSourceColor(argbFromHex(seedColor));
@@ -184,8 +185,8 @@ export function generateThemeFromSeedColor(seedColor: string): Theme {
         const lightColors = schemeToMuiColors(materialTheme.schemes.light);
         const darkColors = schemeToMuiColors(materialTheme.schemes.dark);
 
-        console.log('themeGenerator: Light primary color:', lightColors.primary);
-        console.log('themeGenerator: Dark primary color:', darkColors.primary);
+        devLog('themeGenerator: Light primary color:', lightColors.primary);
+        devLog('themeGenerator: Dark primary color:', darkColors.primary);
 
         const lightPalette = buildPalette(materialTheme, lightColors, 'light');
         const darkPalette = buildPalette(materialTheme, darkColors, 'dark');
@@ -275,7 +276,7 @@ export function generateThemeFromSeedColor(seedColor: string): Theme {
             })
         );
 
-        console.log('themeGenerator: Theme created successfully');
+        devLog('themeGenerator: Theme created successfully');
 
         return customTheme;
     } catch (error) {

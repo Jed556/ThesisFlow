@@ -6,6 +6,39 @@ let currentRouter: any = null;
 let currentAppTheme: any = null;
 
 /**
+ * Development-only logging function.
+ * Only logs when in development environment, no-op in production.
+ * @param args - Arguments to pass to console.log
+ */
+export function devLog(...args: unknown[]): void {
+    if (isDevelopmentEnvironment()) {
+        console.log(...args);
+    }
+}
+
+/**
+ * Development-only warning function.
+ * Only logs when in development environment, no-op in production.
+ * @param args - Arguments to pass to console.warn
+ */
+export function devWarn(...args: unknown[]): void {
+    if (isDevelopmentEnvironment()) {
+        console.warn(...args);
+    }
+}
+
+/**
+ * Development-only error function.
+ * Only logs when in development environment, no-op in production.
+ * @param args - Arguments to pass to console.error
+ */
+export function devError(...args: unknown[]): void {
+    if (isDevelopmentEnvironment()) {
+        console.error(...args);
+    }
+}
+
+/**
  * Stores the current routes for development access
  */
 export function setCurrentRoutes(routes: any[]) {

@@ -22,7 +22,7 @@ export interface ExpertRequestDecisionActionsProps {
 }
 
 /**
- * Renders approve/reject controls with the same behavior as the expert requests list.
+ * Renders approve/reject controls with the same behavior as the service requests list.
  */
 export default function ExpertRequestDecisionActions({ request, group, role, roleLabel, expertUid, loading, onCompleted }:
     ExpertRequestDecisionActionsProps) {
@@ -94,7 +94,7 @@ export default function ExpertRequestDecisionActions({ request, group, role, rol
             setDialogMode(null);
             setDialogNote('');
         } catch (err) {
-            console.error('Failed to update expert request from group view:', err);
+            console.error('Failed to update service request from group view:', err);
             const fallback = err instanceof Error ? err.message : 'Unable to process the request right now.';
             showNotification(fallback, 'error');
         } finally {

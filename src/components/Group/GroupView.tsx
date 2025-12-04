@@ -10,7 +10,7 @@ import type { ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import { findGroupById, getGroupInvites, getGroupJoinRequests } from '../../utils/firebase/firestore/groups';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
-import { findThesisById } from '../../utils/firebase/firestore/thesis';
+import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
 import Avatar from '../Avatar';
 import { GROUP_STATUS_COLORS, formatGroupStatus } from './constants';
 
@@ -175,15 +175,11 @@ async function fetchGroupState(groupId: string, signal: AbortSignal): Promise<Om
         profileIds.length > 0
             ? findUsersByIds(profileIds)
             : Promise.resolve<UserProfile[]>([]),
-        // Thesis is now embedded in group, but fetch fresh if id exists
-        group.thesis?.id
-            ? findThesisById(group.thesis.id)
-                .then((result) => (result ? { ...result, id: result.id ?? group.thesis?.id } : group.thesis ?? null))
-                .catch((error) => {
-                    console.error(`Failed to load thesis ${group.thesis?.id} for group ${group.id}:`, error);
-                    return group.thesis ?? null;
-                })
-            : Promise.resolve(group.thesis ?? null),
+        // Thesis is in subcollection, fetch by group ID
+        findThesisByGroupId(group.id).catch((error) => {
+            console.error(`Failed to load thesis for group ${group.id}:`, error);
+            return null;
+        }),
     ]);
     if (signal.aborted) {
         return { group: null, thesis: null, profiles: new Map(), invites: [], requests: [], error: null };
@@ -252,8 +248,8 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
     const resolvedHeaderActions = typeof headerActions === 'function'
         ? headerActions({ group, invites, requests, loading: state.loading, error: state.error })
         : headerActions;
-    const thesisTitle = thesis?.title ?? group.thesis?.title ?? '—';
-    const thesisIdDisplay = group.thesis?.id ?? thesis?.id ?? '—';
+    const thesisTitle = thesis?.title ?? '—';
+    const thesisIdDisplay = thesis?.id ?? '—';
     // Compute thesis status from the latest stage or use group status as fallback
     const thesisStatus = thesis?.stages?.[thesis.stages.length - 1]?.name ?? '—';
     const statusColor = STATUS_COLOR_MAP[group.status] ?? 'default';

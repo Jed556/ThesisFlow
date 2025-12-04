@@ -4,6 +4,7 @@
 import type { PanelCommentReleaseMap, PanelCommentStage } from '../types/panelComment';
 import type { ThesisStageName } from '../types/thesis';
 import type { UserProfile } from '../types/profile';
+import StagesConfig from '../config/stages.json';
 
 export interface PanelCommentStageMeta {
     id: PanelCommentStage;
@@ -13,20 +14,23 @@ export interface PanelCommentStageMeta {
     unlockStage: ThesisStageName;
 }
 
+// Get stage names from config for panel comment metadata
+const [preProposal, postProposal, preDefense, postDefense] = StagesConfig.stages.map(s => s.name) as [string, string, string, string];
+
 export const PANEL_COMMENT_STAGE_METADATA: readonly PanelCommentStageMeta[] = [
     {
         id: 'proposal',
         studentLabel: 'Proposal',
-        adminLabel: 'Post-Proposal',
+        adminLabel: postProposal,
         description: 'Includes panel notes from the proposal hearing.',
-        unlockStage: 'Pre-Proposal',
+        unlockStage: preProposal as ThesisStageName,
     },
     {
         id: 'defense',
         studentLabel: 'Defense',
-        adminLabel: 'Post-Defense',
+        adminLabel: postDefense,
         description: 'Captures final defense deliberations and required revisions.',
-        unlockStage: 'Pre-Defense',
+        unlockStage: preDefense as ThesisStageName,
     },
 ] as const;
 

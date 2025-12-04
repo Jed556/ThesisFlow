@@ -70,6 +70,9 @@ export function buildAuditContext(
 // ============================================================================
 // Audit Helper Functions - Group Operations
 // ============================================================================
+// TODO: These audit helper functions are designed for integration into group
+// workflows but are not yet actively used. Integrate them when implementing
+// comprehensive audit logging throughout the application.
 
 /**
  * Log group creation

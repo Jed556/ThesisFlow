@@ -1,10 +1,12 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Grid, LinearProgress, Skeleton, Stack, Tab, Tabs, Typography,
+    Alert, Box, Button, Card, CardContent, Dialog, Grid, LinearProgress,
+    Skeleton, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import { FactCheck as FactCheckIcon, TaskAlt as TaskAltIcon } from '@mui/icons-material';
 import { AnimatedPage } from '../../components/Animate';
 import { SubmissionStatus, TerminalRequirementCard, TERMINAL_REQUIREMENT_ROLE_LABELS } from '../../components/TerminalRequirements';
+import { FileViewer } from '../../components/File';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
@@ -16,15 +18,18 @@ import type { FileAttachment } from '../../types/file';
 import type {
     TerminalRequirementApproverAssignments, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
+import type { ThesisChapter } from '../../types/thesis';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
+import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
 import {
     getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
 import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import {
-    THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap, describeStageSequenceStep, getPreviousSequenceStep,
+    THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap,
+    describeStageSequenceStep, getPreviousSequenceStep, canonicalizeStageValue,
 } from '../../utils/thesisStageUtils';
 import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
@@ -32,7 +37,7 @@ import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
-    index: 2,
+    index: 4,
     title: 'Terminal Requirements',
     segment: 'terminal-requirements',
     icon: <FactCheckIcon />,
@@ -66,6 +71,9 @@ export default function TerminalRequirementsPage() {
         Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
     const [submitLoading, setSubmitLoading] = React.useState(false);
+    /** Chapters fetched from subcollection (new hierarchical structure) */
+    const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
+    const [viewingFile, setViewingFile] = React.useState<FileAttachment | null>(null);
 
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
@@ -147,6 +155,36 @@ export default function TerminalRequirementsPage() {
             cancelled = true;
         };
     }, [userUid]);
+
+    // Fetch chapters from subcollection (new hierarchical structure)
+    React.useEffect(() => {
+        if (!thesis?.id || !groupMeta?.id || !groupMeta?.department || !groupMeta?.course) {
+            setChapters([]);
+            return;
+        }
+
+        const chaptersCtx: ThesisChaptersContext = {
+            year: groupMeta.year ?? DEFAULT_YEAR,
+            department: groupMeta.department,
+            course: groupMeta.course,
+            groupId: groupMeta.id,
+            thesisId: thesis.id,
+        };
+
+        const unsubscribe = listenAllChaptersForThesis(chaptersCtx, {
+            onData: (allChapters) => {
+                setChapters(allChapters);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to load chapters:', listenerError);
+                setChapters([]);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesis?.id, groupMeta?.id, groupMeta?.department, groupMeta?.course, groupMeta?.year]);
 
     React.useEffect(() => {
         if (!groupMeta?.department || !groupMeta?.course) {
@@ -232,11 +270,15 @@ export default function TerminalRequirementsPage() {
                 acc[stageMeta.value] = [];
             } else {
                 // Build requirements from config entries for this stage
+                // Use canonicalizeStageValue to handle both slug and full name formats
                 acc[stageMeta.value] = Object.values(configRequirementMap)
-                    .filter((entry) => entry.stage === stageMeta.value && entry.required)
+                    .filter((entry) => {
+                        const canonicalEntryStage = canonicalizeStageValue(entry.stage);
+                        return canonicalEntryStage === stageMeta.value && entry.required;
+                    })
                     .map((entry): TerminalRequirement => ({
                         id: entry.requirementId,
-                        stage: entry.stage,
+                        stage: stageMeta.value, // Use canonical slug
                         title: entry.title ?? entry.requirementId,
                         description: entry.description ?? '',
                         ...(entry.fileTemplate && {
@@ -286,25 +328,12 @@ export default function TerminalRequirementsPage() {
 
     const isConfigInitializing = configLoading && !requirementsConfig;
 
-    // FIX: ThesisData doesn't have chapters directly - it has stages which can contain chapters.
-    // When extracting chapters from stages, we need to ensure each chapter has its stage
-    // property set so that filtering by stage works correctly.
-    const normalizedChapters = React.useMemo(() => {
-        if (!thesis?.stages) return [];
-        return thesis.stages.flatMap((stage) =>
-            (stage.chapters ?? []).map((chapter) => ({
-                ...chapter,
-                // Ensure chapter has stage property set from parent stage
-                stage: chapter.stage ?? [stage.name],
-            }))
-        );
-    }, [thesis?.stages]);
     // FIX: Use treatEmptyAsComplete: true so that stages without chapters don't block
     // terminal requirements. If no chapters are defined for a stage, students should
     // still be able to access terminal requirements for that stage.
     const chapterCompletionMap = React.useMemo(
-        () => buildStageCompletionMap(normalizedChapters, { treatEmptyAsComplete: true }),
-        [normalizedChapters],
+        () => buildStageCompletionMap(chapters, { treatEmptyAsComplete: true }),
+        [chapters],
     );
 
     const terminalRequirementCompletionMap = React.useMemo(() => {
@@ -564,7 +593,7 @@ export default function TerminalRequirementsPage() {
         if (activeSubmission.status === 'returned') {
             return (
                 <Alert severity="warning">
-                    {activeSubmission.returnNote ?? 'A expert requested changes to your submission.'}
+                    {activeSubmission.returnNote ?? 'A service requested changes to your submission.'}
                     {activeSubmission.returnedBy && (
                         <Typography variant="body2" sx={{ mt: 1 }}>
                             Returned by{' '}
@@ -598,7 +627,7 @@ export default function TerminalRequirementsPage() {
                 value={activeStage}
                 onChange={handleStageChange}
                 variant="scrollable"
-                scrollButtons
+                scrollButtons="auto"
                 allowScrollButtonsMobile
             >
                 {THESIS_STAGE_METADATA.map((stageMeta) => (
@@ -757,6 +786,7 @@ export default function TerminalRequirementsPage() {
                                                         onDeleteFile={allowFileActions
                                                             ? (file) => handleDeleteFile(requirement, file)
                                                             : undefined}
+                                                        onViewFile={setViewingFile}
                                                     />
                                                 </Grid>
                                             ))}
@@ -768,6 +798,24 @@ export default function TerminalRequirementsPage() {
                     </>
                 )}
             </Stack>
+
+            {/* File Viewer Dialog */}
+            <Dialog
+                open={Boolean(viewingFile)}
+                onClose={() => setViewingFile(null)}
+                maxWidth="xl"
+                fullWidth
+                slotProps={{
+                    paper: { sx: { height: '90vh' } },
+                }}
+            >
+                <FileViewer
+                    file={viewingFile}
+                    onBack={() => setViewingFile(null)}
+                    height="100%"
+                    showToolbar
+                />
+            </Dialog>
         </AnimatedPage>
     );
 }

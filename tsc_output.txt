@@ -1,0 +1,74 @@
+src/components/FormBuilder/FormBuilder.tsx(24,108): error TS2307: Cannot find module '../../types/forms' or its corresponding type declarations.
+src/components/FormBuilder/FormBuilder.tsx(72,47): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/FormBuilder.tsx(109,48): error TS7006: Parameter 'option' implicitly has an 'any' type.
+src/components/FormBuilder/FormBuilder.tsx(143,45): error TS7006: Parameter 'option' implicitly has an 'any' type.
+src/components/FormBuilder/FormBuilder.tsx(151,48): error TS7006: Parameter 'option' implicitly has an 'any' type.
+src/components/FormBuilder/FormBuilder.tsx(169,14): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<...> & Omit<...>): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: Element; item: true; xs: number; md: number; lg: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<GridTypeMap<{}, "div">>): Element | null', gave the following error.
+    Type '{ children: Element; item: true; xs: number; md: number; lg: number; }' is not assignable to type 'IntrinsicAttributes & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<Theme> & Omit<...>'.
+      Property 'item' does not exist on type 'IntrinsicAttributes & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<Theme> & Omit<...>'.
+src/components/FormBuilder/FormBuilder.tsx(272,14): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<...> & Omit<...>): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: Element; item: true; xs: number; md: number; lg: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<GridTypeMap<{}, "div">>): Element | null', gave the following error.
+    Type '{ children: Element; item: true; xs: number; md: number; lg: number; }' is not assignable to type 'IntrinsicAttributes & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<Theme> & Omit<...>'.
+      Property 'item' does not exist on type 'IntrinsicAttributes & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<Theme> & Omit<...>'.
+src/components/FormBuilder/FormBuilder.tsx(286,55): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/FormBuilder.tsx(286,62): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/FormBuilder/FormBuilder.tsx(336,14): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: { component: ElementType<any, keyof IntrinsicElements>; } & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<...> & Omit<...>): Element | null', gave the following error.
+    Property 'component' is missing in type '{ children: Element; item: true; xs: number; md: number; lg: number; }' but required in type '{ component: ElementType<any, keyof IntrinsicElements>; }'.
+  Overload 2 of 2, '(props: DefaultComponentProps<GridTypeMap<{}, "div">>): Element | null', gave the following error.
+    Type '{ children: Element; item: true; xs: number; md: number; lg: number; }' is not assignable to type 'IntrinsicAttributes & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<Theme> & Omit<...>'.
+      Property 'item' does not exist on type 'IntrinsicAttributes & GridBaseProps & { sx?: SxProps<Theme> | undefined; } & SystemProps<Theme> & Omit<...>'.
+src/components/FormBuilder/FormBuilder.tsx(397,79): error TS7006: Parameter 'option' implicitly has an 'any' type.
+src/components/FormBuilder/FormRenderer.tsx(6,78): error TS2307: Cannot find module '../../types/forms' or its corresponding type declarations.
+src/components/FormBuilder/FormRenderer.tsx(43,72): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/components/FormBuilder/FormRenderer.tsx(43,77): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/FormRenderer.tsx(106,52): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/FormRenderer.tsx(155,43): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/FormRenderer.tsx(186,73): error TS7006: Parameter 'option' implicitly has an 'any' type.
+src/components/FormBuilder/FormRenderer.tsx(203,130): error TS7006: Parameter 'option' implicitly has an 'any' type.
+src/components/FormBuilder/FormRenderer.tsx(204,45): error TS2322: Type '(event: React.ChangeEvent<{ value: unknown; }>) => void' is not assignable to type '(event: ChangeEvent<HTMLInputElement> | (Event & { target: { value: any[]; name: string; }; }), child: ReactNode) => void'.
+  Types of parameters 'event' and 'event' are incompatible.
+    Type 'ChangeEvent<HTMLInputElement> | (Event & { target: { value: any[]; name: string; }; })' is not assignable to type 'ChangeEvent<{ value: unknown; }>'.
+      Type 'Event & { target: { value: any[]; name: string; }; }' is missing the following properties from type 'ChangeEvent<{ value: unknown; }>': nativeEvent, isDefaultPrevented, isPropagationStopped, persist
+src/components/FormBuilder/FormRenderer.tsx(206,73): error TS7006: Parameter 'option' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(2,61): error TS2307: Cannot find module '../../../types/forms' or its corresponding type declarations.
+src/components/FormBuilder/hooks/useFormBuilder.ts(79,55): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(133,22): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(145,22): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(158,22): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(160,38): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(169,22): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(170,52): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(187,22): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/FormBuilder/hooks/useFormBuilder.ts(188,50): error TS7006: Parameter 'field' implicitly has an 'any' type.
+src/pages/Admin/Management/Groups/Groups.tsx(22,56): error TS2307: Cannot find module '../../../../utils/csv/group' or its corresponding type declarations.
+src/pages/Student/TerminalRequirements.tsx(295,20): error TS2339: Property 'chapters' does not exist on type 'ThesisStage'.
+src/pages/Student/TerminalRequirements.tsx(295,41): error TS7006: Parameter 'chapter' implicitly has an 'any' type.
+src/pages/Student/Thesis.tsx(58,47): error TS2339: Property 'status' does not exist on type 'ThesisChapter'.
+src/pages/Student/Thesis.tsx(258,66): error TS2339: Property 'status' does not exist on type 'ThesisChapter'.
+src/pages/Student/Thesis.tsx(259,64): error TS2339: Property 'status' does not exist on type 'ThesisChapter'.
+src/pages/Student/Thesis.tsx(396,64): error TS2339: Property 'status' does not exist on type 'ThesisChapter'.
+src/utils/expertUtils.ts(15,55): error TS7053: Element implicitly has an 'any' type because expression of type 'ExpertRole' can't be used to index type 'ThesisData'.
+  Property 'statistician' does not exist on type 'ThesisData'.
+src/utils/expertUtils.ts(52,34): error TS2344: Type '"status" | "expertApprovals"' does not satisfy the constraint 'keyof ThesisChapter'.
+  Type '"status"' is not assignable to type 'keyof ThesisChapter'.
+src/utils/expertUtils.ts(55,53): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'Partial<Record<ExpertRole, boolean>> | undefined'.
+src/utils/firebase/firestore/chapters.ts(335,21): error TS2339: Property 'expertApprovals' does not exist on type 'ThesisChapter'.
+src/utils/firebase/firestore/chapters.ts(345,9): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'ThesisChapter'.
+src/utils/firebase/firestore/thesis.ts(446,19): error TS2339: Property 'chapters' does not exist on type 'ThesisStage'.
+src/utils/firebase/firestore/thesis.ts(447,36): error TS2339: Property 'chapters' does not exist on type 'ThesisStage'.
+src/utils/firebase/firestore/thesis.ts(448,39): error TS2339: Property 'chapters' does not exist on type 'ThesisStage'.
+src/utils/firebase/firestore/thesis.ts(448,56): error TS7006: Parameter 'ch' implicitly has an 'any' type.
+src/utils/firebase/firestore/thesis.ts(467,19): error TS2339: Property 'chapters' does not exist on type 'ThesisStage'.
+src/utils/firebase/firestore/thesis.ts(468,36): error TS2339: Property 'chapters' does not exist on type 'ThesisStage'.
+src/utils/firebase/firestore/thesis.ts(469,39): error TS2339: Property 'chapters' does not exist on type 'ThesisStage'.
+src/utils/firebase/firestore/thesis.ts(469,56): error TS7006: Parameter 'ch' implicitly has an 'any' type.
+src/utils/thesisStageUtils.ts(133,77): error TS2339: Property 'status' does not exist on type 'ThesisChapter'.
+src/utils/thesisStageUtils.ts(310,24): error TS2339: Property 'status' does not exist on type 'ThesisChapter'.
+src/utils/thesisStageUtils.ts(310,48): error TS2339: Property 'status' does not exist on type 'ThesisChapter'.
+

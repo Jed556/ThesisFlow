@@ -1,22 +1,7 @@
 import * as React from 'react';
 import {
-    Alert,
-    Autocomplete,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    Skeleton,
-    Stack,
-    Tab,
-    Tabs,
-    TextField,
-    Typography,
+    Alert, Autocomplete, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent,
+    DialogContentText, DialogTitle, Skeleton, Stack, Tab, Tabs, TextField, Typography
 } from '@mui/material';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -25,26 +10,18 @@ import type { Session } from '../../types/session';
 import type { ThesisStageName, ThesisData } from '../../types/thesis';
 import type { ThesisGroup } from '../../types/group';
 import type { FileAttachment } from '../../types/file';
-import type {
-    TerminalRequirementApprovalRole,
-    TerminalRequirementSubmissionRecord,
-} from '../../types/terminalRequirementSubmission';
+import type { TerminalRequirementApprovalRole, TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { SubmissionStatus, TERMINAL_REQUIREMENT_ROLE_LABELS } from './SubmissionStatus';
 import { TerminalRequirementCard } from './RequirementCard';
-import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
+import { FileViewer } from '../File';
+import { THESIS_STAGE_METADATA, canonicalizeStageValue } from '../../utils/thesisStageUtils';
 import { useSnackbar } from '../Snackbar';
 import {
-    getReviewerAssignmentsForUser,
-    findThesisById,
-    findThesisByGroupId,
-    type ReviewerRole,
-    type ReviewerAssignment,
+    getReviewerAssignmentsForUser, findThesisById, findThesisByGroupId, type ReviewerRole, type ReviewerAssignment,
 } from '../../utils/firebase/firestore/thesis';
 import { findGroupById, listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
 import {
-    findAndListenTerminalRequirements,
-    findAndRecordTerminalRequirementDecision,
-    getTerminalRequirementConfig,
+    findAndListenTerminalRequirements, findAndRecordTerminalRequirementDecision, getTerminalRequirementConfig
 } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementConfigEntry } from '../../types/terminalRequirementTemplate';
 import type { TerminalRequirement } from '../../types/terminalRequirement';
@@ -100,6 +77,10 @@ export function TerminalRequirementApprovalWorkspace({
     const [decisionLoading, setDecisionLoading] = React.useState(false);
     const [returnDialogOpen, setReturnDialogOpen] = React.useState(false);
     const [returnNote, setReturnNote] = React.useState('');
+    const [viewingFile, setViewingFile] = React.useState<FileAttachment | null>(null);
+
+    /** Ref to track if we've already auto-selected a stage for the current thesis */
+    const hasAutoSelectedStage = React.useRef(false);
 
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
@@ -192,15 +173,21 @@ export function TerminalRequirementApprovalWorkspace({
         }
 
         let cancelled = false;
+        const fallbackGroupId = fallback.groupId;
         setThesisLoading(true);
         void (async () => {
             try {
-                const groupThesis = await findThesisByGroupId(fallback.groupId!);
+                const groupThesis = await findThesisByGroupId(fallbackGroupId);
                 if (cancelled) {
                     return;
                 }
                 if (groupThesis?.id) {
-                    setSelectedThesisId(groupThesis.id);
+                    const resolvedThesisId = groupThesis.id;
+                    setSelectedThesisId(resolvedThesisId);
+                    // Update the assignment option with the resolved thesisId for future matching
+                    setAssignmentOptions((prev) => prev.map((opt) =>
+                        opt.groupId === fallbackGroupId ? { ...opt, thesisId: resolvedThesisId } : opt
+                    ));
                 } else {
                     setSelectedThesisId('');
                     showNotification('No thesis found for this group yet.', 'info');
@@ -228,8 +215,11 @@ export function TerminalRequirementApprovalWorkspace({
             setGroupMeta(null);
             setSubmissionByStage({});
             setThesisError(null);
+            hasAutoSelectedStage.current = false;
             return;
         }
+        // Reset auto-selection when a different thesis is selected
+        hasAutoSelectedStage.current = false;
 
         let cancelled = false;
         const loadThesis = async () => {
@@ -338,16 +328,41 @@ export function TerminalRequirementApprovalWorkspace({
         });
     }, [submissionByStage]);
 
+    /**
+     * Find the first stage where this role needs to take action (currentRole matches).
+     * Falls back to the first available stage if none require action.
+     */
+    const getInProgressStageForRole = React.useCallback(() => {
+        for (const stageMeta of availableStages) {
+            const submissions = submissionByStage[stageMeta.value];
+            const needsAction = submissions?.some(
+                (sub) => sub.locked && sub.status === 'in_review' && sub.currentRole === role
+            );
+            if (needsAction) {
+                return stageMeta.value;
+            }
+        }
+        return availableStages[0]?.value ?? null;
+    }, [availableStages, submissionByStage, role]);
+
     React.useEffect(() => {
         if (!availableStages.length) {
             setActiveStage(null);
+            hasAutoSelectedStage.current = false;
             return;
         }
         const currentStageSubmissions = activeStage ? submissionByStage[activeStage] : undefined;
         if (!activeStage || !currentStageSubmissions || currentStageSubmissions.length === 0) {
-            setActiveStage(availableStages[0].value);
+            // Auto-select in-progress stage only once per thesis selection
+            if (!hasAutoSelectedStage.current) {
+                hasAutoSelectedStage.current = true;
+                const inProgressStage = getInProgressStageForRole();
+                setActiveStage(inProgressStage);
+            } else {
+                setActiveStage(availableStages[0].value);
+            }
         }
-    }, [availableStages, activeStage, submissionByStage]);
+    }, [availableStages, activeStage, submissionByStage, getInProgressStageForRole]);
 
     const resolvedStage = activeStage ?? availableStages[0]?.value ?? null;
     // Get all submissions for the resolved stage
@@ -368,14 +383,16 @@ export function TerminalRequirementApprovalWorkspace({
             return [];
         }
         // Filter requirements by stage and map to TerminalRequirement format
+        // Use canonicalizeStageValue to handle both slug and full name formats
         return Object.values(requirementConfig)
-            .filter((entry) =>
-                entry.stage === resolvedStage &&
-                allRequirementIds.includes(entry.requirementId),
-            )
+            .filter((entry) => {
+                const canonicalEntryStage = canonicalizeStageValue(entry.stage);
+                return canonicalEntryStage === resolvedStage &&
+                    allRequirementIds.includes(entry.requirementId);
+            })
             .map((entry): TerminalRequirement => ({
                 id: entry.requirementId,
-                stage: entry.stage,
+                stage: resolvedStage, // Use canonical slug
                 title: entry.title ?? entry.requirementId,
                 description: entry.description ?? '',
             }));
@@ -460,7 +477,12 @@ export function TerminalRequirementApprovalWorkspace({
             try {
                 const groupThesis = await findThesisByGroupId(groupId as string);
                 if (groupThesis?.id) {
-                    setSelectedThesisId(groupThesis.id);
+                    const resolvedThesisId = groupThesis.id;
+                    setSelectedThesisId(resolvedThesisId);
+                    // Update the assignment option with the resolved thesisId for future matching
+                    setAssignmentOptions((prev) => prev.map((opt) =>
+                        opt.groupId === groupId ? { ...opt, thesisId: resolvedThesisId } : opt
+                    ));
                 } else {
                     showNotification('No thesis found for this group yet.', 'info');
                 }
@@ -596,7 +618,11 @@ export function TerminalRequirementApprovalWorkspace({
         );
     }
 
-    const selectedAssignment = assignmentOptions.find((option) => option.thesisId === selectedThesisId) ?? null;
+    // For panel assignments, thesisId is resolved later, so also match by groupId
+    const selectedAssignment = assignmentOptions.find((option) =>
+        option.thesisId === selectedThesisId ||
+        (option.groupId && groupMeta?.id && option.groupId === groupMeta.id)
+    ) ?? null;
 
     return (
         <Stack spacing={3}>
@@ -660,6 +686,7 @@ export function TerminalRequirementApprovalWorkspace({
                                     value={resolvedStage}
                                     onChange={(_, value: ThesisStageName) => setActiveStage(value)}
                                     variant="scrollable"
+                                    scrollButtons="auto"
                                     allowScrollButtonsMobile
                                 >
                                     {availableStages.map((stage) => (
@@ -707,6 +734,7 @@ export function TerminalRequirementApprovalWorkspace({
                                                 status="submitted"
                                                 loading={fileLoading[requirement.id]}
                                                 disabled
+                                                onViewFile={setViewingFile}
                                             />
                                         ))}
                                     </Stack>
@@ -744,6 +772,24 @@ export function TerminalRequirementApprovalWorkspace({
                         Send request
                     </Button>
                 </DialogActions>
+            </Dialog>
+
+            {/* File Viewer Dialog */}
+            <Dialog
+                open={Boolean(viewingFile)}
+                onClose={() => setViewingFile(null)}
+                maxWidth="xl"
+                fullWidth
+                slotProps={{
+                    paper: { sx: { height: '90vh' } },
+                }}
+            >
+                <FileViewer
+                    file={viewingFile}
+                    onBack={() => setViewingFile(null)}
+                    height="100%"
+                    showToolbar
+                />
             </Dialog>
         </Stack>
     );

@@ -43,7 +43,6 @@ export function templatesToThesisChapters(templates: ChapterTemplate[]): ThesisC
         return {
             id: template.id ?? index + 1,
             title: template.title || `Chapter ${index + 1}`,
-            status: 'not_submitted',
             submissionDate: null,
             lastModified: null,
             submissions: [],

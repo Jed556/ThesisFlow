@@ -2,22 +2,32 @@
  * Schedule and calendar-related type definitions for the ThesisFlow application
  * Contains all scheduling, event, and calendar types
  * 
- * Calendar System Design (Google Calendar Model):
- * - Each user has a "Personal" calendar (auto-created)
- * - Each group has a shared calendar (auto-created)
- * - Admins/Developers can create custom calendars
- * - Events belong to ONE calendar
- * - Users can filter which calendars to view
+ * Calendar System Design (Hierarchical Model):
+ * Calendars follow the same hierarchy as the Firestore structure:
+ * - Global (year-level): Institution-wide events visible to all
+ * - Department: Department-wide events visible to department members
+ * - Course: Course-wide events visible to course members
+ * - Group: Group-specific events visible to group members + advisers/editors
+ * - Personal: Each user has a personal calendar (auto-created on user creation)
+ * 
+ * Access Control:
+ * - Users can view all calendars at or above their level in the hierarchy
+ * - Users can view group calendars for groups they belong to
+ * - Users can only edit calendars they own or have permissions for
+ * - Admins/Developers can view and edit all calendars
  */
 
-// Calendar type for different calendar categories
-export type CalendarType = 'personal' | 'group' | 'custom';
+/**
+ * Calendar hierarchy level - determines scope and visibility
+ */
+export type CalendarLevel = 'global' | 'department' | 'course' | 'group' | 'personal';
 
 // Event status
 export type EventStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'completed' | 'rescheduled';
 
 // Recurrence pattern for recurring events
-export type RecurrencePattern = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+export type RecurrencePattern =
+    'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
 
 // Participant role in events
 export type ParticipantRole = 'organizer' | 'required' | 'optional' | 'observer';
@@ -25,18 +35,32 @@ export type ParticipantRole = 'organizer' | 'required' | 'optional' | 'observer'
 export type ParticipantStatus = 'pending' | 'accepted' | 'declined' | 'tentative';
 
 /**
+ * Hierarchical path context for calendar location
+ */
+export interface CalendarPathContext {
+    year: string;
+    department?: string;
+    course?: string;
+    groupId?: string;
+    userId?: string;
+}
+
+/**
  * Calendar interface - represents a collection of events
- * Similar to Google Calendar's calendar system
+ * Follows hierarchical structure for access control
+ * Events are stored directly as documents within the calendar collection
  */
 export interface Calendar {
     id: string;
     name: string;
     description?: string;
-    type: CalendarType;
     color: string; // hex color for UI display
 
-    // Event management
-    eventIds: string[]; // Array of event IDs that belong to this calendar
+    /** Hierarchy level - determines visibility and access */
+    level: CalendarLevel;
+
+    /** Path context for hierarchical location */
+    pathContext: CalendarPathContext;
 
     // Ownership and access control
     ownerUid: string; // Firebase UID of owner (user UID for personal, group id for group calendars)
@@ -115,8 +139,11 @@ export interface ScheduleEvent {
     description?: string;
     status: EventStatus;
 
-    // Calendar association - events belong to ONE calendar
-    calendarId: string; // ID of the calendar this event belongs to
+    // Calendar association - events belong to ONE calendar (hierarchical)
+    /** Calendar level for hierarchical location */
+    calendarLevel: CalendarLevel;
+    /** Path context for hierarchical calendar location */
+    calendarPathContext: CalendarPathContext;
 
     // Date and time information
     startDate: string; // ISO date string
@@ -154,9 +181,18 @@ export interface ScheduleEvent {
 // Calendar view types
 export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year';
 
+/**
+ * Filter for calendar selection - matches by level and pathContext
+ */
+export interface CalendarFilter {
+    level: CalendarLevel;
+    pathContext: CalendarPathContext;
+}
+
 // Filter options for schedule display
 export interface ScheduleFilter {
-    calendarIds?: string[]; // Filter by specific calendars
+    /** Filter by calendar level and path context */
+    calendars?: CalendarFilter[];
     statuses?: EventStatus[];
     participants?: string[]; // Firebase UIDs
     dateRange?: {
@@ -172,7 +208,8 @@ export interface ScheduleStats {
     upcomingEvents: number;
     overdueEvents: number;
     eventsByStatus: Record<EventStatus, number>;
-    eventsByCalendar: Record<string, number>; // Count by calendar ID
+    /** Count by calendar level */
+    eventsByCalendarLevel: Record<CalendarLevel, number>;
 }
 
 // Schedule notification interface

@@ -303,11 +303,11 @@ service cloud.firestore {
                         allow delete: if isAdminOrDeveloper() || isHead();
 
                         // ================================
-                        // EXPERT REQUESTS (under group)
+                        // SERVICE REQUESTS (under group)
                         // ================================
 
                         match /expertRequests/{requestId} {
-                            // Expert requests - group members and staff can read
+                            // Service Requests - group members and staff can read
                             allow read: if isAuthenticated() && hasGroupAccess();
                             // Members can create, adviser/admin can manage
                             allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();

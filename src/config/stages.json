@@ -1,0 +1,20 @@
+{
+    "stages": [
+        {
+            "name": "Pre-Proposal Oral Defense",
+            "slug": "pre-proposal"
+        },
+        {
+            "name": "Post-Proposal Oral Defense",
+            "slug": "post-proposal"
+        },
+        {
+            "name": "Pre-Final Oral Defense",
+            "slug": "pre-defense"
+        },
+        {
+            "name": "Post-Final Oral Defense",
+            "slug": "post-defense"
+        }
+    ]
+}

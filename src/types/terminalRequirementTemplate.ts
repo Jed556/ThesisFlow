@@ -16,7 +16,6 @@ export interface TerminalRequirementConfigEntry {
     title?: string;
     /** Description or instructions for the requirement */
     description?: string;
-    requireAttachment?: boolean;
     fileTemplate?: TerminalRequirementFileTemplate;
 }
 

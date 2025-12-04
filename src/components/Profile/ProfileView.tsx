@@ -341,8 +341,8 @@ export default function ProfileView({
                                         {currentGroups && currentGroups.length > 0 ? (
                                             <List disablePadding>
                                                 {currentGroups.map((groupItem) => {
-                                                    const thesis = groupItem.thesis;
-                                                    const title = thesis?.title ?? groupItem.name;
+                                                    // Thesis title comes from approved topic proposals, use group name as fallback
+                                                    const title = groupItem.name;
                                                     return (
                                                         <ListItem key={groupItem.id} sx={{ alignItems: 'flex-start' }}>
                                                             <ListItemAvatar>

@@ -1,4 +1,4 @@
-import type { ESG, ThesisStatus } from './thesis';
+import type { ESG, SDG, ThesisAgenda, ThesisStatus } from './thesis';
 
 /**
  * Decision payload recorded whenever a reviewer completes an action.
@@ -40,18 +40,16 @@ export interface TopicProposalEntry {
     id: string;
     title: string;
     description: string;
-    agenda?: {
-        mainTheme: string;
-        subTheme: string;
-    }
+    agenda?: ThesisAgenda;
     ESG?: ESG;
+    /** Sustainable Development Goal covered by this topic */
+    SDG?: SDG;
     /** Problem statement for the topic */
     problemStatement?: string;
     /** Expected outcome of the research */
     expectedOutcome?: string;
     /** Keywords for the topic */
     keywords?: string[];
-
     proposedBy: string;
     createdAt: Date;
     updatedAt: Date;

@@ -188,7 +188,9 @@ export default function ExpertProfileViewPage() {
         if (!profile || !expertRole) {
             return [];
         }
-        return deriveExpertThesisHistory(groups, profile.uid, expertRole);
+        // Pass empty map - deriveExpertThesisHistory falls back to group.name if thesis not found
+        // TODO: Consider fetching theses for completed groups if accurate title is needed
+        return deriveExpertThesisHistory(groups, new Map(), profile.uid, expertRole);
     }, [groups, expertRole, profile]);
 
     const roleStats = React.useMemo<ThesisRoleStats>(() => {
@@ -272,7 +274,7 @@ export default function ExpertProfileViewPage() {
                     });
                 },
                 onError: (listenerError) => {
-                    console.error(`Failed to load expert requests for group ${group.id}:`, listenerError);
+                    console.error(`Failed to load service requests for group ${group.id}:`, listenerError);
                 },
             })
         );
@@ -401,7 +403,7 @@ export default function ExpertProfileViewPage() {
         }
 
         if (requestableGroups.length === 0) {
-            showNotification('Create a thesis group first to send expert requests.', 'info');
+            showNotification('Create a thesis group first to send service requests.', 'info');
             return;
         }
 
@@ -443,7 +445,7 @@ export default function ExpertProfileViewPage() {
             setRequestDialogOpen(false);
             setRequestMessage('');
         } catch (err) {
-            console.error('Failed to send expert request:', err);
+            console.error('Failed to send service request:', err);
             const fallback = err instanceof Error ? err.message : 'Failed to send request.';
             showNotification(fallback, 'error');
         } finally {

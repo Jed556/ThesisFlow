@@ -18,10 +18,12 @@ import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
 import { findUserById, findUsersByIds } from './user';
 import { getGroup } from './groups';
-import type { ThesisData } from '../../../types/thesis';
+import type { ThesisData, ThesisChapter, ChapterSubmission, ChapterSubmissionEntry, THESIS_STAGE_VALUES } from '../../../types/thesis';
 import type { UserProfile } from '../../../types/profile';
 import { THESIS_SUBCOLLECTION, GROUPS_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
 import { buildThesisCollectionPath, buildThesisDocPath, extractPathParams } from './paths';
+import { devLog, devError } from '../../../utils/devUtils';
+import { THESIS_STAGE_METADATA } from '../../thesisStageUtils';
 
 // Re-export from specialized modules for backward compatibility
 export * from './stages';
@@ -112,6 +114,7 @@ export interface ThesisDocumentListenerOptions {
 
 /**
  * Convert Firestore document data to ThesisData
+ * Note: Chapters are now stored in a subcollection, not embedded in thesis
  */
 function docToThesisData(docSnap: DocumentSnapshot): ThesisData | null {
     if (!docSnap.exists()) return null;
@@ -122,8 +125,55 @@ function docToThesisData(docSnap: DocumentSnapshot): ThesisData | null {
         submissionDate: data.submissionDate?.toDate?.() || new Date(),
         lastUpdated: data.lastUpdated?.toDate?.() || new Date(),
         stages: data.stages || [],
-        chapters: data.chapters,
+        agenda: data.agenda,
+        ESG: data.ESG,
+        SDG: data.SDG,
     } as ThesisData;
+}
+
+/**
+ * Convert Firestore document data to ThesisWithGroupContext
+ * Extracts path parameters (year, department, course, groupId) from the document path
+ */
+function docToThesisWithContext(docSnap: DocumentSnapshot): ThesisWithGroupContext | null {
+    if (!docSnap.exists()) {
+        devLog('[thesis.ts] docToThesisWithContext: Document does not exist');
+        return null;
+    }
+    const data = docSnap.data();
+    const pathParams = extractPathParams(docSnap.ref.path);
+
+    devLog('[thesis.ts] docToThesisWithContext: Parsing document', {
+        docId: docSnap.id,
+        refPath: docSnap.ref.path,
+        pathParams,
+        rawData: {
+            title: data.title,
+            agenda: data.agenda,
+            ESG: data.ESG,
+            SDG: data.SDG,
+            stagesCount: data.stages?.length ?? 0,
+            stagesRaw: data.stages,
+            lastStage: data.stages?.[data.stages?.length - 1],
+        },
+    });
+
+    return {
+        id: docSnap.id,
+        title: data.title || '',
+        submissionDate: data.submissionDate?.toDate?.() || new Date(),
+        lastUpdated: data.lastUpdated?.toDate?.() || new Date(),
+        stages: data.stages || [],
+        chapters: data.chapters,
+        agenda: data.agenda,
+        ESG: data.ESG,
+        SDG: data.SDG,
+        // Path context
+        groupId: pathParams.groupId,
+        year: pathParams.year,
+        department: pathParams.department,
+        course: pathParams.course,
+    } as ThesisWithGroupContext;
 }
 
 /**
@@ -266,8 +316,9 @@ export async function getLatestThesisForGroup(ctx: ThesisContext): Promise<Thesi
 
 /**
  * Get all theses across all groups using collectionGroup query
+ * Returns theses with path context (year, department, course, groupId) extracted from document paths
  * @param constraints - Optional query constraints
- * @returns Array of all thesis records
+ * @returns Array of all thesis records with path context
  */
 export async function getAllTheses(constraints?: QueryConstraint[]): Promise<ThesisRecord[]> {
     const thesisQuery = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
@@ -277,7 +328,7 @@ export async function getAllTheses(constraints?: QueryConstraint[]): Promise<The
 
     const snapshot = await getDocs(q);
     return snapshot.docs.map((docSnap) => {
-        const data = docToThesisData(docSnap);
+        const data = docToThesisWithContext(docSnap);
         if (!data) return null;
         return {
             ...data,
@@ -380,47 +431,33 @@ export async function createThesisForGroup(ctx: ThesisContext, data: Omit<Thesis
 // ============================================================================
 
 /**
- * Calculate thesis progress based on approved chapters
- * @param ctx - Thesis context containing path information
- * @param thesisId - Thesis document ID
- * @returns Progress percentage (0-100)
+ * Derive chapter status from its submissions
+ * Priority: latest submission status, or check if any approved/under_review/revision
  */
-export async function calculateThesisProgress(ctx: ThesisContext, thesisId: string): Promise<number> {
-    const thesis = await getThesisById(ctx, thesisId);
-    if (!thesis?.stages || thesis.stages.length === 0) return 0;
-
-    let totalChapters = 0;
-    let approvedChapters = 0;
-
-    for (const stage of thesis.stages) {
-        if (stage.chapters) {
-            totalChapters += stage.chapters.length;
-            approvedChapters += stage.chapters.filter((ch) => ch.status === 'approved').length;
-        }
+function deriveChapterStatusFromSubmissions(chapter: ThesisChapter):
+    'approved' | 'under_review' | 'revision_required' | 'not_submitted' {
+    const submissions: (ChapterSubmission | ChapterSubmissionEntry)[] = chapter.submissions ?? [];
+    if (submissions.length === 0) {
+        return 'not_submitted';
     }
 
-    return totalChapters > 0 ? (approvedChapters / totalChapters) * 100 : 0;
-}
+    // Check the latest submission's status
+    const latestSubmission = submissions[submissions.length - 1];
+    if (latestSubmission?.status === 'approved') return 'approved';
+    if (latestSubmission?.status === 'under_review') return 'under_review';
+    if (latestSubmission?.status === 'revision_required') return 'revision_required';
 
-/**
- * Compute thesis progress ratio (0-1)
- * @param thesis - Thesis data
- * @returns Progress ratio (0-1)
- */
-export function computeThesisProgressRatio(thesis: ThesisData): number {
-    if (!thesis.stages || thesis.stages.length === 0) return 0;
+    // Fallback: check if any submission has a status
+    const hasApproved = submissions.some((s: ChapterSubmission | ChapterSubmissionEntry) => s.status === 'approved');
+    if (hasApproved) return 'approved';
 
-    let totalChapters = 0;
-    let approvedChapters = 0;
+    const hasUnderReview = submissions.some((s: ChapterSubmission | ChapterSubmissionEntry) => s.status === 'under_review');
+    if (hasUnderReview) return 'under_review';
 
-    for (const stage of thesis.stages) {
-        if (stage.chapters) {
-            totalChapters += stage.chapters.length;
-            approvedChapters += stage.chapters.filter((ch) => ch.status === 'approved').length;
-        }
-    }
+    const hasRevision = submissions.some((s: ChapterSubmission | ChapterSubmissionEntry) => s.status === 'revision_required');
+    if (hasRevision) return 'revision_required';
 
-    return totalChapters > 0 ? approvedChapters / totalChapters : 0;
+    return 'not_submitted';
 }
 
 // ============================================================================
@@ -547,6 +584,7 @@ export function listenThesesForGroup(
 
 /**
  * Listen to all theses across all groups (collectionGroup)
+ * Returns theses with path context (year, department, course, groupId) extracted from document paths
  * @param constraints - Optional query constraints
  * @param options - Callbacks for data and errors
  * @returns Unsubscribe function
@@ -555,6 +593,7 @@ export function listenAllTheses(
     constraints: QueryConstraint[] | undefined,
     options: ThesisListenerOptions
 ): () => void {
+    devLog('[thesis.ts] listenAllTheses: Setting up listener with constraints:', constraints);
     const thesisQuery = collectionGroup(firebaseFirestore, THESIS_SUBCOLLECTION);
     const q = constraints?.length
         ? query(thesisQuery, ...constraints)
@@ -563,13 +602,25 @@ export function listenAllTheses(
     return onSnapshot(
         q,
         (snapshot) => {
+            devLog('[thesis.ts] listenAllTheses: Received snapshot with', snapshot.docs.length, 'documents');
             const theses = snapshot.docs.map((docSnap) => {
-                const data = docToThesisData(docSnap);
+                const data = docToThesisWithContext(docSnap);
                 return data ? { ...data, id: docSnap.id } as ThesisRecord : null;
             }).filter((t): t is ThesisRecord => t !== null);
+            devLog('[thesis.ts] listenAllTheses: Parsed', theses.length, 'theses. Sample:', theses.slice(0, 2).map(t => ({
+                id: t.id,
+                title: t.title,
+                groupId: (t as ThesisWithGroupContext).groupId,
+                department: (t as ThesisWithGroupContext).department,
+                course: (t as ThesisWithGroupContext).course,
+                agenda: (t as ThesisWithGroupContext).agenda,
+                ESG: (t as ThesisWithGroupContext).ESG,
+                SDG: (t as ThesisWithGroupContext).SDG,
+            })));
             options.onData(theses);
         },
         (error) => {
+            devError('[thesis.ts] listenAllTheses: Listener error:', error);
             if (options.onError) options.onError(error);
             else console.error('Thesis listener error:', error);
         }
@@ -1008,7 +1059,8 @@ export async function findThesisByGroupId(
             const data = docToThesisData(docSnap);
             if (data) {
                 // Fetch group to get member information
-                let groupMembers: Pick<ThesisWithGroupContext, 'leader' | 'members' | 'adviser' | 'editor' | 'statistician' | 'panels'> = {};
+                let groupMembers: Pick<ThesisWithGroupContext,
+                    'leader' | 'members' | 'adviser' | 'editor' | 'statistician' | 'panels'> = {};
                 if (params.year && params.department && params.course && params.groupId) {
                     try {
                         const group = await getGroup(params.year, params.department, params.course, params.groupId);
@@ -1095,7 +1147,7 @@ export async function getReviewerAssignmentsForUser(
             thesisId: thesisDoc.id,
             thesisTitle: thesisData.title || groupData.name || groupId,
             role,
-            stage: currentStage?.name || 'Pre-Proposal',
+            stage: currentStage?.name || THESIS_STAGE_METADATA[0]?.value,
             progress,
             assignedTo: [userId],
             priority: determinePriority(

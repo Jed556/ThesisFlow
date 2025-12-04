@@ -40,7 +40,7 @@ export interface StageData {
  * @returns Stage slug for use in Firestore paths
  */
 export function getStageSlug(stageName: ThesisStageName): ThesisStageSlug {
-    return THESIS_STAGE_SLUGS[stageName] || 'pre-proposal';
+    return THESIS_STAGE_SLUGS[stageName] || Object.values(THESIS_STAGE_SLUGS)[0] || 'pre-proposal';
 }
 
 // ============================================================================

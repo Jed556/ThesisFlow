@@ -12,7 +12,9 @@ import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { ThesisWorkspace } from '../../components/ThesisWorkspace';
 import { listenThesesForParticipant, getThesisTeamMembers, type ThesisContext } from '../../utils/firebase/firestore/thesis';
-import { createSubmission, type SubmissionContext } from '../../utils/firebase/firestore/submissions';
+import {
+    createSubmission, submitDraftSubmission, deleteSubmission, type SubmissionContext,
+} from '../../utils/firebase/firestore/submissions';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
 import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
@@ -23,7 +25,7 @@ import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
-    index: 1,
+    index: 3,
     title: 'Thesis Workspace',
     segment: 'student-thesis-workspace',
     icon: <SchoolIcon />,
@@ -243,9 +245,9 @@ export default function StudentThesisOverviewPage() {
             chapterId: String(chapterId),
         };
 
-        // Create submission record with file reference
+        // Create submission record with file reference - starts as 'draft' until student submits
         await createSubmission(submissionCtx, {
-            status: 'under_review',
+            status: 'draft',
             submittedAt: result.fileAttachment.uploadDate
                 ? new Date(result.fileAttachment.uploadDate)
                 : new Date(),
@@ -253,6 +255,56 @@ export default function StudentThesisOverviewPage() {
             files: [result.fileAttachment],
         });
     }, [userUid, group]);
+
+    /**
+     * Handler for submitting a draft for review
+     */
+    const handleSubmitDraft = React.useCallback(async (
+        { thesisId, chapterId, stage, submissionId }: {
+            thesisId: string; chapterId: number; stage: ThesisStageName; submissionId: string;
+        }
+    ) => {
+        if (!group) {
+            throw new Error('Group context is not available.');
+        }
+
+        const submissionCtx: SubmissionContext = {
+            year: DEFAULT_YEAR,
+            department: group.department ?? '',
+            course: group.course ?? '',
+            groupId: group.id ?? '',
+            thesisId,
+            stage,
+            chapterId: String(chapterId),
+        };
+
+        await submitDraftSubmission(submissionCtx, submissionId);
+    }, [group]);
+
+    /**
+     * Handler for deleting a draft submission
+     */
+    const handleDeleteDraft = React.useCallback(async (
+        { thesisId, chapterId, stage, submissionId }: {
+            thesisId: string; chapterId: number; stage: ThesisStageName; submissionId: string;
+        }
+    ) => {
+        if (!group) {
+            throw new Error('Group context is not available.');
+        }
+
+        const submissionCtx: SubmissionContext = {
+            year: DEFAULT_YEAR,
+            department: group.department ?? '',
+            course: group.course ?? '',
+            groupId: group.id ?? '',
+            thesisId,
+            stage,
+            chapterId: String(chapterId),
+        };
+
+        await deleteSubmission(submissionCtx, submissionId);
+    }, [group]);
 
     // Stage gate overrides - currently no additional gates beyond terminal requirement sequence
     // The simple flow is: chapters → terminal → next stage chapters → next stage terminal
@@ -304,6 +356,8 @@ export default function StudentThesisOverviewPage() {
                     allowCommenting={false}
                     emptyStateMessage="Select a chapter to upload your first version and unlock feedback."
                     onUploadChapter={handleUploadChapter}
+                    onSubmitDraft={handleSubmitDraft}
+                    onDeleteDraft={handleDeleteDraft}
                     enforceTerminalRequirementSequence
                     terminalRequirementCompletionMap={terminalRequirementCompletionMap}
                     stageGateOverrides={stageGateOverrides}

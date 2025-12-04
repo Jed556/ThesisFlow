@@ -4,10 +4,29 @@
 
 import type {
     ScheduleEvent, EventParticipant, EventLocation, ParticipantRole, ParticipantStatus, EventStatus,
+    CalendarLevel, CalendarPathContext,
 } from '../../types/schedule';
 import {
     parseCsvText, normalizeHeader, mapHeaderIndexes, splitArrayField, parseBoolean, generateCsvText
 } from './parser';
+
+const parseCalendarLevel = (value?: string): CalendarLevel => {
+    const normalized = value?.toLowerCase() as CalendarLevel | undefined;
+    const allowed: CalendarLevel[] = ['global', 'department', 'course', 'group', 'personal'];
+    return normalized && allowed.includes(normalized) ? normalized : 'personal';
+};
+
+/**
+ * Parse CalendarPathContext from JSON string
+ */
+const parseCalendarPathContext = (jsonStr?: string): CalendarPathContext | undefined => {
+    if (!jsonStr) return undefined;
+    try {
+        return JSON.parse(jsonStr) as CalendarPathContext;
+    } catch {
+        return undefined;
+    }
+};
 
 const parseParticipantRole = (value?: string): ParticipantRole => {
     const normalized = value?.toLowerCase() as ParticipantRole | undefined;
@@ -29,8 +48,15 @@ const parseEventStatus = (value?: string): EventStatus => {
 
 /**
  * Import schedule events from CSV text
+ * @param csvText - CSV text to parse
+ * @param defaultCalendarLevel - Default calendar level if not specified in CSV
+ * @param defaultCalendarPathContext - Default calendar path context if not specified in CSV
  */
-export function importScheduleFromCsv(csvText: string): { parsed: ScheduleEvent[]; errors: string[] } {
+export function importScheduleFromCsv(
+    csvText: string,
+    defaultCalendarLevel: CalendarLevel = 'personal',
+    defaultCalendarPathContext?: CalendarPathContext
+): { parsed: ScheduleEvent[]; errors: string[] } {
     const { headers, rows } = parseCsvText(csvText);
     const headerMap = mapHeaderIndexes(headers);
     const parsed: ScheduleEvent[] = [];
@@ -61,11 +87,20 @@ export function importScheduleFromCsv(csvText: string): { parsed: ScheduleEvent[
 
         const isAllDay = parseBoolean(get('allDay') || get('isAllDay'));
 
+        // Parse calendarLevel and calendarPathContext from CSV, or use defaults
+        const calendarLevel = parseCalendarLevel(get('calendarLevel') || get('calendar_level')) || defaultCalendarLevel;
+        const calendarPathContextStr = get('calendarPathContext') || get('calendar_path_context');
+        const calendarPathContext = parseCalendarPathContext(calendarPathContextStr) ?? defaultCalendarPathContext;
+
+        // Build year from path context or use current year
+        const year = calendarPathContext?.year ?? new Date().getFullYear().toString();
+
         const event: ScheduleEvent = {
             id,
             title,
             description: get('description') || undefined,
-            calendarId: get('calendarId') || get('calendar_id') || 'default',
+            calendarLevel,
+            calendarPathContext: calendarPathContext ?? { year },
             status: parseEventStatus(get('status')),
             startDate,
             endDate,
@@ -105,7 +140,8 @@ export function exportScheduleToCsv(events: ScheduleEvent[]): string {
         'id',
         'title',
         'description',
-        'calendarId',
+        'calendarLevel',
+        'calendarPathContext',
         'status',
         'startDate',
         'endDate',
@@ -122,23 +158,24 @@ export function exportScheduleToCsv(events: ScheduleEvent[]): string {
         'createdAt',
     ];
 
-    const rows = events.map(event => [
+    const rows: string[][] = events.map(event => [
         event.id,
         event.title,
-        event.description || '',
-        event.calendarId,
+        event.description ?? '',
+        event.calendarLevel,
+        event.calendarPathContext ? JSON.stringify(event.calendarPathContext) : '',
         event.status,
         event.startDate,
         event.endDate,
         event.isAllDay ? 'true' : 'false',
         event.organizer,
         event.participants.map(p => `${p.uid}:${p.role}:${p.status}`).join(';'),
-        event.location?.address || '',
-        event.location?.room || '',
-        event.location?.url || '',
-        event.location?.platform || '',
-        event.tags?.join(';') || '',
-        event.color || '',
+        event.location?.address ?? '',
+        event.location?.room ?? '',
+        event.location?.url ?? '',
+        event.location?.platform ?? '',
+        event.tags?.join(';') ?? '',
+        event.color ?? '',
         event.createdBy,
         event.createdAt,
     ]);

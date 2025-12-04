@@ -272,10 +272,56 @@ service cloud.firestore {
             allow read: if isAuthenticated();
             allow write: if isAdminOrDeveloper() || isHead();
 
+            // ================================
+            // GLOBAL (YEAR-LEVEL) CALENDAR
+            // Path: year/{year}/calendar/metadata and year/{year}/calendar/events/{eventId}
+            // ================================
+
+            match /calendar/{calendarDoc} {
+                // Global calendar - all authenticated users can read
+                allow read: if isAuthenticated();
+                // Only admins, developers, and heads can manage global calendar
+                allow write: if isAdminOrDeveloper() || isHead();
+
+                // Events subcollection under global calendar
+                match /events/{eventId} {
+                    allow read: if isAuthenticated();
+                    allow write: if isAdminOrDeveloper() || isHead();
+                }
+            }
+
             // Year-level users (admin, developer)
             match /users/{userId} {
                 allow read: if isAuthenticated();
                 allow write: if isAdminOrDeveloper();
+
+                // ================================
+                // PERSONAL CALENDAR (year-level users - admin, developer)
+                // Path: year/{year}/users/{userId}/calendar/metadata
+                // ================================
+
+                match /calendar/{calendarDoc} {
+                    // Personal calendar - only owner can read/write
+                    allow read: if isAuthenticated() && isOwner(userId);
+                    allow write: if isAdminOrDeveloper() || isOwner(userId);
+
+                    // Events subcollection
+                    match /events/{eventId} {
+                        allow read: if isAuthenticated() && isOwner(userId);
+                        allow write: if isAdminOrDeveloper() || isOwner(userId);
+                    }
+                }
+            }
+
+            // ================================
+            // INSTITUTIONAL AGENDAS
+            // ================================
+
+            match /agendas/{agendaId} {
+                // All authenticated users can read agendas
+                allow read: if isAuthenticated();
+                // Only admins, developers, and heads can manage agendas
+                allow write: if isAdminOrDeveloper() || isHead();
             }
 
             // ================================
@@ -307,10 +353,56 @@ service cloud.firestore {
                 allow read: if isAuthenticated();
                 allow write: if isAdminOrDeveloper() || isHead();
 
+                // ================================
+                // DEPARTMENT-LEVEL CALENDAR
+                // Path: year/{year}/departments/{department}/calendar/metadata
+                // ================================
+
+                match /calendar/{calendarDoc} {
+                    // Department calendar - all authenticated users can read
+                    allow read: if isAuthenticated();
+                    // Admins, developers, heads, and department advisers can manage
+                    allow write: if isAdminOrDeveloper() || isHead() || (isAdviser() && userInDepartment(department));
+
+                    // Events subcollection
+                    match /events/{eventId} {
+                        allow read: if isAuthenticated();
+                        allow write: if isAdminOrDeveloper() || isHead() || (isAdviser() && userInDepartment(department));
+                    }
+                }
+
                 // Department-level users (adviser, editor, statistician, panel, moderator, head)
                 match /users/{userId} {
                     allow read: if isAuthenticated();
                     allow write: if isAdminOrDeveloper() || isHead() || (isOwner(userId) && userInDepartment(department));
+
+                    // ================================
+                    // PERSONAL CALENDAR (department-level users)
+                    // Path: year/{year}/departments/{department}/users/{userId}/calendar/metadata
+                    // ================================
+
+                    match /calendar/{calendarDoc} {
+                        // Personal calendar - owner and admins can read
+                        allow read: if isAuthenticated() && (isOwner(userId) || isAdminOrDeveloper());
+                        allow write: if isOwner(userId) || isAdminOrDeveloper();
+
+                        // Events subcollection
+                        match /events/{eventId} {
+                            allow read: if isAuthenticated() && (isOwner(userId) || isAdminOrDeveloper());
+                            allow write: if isOwner(userId) || isAdminOrDeveloper();
+                        }
+                    }
+                }
+
+                // ================================
+                // DEPARTMENTAL AGENDAS
+                // ================================
+
+                match /departmentAgendas/{agendaId} {
+                    // All authenticated users can read departmental agendas
+                    allow read: if isAuthenticated();
+                    // Only admins, developers, and heads can manage agendas
+                    allow write: if isAdminOrDeveloper() || isHead();
                 }
 
                 // ================================
@@ -322,10 +414,45 @@ service cloud.firestore {
                     allow read: if isAuthenticated();
                     allow write: if isAdminOrDeveloper() || isHead() || isAdviser();
 
+                    // ================================
+                    // COURSE-LEVEL CALENDAR
+                    // Path: year/{year}/departments/{department}/courses/{course}/calendar/metadata
+                    // ================================
+
+                    match /calendar/{calendarDoc} {
+                        // Course calendar - all authenticated users can read
+                        allow read: if isAuthenticated();
+                        // Admins, developers, heads, and course advisers can manage
+                        allow write: if isAdminOrDeveloper() || isHead() || isAdviser();
+
+                        // Events subcollection
+                        match /events/{eventId} {
+                            allow read: if isAuthenticated();
+                            allow write: if isAdminOrDeveloper() || isHead() || isAdviser();
+                        }
+                    }
+
                     // Course-level users (students)
                     match /users/{userId} {
                         allow read: if isAuthenticated();
                         allow write: if isAdminOrDeveloper() || isHead() || isAdviser() || isOwner(userId);
+
+                        // ================================
+                        // PERSONAL CALENDAR (course-level users - students)
+                        // Path: year/{year}/departments/{department}/courses/{course}/users/{userId}/calendar/metadata
+                        // ================================
+
+                        match /calendar/{calendarDoc} {
+                            // Personal calendar - owner and admins can read
+                            allow read: if isAuthenticated() && (isOwner(userId) || isAdminOrDeveloper());
+                            allow write: if isOwner(userId) || isAdminOrDeveloper();
+
+                            // Events subcollection
+                            match /events/{eventId} {
+                                allow read: if isAuthenticated() && (isOwner(userId) || isAdminOrDeveloper());
+                                allow write: if isOwner(userId) || isAdminOrDeveloper();
+                            }
+                        }
                     }
 
                     // ================================
@@ -439,6 +566,24 @@ service cloud.firestore {
                         allow delete: if isAdminOrDeveloper() || isHead();
 
                         // ================================
+                        // GROUP-LEVEL CALENDAR
+                        // Path: year/{year}/departments/{department}/courses/{course}/groups/{groupId}/calendar/metadata
+                        // ================================
+
+                        match /calendar/{calendarDoc} {
+                            // Group calendar - group members and staff can read
+                            allow read: if isAuthenticated() && hasGroupAccess();
+                            // Group leader, adviser, and admins can manage
+                            allow write: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader();
+
+                            // Events subcollection
+                            match /events/{eventId} {
+                                allow read: if isAuthenticated() && hasGroupAccess();
+                                allow write: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader() || isGroupMember();
+                            }
+                        }
+
+                        // ================================
                         // JOIN SUBCOLLECTION (invites/requests)
                         // Path: join/invites - invite documents containing userIds array
                         // Path: join/requests - join request documents containing userIds array
@@ -460,7 +605,7 @@ service cloud.firestore {
                         }
 
                         // ================================
-                        // EXPERT REQUESTS (under group)
+                        // SERVICE REQUESTS (under group)
                         // ================================
 
                         match /expertRequests/{requestId} {
@@ -472,7 +617,7 @@ service cloud.firestore {
                                 return req.data.expertUid == request.auth.uid;
                             }
 
-                            // Expert requests - group members and staff can read
+                            // Service Requests - group members and staff can read
                             allow read: if isAuthenticated() && hasGroupAccess();
                             // Members can create, adviser/admin can manage
                             allow create: if isGroupMember() || isGroupAdviser() || isAdminOrDeveloper();
@@ -510,8 +655,8 @@ service cloud.firestore {
 
                         // ================================
                         // PANEL COMMENTS (under group)
-                        // Path: panelComments/release - release state document
-                        // Path: panelComments/entries/{entryId} - individual comment entries
+                        // Path: panelComments/meta - metadata/release state document
+                        // Path: panelComments/meta/entries/{entryId} - individual comment entries
                         // ================================
 
                         match /panelComments/{docId} {
@@ -591,7 +736,9 @@ service cloud.firestore {
                                         allow create: if isGroupMember() || isAssignedExpert();
                                         // Members and reviewers can update
                                         allow update: if isGroupMember() || isAssignedExpert() || isThesisReviewer() || isModeratorOrAbove();
-                                        allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser();
+                                        // Group members can delete their own draft submissions, advisers/admins can delete any
+                                        allow delete: if isAdminOrDeveloper() || isHead() || isGroupAdviser() 
+                                            || (isGroupMember() && resource.data.status == 'draft');
 
                                         // ================================
                                         // CHATS (under submission)
@@ -631,7 +778,16 @@ service cloud.firestore {
         // GLOBAL COLLECTIONS
         // ====================================
 
-        // Calendars - global schedule events
+        // Schedule Events - global events collection
+        // Events are linked to calendars via calendarLevel and calendarPathContext
+        match /events/{eventId} {
+            allow read: if isAuthenticated();
+            allow create: if isAuthenticated();
+            allow update: if isAuthenticated();
+            allow delete: if isAdminOrDeveloper() || isHead() || isOwner(resource.data.createdBy);
+        }
+
+        // Calendars - legacy global schedule events (deprecated - use hierarchical calendars)
         match /calendars/{eventId} {
             allow read: if isAuthenticated();
             allow create: if isStaff();

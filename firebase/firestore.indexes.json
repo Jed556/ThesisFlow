@@ -1,6 +1,68 @@
 {
     "indexes": [
         {
+            "collectionGroup": "templates",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "templateType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "year",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "templates",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "departmentKey",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "templateType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "year",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "templates",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "department",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "templateType",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "year",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "expertRequests",
             "queryScope": "COLLECTION_GROUP",
             "fields": [
@@ -86,6 +148,10 @@
             "collectionGroup": "groups",
             "queryScope": "COLLECTION_GROUP",
             "fields": [
+                {
+                    "fieldPath": "members.panels",
+                    "arrayConfig": "CONTAINS"
+                },
                 {
                     "fieldPath": "createdAt",
                     "order": "DESCENDING"
@@ -239,6 +305,20 @@
         {
             "collectionGroup": "groups",
             "fieldPath": "status",
+            "indexes": [
+                {
+                    "order": "ASCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                },
+                {
+                    "order": "DESCENDING",
+                    "queryScope": "COLLECTION_GROUP"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "groups",
+            "fieldPath": "createdAt",
             "indexes": [
                 {
                     "order": "ASCENDING",

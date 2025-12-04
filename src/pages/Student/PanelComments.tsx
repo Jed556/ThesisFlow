@@ -4,7 +4,7 @@ import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
-import type { ThesisData } from '../../types/thesis';
+import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { ThesisGroup } from '../../types/group';
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentEntry,
@@ -19,6 +19,8 @@ import {
     updatePanelCommentStudentFields, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
+import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
+import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
@@ -28,7 +30,7 @@ import { DEFAULT_YEAR } from '../../config/firestore';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
-    index: 3,
+    index: 5,
     title: 'Panel Comments',
     segment: 'panel-comments',
     icon: <CommentBankIcon />,
@@ -61,6 +63,8 @@ export default function StudentPanelCommentsPage() {
     const [panelistsLoading, setPanelistsLoading] = React.useState(false);
     const [panelistsError, setPanelistsError] = React.useState<string | null>(null);
     const [activePanelUid, setActivePanelUid] = React.useState<string | null>(null);
+    /** Chapters fetched from subcollection (new hierarchical structure) */
+    const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
 
     /** Build panel comment context from group */
     const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
@@ -85,7 +89,7 @@ export default function StudentPanelCommentsPage() {
         setThesisLoading(true);
         setThesisError(null);
 
-        // Load group first, then get thesis from group context
+        // Load group first, then fetch thesis from subcollection
         (async () => {
             try {
                 // Try to find group where user is leader first, then as member
@@ -96,8 +100,14 @@ export default function StudentPanelCommentsPage() {
                 const preferredGroup = allGroups.find((g) => g.members.leader === userUid) ?? allGroups[0] ?? null;
                 setGroup(preferredGroup);
 
-                if (preferredGroup?.thesis) {
-                    setThesis({ ...preferredGroup.thesis, id: preferredGroup.thesis.id ?? preferredGroup.id });
+                // Thesis is stored in a subcollection, fetch it using findThesisByGroupId
+                if (preferredGroup) {
+                    const thesisData = await findThesisByGroupId(preferredGroup.id);
+                    if (thesisData) {
+                        setThesis({ ...thesisData, id: thesisData.id ?? preferredGroup.id });
+                    } else {
+                        setThesis(null);
+                    }
                 } else {
                     setThesis(null);
                 }
@@ -113,6 +123,36 @@ export default function StudentPanelCommentsPage() {
     }, [userUid]);
 
     const groupId = group?.id ?? null;
+
+    // Fetch chapters from subcollection (new hierarchical structure)
+    React.useEffect(() => {
+        if (!thesis?.id || !group?.id || !group?.department || !group?.course) {
+            setChapters([]);
+            return;
+        }
+
+        const chaptersCtx: ThesisChaptersContext = {
+            year: group.year ?? DEFAULT_YEAR,
+            department: group.department,
+            course: group.course,
+            groupId: group.id,
+            thesisId: thesis.id,
+        };
+
+        const unsubscribe = listenAllChaptersForThesis(chaptersCtx, {
+            onData: (allChapters) => {
+                setChapters(allChapters);
+            },
+            onError: (listenerError) => {
+                console.error('Failed to load chapters:', listenerError);
+                setChapters([]);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [thesis?.id, group?.id, group?.department, group?.course, group?.year]);
 
     React.useEffect(() => {
         if (!panelCommentCtx) {
@@ -223,8 +263,8 @@ export default function StudentPanelCommentsPage() {
     }, [groupId]);
 
     const stageCompletionMap = React.useMemo(() => (
-        buildStageCompletionMap(thesis?.chapters ?? [], { treatEmptyAsComplete: false })
-    ), [thesis?.chapters]);
+        buildStageCompletionMap(chapters, { treatEmptyAsComplete: false })
+    ), [chapters]);
 
     const stageAccessible = canStudentAccessPanelStage(activeStage, stageCompletionMap, releaseMap);
     const activePanelist = React.useMemo(

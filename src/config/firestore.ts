@@ -1,39 +1,44 @@
 /**
  * Firestore collection names and constants
  * Centralized configuration for all Firestore collections
- *
- * Configuration Hierarchy:
- * configuration/
- *   ├── departments/{department}/courses/{course}/chapters/{chapter} {document with chapter details}
- *   └── terminal/{requirement} {document with requirement details}
  * 
- * Group Hierarchical Structure:
- * year/{year}/departments/{department}/courses/{course}
- *   ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
- *   ├── templates/"terminalRequirements" (parent doc with metadata)
- *   │   └── entries/{requirementId} (individual terminal requirement entries)
- *   └── groups/{group}
- *       ├── audits/{audit}
- *       ├── expertRequests/{request}
- *       ├── proposals/{proposal}
- *       ├── panelComments/{comment}
- *       ├── join/
- *       │   ├── invites (document with userIds array)
- *       │   └── requests (document with userIds array)
- *       └── thesis/{thesis}
- *           └── stages/{stage}/chapters/{chapter}
- *               └── submissions/{attachment}/chats/{chat}
- *                   └── attachments/{attachment}
- * 
- * User Hierarchical Structure:
+ * Firestore Hierarchical Structure:
  * year/{year}
+ *   ├── calendar/{events} (global events for the year)
+ *   ├── agendas/{agenda} (institution-wide research agendas)
+ *   ├── ESGs/{esg}
+ *   ├── SDGs/{sdg}
  *   ├── users/{user}
- *   │   └── salary/{salaryDistribution} 
+ *   │   ├── salary/{salaryDistribution}
+ *   │   └── calendar/{events}
  *   └── departments/{department}
+ *       ├── departmentAgendas/{agenda}
+ *       ├── calendar/{events} (department-wide events)
+ *       ├── adviserSkills/{skill}
  *       ├── users/{user}
- *       │   └── salary/{salaryDistribution}
- *       └── courses/{course}/users/{user}
- *           └── salary/{salaryDistribution}
+ *       │   ├── salary/{salaryDistribution}
+ *       │   └── calendar/{events} 
+ *       └── courses/{course}
+ *           ├── agendas/{agenda} (departamental research agendas)
+ *           ├── templates/"chapterTemplates"/chapters/{chapter} (document with chapter templates)
+ *           ├── templates/"terminalRequirements" (parent doc with metadata)
+ *           │   └── entries/{requirementId} (individual terminal requirement entries)
+ *           ├── users/{user}
+ *           │   └── salary/{salaryDistribution}
+ *           │   └── calendar/{events} (course-wide events)
+ *           └── groups/{group}
+ *               ├── audits/{audit}
+ *               ├── calendar/{events} (group-specific events)
+ *               ├── expertRequests/{request}
+ *               ├── panelComments/{comment}
+ *               ├── proposals/{proposal}
+ *               ├── join/
+ *               │   ├── invites (document with userIds array)
+ *               │   └── requests (document with userIds array)
+ *               └── thesis/{thesis}
+ *                   └── stages/{stage}/chapters/{chapter}
+ *                       └── submissions/{attachment}/chats/{chat}
+ *                           └── attachments/{attachment}
  * 
  * Firebase Storage Hierarchical Structure:
  * {year}/{department}/{course}/{group}
@@ -63,8 +68,14 @@ export const DEFAULT_COURSE_SEGMENT = 'common';
 /** Root year collection */
 export const YEAR_ROOT = 'year';
 
+/** Institution-wide agendas subcollection under year */
+export const AGENDAS_SUBCOLLECTION = 'agendas';
+
 /** Departments subcollection */
 export const DEPARTMENTS_SUBCOLLECTION = 'departments';
+
+/** Department-specific agendas subcollection under department */
+export const DEPARTMENT_AGENDAS_SUBCOLLECTION = 'departmentAgendas';
 
 /** Courses subcollection */
 export const COURSES_SUBCOLLECTION = 'courses';
@@ -75,7 +86,7 @@ export const COURSE_TEMPLATES_SUBCOLLECTION = 'templates';
 /** Groups subcollection */
 export const GROUPS_SUBCOLLECTION = 'groups';
 
-/** Expert requests subcollection under group */
+/** Service Requests subcollection under group */
 export const EXPERT_REQUESTS_SUBCOLLECTION = 'expertRequests';
 
 /** Proposals subcollection under group */
@@ -126,6 +137,12 @@ export const CHAPTER_SLOTS_SUBCOLLECTION = 'chapterSlots';
 /** Salary subcollection under user documents */
 export const SALARY_SUBCOLLECTION = 'salary';
 
+/** Calendar subcollection - used at all hierarchy levels (year, department, course, group, user) */
+export const CALENDAR_SUBCOLLECTION = 'calendar';
+
+/** Events subcollection under calendar */
+export const EVENTS_SUBCOLLECTION = 'events';
+
 // ============================================================================
 // Configuration Collection (Global settings)
 // ============================================================================
@@ -152,14 +169,21 @@ export const GROUP_CONFIGURATION_CHAPTER_DOC = 'chapters';
 // Thesis Stage Slugs
 // ============================================================================
 
-export const THESIS_STAGE_SLUGS = {
-    'Pre-Proposal': 'pre-proposal',
-    'Post-Proposal': 'post-proposal',
-    'Pre-Defense': 'pre-defense',
-    'Post-Defense': 'post-defense',
-} as const;
+import StagesConfig from './stages.json';
+import type { ThesisStageName } from '../types/thesis';
 
-export type ThesisStageSlug = typeof THESIS_STAGE_SLUGS[keyof typeof THESIS_STAGE_SLUGS];
+/**
+ * Map stage names to their URL-friendly slugs (derived from JSON config)
+ */
+export const THESIS_STAGE_SLUGS = StagesConfig.stages.reduce(
+    (acc, stage) => {
+        acc[stage.name as ThesisStageName] = stage.slug;
+        return acc;
+    },
+    {} as Record<ThesisStageName, string>
+);
+
+export type ThesisStageSlug = typeof StagesConfig.stages[number]['slug'];
 
 // ============================================================================
 // Firestore Query Limits

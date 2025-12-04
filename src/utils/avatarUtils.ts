@@ -111,13 +111,13 @@ export const getInitialsFromFullName = (fullName: string): string => {
 };
 
 /**
- * Generates a full display name from UserProfile components
+ * Generates a full display name from UserProfile components.
+ * This is a synchronous formatter that takes a profile object.
+ * For async UID-based resolution, use getDisplayName from userUtils.
  * @param profile - UserProfile object
  * @returns Formatted full name with prefix and suffix if present
- * 
- * @internal
  */
-export const getDisplayName = (profile: UserProfile): string => {
+export const formatDisplayName = (profile: UserProfile): string => {
     const parts: string[] = [];
 
     if (profile.name.prefix) {

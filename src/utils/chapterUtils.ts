@@ -2,7 +2,7 @@ import type { ChapterTemplate } from '../types/chapter';
 import type { ThesisStageName } from '../types/thesis';
 import { THESIS_STAGE_METADATA } from './thesisStageUtils';
 
-export const DEFAULT_CHAPTER_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value ?? 'Pre-Proposal';
+export const DEFAULT_CHAPTER_STAGE: ThesisStageName = THESIS_STAGE_METADATA[0]?.value as ThesisStageName;
 
 function collapseStages(stages: ThesisStageName[]): ThesisStageName | ThesisStageName[] {
     return stages.length === 1 ? stages[0] : stages;

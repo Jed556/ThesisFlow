@@ -3,10 +3,93 @@
  * Provides base functionality for file uploads, deletion, and path generation
  */
 
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject, getBlob } from 'firebase/storage';
 import { firebaseStorage } from '../firebaseConfig';
 import { getError } from '../../../../utils/errorUtils';
 import { STORAGE_PATHS } from '../../../config/files';
+
+/**
+ * Cache for blob URLs to avoid refetching the same file
+ */
+const blobUrlCache = new Map<string, string>();
+
+/**
+ * Fetch a file as blob from Firebase Storage
+ * Uses Firebase SDK which handles authentication and CORS properly
+ * @param fileUrl - Download URL or storage path
+ * @returns Blob of the file
+ */
+export async function getFileBlob(fileUrl: string): Promise<Blob> {
+    try {
+        const storagePath = extractStoragePath(fileUrl) ?? fileUrl;
+        const storageRef = ref(firebaseStorage, storagePath);
+        return await getBlob(storageRef);
+    } catch (error) {
+        const { message } = getError(error, 'Failed to fetch file');
+        throw new Error(`Fetch failed: ${message}`);
+    }
+}
+
+/**
+ * Create a blob URL for a Firebase Storage file
+ * Fetches the file via Firebase SDK (avoids CORS issues) and creates a local blob URL
+ * @param fileUrl - Download URL or storage path
+ * @param mimeType - Optional MIME type override for the blob
+ * @returns Local blob URL that can be used in viewers
+ */
+export async function createFileBlobUrl(fileUrl: string, mimeType?: string): Promise<string> {
+    // Check cache first
+    const cacheKey = fileUrl + (mimeType ?? '');
+    const cached = blobUrlCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
+    try {
+        const blob = await getFileBlob(fileUrl);
+
+        // Create a new blob with the specified MIME type if provided
+        const finalBlob = mimeType ? new Blob([blob], { type: mimeType }) : blob;
+        const blobUrl = URL.createObjectURL(finalBlob);
+
+        // Cache the result
+        blobUrlCache.set(cacheKey, blobUrl);
+
+        return blobUrl;
+    } catch (error) {
+        const { message } = getError(error, 'Failed to create blob URL');
+        throw new Error(`Blob URL creation failed: ${message}`);
+    }
+}
+
+/**
+ * Revoke a blob URL to free memory
+ * Should be called when the blob URL is no longer needed
+ * @param blobUrl - Blob URL to revoke
+ */
+export function revokeBlobUrl(blobUrl: string): void {
+    if (blobUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(blobUrl);
+        // Remove from cache
+        for (const [key, value] of blobUrlCache.entries()) {
+            if (value === blobUrl) {
+                blobUrlCache.delete(key);
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * Clear all cached blob URLs and revoke them
+ * Should be called when navigating away or cleaning up
+ */
+export function clearBlobUrlCache(): void {
+    for (const blobUrl of blobUrlCache.values()) {
+        URL.revokeObjectURL(blobUrl);
+    }
+    blobUrlCache.clear();
+}
 
 /**
  * Generate a storage path for a user's file

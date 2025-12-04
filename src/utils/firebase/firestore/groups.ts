@@ -11,7 +11,6 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { ThesisGroup, ThesisGroupFormData, GroupStatus } from '../../../types/group';
-import type { ThesisData } from '../../../types/thesis';
 import {
     buildGroupsCollectionPath, buildGroupDocPath, extractPathParams, buildInvitesDocPath, buildRequestsDocPath
 } from './paths';
@@ -24,6 +23,7 @@ import { getAcademicYear } from '../../../utils/dateUtils';
 
 /**
  * Convert Firestore document data to ThesisGroup
+ * Note: Thesis is now stored in a subcollection, not embedded in group
  */
 function docToThesisGroup(docSnap: DocumentSnapshot): ThesisGroup | null {
     if (!docSnap.exists()) return null;
@@ -37,7 +37,6 @@ function docToThesisGroup(docSnap: DocumentSnapshot): ThesisGroup | null {
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
         updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
         status: data.status || 'draft',
-        thesis: data.thesis,
         year: context.year || DEFAULT_YEAR,
         department: data.department || context.department || '',
         course: data.course || context.course || '',
@@ -1181,17 +1180,19 @@ export async function getGroupDepartments(): Promise<string[]> {
 }
 
 /**
- * Get all theses from all groups.
+ * Get unique courses that have groups.
  *
- * @returns Array of all thesis references with their group context
+ * @returns Array of unique course identifiers
  */
-export async function getAllThesesFromGroups(): Promise<
-    { groupId: string; thesis: ThesisData }[]
-> {
+export async function getGroupCourses(): Promise<string[]> {
     const groups = await getAllGroups();
-    return groups
-        .filter((g): g is ThesisGroup & { thesis: ThesisData } => !!g.thesis)
-        .map((g) => ({ groupId: g.id, thesis: g.thesis }));
+    const courses = new Set<string>();
+    for (const group of groups) {
+        if (group.course) {
+            courses.add(group.course);
+        }
+    }
+    return Array.from(courses);
 }
 
 // ============================================================================

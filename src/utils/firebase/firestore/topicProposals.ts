@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import type { TopicProposalEntry, TopicProposalSet, TopicProposalReviewEvent } from '../../../types/proposal';
+import type { ESG, SDG, ThesisAgenda } from '../../../types/thesis';
 import { PROPOSALS_SUBCOLLECTION, GROUPS_SUBCOLLECTION } from '../../../config/firestore';
 import { buildProposalsCollectionPath, buildProposalDocPath, extractPathParams } from './paths';
 import { updateGroupById } from './groups';
@@ -51,6 +52,15 @@ export interface ProposalDecisionPayload {
     notes?: string;
 }
 
+/**
+ * Extended decision payload for head approval with agenda and sustainability classification
+ */
+export interface HeadDecisionPayload extends ProposalDecisionPayload {
+    agenda?: ThesisAgenda;
+    ESG?: ESG;
+    SDG?: SDG;
+}
+
 export interface UseTopicPayload {
     proposalId: string;
     entryId: string;
@@ -71,50 +81,93 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
     const data = docSnap.data() ?? {};
 
     const entriesRaw = Array.isArray(data.entries) ? data.entries : [];
-    const entries: TopicProposalEntry[] = entriesRaw.map((entry: Record<string, unknown>) => ({
-        id: typeof entry.id === 'string' ? entry.id : crypto.randomUUID(),
-        title: typeof entry.title === 'string' ? entry.title : 'Untitled Topic',
-        description: typeof entry.description === 'string' ? entry.description : '',
-        agenda: entry.agenda as TopicProposalEntry['agenda'],
-        ESG: entry.ESG as TopicProposalEntry['ESG'],
-        problemStatement: typeof entry.problemStatement === 'string' ? entry.problemStatement : undefined,
-        expectedOutcome: typeof entry.expectedOutcome === 'string' ? entry.expectedOutcome : undefined,
-        keywords: Array.isArray(entry.keywords) ? entry.keywords as string[] : undefined,
-        proposedBy: typeof entry.proposedBy === 'string' ? entry.proposedBy : '',
-        createdAt: (entry.createdAt as Timestamp)?.toDate?.() || new Date(),
-        updatedAt: (entry.updatedAt as Timestamp)?.toDate?.() || new Date(),
-        status: entry.status as TopicProposalEntry['status'],
-        usedAsThesis: typeof entry.usedAsThesis === 'boolean' ? entry.usedAsThesis : undefined,
-    }));
+    const entries: TopicProposalEntry[] = entriesRaw.map((entry: Record<string, unknown>) => {
+        const baseEntry: TopicProposalEntry = {
+            id: typeof entry.id === 'string' ? entry.id : crypto.randomUUID(),
+            title: typeof entry.title === 'string' ? entry.title : 'Untitled Topic',
+            description: typeof entry.description === 'string' ? entry.description : '',
+            proposedBy: typeof entry.proposedBy === 'string' ? entry.proposedBy : '',
+            createdAt: (entry.createdAt as Timestamp)?.toDate?.() || new Date(),
+            updatedAt: (entry.updatedAt as Timestamp)?.toDate?.() || new Date(),
+        };
+
+        // Only add optional fields if they have values
+        if (entry.agenda) {
+            baseEntry.agenda = entry.agenda as TopicProposalEntry['agenda'];
+        }
+        if (entry.ESG) {
+            baseEntry.ESG = entry.ESG as TopicProposalEntry['ESG'];
+        }
+        if (entry.SDG) {
+            baseEntry.SDG = entry.SDG as TopicProposalEntry['SDG'];
+        }
+        if (typeof entry.problemStatement === 'string' && entry.problemStatement) {
+            baseEntry.problemStatement = entry.problemStatement;
+        }
+        if (typeof entry.expectedOutcome === 'string' && entry.expectedOutcome) {
+            baseEntry.expectedOutcome = entry.expectedOutcome;
+        }
+        if (Array.isArray(entry.keywords) && entry.keywords.length > 0) {
+            baseEntry.keywords = entry.keywords as string[];
+        }
+        if (entry.status) {
+            baseEntry.status = entry.status as TopicProposalEntry['status'];
+        }
+        if (typeof entry.usedAsThesis === 'boolean') {
+            baseEntry.usedAsThesis = entry.usedAsThesis;
+        }
+
+        return baseEntry;
+    });
 
     const auditsRaw = Array.isArray(data.audits) ? data.audits : [];
-    const audits: TopicProposalReviewEvent[] = auditsRaw.map((audit: Record<string, unknown>) => ({
-        stage: audit.stage as 'moderator' | 'head',
-        status: audit.status as 'approved' | 'rejected',
-        reviewerUid: typeof audit.reviewerUid === 'string' ? audit.reviewerUid : '',
-        proposalId: typeof audit.proposalId === 'string' ? audit.proposalId : '',
-        notes: typeof audit.notes === 'string' ? audit.notes : undefined,
-        reviewedAt: (audit.reviewedAt as Timestamp)?.toDate?.() || new Date(),
-    }));
+    const audits: TopicProposalReviewEvent[] = auditsRaw.map((audit: Record<string, unknown>) => {
+        const baseAudit: TopicProposalReviewEvent = {
+            stage: audit.stage as 'moderator' | 'head',
+            status: audit.status as 'approved' | 'rejected',
+            reviewerUid: typeof audit.reviewerUid === 'string' ? audit.reviewerUid : '',
+            proposalId: typeof audit.proposalId === 'string' ? audit.proposalId : '',
+            reviewedAt: (audit.reviewedAt as Timestamp)?.toDate?.() || new Date(),
+        };
+
+        // Only add notes if present
+        if (typeof audit.notes === 'string' && audit.notes) {
+            baseAudit.notes = audit.notes;
+        }
+
+        return baseAudit;
+    });
 
     // Compute awaiting flags
     const awaitingModerator = entries.some((e) => e.status === 'submitted');
     const awaitingHead = entries.some((e) => e.status === 'head_review');
 
-    return {
+    const result: TopicProposalSetRecord = {
         id: docSnap.id,
         createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
         createdAt: (data.createdAt as Timestamp)?.toDate?.() || new Date(),
         updatedAt: (data.updatedAt as Timestamp)?.toDate?.() || new Date(),
         entries,
-        submittedBy: data.submittedBy?.toDate?.(),
-        submittedAt: data.submittedAt?.toDate?.(),
-        usedAsThesisAt: typeof data.usedAsThesisAt === 'string' ? data.usedAsThesisAt : undefined,
         audits,
-        set: typeof data.set === 'number' ? data.set : undefined,
         awaitingHead,
         awaitingModerator,
     };
+
+    // Only add optional fields if they have values
+    if (data.submittedBy?.toDate?.()) {
+        result.submittedBy = data.submittedBy.toDate();
+    }
+    if (data.submittedAt?.toDate?.()) {
+        result.submittedAt = data.submittedAt.toDate();
+    }
+    if (typeof data.usedAsThesisAt === 'string' && data.usedAsThesisAt) {
+        result.usedAsThesisAt = data.usedAsThesisAt;
+    }
+    if (typeof data.set === 'number') {
+        result.set = data.set;
+    }
+
+    return result;
 }
 
 /**
@@ -155,13 +208,18 @@ export async function createProposalSet(
     const proposalsRef = collection(firebaseFirestore, collectionPath);
     const newDocRef = doc(proposalsRef);
 
-    const proposalData = {
+    const proposalData: Record<string, unknown> = {
         createdBy: payload.createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         entries: [],
         audits: [],
     };
+
+    // Include set number if provided
+    if (typeof payload.set === 'number') {
+        proposalData.set = payload.set;
+    }
 
     await setDoc(newDocRef, proposalData);
     return newDocRef.id;
@@ -178,13 +236,18 @@ export async function createProposalSetWithId(
     const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, proposalId);
     const docRef = doc(firebaseFirestore, docPath);
 
-    const proposalData = {
+    const proposalData: Record<string, unknown> = {
         createdBy: payload.createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         entries: [],
         audits: [],
     };
+
+    // Include set number if provided
+    if (typeof payload.set === 'number') {
+        proposalData.set = payload.set;
+    }
 
     await setDoc(docRef, proposalData);
 }
@@ -384,7 +447,7 @@ async function recordModeratorDecisionWithContext(
  */
 async function recordHeadDecisionWithContext(
     ctx: ProposalContext,
-    payload: ProposalDecisionPayload
+    payload: HeadDecisionPayload
 ): Promise<void> {
     const proposal = await getProposalSet(ctx, payload.proposalId);
     if (!proposal) throw new Error('Proposal set not found.');
@@ -401,27 +464,51 @@ async function recordHeadDecisionWithContext(
         ? 'head_approved'
         : 'head_rejected';
 
-    updatedEntries[entryIndex] = {
+    // Build updated entry with optional agenda, ESG, and SDG fields
+    const updatedEntry: TopicProposalEntry = {
         ...entry,
         status: newStatus,
         updatedAt: now,
     };
 
+    // Add agenda if provided (for approval)
+    if (payload.agenda) {
+        updatedEntry.agenda = payload.agenda;
+    }
+    // Add ESG if provided (for approval)
+    if (payload.ESG) {
+        updatedEntry.ESG = payload.ESG;
+    }
+    // Add SDG if provided (for approval)
+    if (payload.SDG) {
+        updatedEntry.SDG = payload.SDG;
+    }
+
+    updatedEntries[entryIndex] = updatedEntry;
+
+    // Build audit object without undefined values
     const newAudit: TopicProposalReviewEvent = {
         stage: 'head',
         status: payload.decision,
         reviewerUid: payload.reviewerUid,
         proposalId: payload.entryId,
-        notes: payload.notes,
         reviewedAt: now,
     };
+    // Only add notes if provided
+    if (payload.notes) {
+        newAudit.notes = payload.notes;
+    }
 
     const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId);
     const docRef = doc(firebaseFirestore, docPath);
 
+    // Strip undefined from all entries and audits before saving
+    const cleanedEntries = updatedEntries.map((e) => stripUndefined(e));
+    const cleanedAudits = [...proposal.audits, newAudit].map((a) => stripUndefined(a));
+
     await updateDoc(docRef, {
-        entries: updatedEntries.map((e) => stripUndefined(e)),
-        audits: [...proposal.audits, stripUndefined(newAudit)],
+        entries: cleanedEntries,
+        audits: cleanedAudits,
         updatedAt: serverTimestamp(),
     });
 }
@@ -448,6 +535,7 @@ export async function markProposalAsThesis(
 
     // Import thesis utilities dynamically to avoid circular dependencies
     const { createThesisForGroup } = await import('./thesis');
+    const { seedAllChaptersForThesis } = await import('./chapters');
     const { getChapterConfigByCourse } = await import('./chapter');
     const { templatesToThesisChapters, buildDefaultThesisChapters } = await import('../../thesisChapterTemplates');
 
@@ -463,15 +551,24 @@ export async function markProposalAsThesis(
         chapters = buildDefaultThesisChapters();
     }
 
-    // Create thesis document with chapters
-    const thesisData = {
+    // Create thesis document WITHOUT chapters (chapters stored in subcollection)
+    // Build base thesis data
+    const baseThesisData = {
         title: entry.title,
         submissionDate: nowISO,
         lastUpdated: nowISO,
         stages: [],
-        chapters,
+        // Note: chapters are NOT stored here - they are seeded to subcollection below
         groupId: ctx.groupId,
         overallStatus: 'draft' as const,
+    };
+
+    // Build extended thesis data with optional agenda, ESG, and SDG
+    const thesisData = {
+        ...baseThesisData,
+        ...(entry.agenda && { agenda: entry.agenda }),
+        ...(entry.ESG && { ESG: entry.ESG }),
+        ...(entry.SDG && { SDG: entry.SDG }),
     };
 
     const thesisId = await createThesisForGroup(
@@ -479,10 +576,14 @@ export async function markProposalAsThesis(
         thesisData
     );
 
-    // Update group with thesis reference for backward compatibility
-    await updateGroupById(ctx.groupId, {
-        thesis: { ...thesisData, id: thesisId },
-    });
+    // Seed chapters to the hierarchical subcollection: stages/{stageSlug}/chapters/{chapterId}
+    await seedAllChaptersForThesis(
+        { year: ctx.year, department: ctx.department, course: ctx.course, groupId: ctx.groupId, thesisId },
+        chapters
+    );
+
+    // Note: thesis is now stored as a separate document linked by groupId
+    // No need to update group with thesis reference - the thesis document is found via the group path
 
     // Update entry with usedAsThesis flag
     const updatedEntries = proposal.entries.map((e) =>
@@ -737,6 +838,18 @@ export interface ContextFreeDecisionPayload {
 }
 
 /**
+ * Extended payload for head approval with agenda, ESG, and SDG classification
+ */
+export interface HeadApprovalPayload extends ContextFreeDecisionPayload {
+    /** Research agenda classification */
+    agenda?: ThesisAgenda;
+    /** ESG category */
+    ESG?: ESG;
+    /** Sustainable Development Goal */
+    SDG?: SDG;
+}
+
+/**
  * Find a proposal set by ID using collectionGroup and extract context from path.
  * @param setId The proposal set document ID
  * @returns The document snapshot and extracted context, or null if not found
@@ -790,20 +903,37 @@ export async function recordModeratorDecision(payload: ContextFreeDecisionPayloa
  * Record a head decision on a proposal entry (context-free version).
  * Finds the proposal by setId using collectionGroup and extracts context from path.
  *
- * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes
+ * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes, agenda, ESG, SDG
  */
-export async function recordHeadDecision(payload: ContextFreeDecisionPayload): Promise<void> {
+export async function recordHeadDecision(payload: HeadApprovalPayload): Promise<void> {
     const result = await findProposalSetWithContext(payload.setId);
     if (!result) throw new Error('Proposal set not found.');
 
     const { ctx } = result;
-    return recordHeadDecisionWithContext(ctx, {
+
+    // Build decision payload, only including defined values
+    const decisionPayload: HeadDecisionPayload = {
         proposalId: payload.setId,
         entryId: payload.proposalId,
         reviewerUid: payload.reviewerUid,
         decision: payload.decision,
-        notes: payload.notes,
-    });
+    };
+
+    // Only add optional fields if they have values
+    if (payload.notes !== undefined) {
+        decisionPayload.notes = payload.notes;
+    }
+    if (payload.agenda?.agendaPath && payload.agenda.agendaPath.length > 0) {
+        decisionPayload.agenda = payload.agenda;
+    }
+    if (payload.ESG) {
+        decisionPayload.ESG = payload.ESG;
+    }
+    if (payload.SDG) {
+        decisionPayload.SDG = payload.SDG;
+    }
+
+    return recordHeadDecisionWithContext(ctx, decisionPayload);
 }
 
 // ============================================================================

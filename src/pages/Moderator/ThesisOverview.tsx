@@ -15,7 +15,7 @@ import {
     findThesisByGroupId,
     type ThesisWithGroupContext
 } from '../../utils/firebase/firestore/thesis';
-import { appendChapterComment } from '../../utils/firebase/firestore/chat';
+import { createChat } from '../../utils/firebase/firestore/chat';
 import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
@@ -299,13 +299,13 @@ export default function ModeratorThesisOverviewPage() {
     const handleCreateComment = React.useCallback(async ({
         chapterId,
         chapterStage,
-        versionIndex,
+        submissionId,
         content,
         files,
     }: WorkspaceCommentPayload) => {
         if (!moderatorUid || !selectedThesisId || !thesis?.groupId || !thesis.year ||
-            !thesis.department || !thesis.course) {
-            throw new Error('Missing moderator context.');
+            !thesis.department || !thesis.course || !submissionId) {
+            throw new Error('Missing moderator context or submission ID.');
         }
 
         let attachments: FileAttachment[] = [];
@@ -319,35 +319,20 @@ export default function ModeratorThesisOverviewPage() {
             });
         }
 
-        const savedComment = await appendChapterComment({
-            ctx: {
-                year: thesis.year,
-                department: thesis.department,
-                course: thesis.course,
-                groupId: thesis.groupId,
-                thesisId: selectedThesisId,
-            },
-            chapterId,
-            comment: {
-                author: moderatorUid,
-                comment: content,
-                attachments,
-                version: typeof versionIndex === 'number' ? versionIndex : undefined,
-            },
-        });
-
-        setThesis((prev) => {
-            if (!prev) {
-                return prev;
-            }
-            return {
-                ...prev,
-                chapters: (prev.chapters ?? []).map((chapter) =>
-                    chapter.id === chapterId
-                        ? { ...chapter, comments: [...(chapter.comments ?? []), savedComment] }
-                        : chapter
-                ),
-            };
+        await createChat({
+            year: thesis.year,
+            department: thesis.department,
+            course: thesis.course,
+            groupId: thesis.groupId,
+            thesisId: selectedThesisId,
+            stage: chapterStage,
+            chapterId: String(chapterId),
+            submissionId,
+        }, {
+            author: moderatorUid,
+            comment: content,
+            date: new Date().toISOString(),
+            attachments,
         });
     }, [moderatorUid, selectedThesisId, thesis]);
 

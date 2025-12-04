@@ -15,7 +15,7 @@ import type { UserProfile, UserRole } from '../../../types/profile';
 import type { Session } from '../../../types/session';
 import {
     findAllUsers, findUserById, findUserByEmail, setUserProfile, updateUserProfile,
-    deleteUserProfile, createPersonalCalendar,
+    deleteUserProfile, createPersonalCalendarForUser,
 } from '../../../utils/firebase/firestore';
 import { getAcademicYear } from '../../../utils/dateUtils';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../../utils/firebase/auth/admin';
@@ -328,7 +328,7 @@ export default function AdminUsersPage() {
                 // Create personal calendar for the new user
                 try {
                     if (uid) {
-                        await createPersonalCalendar(uid);
+                        await createPersonalCalendarForUser(uid, userRole, userContext);
                     } else {
                         console.warn('User created but UID not available for calendar creation');
                     }

@@ -17,7 +17,7 @@ export const DEFAULT_MAX_EXPERT_SLOTS = 5;
 export interface SlotRequest {
     /** Unique identifier for the request */
     id: string;
-    /** UID of the expert requesting the slot increase */
+    /** UID of the service requesting the slot increase */
     expertUid: string;
     /** Role of the expert (adviser, editor, statistician) */
     expertRole: UserRole;

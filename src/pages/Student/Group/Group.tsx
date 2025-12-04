@@ -701,8 +701,8 @@ export default function StudentGroupPage() {
                 </Alert>
             )}
 
-            {/* Hide create/search controls when user has an established group */}
-            {!hasEstablishedGroup && (
+            {/* Hide create/search controls when loading or when user has an established group */}
+            {!loading && !hasEstablishedGroup && (
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" sx={{ mb: 3 }}>
                     <Button startIcon={<AddIcon />} variant="contained" onClick={handleOpenCreateDialog}>
                         Create Group

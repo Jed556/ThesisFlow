@@ -68,7 +68,7 @@ function useExpertRequestViewModels(requests: ExpertRequest[]): ExpertRequestVie
                 }
             } catch (err) {
                 if (!cancelled) {
-                    console.error('Failed to resolve expert request groups:', err);
+                    console.error('Failed to resolve service request groups:', err);
                 }
             }
         })();
@@ -142,7 +142,7 @@ function useExpertRequestViewModels(requests: ExpertRequest[]): ExpertRequestVie
 }
 
 /**
- * Shared expert requests experience for adviser/editor/statistician dashboards.
+ * Shared service requests experience for adviser/editor/statistician dashboards.
  */
 export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: ExpertRequestsPageProps) {
     const session = useSession<Session>();
@@ -199,8 +199,8 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                 setLoading(false);
             },
             onError: (listenerError: Error) => {
-                console.error('Failed to load expert requests:', listenerError);
-                setError('Unable to load expert requests right now.');
+                console.error('Failed to load service requests:', listenerError);
+                setError('Unable to load service requests right now.');
                 setLoading(false);
             },
         });
@@ -411,7 +411,7 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
         return (
             <AnimatedPage variant="fade">
                 <Alert severity="warning">
-                    You need to sign in again to manage expert requests.
+                    You need to sign in again to manage service requests.
                 </Alert>
             </AnimatedPage>
         );
@@ -554,7 +554,7 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
             ) : viewModels.length === 0 ? (
                 <Paper sx={{ p: 3 }}>
                     <Typography variant="body1" color="text.secondary">
-                        No expert requests yet. Groups with an approved topic can send you a request from your profile page.
+                        No service requests yet. Groups with an approved topic can send you a request from your profile page.
                     </Typography>
                 </Paper>
             ) : (
@@ -579,15 +579,14 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                         }
 
                         return (
-                            <Box key={request.id} sx={{ display: 'flex' }}>
-                                <ExpertRequestCard
-                                    request={request}
-                                    group={group}
-                                    requester={requester}
-                                    usersByUid={usersByUid}
-                                    onOpenGroup={handleOpenGroupView}
-                                />
-                            </Box>
+                            <ExpertRequestCard
+                                key={request.id}
+                                request={request}
+                                group={group}
+                                requester={requester}
+                                usersByUid={usersByUid}
+                                onOpenGroup={handleOpenGroupView}
+                            />
                         );
                     })}
                 </Box>
