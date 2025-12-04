@@ -459,3 +459,56 @@ export async function updatePanelCommentApprovalStatus(
         approvalUpdatedBy: userUid,
     }, { merge: true });
 }
+
+/**
+ * Options for panel comment completion listener.
+ */
+export interface PanelCommentCompletionListenerOptions {
+    onData: (isComplete: boolean, entries: PanelCommentEntry[]) => void;
+    onError?: (error: Error) => void;
+}
+
+/**
+ * Listen to all panel comment entries for a stage and determine if they are all approved.
+ * Panel comments are considered "complete" when:
+ * 1. At least one entry exists for the stage
+ * 2. ALL entries have approvalStatus === 'approved'
+ * 
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param stage - The panel comment stage to check
+ * @param options - Callback options for completion status
+ * @returns Unsubscribe function
+ */
+export function listenPanelCommentCompletion(
+    ctx: PanelCommentContext | null | undefined,
+    stage: PanelCommentStage,
+    options: PanelCommentCompletionListenerOptions,
+): () => void {
+    if (!ctx?.groupId) {
+        options.onData(false, []);
+        return () => { /* no-op */ };
+    }
+
+    const entriesQuery = query(
+        getEntriesCollection(ctx),
+        where('stage', '==', stage)
+    );
+
+    return onSnapshot(entriesQuery, (snapshot) => {
+        const entries = snapshot.docs
+            .map((docSnap) => mapEntry(docSnap))
+            .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+        // Complete if at least one entry exists and ALL are approved
+        const isComplete = entries.length > 0 &&
+            entries.every((entry) => entry.approvalStatus === 'approved');
+
+        options.onData(isComplete, entries);
+    }, (error) => {
+        if (options.onError) {
+            options.onError(error as Error);
+        } else {
+            console.error('Panel comments completion listener error:', error);
+        }
+    });
+}

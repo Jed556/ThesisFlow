@@ -8,6 +8,7 @@ import {
     CHAPTER_SLOTS_SUBCOLLECTION, SALARY_SUBCOLLECTION, CALENDAR_SUBCOLLECTION, EVENTS_SUBCOLLECTION,
     GROUP_CONFIGURATION_SUBCOLLECTION, GROUP_CONFIGURATION_CHAPTER_DOC,
     TERMINAL_REQUIREMENT_ENTRIES_SUBCOLLECTION, AGENDAS_SUBCOLLECTION, DEPARTMENT_AGENDAS_SUBCOLLECTION,
+    ADVISER_SKILLS_SUBCOLLECTION,
 } from '../../../config/firestore';
 
 
@@ -111,6 +112,31 @@ export function buildDepartmentAgendasCollectionPath(year: string, department: s
 export function buildDepartmentAgendaPath(year: string, department: string, agendaId: string): string {
     const deptKey = sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT);
     return `${YEAR_ROOT}/${year}/${DEPARTMENTS_SUBCOLLECTION}/${deptKey}/${DEPARTMENT_AGENDAS_SUBCOLLECTION}/${agendaId}`;
+}
+
+// ============================================================================
+// Adviser Skills Path Builders
+// ============================================================================
+
+/**
+ * Build path to adviser skills collection for a department
+ * Path: year/{year}/departments/{department}/adviserSkills
+ */
+export function buildAdviserSkillsCollectionPath(year: string, department: string): string {
+    const deptKey = sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT);
+    return `${YEAR_ROOT}/${year}/${DEPARTMENTS_SUBCOLLECTION}/${deptKey}/${ADVISER_SKILLS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific adviser skill document
+ * Path: year/{year}/departments/{department}/adviserSkills/{skillId}
+ */
+export function buildAdviserSkillDocPath(
+    year: string,
+    department: string,
+    skillId: string
+): string {
+    return `${buildAdviserSkillsCollectionPath(year, department)}/${skillId}`;
 }
 
 // ============================================================================

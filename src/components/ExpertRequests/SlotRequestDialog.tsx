@@ -6,15 +6,49 @@ import {
 import {
     Add as AddIcon,
     Send as SendIcon,
+    Warning as WarningIcon,
 } from '@mui/icons-material';
 import { GrowTransition } from '../Animate';
 import { DEFAULT_MAX_EXPERT_SLOTS, type SlotRequestRecord } from '../../types/slotRequest';
-import type { UserProfile, UserRole } from '../../types/profile';
+import type { UserProfile, UserRole, Skills } from '../../types/profile';
+import type { ExpertSkillRating, SkillTemplateRecord } from '../../types/skillTemplate';
 import {
     createSlotRequest,
     getPendingSlotRequestByExpert,
 } from '../../utils/firebase/firestore/slotRequests';
+import {
+    validateExpertSkillRatings,
+    type SkillRatingValidationResult,
+} from '../../utils/firebase/firestore/skillTemplates';
+import { DEFAULT_YEAR } from '../../config/firestore';
 import { useSnackbar } from '../../contexts/SnackbarContext';
+
+/**
+ * Convert profile skillRatings to ExpertSkillRating format
+ * Handles backward compatibility with old Skills format
+ */
+function normalizeSkillRatings(
+    skillRatings: Skills[] | ExpertSkillRating[] | undefined
+): ExpertSkillRating[] {
+    if (!skillRatings || skillRatings.length === 0) {
+        return [];
+    }
+
+    return skillRatings.map((skill) => {
+        // Check if it's already in ExpertSkillRating format
+        if ('skillId' in skill && skill.skillId) {
+            return skill as ExpertSkillRating;
+        }
+        // Convert from old Skills format - use name as a pseudo-ID
+        return {
+            skillId: skill.name.toLowerCase().replace(/\s+/g, '-'),
+            name: skill.name,
+            rating: skill.rating,
+            note: skill.note,
+            updatedAt: (skill as Skills).updatedAt,
+        } as ExpertSkillRating;
+    });
+}
 
 export interface SlotRequestDialogProps {
     /** Whether the dialog is open */
@@ -31,11 +65,14 @@ export interface SlotRequestDialogProps {
     currentMaxSlots?: number;
     /** Callback after successful submission */
     onSubmitSuccess?: () => void;
+    /** Callback to navigate to skill rating page */
+    onNavigateToSkillRating?: () => void;
 }
 
 /**
  * Dialog for experts to request a slot increase.
  * Experts specify the total number of slots they want (not additional slots).
+ * Requires experts to rate their skills before submitting a request.
  */
 export function SlotRequestDialog({
     open,
@@ -45,6 +82,7 @@ export function SlotRequestDialog({
     profile,
     currentMaxSlots,
     onSubmitSuccess,
+    onNavigateToSkillRating,
 }: SlotRequestDialogProps) {
     const { showNotification } = useSnackbar();
     const [requestedSlots, setRequestedSlots] = React.useState<number>(0);
@@ -54,6 +92,10 @@ export function SlotRequestDialog({
     const [hasPendingRequest, setHasPendingRequest] = React.useState(false);
     const [pendingRequest, setPendingRequest] = React.useState<SlotRequestRecord | null>(null);
     const [checkingPending, setCheckingPending] = React.useState(true);
+
+    // Skill rating validation state
+    const [skillValidation, setSkillValidation] = React.useState<SkillRatingValidationResult | null>(null);
+    const [checkingSkills, setCheckingSkills] = React.useState(true);
 
     // Get effective current max slots
     const effectiveMaxSlots = currentMaxSlots ?? profile?.maxSlots ?? DEFAULT_MAX_EXPERT_SLOTS;
@@ -78,12 +120,54 @@ export function SlotRequestDialog({
                     setCheckingPending(false);
                 }
             })();
+
+            // Check skill ratings
+            setCheckingSkills(true);
+            void (async () => {
+                try {
+                    const department = profile?.department;
+                    if (!department) {
+                        // No department means no skill requirements
+                        setSkillValidation({
+                            isComplete: true,
+                            unratedCount: 0,
+                            totalSkills: 0,
+                            unratedSkillNames: [],
+                        });
+                    } else {
+                        const normalizedRatings = normalizeSkillRatings(profile?.skillRatings);
+                        const validation = await validateExpertSkillRatings(
+                            DEFAULT_YEAR,
+                            department,
+                            normalizedRatings
+                        );
+                        setSkillValidation(validation);
+                    }
+                } catch (err) {
+                    console.error('Failed to validate skill ratings:', err);
+                    // On error, allow the request but log the issue
+                    setSkillValidation({
+                        isComplete: true,
+                        unratedCount: 0,
+                        totalSkills: 0,
+                        unratedSkillNames: [],
+                    });
+                } finally {
+                    setCheckingSkills(false);
+                }
+            })();
         }
-    }, [open, expertUid, effectiveMaxSlots]);
+    }, [open, expertUid, effectiveMaxSlots, profile?.department, profile?.skillRatings]);
 
     const handleSubmit = async () => {
         if (requestedSlots <= effectiveMaxSlots) {
             setError('Requested slots must be greater than your current maximum.');
+            return;
+        }
+
+        // Validate skill ratings before submission
+        if (skillValidation && !skillValidation.isComplete) {
+            setError('You must rate all your skills before requesting additional slots.');
             return;
         }
 
@@ -194,6 +278,50 @@ export function SlotRequestDialog({
                             onChange={(e) => setReason(e.target.value)}
                             placeholder="Explain why you need additional slots (e.g., high demand, research needs)"
                         />
+
+                        {/* Skill rating requirement notice */}
+                        {checkingSkills ? (
+                            <Skeleton variant="rectangular" height={60} />
+                        ) : skillValidation && !skillValidation.isComplete ? (
+                            <Alert
+                                severity="warning"
+                                icon={<WarningIcon />}
+                                action={
+                                    onNavigateToSkillRating ? (
+                                        <Button
+                                            color="inherit"
+                                            size="small"
+                                            onClick={() => {
+                                                onClose();
+                                                onNavigateToSkillRating();
+                                            }}
+                                        >
+                                            Rate Skills
+                                        </Button>
+                                    ) : undefined
+                                }
+                            >
+                                <Typography variant="body2" fontWeight="medium">
+                                    Skill Rating Required
+                                </Typography>
+                                <Typography variant="body2">
+                                    You must rate {skillValidation.unratedCount} skill
+                                    {skillValidation.unratedCount !== 1 ? 's' : ''} before
+                                    requesting additional slots.
+                                </Typography>
+                                {skillValidation.unratedSkillNames.length > 0 && (
+                                    <Typography variant="caption" color="text.secondary">
+                                        Missing: {skillValidation.unratedSkillNames.slice(0, 3).join(', ')}
+                                        {skillValidation.unratedSkillNames.length > 3 &&
+                                            ` (+${skillValidation.unratedSkillNames.length - 3} more)`}
+                                    </Typography>
+                                )}
+                            </Alert>
+                        ) : skillValidation && skillValidation.totalSkills > 0 ? (
+                            <Alert severity="success" variant="outlined">
+                                All {skillValidation.totalSkills} required skills have been rated.
+                            </Alert>
+                        ) : null}
                     </Stack>
                 )}
             </DialogContent>
@@ -208,8 +336,10 @@ export function SlotRequestDialog({
                     disabled={
                         submitting ||
                         checkingPending ||
+                        checkingSkills ||
                         hasPendingRequest ||
-                        !isValidRequest
+                        !isValidRequest ||
+                        (skillValidation !== null && !skillValidation.isComplete)
                     }
                 >
                     {submitting ? 'Submitting...' : 'Submit Request'}
@@ -234,6 +364,8 @@ export interface SlotRequestButtonProps {
     size?: 'small' | 'medium' | 'large';
     /** Callback after successful submission */
     onSubmitSuccess?: () => void;
+    /** Callback to navigate to skill rating page */
+    onNavigateToSkillRating?: () => void;
 }
 
 /**
@@ -248,6 +380,7 @@ export function SlotRequestButton({
     variant = 'outlined',
     size = 'small',
     onSubmitSuccess,
+    onNavigateToSkillRating,
 }: SlotRequestButtonProps) {
     const [dialogOpen, setDialogOpen] = React.useState(false);
 
@@ -269,6 +402,7 @@ export function SlotRequestButton({
                 profile={profile}
                 currentMaxSlots={currentMaxSlots}
                 onSubmitSuccess={onSubmitSuccess}
+                onNavigateToSkillRating={onNavigateToSkillRating}
             />
         </>
     );

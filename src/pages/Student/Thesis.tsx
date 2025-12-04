@@ -32,8 +32,9 @@ import {
 } from '../../utils/firebase/firestore/groupNotifications';
 import { listenChaptersForStage, type ChapterContext } from '../../utils/firebase/firestore/chapters';
 import {
-    listenPanelCommentRelease, type PanelCommentContext
+    listenPanelCommentRelease, listenPanelCommentCompletion, type PanelCommentContext
 } from '../../utils/firebase/firestore/panelComments';
+import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
 import {
     findAndListenTerminalRequirements, type TerminalRequirementSubmissionRecord
 } from '../../utils/firebase/firestore/terminalRequirements';
@@ -407,8 +408,8 @@ function buildThesisWorkflowSteps(
         const panelCommentStage = STAGE_TO_PANEL_COMMENT_STAGE[stageSlug];
         if (panelCommentStage) {
             const panelCommentStepId = `panel-comments-${panelCommentStage}`;
-            const isReleased = panelCommentReleaseMap?.[panelCommentStage]?.sent ?? false;
-            const panelCommentCompleted = panelCommentCompletionMap?.[panelCommentStage] ?? false;
+            // Check if any panelist table has been released for this stage
+            const isReleased = isAnyTableReleasedForStage(panelCommentStage, panelCommentReleaseMap);
             const nextStageName = PANEL_COMMENT_UNLOCKS_STAGE[panelCommentStage];
             const nextStageConfig = StagesConfig.stages.find((s) => s.slug === nextStageName);
             const nextStageLabel = nextStageConfig?.name ?? nextStageName;
@@ -416,12 +417,12 @@ function buildThesisWorkflowSteps(
             let panelCommentDescription: string;
             let panelCommentState: WorkflowStep['state'];
 
-            if (panelCommentCompleted) {
-                panelCommentDescription = `Panel comments for ${stageName} addressed.`;
+            // Step is complete when panel comments have been released (students can view and address them)
+            // Step is available when terminal is complete but waiting for release
+            // Step is locked when terminal requirements not complete
+            if (isReleased) {
+                panelCommentDescription = `Panel comments released. Review and address panel feedback.`;
                 panelCommentState = 'completed';
-            } else if (isReleased) {
-                panelCommentDescription = `Review and address panel feedback from ${stageName} defense.`;
-                panelCommentState = 'available';
             } else if (terminalCompleted) {
                 panelCommentDescription = `Waiting for panel comments to be released for ${stageName}.`;
                 panelCommentState = 'available';
@@ -434,7 +435,7 @@ function buildThesisWorkflowSteps(
                 id: panelCommentStepId,
                 title: `${nextStageLabel} Panel Comments`,
                 description: panelCommentDescription,
-                completedMessage: `Panel comments for ${stageName} have been addressed.`,
+                completedMessage: `Panel comments for ${stageName} have been released.`,
                 state: panelCommentState,
                 actionLabel: 'View Comments',
                 actionPath: `/panel-comments?stage=${panelCommentStage}`,
@@ -497,6 +498,11 @@ export default function ThesisPage() {
     const [panelCommentReleaseMap, setPanelCommentReleaseMap] = React.useState(
         createDefaultPanelCommentReleaseMap()
     );
+
+    // Panel comment completion state (all comments approved per stage)
+    const [panelCommentCompletionMap, setPanelCommentCompletionMap] = React.useState<
+        Partial<Record<PanelCommentStage, boolean>>
+    >({});
 
     // Terminal requirement submissions by stage
     const [terminalSubmissionsByStage, setTerminalSubmissionsByStage] = React.useState<
@@ -808,6 +814,34 @@ export default function ThesisPage() {
         };
     }, [panelCommentCtx]);
 
+    // Listen for panel comment completion (all comments approved) for each stage
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setPanelCommentCompletionMap({});
+            return;
+        }
+
+        // Listen for both proposal and defense stages
+        const stages: PanelCommentStage[] = ['proposal', 'defense'];
+        const unsubscribers = stages.map((stage) =>
+            listenPanelCommentCompletion(panelCommentCtx, stage, {
+                onData: (isComplete) => {
+                    setPanelCommentCompletionMap((prev) => ({
+                        ...prev,
+                        [stage]: isComplete,
+                    }));
+                },
+                onError: (err) => {
+                    console.error(`Failed to listen for panel comment completion (${stage}):`, err);
+                },
+            })
+        );
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [panelCommentCtx]);
+
     // Listen for terminal requirement submissions for each stage
     React.useEffect(() => {
         if (!thesis?.id) {
@@ -850,9 +884,10 @@ export default function ThesisPage() {
     const workflowSteps = React.useMemo(
         () => buildThesisWorkflowSteps(
             thesis, teamMembers, group, proposalSets, stageChaptersMap,
-            panelCommentReleaseMap, undefined, terminalRequirementCompletionMap
+            panelCommentReleaseMap, panelCommentCompletionMap, terminalRequirementCompletionMap
         ),
-        [thesis, teamMembers, group, proposalSets, stageChaptersMap, panelCommentReleaseMap, terminalRequirementCompletionMap]
+        [thesis, teamMembers, group, proposalSets, stageChaptersMap,
+            panelCommentReleaseMap, panelCommentCompletionMap, terminalRequirementCompletionMap]
     );
     const activeStepIndex = React.useMemo(() => getActiveStepIndex(workflowSteps), [workflowSteps]);
 

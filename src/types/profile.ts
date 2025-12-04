@@ -25,16 +25,23 @@ export interface UserName {
     suffix?: string;
 }
 
+import type { ExpertSkillRating } from './skillTemplate';
+
 /**
  * Skill rating metadata for expert expertise
+ * @deprecated Use ExpertSkillRating from skillTemplate.ts for new implementations
  */
 export interface Skills {
+    /** Reference to the skill template ID (optional for backward compatibility) */
+    skillId?: string;
     /** Display name of the skill */
     name: string;
     /** Expert self- or system-assessed rating using a 0-5 scale */
     rating: number;
     /** Optional free-form note or description */
     note?: string;
+    /** ISO timestamp when the rating was last updated */
+    updatedAt?: string;
 }
 
 /**
@@ -91,9 +98,10 @@ export interface UserProfile {
     bio?: string;
 
     /**
-     * Expertise areas or skills (for advisers)
+     * Expertise areas or skills (for advisers, editors, statisticians)
+     * Use ExpertSkillRating for new implementations with department skill templates
      */
-    skillRatings?: Skills[];
+    skillRatings?: Skills[] | ExpertSkillRating[];
 
     /**
      * Capacity for handled theses (only for advisers, editors and statisticians)

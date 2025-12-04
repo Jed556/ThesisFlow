@@ -15,3 +15,4 @@ export * from './terminalRequirements';
 export * from './expertRequests';
 export * from './chapterSlots';
 export * from './salaries';
+export * from './skillTemplates';

@@ -280,26 +280,33 @@ export default function StudentPanelCommentsPage() {
         return result;
     }, [terminalSubmissionsByStage]);
 
-    const stageAccessible = canStudentAccessPanelStage(activeStage, terminalApprovalMap, releaseMap);
+    const stageAccessible = canStudentAccessPanelStage(activeStage, releaseMap, activePanelUid);
     const activePanelist = React.useMemo(
         () => panelists.find((panel) => panel.uid === activePanelUid) ?? null,
         [panelists, activePanelUid]
     );
     const stageMeta = PANEL_COMMENT_STAGE_METADATA.find((item) => item.id === activeStage);
     const lockedDescription = React.useMemo(() => {
-        const releaseReady = releaseMap[activeStage]?.sent ?? false;
-        if (!releaseReady) {
+        // Check per-table release for the active panelist
+        const tableReleased = activePanelUid
+            ? (releaseMap[activeStage]?.tables?.[activePanelUid]?.sent ?? false)
+            : false;
+        // Fall back to stage-level release (legacy)
+        const stageReleased = releaseMap[activeStage]?.sent ?? false;
+        const isReleased = tableReleased || stageReleased;
+
+        if (!isReleased) {
             if (!stageMeta) {
                 return 'Waiting for the admin to release the panel comments.';
             }
             const terminalApproved = terminalApprovalMap[stageMeta.terminalUnlockStage] ?? false;
             if (!terminalApproved) {
-                return `Complete ${stageMeta.releaseStageLabel} terminal requirements`;
+                return `Complete ${stageMeta.releaseStageLabel} terminal requirements first.`;
             }
             return 'Waiting for the admin to release the panel comments for viewing.';
         }
         return 'Panel comments are not available yet.';
-    }, [activeStage, releaseMap, terminalApprovalMap, stageMeta]);
+    }, [activeStage, releaseMap, activePanelUid, terminalApprovalMap, stageMeta]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
@@ -377,7 +384,7 @@ export default function StudentPanelCommentsPage() {
                     <Tab
                         key={stage.id}
                         value={stage.id}
-                        label={stage.studentLabel}
+                        label={stage.adminLabel}
                     />
                 ))}
             </Tabs>

@@ -15,6 +15,10 @@ import { listenThesesForParticipant, getThesisTeamMembers, type ThesisContext } 
 import {
     createSubmission, submitDraftSubmission, deleteSubmission, type SubmissionContext,
 } from '../../utils/firebase/firestore/submissions';
+import {
+    listenPanelCommentCompletion, type PanelCommentContext,
+} from '../../utils/firebase/firestore/panelComments';
+import type { PanelCommentStage } from '../../types/panelComment';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
 import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
@@ -44,6 +48,16 @@ const formatUserName = (name: UserProfile['name']) => (
         .join(' ')
 );
 
+/**
+ * Maps PanelCommentStage to its corresponding thesis stage slug.
+ * Panel comments 'proposal' are tied to 'pre-proposal' stage.
+ * Panel comments 'defense' are tied to 'pre-defense' stage.
+ */
+const PANEL_COMMENT_STAGE_TO_THESIS_STAGE: Record<PanelCommentStage, ThesisStageName> = {
+    'proposal': 'pre-proposal',
+    'defense': 'pre-defense',
+};
+
 export default function StudentThesisOverviewPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid ?? null;
@@ -55,6 +69,9 @@ export default function StudentThesisOverviewPage() {
     const [participants, setParticipants] = React.useState<Record<string, ConversationParticipant>>();
     const [terminalSubmissions, setTerminalSubmissions] = React.useState<
         Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
+    >({});
+    const [panelCommentCompletionMap, setPanelCommentCompletionMap] = React.useState<
+        Partial<Record<ThesisStageName, boolean>>
     >({});
 
     React.useEffect(() => {
@@ -196,6 +213,42 @@ export default function StudentThesisOverviewPage() {
         };
     }, [userUid]);
 
+    // Listen for panel comment completion (all entries approved) for each stage
+    React.useEffect(() => {
+        if (!group?.id || !group?.department || !group?.course) {
+            setPanelCommentCompletionMap({});
+            return;
+        }
+
+        const panelCommentCtx: PanelCommentContext = {
+            year: DEFAULT_YEAR,
+            department: group.department,
+            course: group.course,
+            groupId: group.id,
+        };
+
+        const stages: PanelCommentStage[] = ['proposal', 'defense'];
+        const unsubscribers = stages.map((panelCommentStage) => (
+            listenPanelCommentCompletion(panelCommentCtx, panelCommentStage, {
+                onData: (allApproved) => {
+                    // Map PanelCommentStage to ThesisStageName for lock map compatibility
+                    const thesisStage = PANEL_COMMENT_STAGE_TO_THESIS_STAGE[panelCommentStage];
+                    setPanelCommentCompletionMap((prev) => ({
+                        ...prev,
+                        [thesisStage]: allApproved,
+                    }));
+                },
+                onError: (err) => {
+                    console.error(`Failed to listen for panel comment completion (${panelCommentStage}):`, err);
+                },
+            })
+        ));
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [group?.id, group?.department, group?.course]);
+
     const terminalRequirementCompletionMap = React.useMemo(() => {
         return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
             const submissions = terminalSubmissions[stageMeta.value] ?? [];
@@ -306,9 +359,8 @@ export default function StudentThesisOverviewPage() {
         await deleteSubmission(submissionCtx, submissionId);
     }, [group]);
 
-    // Stage gate overrides - currently no additional gates beyond terminal requirement sequence
-    // The simple flow is: chapters → terminal → next stage chapters → next stage terminal
-    // Panel comment releases are NOT required to unlock subsequent stages
+    // Stage gate overrides - currently no additional gates beyond terminal requirement and panel comment sequence
+    // The flow is: chapters → terminal → panel comments (all approved) → next stage chapters
     const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({}), []);
 
     return (
@@ -360,6 +412,7 @@ export default function StudentThesisOverviewPage() {
                     onDeleteDraft={handleDeleteDraft}
                     enforceTerminalRequirementSequence
                     terminalRequirementCompletionMap={terminalRequirementCompletionMap}
+                    panelCommentCompletionMap={panelCommentCompletionMap}
                     stageGateOverrides={stageGateOverrides}
                 />
             )}
