@@ -310,7 +310,9 @@ export default function AdviserEditorRecommendationsPage() {
     );
 
     const hasGroupRecord = Boolean(studentGroupId || studentGroup);
-    const editorTabLocked = !hasGroupRecord;
+    const groupApproved = studentGroup?.status === 'active';
+    // Editor tab requires an approved group (not just created)
+    const editorTabLocked = !hasGroupRecord || !groupApproved;
     // Adviser tab unlocks when thesis document exists in subcollection
     const adviserTabLocked = !hasThesisDocument;
     const adviserAssigned = Boolean(studentGroup?.members?.adviser);
@@ -480,8 +482,10 @@ export default function AdviserEditorRecommendationsPage() {
                     <UnauthorizedNotice
                         variant="box"
                         icon={EditNoteIcon}
-                        title="Create your research group first"
-                        description="Set up your thesis group to browse and request a research editor."
+                        title={!hasGroupRecord ? 'Create your research group first' : 'Group approval required'}
+                        description={!hasGroupRecord
+                            ? 'Set up your thesis group to browse and request a research editor.'
+                            : 'Your research group must be approved by the moderator before you can request a research editor.'}
                         sx={{ minHeight: 'auto', py: 6 }}
                     />
                 ) : (
