@@ -4,8 +4,9 @@ import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
-import type { ThesisChapter, ThesisData } from '../../types/thesis';
+import type { ThesisData, ThesisStageName } from '../../types/thesis';
 import type { ThesisGroup } from '../../types/group';
+import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentEntry,
     type PanelCommentReleaseMap, type PanelCommentStage,
@@ -20,9 +21,8 @@ import {
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
-import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
+import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
-import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
     PANEL_COMMENT_STAGE_METADATA, canStudentAccessPanelStage, formatPanelistDisplayName, getPanelCommentStageLabel
 } from '../../utils/panelCommentUtils';
@@ -63,8 +63,10 @@ export default function StudentPanelCommentsPage() {
     const [panelistsLoading, setPanelistsLoading] = React.useState(false);
     const [panelistsError, setPanelistsError] = React.useState<string | null>(null);
     const [activePanelUid, setActivePanelUid] = React.useState<string | null>(null);
-    /** Chapters fetched from subcollection (new hierarchical structure) */
-    const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
+    /** Terminal requirement submission records by stage for unlock logic */
+    const [terminalSubmissionsByStage, setTerminalSubmissionsByStage] = React.useState<
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
+    >({});
 
     /** Build panel comment context from group */
     const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
@@ -124,35 +126,33 @@ export default function StudentPanelCommentsPage() {
 
     const groupId = group?.id ?? null;
 
-    // Fetch chapters from subcollection (new hierarchical structure)
+    // Listen for terminal requirement submissions to determine unlock status
     React.useEffect(() => {
-        if (!thesis?.id || !group?.id || !group?.department || !group?.course) {
-            setChapters([]);
+        if (!thesis?.id) {
+            setTerminalSubmissionsByStage({});
             return;
         }
 
-        const chaptersCtx: ThesisChaptersContext = {
-            year: group.year ?? DEFAULT_YEAR,
-            department: group.department,
-            course: group.course,
-            groupId: group.id,
-            thesisId: thesis.id,
-        };
-
-        const unsubscribe = listenAllChaptersForThesis(chaptersCtx, {
-            onData: (allChapters) => {
-                setChapters(allChapters);
-            },
-            onError: (listenerError) => {
-                console.error('Failed to load chapters:', listenerError);
-                setChapters([]);
-            },
+        // Listen to terminal requirements for each panel comment stage's unlock stage
+        const unsubscribers = PANEL_COMMENT_STAGE_METADATA.map((stageMeta) => {
+            const unlockStage = stageMeta.terminalUnlockStage;
+            return findAndListenTerminalRequirements(thesis.id, unlockStage, {
+                onData: (records) => {
+                    setTerminalSubmissionsByStage((prev) => ({
+                        ...prev,
+                        [unlockStage]: records,
+                    }));
+                },
+                onError: (listenerError) => {
+                    console.error(`Terminal requirement listener error for ${unlockStage}:`, listenerError);
+                },
+            });
         });
 
         return () => {
-            unsubscribe();
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, [thesis?.id, group?.id, group?.department, group?.course, group?.year]);
+    }, [thesis?.id]);
 
     React.useEffect(() => {
         if (!panelCommentCtx) {
@@ -262,11 +262,24 @@ export default function StudentPanelCommentsPage() {
         };
     }, [groupId]);
 
-    const stageCompletionMap = React.useMemo(() => (
-        buildStageCompletionMap(chapters, { treatEmptyAsComplete: false })
-    ), [chapters]);
+    /**
+     * Build a map of terminal requirement approval status for each unlock stage.
+     * A stage is considered unlocked when ALL terminal requirements for that stage are approved.
+     */
+    const terminalApprovalMap = React.useMemo(() => {
+        const result: Partial<Record<ThesisStageName, boolean>> = {};
+        for (const stageMeta of PANEL_COMMENT_STAGE_METADATA) {
+            const unlockStage = stageMeta.terminalUnlockStage;
+            const submissions = terminalSubmissionsByStage[unlockStage] ?? [];
+            // Stage is approved if there are submissions and ALL are approved
+            const allApproved = submissions.length > 0 &&
+                submissions.every((sub) => sub.status === 'approved');
+            result[unlockStage] = allApproved;
+        }
+        return result;
+    }, [terminalSubmissionsByStage]);
 
-    const stageAccessible = canStudentAccessPanelStage(activeStage, stageCompletionMap, releaseMap);
+    const stageAccessible = canStudentAccessPanelStage(activeStage, terminalApprovalMap, releaseMap);
     const activePanelist = React.useMemo(
         () => panelists.find((panel) => panel.uid === activePanelUid) ?? null,
         [panelists, activePanelUid]
@@ -278,14 +291,14 @@ export default function StudentPanelCommentsPage() {
             if (!stageMeta) {
                 return 'Waiting for the admin to release the panel comments.';
             }
-            const stageReady = stageCompletionMap[stageMeta.unlockStage] ?? false;
-            if (!stageReady) {
-                return `Complete all ${stageMeta.unlockStage} chapters`;
+            const terminalApproved = terminalApprovalMap[stageMeta.terminalUnlockStage] ?? false;
+            if (!terminalApproved) {
+                return `Complete ${stageMeta.releaseStageLabel} terminal requirements`;
             }
             return 'Waiting for the admin to release the panel comments for viewing.';
         }
         return 'Panel comments are not available yet.';
-    }, [activeStage, releaseMap, stageCompletionMap, stageMeta]);
+    }, [activeStage, releaseMap, terminalApprovalMap, stageMeta]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);

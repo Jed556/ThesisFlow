@@ -8,14 +8,15 @@ import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisGroup } from '../../types/group';
-import type { ThesisChapter } from '../../types/thesis';
+import type { ThesisStageName } from '../../types/thesis';
 import type { PanelCommentEntry, PanelCommentReleaseMap, PanelCommentStage } from '../../types/panelComment';
+import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable } from '../../components/PanelComments';
 import { useSnackbar } from '../../components/Snackbar';
 import { getAllGroups } from '../../utils/firebase/firestore/groups';
 import { listenThesisByGroupId, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
-import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
+import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import {
     listenPanelCommentEntries,
     listenPanelCommentRelease,
@@ -23,7 +24,6 @@ import {
     type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
-import { buildStageCompletionMap } from '../../utils/thesisStageUtils';
 import {
     PANEL_COMMENT_STAGE_METADATA,
     getPanelCommentStageLabel,
@@ -116,8 +116,10 @@ export default function AdminPanelCommentsPage() {
     const [panelistsLoading, setPanelistsLoading] = React.useState(false);
     const [panelistsError, setPanelistsError] = React.useState<string | null>(null);
     const [activePanelUid, setActivePanelUid] = React.useState<string | null>(null);
-    /** Chapters fetched from subcollection (new hierarchical structure) */
-    const [chapters, setChapters] = React.useState<ThesisChapter[]>([]);
+    /** Terminal requirement submission records by stage for unlock logic */
+    const [terminalSubmissionsByStage, setTerminalSubmissionsByStage] = React.useState<
+        Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
+    >({});
 
     React.useEffect(() => {
         let cancelled = false;
@@ -193,35 +195,33 @@ export default function AdminPanelCommentsPage() {
         return () => unsubscribe();
     }, [selectedGroupId]);
 
-    // Fetch chapters from subcollection (new hierarchical structure)
+    // Listen for terminal requirement submissions to determine release eligibility
     React.useEffect(() => {
-        if (!thesis?.id || !selectedGroup?.id || !selectedGroup?.department || !selectedGroup?.course) {
-            setChapters([]);
+        if (!thesis?.id) {
+            setTerminalSubmissionsByStage({});
             return;
         }
 
-        const chaptersCtx: ThesisChaptersContext = {
-            year: selectedGroup.year ?? DEFAULT_YEAR,
-            department: selectedGroup.department,
-            course: selectedGroup.course,
-            groupId: selectedGroup.id,
-            thesisId: thesis.id,
-        };
-
-        const unsubscribe = listenAllChaptersForThesis(chaptersCtx, {
-            onData: (allChapters) => {
-                setChapters(allChapters);
-            },
-            onError: (listenerError) => {
-                console.error('Failed to load chapters:', listenerError);
-                setChapters([]);
-            },
+        // Listen to terminal requirements for each panel comment stage's unlock stage
+        const unsubscribers = PANEL_COMMENT_STAGE_METADATA.map((stageMeta) => {
+            const unlockStage = stageMeta.terminalUnlockStage;
+            return findAndListenTerminalRequirements(thesis.id, unlockStage, {
+                onData: (records) => {
+                    setTerminalSubmissionsByStage((prev) => ({
+                        ...prev,
+                        [unlockStage]: records,
+                    }));
+                },
+                onError: (listenerError) => {
+                    console.error(`Terminal requirement listener error for ${unlockStage}:`, listenerError);
+                },
+            });
         });
 
         return () => {
-            unsubscribe();
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, [thesis?.id, selectedGroup?.id, selectedGroup?.department, selectedGroup?.course, selectedGroup?.year]);
+    }, [thesis?.id]);
 
     React.useEffect(() => {
         if (!panelCommentCtx) {
@@ -323,9 +323,22 @@ export default function AdminPanelCommentsPage() {
         };
     }, [selectedGroup]);
 
-    const stageCompletionMap = React.useMemo(() => (
-        buildStageCompletionMap(chapters, { treatEmptyAsComplete: false })
-    ), [chapters]);
+    /**
+     * Build a map of terminal requirement approval status for each unlock stage.
+     * A stage is considered ready when ALL terminal requirements for that stage are approved.
+     */
+    const terminalApprovalMap = React.useMemo(() => {
+        const result: Partial<Record<ThesisStageName, boolean>> = {};
+        for (const stageMeta of PANEL_COMMENT_STAGE_METADATA) {
+            const unlockStage = stageMeta.terminalUnlockStage;
+            const submissions = terminalSubmissionsByStage[unlockStage] ?? [];
+            // Stage is approved if there are submissions and ALL are approved
+            const allApproved = submissions.length > 0 &&
+                submissions.every((sub) => sub.status === 'approved');
+            result[unlockStage] = allApproved;
+        }
+        return result;
+    }, [terminalSubmissionsByStage]);
 
     const activeStageMeta = React.useMemo(
         () => PANEL_COMMENT_STAGE_METADATA.find((meta) => meta.id === activeStage),
@@ -335,7 +348,10 @@ export default function AdminPanelCommentsPage() {
         () => panelists.find((panel) => panel.uid === activePanelUid) ?? null,
         [panelists, activePanelUid]
     );
-    const canRelease = activeStageMeta ? (stageCompletionMap[activeStageMeta.unlockStage] ?? false) : false;
+    /** Admin can release when terminal requirements for the unlock stage are approved */
+    const canRelease = activeStageMeta
+        ? (terminalApprovalMap[activeStageMeta.terminalUnlockStage] ?? false)
+        : false;
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
@@ -364,7 +380,8 @@ export default function AdminPanelCommentsPage() {
         }
         const currentState = releaseMap[activeStage]?.sent ?? false;
         if (!currentState && !canRelease) {
-            showNotification('All prerequisite chapters must be approved before releasing.', 'warning');
+            const stageName = activeStageMeta?.releaseStageLabel ?? 'stage';
+            showNotification(`Terminal requirements for ${stageName} must be approved first.`, 'warning');
             return;
         }
         setReleaseSaving(true);
@@ -377,7 +394,7 @@ export default function AdminPanelCommentsPage() {
         } finally {
             setReleaseSaving(false);
         }
-    }, [panelCommentCtx, userUid, releaseMap, activeStage, canRelease, showNotification]);
+    }, [panelCommentCtx, userUid, releaseMap, activeStage, canRelease, activeStageMeta, showNotification]);
 
     if (session?.loading) {
         return (
@@ -508,7 +525,7 @@ export default function AdminPanelCommentsPage() {
                                     />
                                     {!canRelease && !releaseMap[activeStage]?.sent && (
                                         <Typography variant="body2" color="text.secondary">
-                                            Waiting for chapter approvals.
+                                            Waiting for {activeStageMeta?.releaseStageLabel ?? 'stage'} terminal requirements approval.
                                         </Typography>
                                     )}
                                 </Stack>

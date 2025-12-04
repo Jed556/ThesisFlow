@@ -11,7 +11,10 @@ export interface PanelCommentStageMeta {
     studentLabel: string;
     adminLabel: string;
     description: string;
-    unlockStage: ThesisStageName;
+    /** Stage whose terminal requirements must be approved to unlock panel comments for students */
+    terminalUnlockStage: ThesisStageName;
+    /** Stage label used for admin release messaging */
+    releaseStageLabel: string;
 }
 
 // Get stage names from config for panel comment metadata
@@ -23,14 +26,16 @@ export const PANEL_COMMENT_STAGE_METADATA: readonly PanelCommentStageMeta[] = [
         studentLabel: 'Proposal',
         adminLabel: postProposal,
         description: 'Includes panel notes from the proposal hearing.',
-        unlockStage: preProposal as ThesisStageName,
+        terminalUnlockStage: preProposal as ThesisStageName,
+        releaseStageLabel: preProposal,
     },
     {
         id: 'defense',
         studentLabel: 'Defense',
         adminLabel: postDefense,
         description: 'Captures final defense deliberations and required revisions.',
-        unlockStage: preDefense as ThesisStageName,
+        terminalUnlockStage: preDefense as ThesisStageName,
+        releaseStageLabel: preDefense,
     },
 ] as const;
 
