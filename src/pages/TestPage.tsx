@@ -3,8 +3,15 @@ import {
     Box, Button, TextField, Typography, LinearProgress, Dialog, DialogTitle, DialogContent,
     DialogContentText, DialogActions, IconButton, Alert, Snackbar, Stack, Chip,
     Switch, FormControlLabel, Radio, RadioGroup, Checkbox, MenuItem, Slider, Divider, Paper,
+    CircularProgress, Link, InputAdornment, Collapse,
 } from '@mui/material';
-import { Analytics, Notifications, Colorize, Delete, Edit, Save, Add, } from '@mui/icons-material';
+import {
+    Analytics as AnalyticsIcon, Notifications as NotificationsIcon,
+    Colorize as ColorizeIcon, Delete as DeleteIcon, Edit as EditIcon,
+    Save as SaveIcon, Add as AddIcon, Email as EmailIcon, Send as SendIcon,
+    OpenInNew as OpenInNewIcon, Visibility as VisibilityIcon,
+    VisibilityOff as VisibilityOffIcon, Settings as SettingsIcon,
+} from '@mui/icons-material';
 import type { NavigationItem } from '../types/navigation';
 import { ColorPickerDialog } from '../components/ColorPicker';
 
@@ -13,7 +20,7 @@ export const metadata: NavigationItem = {
     index: 99,
     title: 'Test Page',
     segment: 'test',
-    icon: <Analytics />,
+    icon: <AnalyticsIcon />,
     children: [],
     roles: ['developer'],
     hidden: false,
@@ -46,15 +53,32 @@ export default function TestPage() {
     const [selectValue, setSelectValue] = useState('option1');
     const [sliderValue, setSliderValue] = useState(50);
 
+    // State for email testing
+    const [emailTo, setEmailTo] = useState('');
+    const [emailSubject, setEmailSubject] = useState('Test Email from ThesisFlow');
+    const [emailBody, setEmailBody] = useState('This is a test email sent from the ThesisFlow test page.');
+    const [emailSending, setEmailSending] = useState(false);
+    const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
+    const [emailResult, setEmailResult] = useState<{
+        success: boolean;
+        message: string;
+        messageId?: string;
+    } | null>(null);
+
+    // State for SMTP configuration
+    const [useEthereal, setUseEthereal] = useState(true);
+    const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+    const [smtpPort, setSmtpPort] = useState(587);
+    const [smtpSecure, setSmtpSecure] = useState(false);
+    const [smtpUser, setSmtpUser] = useState('');
+    const [smtpPass, setSmtpPass] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+
     const handleDialogOpen = () => setDialogOpen(true);
     const handleDialogClose = () => setDialogOpen(false);
 
     const handleColorPickerOpen = () => setColorPickerOpen(true);
     const handleColorPickerClose = () => setColorPickerOpen(false);
-    const handleColorChange = (color: string) => {
-        setSelectedColor(color);
-        showNotification('Color changed to ' + color, 'success');
-    };
 
     const showNotification = (message: string, severity: 'success' | 'error' | 'warning' | 'info') => {
         setSnackbarMessage(message);
@@ -70,6 +94,87 @@ export default function TestPage() {
 
     const decreaseProgress = () => {
         setProgress((prev) => Math.max(prev - 10, 0));
+    };
+
+    /**
+     * Sends a test email via the configured SMTP or Ethereal
+     */
+    const handleSendTestEmail = async () => {
+        if (!emailTo || !emailSubject || !emailBody) {
+            showNotification('Please fill in all email fields', 'warning');
+            return;
+        }
+
+        if (!useEthereal && (!smtpHost || !smtpUser || !smtpPass)) {
+            showNotification('Please fill in SMTP credentials', 'warning');
+            return;
+        }
+
+        setEmailSending(true);
+        setEmailResult(null);
+        setEmailPreviewUrl(null);
+
+        try {
+            const requestBody: Record<string, unknown> = {
+                to: emailTo,
+                subject: emailSubject,
+                text: emailBody,
+                html: `<div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2 style="color: #1976d2;">ThesisFlow Test Email</h2>
+                    <p>${emailBody.replace(/\n/g, '<br/>')}</p>
+                    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;" />
+                    <p style="color: #666; font-size: 12px;">
+                        This is a test email sent from the ThesisFlow development environment.
+                    </p>
+                </div>`,
+                useEthereal,
+            };
+
+            if (!useEthereal) {
+                requestBody.smtp = {
+                    host: smtpHost,
+                    port: smtpPort,
+                    secure: smtpSecure,
+                    user: smtpUser,
+                    pass: smtpPass,
+                };
+            }
+
+            const response = await fetch('/api/email/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setEmailResult({
+                    success: true,
+                    message: data.message ?? 'Email sent successfully!',
+                    messageId: data.messageId,
+                });
+                setEmailPreviewUrl(data.previewUrl ?? null);
+                showNotification('Test email sent successfully!', 'success');
+            } else {
+                setEmailResult({
+                    success: false,
+                    message: data.error ?? 'Failed to send email',
+                });
+                showNotification(data.error ?? 'Failed to send email', 'error');
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Network error';
+            setEmailResult({
+                success: false,
+                message: errorMessage,
+            });
+            showNotification(errorMessage, 'error');
+        } finally {
+            setEmailSending(false);
+        }
     };
 
     return (
@@ -97,23 +202,23 @@ export default function TestPage() {
                         <Button variant="text" color="success">
                             Text
                         </Button>
-                        <Button variant="contained" color="error" startIcon={<Delete />}>
+                        <Button variant="contained" color="error" startIcon={<DeleteIcon />}>
                             Delete
                         </Button>
-                        <Button variant="contained" color="warning" startIcon={<Edit />}>
+                        <Button variant="contained" color="warning" startIcon={<EditIcon />}>
                             Edit
                         </Button>
-                        <Button variant="contained" color="info" startIcon={<Save />}>
+                        <Button variant="contained" color="info" startIcon={<SaveIcon />}>
                             Save
                         </Button>
-                        <Button variant="outlined" startIcon={<Add />}>
+                        <Button variant="outlined" startIcon={<AddIcon />}>
                             Add New
                         </Button>
                         <IconButton color="primary">
-                            <Notifications />
+                            <NotificationsIcon />
                         </IconButton>
                         <IconButton color="secondary">
-                            <Colorize />
+                            <ColorizeIcon />
                         </IconButton>
                     </Stack>
                 </Paper>
@@ -174,7 +279,7 @@ export default function TestPage() {
                     <Stack direction="row" spacing={2} alignItems="center">
                         <Button
                             variant="contained"
-                            startIcon={<Colorize />}
+                            startIcon={<ColorizeIcon />}
                             onClick={handleColorPickerOpen}
                         >
                             Pick Color
@@ -391,6 +496,204 @@ export default function TestPage() {
                         <Alert severity="error">This is an error alert</Alert>
                         <Alert severity="success" variant="outlined">Outlined success alert</Alert>
                         <Alert severity="info" variant="filled">Filled info alert</Alert>
+                    </Stack>
+                </Paper>
+
+                {/* Email Testing Section */}
+                <Paper sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <EmailIcon /> Email Testing (SMTP)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Send test emails using Ethereal (fake SMTP) or your own SMTP credentials.
+                    </Typography>
+
+                    <Stack spacing={3}>
+                        {/* SMTP Mode Toggle */}
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={useEthereal}
+                                    onChange={(e) => setUseEthereal(e.target.checked)}
+                                />
+                            }
+                            label={
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Typography>
+                                        {useEthereal ? 'Using Ethereal (Test Mode)' : 'Using Custom SMTP'}
+                                    </Typography>
+                                    <SettingsIcon fontSize="small" color="action" />
+                                </Stack>
+                            }
+                        />
+
+                        {/* Custom SMTP Configuration */}
+                        <Collapse in={!useEthereal}>
+                            <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
+                                <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
+                                    SMTP Configuration
+                                </Typography>
+                                <Stack spacing={2}>
+                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                        <TextField
+                                            label="SMTP Host"
+                                            value={smtpHost}
+                                            onChange={(e) => setSmtpHost(e.target.value)}
+                                            placeholder="smtp.gmail.com"
+                                            fullWidth
+                                            size="small"
+                                        />
+                                        <TextField
+                                            label="Port"
+                                            type="number"
+                                            value={smtpPort}
+                                            onChange={(e) => setSmtpPort(Number(e.target.value))}
+                                            sx={{ minWidth: 100 }}
+                                            size="small"
+                                        />
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={smtpSecure}
+                                                    onChange={(e) => setSmtpSecure(e.target.checked)}
+                                                    size="small"
+                                                />
+                                            }
+                                            label="SSL/TLS"
+                                        />
+                                    </Stack>
+                                    <TextField
+                                        label="Username / Email"
+                                        value={smtpUser}
+                                        onChange={(e) => setSmtpUser(e.target.value)}
+                                        placeholder="your-email@gmail.com"
+                                        fullWidth
+                                        size="small"
+                                    />
+                                    <TextField
+                                        label="Password / App Password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        value={smtpPass}
+                                        onChange={(e) => setSmtpPass(e.target.value)}
+                                        placeholder="Your app password"
+                                        fullWidth
+                                        size="small"
+                                        slotProps={{
+                                            input: {
+                                                endAdornment: (
+                                                    <InputAdornment position="end">
+                                                        <IconButton
+                                                            onClick={() => setShowPassword(!showPassword)}
+                                                            edge="end"
+                                                            size="small"
+                                                        >
+                                                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                                                        </IconButton>
+                                                    </InputAdornment>
+                                                ),
+                                            },
+                                        }}
+                                    />
+                                    <Alert severity="info" sx={{ mt: 1 }}>
+                                        For Gmail, use an App Password instead of your regular password.{' '}
+                                        <Link
+                                            href="https://support.google.com/accounts/answer/185833"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            Learn more
+                                        </Link>
+                                    </Alert>
+                                </Stack>
+                            </Paper>
+                        </Collapse>
+
+                        <Divider />
+
+                        {/* Email Fields */}
+                        <TextField
+                            label="To (Email Address)"
+                            type="email"
+                            value={emailTo}
+                            onChange={(e) => setEmailTo(e.target.value)}
+                            placeholder="recipient@example.com"
+                            fullWidth
+                            required
+                        />
+
+                        <TextField
+                            label="Subject"
+                            value={emailSubject}
+                            onChange={(e) => setEmailSubject(e.target.value)}
+                            fullWidth
+                            required
+                        />
+
+                        <TextField
+                            label="Email Body"
+                            value={emailBody}
+                            onChange={(e) => setEmailBody(e.target.value)}
+                            multiline
+                            rows={4}
+                            fullWidth
+                            required
+                        />
+
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={emailSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+                                onClick={handleSendTestEmail}
+                                disabled={
+                                    emailSending ||
+                                    !emailTo ||
+                                    !emailSubject ||
+                                    !emailBody ||
+                                    (!useEthereal && (!smtpHost || !smtpUser || !smtpPass))
+                                }
+                            >
+                                {emailSending ? 'Sending...' : 'Send Test Email'}
+                            </Button>
+                            <Chip
+                                label={useEthereal ? 'Ethereal' : smtpHost}
+                                size="small"
+                                color={useEthereal ? 'info' : 'default'}
+                                variant="outlined"
+                            />
+                        </Stack>
+
+                        {/* Email Result Display */}
+                        {emailResult && (
+                            <Alert
+                                severity={emailResult.success ? 'success' : 'error'}
+                                sx={{ mt: 2 }}
+                            >
+                                <Typography variant="body2">{emailResult.message}</Typography>
+                                {emailResult.messageId && (
+                                    <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                                        Message ID: {emailResult.messageId}
+                                    </Typography>
+                                )}
+                            </Alert>
+                        )}
+
+                        {/* Email Preview Link (Ethereal only) */}
+                        {emailPreviewUrl && useEthereal && (
+                            <Alert severity="info" icon={<OpenInNewIcon />}>
+                                <Typography variant="body2">
+                                    View your test email:{' '}
+                                    <Link
+                                        href={emailPreviewUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        sx={{ fontWeight: 'medium' }}
+                                    >
+                                        Open in Ethereal Mail
+                                    </Link>
+                                </Typography>
+                            </Alert>
+                        )}
                     </Stack>
                 </Paper>
             </Stack>
