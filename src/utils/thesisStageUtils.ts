@@ -176,6 +176,21 @@ export function buildStageCompletionMap(
 }
 
 /**
+ * Builds a map describing whether each thesis stage has started (has any chapters).
+ * A stage is considered "started" if there is at least one chapter assigned to it.
+ */
+export function buildStageStartedMap(
+    chapters: ThesisChapter[] | undefined,
+): Record<ThesisStageName, boolean> {
+    const source = chapters ?? [];
+    return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
+        const stageChapters = filterChaptersByStage(source, stageMeta.value);
+        acc[stageMeta.value] = stageChapters.length > 0;
+        return acc;
+    }, {} as Record<ThesisStageName, boolean>);
+}
+
+/**
  * Determines the current "in progress" stage based on completion and lock maps.
  * Returns the first stage that is unlocked and not yet completed.
  * If all unlocked stages are complete, returns the last unlocked stage.
