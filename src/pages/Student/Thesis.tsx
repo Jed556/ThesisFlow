@@ -12,7 +12,7 @@ import {
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
-import type { ThesisChapter, ThesisData, ThesisStatus } from '../../types/thesis';
+import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import type { TopicProposalSetRecord } from '../../utils/firebase/firestore/topicProposals';
@@ -20,19 +20,22 @@ import type { ScheduleEvent } from '../../types/schedule';
 import type { GroupNotificationDoc } from '../../types/notification';
 import { AnimatedPage } from '../../components/Animate';
 import { Avatar, Name } from '../../components/Avatar';
-import { deriveChapterStatus } from '../../components/ThesisWorkspace/ChapterRail';
+import type { deriveChapterStatus } from '../../components/ThesisWorkspace/ChapterRail';
 import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { listenTopicProposalSetsByGroup } from '../../utils/firebase/firestore/topicProposals';
 import { listenEventsByThesisIds } from '../../utils/firebase/firestore/events';
 import { listenGroupNotifications, ensureGroupNotificationDocument } from '../../utils/firebase/firestore/groupNotifications';
+import { listenChaptersForStage, type ChapterContext } from '../../utils/firebase/firestore/chapters';
 import { normalizeDateInput } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router';
 import type { WorkflowStep } from '../../types/workflow';
+import type { ThesisStageName } from '../../types/thesis';
 import {
     resolveStepState, applyPrerequisiteLocks, getStepMeta, getActiveStepIndex, formatPrerequisiteMessage,
 } from '../../utils/workflowUtils';
+import StagesConfig from '../../config/stages.json';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -54,16 +57,6 @@ type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembersById>> extends (
 function formatUserName(name: UserProfile['name']): string {
     const parts = [name.prefix, name.first, name.middle, name.last, name.suffix].filter((value): value is string => Boolean(value));
     return parts.join(' ');
-}
-
-/**
- * Get color for chapter status display
- */
-function getStatusColor(status: ThesisStatus | ReturnType<typeof deriveChapterStatus>): 'success' | 'warning' | 'error' | 'default' {
-    if (status === 'approved') return 'success';
-    if (status === 'under_review') return 'warning';
-    if (status === 'revision_required') return 'error';
-    return 'default';
 }
 
 /**
@@ -128,199 +121,96 @@ function hasSubmittedProposals(proposalSets: TopicProposalSetRecord[]): boolean 
     );
 }
 
+/**
+ * Check if a specific stage is completed based on thesis stages array
+ */
+function isStageCompleted(record: ThesisRecord | null, stageSlug: string): boolean {
+    if (!record?.stages) return false;
+    return record.stages.some(
+        (s) => s.name === stageSlug && s.completedAt != null
+    );
+}
+
+/**
+ * Check if a specific stage has been started based on thesis stages array
+ */
+function isStageStarted(record: ThesisRecord | null, stageSlug: string): boolean {
+    if (!record?.stages) return false;
+    return record.stages.some((s) => s.name === stageSlug);
+}
+
+/**
+ * Chapters organized by stage slug
+ */
+type StageChaptersMap = Record<string, ThesisChapter[]>;
+
 function buildThesisWorkflowSteps(
     record: ThesisRecord | null,
     members: TeamMember[],
     group: ThesisGroup | null,
-    proposalSets: TopicProposalSetRecord[] = []
+    proposalSets: TopicProposalSetRecord[] = [],
+    stageChaptersMap: StageChaptersMap = {}
 ): WorkflowStep[] {
     // Check proposal approval status from proposal sets
     const proposalApproved = hasApprovedProposal(proposalSets);
     const approvedTitle = getApprovedProposalTitle(proposalSets);
     const proposalsSubmitted = hasSubmittedProposals(proposalSets);
 
-    if (!record) {
-        // Determine group state for better messaging
-        const groupStatus = group?.status;
-        const isDraft = groupStatus === 'draft';
-        const isInReview = groupStatus === 'review';
-        const isActive = groupStatus === 'active';
-        const isRejected = groupStatus === 'rejected';
-
-        let groupDescription = 'Form your research group with team members and submit for moderator approval.';
-        let groupState: WorkflowStep['state'] = group ? 'in-progress' : 'available';
-        const adviserAssigned = Boolean(group?.members?.adviser);
-        const editorAssigned = Boolean(group?.members?.editor);
-        const hasGroup = Boolean(group);
-
-        if (isActive) {
-            groupDescription = 'Group has been approved and is active.';
-            groupState = 'completed';
-        } else if (isInReview) {
-            groupDescription = 'Group is awaiting approval from the Research Moderator.';
-            groupState = 'in-progress';
-        } else if (isRejected) {
-            groupDescription = group?.rejectionReason
-                ? `Group was rejected: ${group.rejectionReason}`
-                : 'Group was rejected. Please review and resubmit.';
-            groupState = 'available';
-        } else if (isDraft) {
-            groupDescription = 'Group created. Review your members and submit the group request when ready.';
-            groupState = 'in-progress';
-        }
-
-        const editorDescription = editorAssigned
-            ? 'Research editor assigned.'
-            : hasGroup
-                ? 'Select and request approval from your research editor.'
-                : 'Create your research group to unlock editor selection.';
-        const editorState: WorkflowStep['state'] = editorAssigned ? 'completed' : 'available';
-
-        const adviserState: WorkflowStep['state'] = adviserAssigned ? 'completed' : 'available';
-
-        const baseSteps: WorkflowStep[] = [
-            {
-                id: 'create-group',
-                title: 'Create Research Group',
-                description: groupDescription,
-                completedMessage: 'Your research group has been created and approved.',
-                state: groupState,
-                actionLabel: 'Go to My Group',
-                actionPath: '/group',
-                icon: <GroupsIcon />,
-            },
-            {
-                id: 'request-editor',
-                title: 'Select Research Editor',
-                description: editorDescription,
-                completedMessage: 'Research editor has been assigned to your group.',
-                state: editorState,
-                actionLabel: editorAssigned ? undefined : 'Browse Editors',
-                actionPath: '/recommendation',
-                icon: <PersonAddIcon />,
-                prerequisites: [
-                    { stepId: 'create-group', type: 'corequisite' },
-                ],
-            },
-            {
-                id: 'submit-proposals',
-                title: 'Submit Topic Proposals',
-                description: proposalApproved
-                    ? `Topic approved: "${approvedTitle}"`
-                    : proposalsSubmitted
-                        ? 'Proposals submitted. Awaiting approval.'
-                        : 'Upload up to 3 thesis title proposals for review and approval.',
-                completedMessage: proposalApproved
-                    ? `Your topic proposal "${approvedTitle}" has been approved.`
-                    : 'Your topic proposal has been approved.',
-                state: resolveStepState({ completed: proposalApproved, started: proposalsSubmitted }),
-                actionLabel: 'View Proposals',
-                actionPath: '/topic-proposals',
-                icon: <TopicIcon />,
-                prerequisites: [
-                    { stepId: 'create-group', type: 'prerequisite' },
-                    { stepId: 'request-editor', type: 'prerequisite' },
-                ],
-            },
-            {
-                id: 'request-adviser',
-                title: 'Select Research Adviser',
-                description: adviserAssigned
-                    ? 'Research adviser assigned.'
-                    : proposalApproved
-                        ? 'Choose your research adviser now that your topic is approved.'
-                        : 'Adviser selection unlocks after your topic proposal is approved.',
-                completedMessage: 'Research adviser has been assigned to your group.',
-                state: adviserState,
-                actionLabel: adviserAssigned ? undefined : 'Browse Advisers',
-                actionPath: '/recommendation',
-                icon: <PersonAddIcon />,
-                prerequisites: [
-                    { stepId: 'submit-proposals', type: 'prerequisite' },
-                ],
-            },
-            {
-                id: 'upload-chapters',
-                title: 'Upload Thesis Chapters',
-                description: 'Submit your thesis chapters for adviser and editor review.',
-                completedMessage: 'All thesis chapters have been approved.',
-                state: 'available',
-                actionLabel: 'View Chapters',
-                actionPath: '/student-thesis-workspace',
-                icon: <ArticleIcon />,
-                prerequisites: [
-                    { stepId: 'submit-proposals', type: 'prerequisite' },
-                    { stepId: 'request-adviser', type: 'prerequisite' },
-                ],
-            },
-            {
-                id: 'terminal-requirements',
-                title: 'Submit Terminal Requirements',
-                description: 'Upload final documents and complete terminal requirements for submission.',
-                completedMessage: 'All terminal requirements have been submitted.',
-                state: 'available',
-                actionLabel: 'View Requirements',
-                actionPath: '/terminal-requirements',
-                icon: <UploadIcon />,
-                prerequisites: [
-                    { stepId: 'upload-chapters', type: 'prerequisite' },
-                ],
-            },
-        ];
-        return applyPrerequisiteLocks(baseSteps);
-    }
-
-    const chapters = record.chapters ?? [];
-    const totalMembers = members.length;
-    const hasGroup = totalMembers > 0 || Boolean(group);
-
-    // Determine group approval state with detailed status
+    // Common group state checks
     const groupStatus = group?.status;
     const isDraft = groupStatus === 'draft';
     const isInReview = groupStatus === 'review';
     const isActive = groupStatus === 'active';
     const isRejected = groupStatus === 'rejected';
-    const groupApproved = isActive || (totalMembers > 1 && groupStatus !== 'draft');
+    const hasGroup = Boolean(group);
+    const totalMembers = members.length;
+    const groupApproved = isActive || (totalMembers > 1 && groupStatus !== 'draft' && groupStatus !== 'review');
 
     const adviserAssigned = Boolean(group?.members?.adviser);
     const editorAssigned = Boolean(group?.members?.editor);
-    const hasTopicProposals = Boolean(record.title) || proposalsSubmitted;
-    // Topic is approved if proposal is head_approved OR thesis record indicates approval
-    const topicApproved = proposalApproved || isTopicApproved(record);
-    const displayTitle = approvedTitle || record.title;
-    const chaptersSubmitted = chapters.some(
-        (chapter) => getChapterStatusFromSubmissions(chapter) !== 'not_submitted'
-    );
-    const approvedCount = chapters.filter(
-        (chapter) => getChapterStatusFromSubmissions(chapter) === 'approved'
-    ).length;
-    const allChaptersApproved = chapters.length > 0 && approvedCount === chapters.length;
+    const hasTopicProposals = Boolean(record?.title) || proposalsSubmitted;
+    const topicApproved = proposalApproved || (record ? isTopicApproved(record) : false);
+    const displayTitle = approvedTitle || record?.title;
 
     // Build group description based on current status
     let groupDescription: string;
+    let groupState: WorkflowStep['state'] = hasGroup ? 'in-progress' : 'available';
+
     if (groupApproved) {
         groupDescription = `Group approved with ${totalMembers} members.`;
+        groupState = 'completed';
     } else if (isInReview) {
         groupDescription = 'Group is awaiting approval from the Research Moderator.';
+        groupState = 'in-progress';
     } else if (isRejected) {
         groupDescription = group?.rejectionReason
             ? `Group was rejected: ${group.rejectionReason}. Please update and resubmit.`
             : 'Group was rejected. Please review and resubmit.';
+        groupState = 'available';
     } else if (isDraft) {
         groupDescription = 'Group created. Review your members and submit the group request when ready.';
+        groupState = 'in-progress';
     } else if (hasGroup) {
         groupDescription = 'Awaiting Research Moderator approval.';
+        groupState = 'in-progress';
     } else {
         groupDescription = 'Form your research group with team members and submit for moderator approval.';
     }
 
+    const editorDescription = editorAssigned
+        ? 'Research editor assigned.'
+        : groupApproved
+            ? 'Select and request approval from your research editor.'
+            : 'Your research group must be approved before selecting an editor.';
+
+    // Build initial setup steps
     const baseSteps: WorkflowStep[] = [
         {
             id: 'create-group',
             title: 'Create Research Group',
             description: groupDescription,
             completedMessage: `Your research group has been created and approved with ${totalMembers} members.`,
-            state: resolveStepState({ completed: groupApproved, started: hasGroup }),
+            state: groupState,
             actionLabel: 'Go to My Group',
             actionPath: '/group',
             icon: <GroupsIcon />,
@@ -328,18 +218,14 @@ function buildThesisWorkflowSteps(
         {
             id: 'request-editor',
             title: 'Select Research Editor',
-            description: editorAssigned
-                ? 'Research editor assigned.'
-                : hasGroup
-                    ? 'Select and request approval from your research editor.'
-                    : 'Create and submit your research group to access editors.',
+            description: editorDescription,
             completedMessage: 'Research editor has been assigned to your group.',
             state: editorAssigned ? 'completed' : 'available',
             actionLabel: editorAssigned ? undefined : 'Browse Editors',
             actionPath: '/recommendation',
             icon: <PersonAddIcon />,
             prerequisites: [
-                { stepId: 'create-group', type: 'corequisite' },
+                { stepId: 'create-group', type: 'prerequisite' },
             ],
         },
         {
@@ -350,8 +236,10 @@ function buildThesisWorkflowSteps(
                 : hasTopicProposals
                     ? 'Proposals submitted. Awaiting approval.'
                     : 'Upload up to 3 thesis title proposals for review and approval.',
-            completedMessage: `Your topic proposal "${displayTitle}" has been approved.`,
-            state: resolveStepState({ completed: topicApproved, started: hasTopicProposals || topicApproved }),
+            completedMessage: topicApproved
+                ? `Your topic proposal "${displayTitle}" has been approved.`
+                : 'Your topic proposal has been approved.',
+            state: resolveStepState({ completed: topicApproved, started: hasTopicProposals }),
             actionLabel: 'View Proposals',
             actionPath: '/topic-proposals',
             icon: <TopicIcon />,
@@ -367,9 +255,7 @@ function buildThesisWorkflowSteps(
                 ? 'Research adviser assigned.'
                 : topicApproved
                     ? 'Choose your research adviser now that your topic is approved.'
-                    : hasTopicProposals
-                        ? 'Awaiting topic approval before adviser selection opens.'
-                        : 'Submit your topic proposals to unlock adviser selection.',
+                    : 'Adviser selection unlocks after your topic proposal is approved.',
             completedMessage: 'Research adviser has been assigned to your group.',
             state: resolveStepState({ completed: adviserAssigned, started: topicApproved && !adviserAssigned }),
             actionLabel: adviserAssigned ? undefined : 'Browse Advisers',
@@ -379,40 +265,90 @@ function buildThesisWorkflowSteps(
                 { stepId: 'submit-proposals', type: 'prerequisite' },
             ],
         },
-        {
-            id: 'upload-chapters',
-            title: 'Upload Thesis Chapters',
-            description: allChaptersApproved
-                ? `All ${chapters.length} chapters approved.`
-                : chaptersSubmitted
-                    ? `${approvedCount}/${chapters.length} chapters approved.`
-                    : 'Submit your thesis chapters for adviser and editor review.',
-            completedMessage: `All ${chapters.length} thesis chapters have been approved.`,
-            state: resolveStepState({ completed: allChaptersApproved, started: chaptersSubmitted }),
-            actionLabel: 'View Chapters',
-            actionPath: '/student-thesis-workspace',
-            icon: <ArticleIcon />,
-            prerequisites: [
-                { stepId: 'submit-proposals', type: 'prerequisite' },
-                { stepId: 'request-adviser', type: 'prerequisite' },
-            ],
-        },
-        {
-            id: 'terminal-requirements',
-            title: 'Submit Terminal Requirements',
-            description: 'Upload final documents and complete terminal requirements for submission.',
-            completedMessage: 'All terminal requirements have been submitted successfully.',
-            state: 'available',
-            actionLabel: 'View Requirements',
-            actionPath: '/terminal-requirements',
-            icon: <UploadIcon />,
-            prerequisites: [
-                { stepId: 'upload-chapters', type: 'prerequisite' },
-            ],
-        },
     ];
 
-    return applyPrerequisiteLocks(baseSteps);
+    // Build stage-specific steps for each stage
+    const stageSteps: WorkflowStep[] = [];
+    let previousStepId = 'request-adviser';
+
+    StagesConfig.stages.forEach((stageConfig) => {
+        const stageSlug = stageConfig.slug as ThesisStageName;
+        const stageName = stageConfig.name;
+        const stageCompleted = isStageCompleted(record, stageSlug);
+        const stageStarted = isStageStarted(record, stageSlug);
+
+        // Chapter upload step for this stage
+        const chapterStepId = `chapters-${stageSlug}`;
+        const chapterPrerequisites: WorkflowStep['prerequisites'] = [
+            { stepId: previousStepId, type: 'prerequisite' },
+        ];
+
+        // Check chapter status for this stage using the chapters map
+        const stageChapters = stageChaptersMap[stageSlug] ?? [];
+        const stageChaptersSubmitted = stageChapters.some(
+            (ch) => getChapterStatusFromSubmissions(ch) !== 'not_submitted'
+        );
+        const stageChaptersApproved = stageChapters.length > 0 && stageChapters.every(
+            (ch) => getChapterStatusFromSubmissions(ch) === 'approved'
+        );
+
+        let chapterDescription: string;
+        if (stageChaptersApproved && stageChapters.length > 0) {
+            chapterDescription = `All ${stageChapters.length} chapters approved for ${stageName}.`;
+        } else if (stageChaptersSubmitted) {
+            const approvedCount = stageChapters.filter(
+                (ch) => getChapterStatusFromSubmissions(ch) === 'approved'
+            ).length;
+            chapterDescription = `${approvedCount}/${stageChapters.length} chapters approved for ${stageName}.`;
+        } else {
+            chapterDescription = `Submit your thesis chapters for ${stageName} review.`;
+        }
+
+        stageSteps.push({
+            id: chapterStepId,
+            title: `${stageName} - Upload Chapters`,
+            description: chapterDescription,
+            completedMessage: `All chapters for ${stageName} have been approved.`,
+            state: resolveStepState({ completed: stageChaptersApproved, started: stageChaptersSubmitted }),
+            actionLabel: 'View Chapters',
+            actionPath: `/student-thesis-workspace?stage=${stageSlug}`,
+            icon: <ArticleIcon />,
+            prerequisites: chapterPrerequisites,
+        });
+
+        // Terminal requirements step for this stage
+        const terminalStepId = `terminal-${stageSlug}`;
+        const terminalCompleted = stageCompleted;
+        const terminalStarted = stageStarted && stageChaptersApproved;
+
+        let terminalDescription: string;
+        if (terminalCompleted) {
+            terminalDescription = `${stageName} requirements completed.`;
+        } else if (terminalStarted) {
+            terminalDescription = `Submit terminal requirements for ${stageName}.`;
+        } else {
+            terminalDescription = `Complete chapter reviews to unlock ${stageName} requirements.`;
+        }
+
+        stageSteps.push({
+            id: terminalStepId,
+            title: `${stageName} - Terminal Requirements`,
+            description: terminalDescription,
+            completedMessage: `${stageName} requirements completed successfully.`,
+            state: resolveStepState({ completed: terminalCompleted, started: terminalStarted }),
+            actionLabel: 'View Requirements',
+            actionPath: `/terminal-requirements?stage=${stageSlug}`,
+            icon: <UploadIcon />,
+            prerequisites: [
+                { stepId: chapterStepId, type: 'prerequisite' },
+            ],
+        });
+
+        // Update previous step ID for next stage's prerequisites
+        previousStepId = terminalStepId;
+    });
+
+    return applyPrerequisiteLocks([...baseSteps, ...stageSteps]);
 }
 
 function formatDateLabel(value?: string | Date | null): string {
@@ -421,19 +357,20 @@ function formatDateLabel(value?: string | Date | null): string {
 }
 
 /**
- * Calculate the overall completion percentage for a thesis record.
- * @param record - Thesis document containing chapter progress information
+ * Calculate the overall completion percentage from chapters across all stages.
+ * @param stageChaptersMap - Chapters organized by stage slug
  * @returns Completion percentage between 0 and 100
  */
-function computeThesisProgressPercent(record: ThesisRecord): number {
-    const chapters = record.chapters ?? [];
-    if (chapters.length === 0) {
+function computeThesisProgressPercent(stageChaptersMap: StageChaptersMap): number {
+    // Flatten all chapters from all stages
+    const allChapters = Object.values(stageChaptersMap).flat();
+    if (allChapters.length === 0) {
         return 0;
     }
-    const approvedCount = chapters.filter(
+    const approvedCount = allChapters.filter(
         (chapter) => getChapterStatusFromSubmissions(chapter) === 'approved'
     ).length;
-    return (approvedCount / chapters.length) * 100;
+    return (approvedCount / allChapters.length) * 100;
 }
 
 /**
@@ -449,6 +386,7 @@ export default function ThesisPage() {
     const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>([]);
     const [group, setGroup] = React.useState<ThesisGroup | null>(null);
     const [proposalSets, setProposalSets] = React.useState<TopicProposalSetRecord[]>([]);
+    const [stageChaptersMap, setStageChaptersMap] = React.useState<StageChaptersMap>({});
     const [progress, setProgress] = React.useState<number>(0);
     const [loading, setLoading] = React.useState<boolean>(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -466,6 +404,7 @@ export default function ThesisPage() {
             setThesis(null);
             setUserTheses([]);
             setTeamMembers([]);
+            setStageChaptersMap({});
             setProgress(0);
             setHasNoThesis(false);
             setLoading(false);
@@ -504,6 +443,7 @@ export default function ThesisPage() {
         if (userTheses.length === 0) {
             setThesis(null);
             setTeamMembers([]);
+            setStageChaptersMap({});
             setProgress(0);
             setHasNoThesis(true);
             return;
@@ -512,7 +452,7 @@ export default function ThesisPage() {
         // Select thesis - prefer one where user is the group leader
         const candidate = userTheses[0];
         setThesis(candidate);
-        setProgress(computeThesisProgressPercent(candidate));
+        // Progress will be calculated when chapters are loaded
         setHasNoThesis(false);
     }, [userTheses, userUid]);
 
@@ -616,6 +556,56 @@ export default function ThesisPage() {
         };
     }, [group?.id]);
 
+    // Load chapters for all stages when thesis and group are available
+    React.useEffect(() => {
+        if (!thesis?.id || !group?.id || !group.year || !group.department || !group.course) {
+            setStageChaptersMap({});
+            setProgress(0);
+            return;
+        }
+
+        // Create listeners for each stage
+        const unsubscribers: (() => void)[] = [];
+        const chaptersMap: StageChaptersMap = {};
+
+        StagesConfig.stages.forEach((stageConfig) => {
+            const stageSlug = stageConfig.slug;
+            const ctx: ChapterContext = {
+                year: group.year as string,
+                department: group.department as string,
+                course: group.course as string,
+                groupId: group.id,
+                thesisId: thesis.id,
+                stage: stageSlug,
+            };
+
+            const unsubscribe = listenChaptersForStage(ctx, {
+                onData: (chapters) => {
+                    // Update the chapters map for this stage
+                    setStageChaptersMap((prev) => {
+                        const updated = { ...prev, [stageSlug]: chapters };
+                        // Recalculate progress with updated chapters
+                        setProgress(computeThesisProgressPercent(updated));
+                        return updated;
+                    });
+                },
+                onError: (err) => {
+                    console.error(`Failed to load chapters for stage ${stageSlug}:`, err);
+                },
+            });
+
+            unsubscribers.push(unsubscribe);
+            chaptersMap[stageSlug] = [];
+        });
+
+        // Initialize empty map
+        setStageChaptersMap(chaptersMap);
+
+        return () => {
+            unsubscribers.forEach((unsub) => unsub());
+        };
+    }, [thesis?.id, group?.id, group?.year, group?.department, group?.course]);
+
     // Load upcoming events when thesis is available
     React.useEffect(() => {
         if (!thesis?.id) {
@@ -677,8 +667,8 @@ export default function ThesisPage() {
 
     // Compute workflow steps before any conditional returns (hooks must be called unconditionally)
     const workflowSteps = React.useMemo(
-        () => buildThesisWorkflowSteps(thesis, teamMembers, group, proposalSets),
-        [thesis, teamMembers, group, proposalSets]
+        () => buildThesisWorkflowSteps(thesis, teamMembers, group, proposalSets, stageChaptersMap),
+        [thesis, teamMembers, group, proposalSets, stageChaptersMap]
     );
     const activeStepIndex = React.useMemo(() => getActiveStepIndex(workflowSteps), [workflowSteps]);
 
