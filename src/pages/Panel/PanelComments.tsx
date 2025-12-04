@@ -5,15 +5,17 @@ import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisGroup } from '../../types/group';
-import type { PanelCommentEntry, PanelCommentStage } from '../../types/panelComment';
+import type { PanelCommentApprovalStatus, PanelCommentEntry, PanelCommentStage } from '../../types/panelComment';
 import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable, PanelCommentEditorDialog } from '../../components/PanelComments';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
 import {
     addPanelCommentEntry, deletePanelCommentEntry, listenPanelCommentEntries,
-    updatePanelCommentEntry, type PanelCommentContext,
+    updatePanelCommentEntry, listenPanelCommentRelease, isPanelTableReleased,
+    updatePanelCommentApprovalStatus, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
+import { createDefaultPanelCommentReleaseMap, type PanelCommentReleaseMap } from '../../types/panelComment';
 import { PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel } from '../../utils/panelCommentUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
 
@@ -44,6 +46,9 @@ export default function PanelPanelCommentsPage() {
     const [dialogMode, setDialogMode] = React.useState<EditorMode>('create');
     const [editingEntry, setEditingEntry] = React.useState<PanelCommentEntry | null>(null);
     const [saving, setSaving] = React.useState(false);
+    const [releaseMap, setReleaseMap] = React.useState<PanelCommentReleaseMap>(
+        createDefaultPanelCommentReleaseMap()
+    );
     const selectedGroup = React.useMemo(
         () => groups.find((group) => group.id === selectedGroupId) ?? null,
         [groups, selectedGroupId]
@@ -84,6 +89,25 @@ export default function PanelPanelCommentsPage() {
         });
         return () => unsubscribe();
     }, [userUid, selectedGroupId]);
+
+    // Listen for release status
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setReleaseMap(createDefaultPanelCommentReleaseMap());
+            return;
+        }
+        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
+            onData: (next) => setReleaseMap(next),
+            onError: (error) => console.error('Panel release listener error:', error),
+        });
+        return () => unsubscribe();
+    }, [panelCommentCtx]);
+
+    // Check if current user's table is released for the active stage
+    const isTableReleased = React.useMemo(() => {
+        if (!userUid) return false;
+        return isPanelTableReleased(releaseMap, activeStage, userUid);
+    }, [releaseMap, activeStage, userUid]);
 
     React.useEffect(() => {
         if (!panelCommentCtx || !userUid) {
@@ -161,7 +185,7 @@ export default function PanelPanelCommentsPage() {
     }, [panelCommentCtx, userUid, dialogMode, editingEntry, activeStage, showNotification]);
 
     const handleDeleteEntry = React.useCallback(async (entry: PanelCommentEntry) => {
-        if (!panelCommentCtx) return;
+        if (!panelCommentCtx || isTableReleased) return;
         const confirmed = window.confirm('Delete this comment? This action cannot be undone.');
         if (!confirmed) {
             return;
@@ -173,7 +197,24 @@ export default function PanelPanelCommentsPage() {
             console.error('Failed to delete panel comment:', error);
             showNotification('Unable to delete the comment. Please try again.', 'error');
         }
-    }, [panelCommentCtx, showNotification]);
+    }, [panelCommentCtx, isTableReleased, showNotification]);
+
+    const handleApprovalChange = React.useCallback(async (
+        entry: PanelCommentEntry,
+        status: PanelCommentApprovalStatus
+    ) => {
+        if (!panelCommentCtx || !userUid || !isTableReleased) return;
+        try {
+            await updatePanelCommentApprovalStatus(panelCommentCtx, entry.id, status, userUid);
+            showNotification(
+                status === 'approved' ? 'Comment marked as approved.' : 'Revision requested.',
+                'success'
+            );
+        } catch (error) {
+            console.error('Failed to update approval status:', error);
+            showNotification('Unable to update approval status. Please try again.', 'error');
+        }
+    }, [panelCommentCtx, userUid, isTableReleased, showNotification]);
 
     if (session?.loading) {
         return (
@@ -229,10 +270,17 @@ export default function PanelPanelCommentsPage() {
                                 <Tab key={stage.id} value={stage.id} label={stage.studentLabel} />
                             ))}
                         </Tabs>
-                        <Alert severity="info">
-                            Students will provide their page references and status separately. Focus on the concrete comments here.
-                            {' '}Each panelist works on a dedicated sheet, so you will only see entries that belong to you.
-                        </Alert>
+                        {isTableReleased ? (
+                            <Alert severity="success">
+                                Your comment sheet has been released to students.
+                                You can now review their responses and approve or request revisions.
+                            </Alert>
+                        ) : (
+                            <Alert severity="info">
+                                Students will provide their page references and status separately. Focus on the concrete comments here.
+                                {' '}Each panelist works on a dedicated sheet, so you will only see entries that belong to you.
+                            </Alert>
+                        )}
                         {entriesError && (
                             <Alert severity="error">{entriesError}</Alert>
                         )}
@@ -242,9 +290,11 @@ export default function PanelPanelCommentsPage() {
                             variant="panel"
                             loading={entriesLoading}
                             disabled={saving}
+                            released={isTableReleased}
                             onAddEntry={() => handleOpenEditor('create')}
                             onEditEntry={(entry) => handleOpenEditor('edit', entry)}
                             onDeleteEntry={handleDeleteEntry}
+                            onApprovalChange={handleApprovalChange}
                         />
                     </>
                 )}

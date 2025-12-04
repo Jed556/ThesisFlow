@@ -40,7 +40,7 @@ const STAGE_LOOKUP = StagesConfig.stages.reduce<Map<string, ThesisStageName>>((a
     return acc;
 }, new Map());
 
-export type StageSequenceTarget = 'chapters' | 'terminal';
+export type StageSequenceTarget = 'chapters' | 'terminal' | 'panelComments';
 
 export interface StageSequenceStep {
     stage: ThesisStageName;
@@ -48,14 +48,33 @@ export interface StageSequenceStep {
 }
 
 /**
- * Thesis stage unlock sequence derived from JSON config
- * Each stage has chapters and terminal requirements
+ * Stages that have panel comments after their terminal requirements.
+ * Panel comments for 'proposal' unlock after pre-proposal terminal (before post-proposal chapters).
+ * Panel comments for 'defense' unlock after pre-defense terminal (before post-defense chapters).
+ */
+const STAGES_WITH_PANEL_COMMENTS = new Set<ThesisStageName>(['pre-proposal', 'pre-defense']);
+
+/**
+ * Thesis stage unlock sequence derived from JSON config.
+ * The sequence is:
+ * 1. Pre-Proposal chapters → Pre-Proposal terminal → Panel Comments (proposal)
+ * 2. Post-Proposal chapters → Post-Proposal terminal
+ * 3. Pre-Defense chapters → Pre-Defense terminal → Panel Comments (defense)
+ * 4. Post-Defense chapters → Post-Defense terminal
  */
 export const THESIS_STAGE_UNLOCK_SEQUENCE: readonly StageSequenceStep[] = StagesConfig.stages.flatMap(
-    (stage) => [
-        { stage: stage.slug as ThesisStageName, target: 'chapters' as const },
-        { stage: stage.slug as ThesisStageName, target: 'terminal' as const },
-    ]
+    (stage) => {
+        const stageSlug = stage.slug as ThesisStageName;
+        const steps: StageSequenceStep[] = [
+            { stage: stageSlug, target: 'chapters' as const },
+            { stage: stageSlug, target: 'terminal' as const },
+        ];
+        // Add panel comments step after terminal for stages that have them
+        if (STAGES_WITH_PANEL_COMMENTS.has(stageSlug)) {
+            steps.push({ stage: stageSlug, target: 'panelComments' as const });
+        }
+        return steps;
+    }
 );
 
 /**
@@ -250,21 +269,25 @@ export function buildSequentialStageLockMap(
 export interface StageProgressSnapshot {
     chapters?: Partial<Record<ThesisStageName, boolean>>;
     terminalRequirements?: Partial<Record<ThesisStageName, boolean>>;
+    panelComments?: Partial<Record<ThesisStageName, boolean>>;
 }
 
 export interface StageInterleavedLockMap {
     chapters: Record<ThesisStageName, boolean>;
     terminalRequirements: Record<ThesisStageName, boolean>;
+    panelComments: Record<ThesisStageName, boolean>;
 }
 
 export interface StageGateOverrides {
     chapters?: Partial<Record<ThesisStageName, boolean>>;
     terminalRequirements?: Partial<Record<ThesisStageName, boolean>>;
+    panelComments?: Partial<Record<ThesisStageName, boolean>>;
 }
 
 const describeTargetLabel: Record<StageSequenceTarget, string> = {
     chapters: 'chapters',
     terminal: 'terminal requirements',
+    panelComments: 'panel comments',
 };
 
 export function describeStageSequenceStep(step: StageSequenceStep): string {
@@ -291,22 +314,33 @@ export function buildInterleavedStageLockMap(
     const locks: StageInterleavedLockMap = {
         chapters: {} as Record<ThesisStageName, boolean>,
         terminalRequirements: {} as Record<ThesisStageName, boolean>,
+        panelComments: {} as Record<ThesisStageName, boolean>,
     };
     let previousStepComplete = true;
 
     THESIS_STAGE_UNLOCK_SEQUENCE.forEach((step) => {
-        const targetLockMap = step.target === 'chapters'
-            ? locks.chapters
-            : locks.terminalRequirements;
-        const gateReady = step.target === 'chapters'
-            ? gates?.chapters?.[step.stage]
-            : gates?.terminalRequirements?.[step.stage];
+        let targetLockMap: Record<ThesisStageName, boolean>;
+        let gateReady: boolean | undefined;
+        let completionSource: Partial<Record<ThesisStageName, boolean>> | undefined;
+
+        if (step.target === 'chapters') {
+            targetLockMap = locks.chapters;
+            gateReady = gates?.chapters?.[step.stage];
+            completionSource = progress.chapters;
+        } else if (step.target === 'terminal') {
+            targetLockMap = locks.terminalRequirements;
+            gateReady = gates?.terminalRequirements?.[step.stage];
+            completionSource = progress.terminalRequirements;
+        } else {
+            // panelComments
+            targetLockMap = locks.panelComments;
+            gateReady = gates?.panelComments?.[step.stage];
+            completionSource = progress.panelComments;
+        }
+
         const gateSatisfied = gateReady ?? true;
         targetLockMap[step.stage] = !(previousStepComplete && gateSatisfied);
 
-        const completionSource = step.target === 'chapters'
-            ? progress.chapters
-            : progress.terminalRequirements;
         const stageComplete = Boolean(completionSource?.[step.stage]);
         previousStepComplete = stageComplete;
     });

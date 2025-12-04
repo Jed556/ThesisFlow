@@ -1,5 +1,6 @@
 // User role types - System-wide roles
-export type UserRole = 'student' | 'statistician' | 'editor' | 'adviser' | 'panel' | 'moderator' | 'head' | 'admin' | 'developer';
+export type UserRole =
+    'student' | 'statistician' | 'editor' | 'adviser' | 'panel' | 'moderator' | 'chair' | 'head' | 'admin' | 'developer';
 
 export interface UserName {
     /**
@@ -24,18 +25,23 @@ export interface UserName {
     suffix?: string;
 }
 
+import type { ExpertSkillRating } from './skillTemplate';
+
 /**
  * Skill rating metadata for expert expertise
+ * @deprecated Use ExpertSkillRating from skillTemplate.ts for new implementations
  */
-export interface SkillRating {
+export interface Skills {
+    /** Reference to the skill template ID (optional for backward compatibility) */
+    skillId?: string;
     /** Display name of the skill */
     name: string;
     /** Expert self- or system-assessed rating using a 0-5 scale */
     rating: number;
-    /** Optional count of endorsements backing the rating */
-    endorsements?: number;
     /** Optional free-form note or description */
     note?: string;
+    /** ISO timestamp when the rating was last updated */
+    updatedAt?: string;
 }
 
 /**
@@ -92,14 +98,10 @@ export interface UserProfile {
     bio?: string;
 
     /**
-     * Expertise areas or skills (for advisers)
+     * Expertise areas or skills (for advisers, editors, statisticians)
+     * Use ExpertSkillRating for new implementations with department skill templates
      */
-    skills?: string[];
-
-    /**
-     * Optional skill ratings with proficiency scores (0-5 scale)
-     */
-    skillRatings?: SkillRating[];
+    skillRatings?: Skills[] | ExpertSkillRating[];
 
     /**
      * Capacity for handled theses (only for advisers, editors and statisticians)

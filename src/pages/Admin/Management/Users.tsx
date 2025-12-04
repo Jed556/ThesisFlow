@@ -35,7 +35,7 @@ export const metadata: NavigationItem = {
 };
 
 const ROLE_OPTIONS: UserRole[] = [
-    'student', 'statistician', 'editor', 'adviser', 'panel', 'moderator', 'head', 'admin', 'developer'
+    'student', 'statistician', 'editor', 'adviser', 'panel', 'moderator', 'head', 'chair', 'admin', 'developer'
 ];
 
 const ROLE_COLORS: Record<UserRole, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
@@ -46,6 +46,7 @@ const ROLE_COLORS: Record<UserRole, 'default' | 'primary' | 'secondary' | 'error
     panel: 'secondary',
     moderator: 'warning',
     head: 'success',
+    chair: 'success',
     admin: 'error',
     developer: 'secondary',
 };

@@ -67,6 +67,8 @@ interface ThesisWorkspaceProps {
         thesisId: string; chapterId: number; stage: ThesisStageName; submissionId: string;
     }) => Promise<void> | void;
     terminalRequirementCompletionMap?: Partial<Record<ThesisStageName, boolean>>;
+    /** Panel comment completion map for stages that have panel comments (pre-proposal, pre-defense) */
+    panelCommentCompletionMap?: Partial<Record<ThesisStageName, boolean>>;
     enforceTerminalRequirementSequence?: boolean;
     stageGateOverrides?: StageGateOverrides;
 }
@@ -120,6 +122,7 @@ export default function ThesisWorkspace({
     emptyStateMessage = 'Select a group to inspect its thesis.',
     onCreateComment, onEditComment, onUploadChapter, onChapterDecision, onSubmitDraft, onDeleteDraft,
     terminalRequirementCompletionMap,
+    panelCommentCompletionMap,
     enforceTerminalRequirementSequence = false,
     stageGateOverrides,
 }: ThesisWorkspaceProps) {
@@ -253,12 +256,14 @@ export default function ThesisWorkspace({
         const interleavedLocks = buildInterleavedStageLockMap({
             chapters: stageCompletionMap,
             terminalRequirements: terminalRequirementCompletionMap,
+            panelComments: panelCommentCompletionMap,
         }, stageGateOverrides);
         return interleavedLocks.chapters;
     }, [
         enforceTerminalRequirementSequence,
         stageCompletionMap,
         terminalRequirementCompletionMap,
+        panelCommentCompletionMap,
         stageGateOverrides,
     ]);
 

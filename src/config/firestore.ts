@@ -128,6 +128,9 @@ export const TERMINAL_SUBCOLLECTION = 'terminal';
 /** Users subcollection */
 export const USERS_SUBCOLLECTION = 'users';
 
+/** Adviser skills template subcollection under department */
+export const ADVISER_SKILLS_SUBCOLLECTION = 'adviserSkills';
+
 /** Slot requests subcollection under year */
 export const SLOT_REQUESTS_SUBCOLLECTION = 'slotRequests';
 

@@ -7,7 +7,7 @@ import {
 import {
     School as SchoolIcon, Groups as GroupsIcon, PersonAdd as PersonAddIcon,
     Topic as TopicIcon, Article as ArticleIcon, Upload as UploadIcon,
-    Event as EventIcon, Notifications as NotificationsIcon
+    Event as EventIcon, Notifications as NotificationsIcon, CommentBank as CommentBankIcon
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
@@ -15,6 +15,7 @@ import type { Session } from '../../types/session';
 import type { ThesisChapter, ThesisData } from '../../types/thesis';
 import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
+import type { PanelCommentReleaseMap, PanelCommentStage } from '../../types/panelComment';
 import type { TopicProposalSetRecord } from '../../utils/firebase/firestore/topicProposals';
 import type { ScheduleEvent } from '../../types/schedule';
 import type { GroupNotificationDoc } from '../../types/notification';
@@ -26,8 +27,20 @@ import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesi
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { listenTopicProposalSetsByGroup } from '../../utils/firebase/firestore/topicProposals';
 import { listenEventsByThesisIds } from '../../utils/firebase/firestore/events';
-import { listenGroupNotifications, ensureGroupNotificationDocument } from '../../utils/firebase/firestore/groupNotifications';
+import {
+    listenGroupNotifications, ensureGroupNotificationDocument
+} from '../../utils/firebase/firestore/groupNotifications';
 import { listenChaptersForStage, type ChapterContext } from '../../utils/firebase/firestore/chapters';
+import {
+    listenPanelCommentRelease, listenPanelCommentCompletion, type PanelCommentContext
+} from '../../utils/firebase/firestore/panelComments';
+import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
+import {
+    findAndListenTerminalRequirements, type TerminalRequirementSubmissionRecord
+} from '../../utils/firebase/firestore/terminalRequirements';
+import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
+import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
+import { DEFAULT_YEAR } from '../../config/firestore';
 import { normalizeDateInput } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router';
 import type { WorkflowStep } from '../../types/workflow';
@@ -98,9 +111,26 @@ function hasApprovedProposal(proposalSets: TopicProposalSetRecord[]): boolean {
 }
 
 /**
- * Get the title of the first approved proposal entry
+ * Check if any proposal entry has been marked as used for thesis
  */
-function getApprovedProposalTitle(proposalSets: TopicProposalSetRecord[]): string | undefined {
+function hasUsedProposal(proposalSets: TopicProposalSetRecord[]): boolean {
+    return proposalSets.some((set) =>
+        set.entries.some((entry) => entry.usedAsThesis === true)
+    );
+}
+
+/**
+ * Get the title of the first used-as-thesis proposal entry, or fallback to approved
+ */
+function getUsedOrApprovedProposalTitle(proposalSets: TopicProposalSetRecord[]): string | undefined {
+    // First, look for the used-as-thesis entry
+    for (const set of proposalSets) {
+        const usedEntry = set.entries.find((entry) => entry.usedAsThesis === true);
+        if (usedEntry) {
+            return usedEntry.title;
+        }
+    }
+    // Fallback to approved entry
     for (const set of proposalSets) {
         const approvedEntry = set.entries.find((entry) => entry.status === 'head_approved');
         if (approvedEntry) {
@@ -144,16 +174,38 @@ function isStageStarted(record: ThesisRecord | null, stageSlug: string): boolean
  */
 type StageChaptersMap = Record<string, ThesisChapter[]>;
 
+/**
+ * Maps stage slugs that trigger panel comments to their PanelCommentStage value.
+ * Pre-proposal terminal completion unlocks 'proposal' panel comments.
+ * Pre-defense terminal completion unlocks 'defense' panel comments.
+ */
+const STAGE_TO_PANEL_COMMENT_STAGE: Partial<Record<ThesisStageName, PanelCommentStage>> = {
+    'pre-proposal': 'proposal',
+    'pre-defense': 'defense',
+};
+
+/**
+ * Maps PanelCommentStage to the next thesis stage that follows (whose chapters it unlocks).
+ */
+const PANEL_COMMENT_UNLOCKS_STAGE: Record<PanelCommentStage, ThesisStageName> = {
+    'proposal': 'post-proposal',
+    'defense': 'post-defense',
+};
+
 function buildThesisWorkflowSteps(
     record: ThesisRecord | null,
     members: TeamMember[],
     group: ThesisGroup | null,
     proposalSets: TopicProposalSetRecord[] = [],
-    stageChaptersMap: StageChaptersMap = {}
+    stageChaptersMap: StageChaptersMap = {},
+    panelCommentReleaseMap?: PanelCommentReleaseMap,
+    panelCommentCompletionMap?: Partial<Record<PanelCommentStage, boolean>>,
+    terminalRequirementCompletionMap?: Partial<Record<ThesisStageName, boolean>>
 ): WorkflowStep[] {
-    // Check proposal approval status from proposal sets
+    // Check proposal approval and usage status from proposal sets
     const proposalApproved = hasApprovedProposal(proposalSets);
-    const approvedTitle = getApprovedProposalTitle(proposalSets);
+    const proposalInUse = hasUsedProposal(proposalSets);
+    const displayTitle = getUsedOrApprovedProposalTitle(proposalSets) || record?.title;
     const proposalsSubmitted = hasSubmittedProposals(proposalSets);
 
     // Common group state checks
@@ -169,8 +221,10 @@ function buildThesisWorkflowSteps(
     const adviserAssigned = Boolean(group?.members?.adviser);
     const editorAssigned = Boolean(group?.members?.editor);
     const hasTopicProposals = Boolean(record?.title) || proposalsSubmitted;
-    const topicApproved = proposalApproved || (record ? isTopicApproved(record) : false);
-    const displayTitle = approvedTitle || record?.title;
+    // Topic is considered complete for workflow when it's marked as "used" (not just approved)
+    const topicComplete = proposalInUse || (record ? isTopicApproved(record) : false);
+    // Topic is approved but not yet in use - student needs to click "Use This Topic"
+    const topicApprovedNotUsed = proposalApproved && !proposalInUse;
 
     // Build group description based on current status
     let groupDescription: string;
@@ -231,15 +285,15 @@ function buildThesisWorkflowSteps(
         {
             id: 'submit-proposals',
             title: 'Submit Topic Proposals',
-            description: topicApproved
-                ? `Topic approved: "${displayTitle}"`
-                : hasTopicProposals
-                    ? 'Proposals submitted. Awaiting approval.'
-                    : 'Upload up to 3 thesis title proposals for review and approval.',
-            completedMessage: topicApproved
-                ? `Your topic proposal "${displayTitle}" has been approved.`
-                : 'Your topic proposal has been approved.',
-            state: resolveStepState({ completed: topicApproved, started: hasTopicProposals }),
+            description: topicComplete
+                ? `Topic in use: "${displayTitle}"`
+                : topicApprovedNotUsed
+                    ? `Topic approved: "${displayTitle}". Click "Use This Topic" to proceed.`
+                    : hasTopicProposals
+                        ? 'Proposals submitted. Awaiting approval.'
+                        : 'Upload up to 3 thesis title proposals for review and approval.',
+            completedMessage: `Your topic "${displayTitle}" is now in use for your thesis.`,
+            state: resolveStepState({ completed: topicComplete, started: hasTopicProposals || proposalApproved }),
             actionLabel: 'View Proposals',
             actionPath: '/topic-proposals',
             icon: <TopicIcon />,
@@ -253,11 +307,13 @@ function buildThesisWorkflowSteps(
             title: 'Select Research Adviser',
             description: adviserAssigned
                 ? 'Research adviser assigned.'
-                : topicApproved
-                    ? 'Choose your research adviser now that your topic is approved.'
-                    : 'Adviser selection unlocks after your topic proposal is approved.',
+                : topicComplete
+                    ? 'Choose your research adviser now that your topic is in use.'
+                    : topicApprovedNotUsed
+                        ? 'Click "Use This Topic" on your approved proposal to unlock adviser selection.'
+                        : 'Adviser selection unlocks after your topic proposal is approved and in use.',
             completedMessage: 'Research adviser has been assigned to your group.',
-            state: resolveStepState({ completed: adviserAssigned, started: topicApproved && !adviserAssigned }),
+            state: resolveStepState({ completed: adviserAssigned, started: topicComplete && !adviserAssigned }),
             actionLabel: adviserAssigned ? undefined : 'Browse Advisers',
             actionPath: '/recommendation',
             icon: <PersonAddIcon />,
@@ -318,7 +374,8 @@ function buildThesisWorkflowSteps(
 
         // Terminal requirements step for this stage
         const terminalStepId = `terminal-${stageSlug}`;
-        const terminalCompleted = stageCompleted;
+        // Use terminal requirement completion map if available, otherwise fall back to stage completion
+        const terminalCompleted = terminalRequirementCompletionMap?.[stageSlug] ?? stageCompleted;
         const terminalStarted = stageStarted && stageChaptersApproved;
 
         let terminalDescription: string;
@@ -346,6 +403,50 @@ function buildThesisWorkflowSteps(
 
         // Update previous step ID for next stage's prerequisites
         previousStepId = terminalStepId;
+
+        // Add panel comment step after terminal requirements for specific stages
+        const panelCommentStage = STAGE_TO_PANEL_COMMENT_STAGE[stageSlug];
+        if (panelCommentStage) {
+            const panelCommentStepId = `panel-comments-${panelCommentStage}`;
+            // Check if any panelist table has been released for this stage
+            const isReleased = isAnyTableReleasedForStage(panelCommentStage, panelCommentReleaseMap);
+            const nextStageName = PANEL_COMMENT_UNLOCKS_STAGE[panelCommentStage];
+            const nextStageConfig = StagesConfig.stages.find((s) => s.slug === nextStageName);
+            const nextStageLabel = nextStageConfig?.name ?? nextStageName;
+
+            let panelCommentDescription: string;
+            let panelCommentState: WorkflowStep['state'];
+
+            // Step is complete when panel comments have been released (students can view and address them)
+            // Step is available when terminal is complete but waiting for release
+            // Step is locked when terminal requirements not complete
+            if (isReleased) {
+                panelCommentDescription = `Panel comments released. Review and address panel feedback.`;
+                panelCommentState = 'completed';
+            } else if (terminalCompleted) {
+                panelCommentDescription = `Waiting for panel comments to be released for ${stageName}.`;
+                panelCommentState = 'available';
+            } else {
+                panelCommentDescription = `Complete ${stageName} terminal requirements to unlock panel comments.`;
+                panelCommentState = 'locked';
+            }
+
+            stageSteps.push({
+                id: panelCommentStepId,
+                title: `${nextStageLabel} Panel Comments`,
+                description: panelCommentDescription,
+                completedMessage: `Panel comments for ${stageName} have been released.`,
+                state: panelCommentState,
+                actionLabel: 'View Comments',
+                actionPath: `/panel-comments?stage=${panelCommentStage}`,
+                icon: <CommentBankIcon />,
+                prerequisites: [
+                    { stepId: terminalStepId, type: 'prerequisite' },
+                ],
+            });
+
+            previousStepId = panelCommentStepId;
+        }
     });
 
     return applyPrerequisiteLocks([...baseSteps, ...stageSteps]);
@@ -392,6 +493,21 @@ export default function ThesisPage() {
     const [error, setError] = React.useState<string | null>(null);
     const [hasNoThesis, setHasNoThesis] = React.useState<boolean>(false);
     const [expandedSteps, setExpandedSteps] = React.useState<Set<string>>(new Set());
+
+    // Panel comment release state
+    const [panelCommentReleaseMap, setPanelCommentReleaseMap] = React.useState(
+        createDefaultPanelCommentReleaseMap()
+    );
+
+    // Panel comment completion state (all comments approved per stage)
+    const [panelCommentCompletionMap, setPanelCommentCompletionMap] = React.useState<
+        Partial<Record<PanelCommentStage, boolean>>
+    >({});
+
+    // Terminal requirement submissions by stage
+    const [terminalSubmissionsByStage, setTerminalSubmissionsByStage] = React.useState<
+        Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>
+    >({} as Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>);
 
     // Upcoming events and recent updates state
     const [upcomingEvents, setUpcomingEvents] = React.useState<EventRecord[]>([]);
@@ -665,10 +781,113 @@ export default function ThesisPage() {
         };
     }, [group?.id]);
 
+    // Build panel comment context from group
+    const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
+        if (!group) return null;
+        return {
+            year: DEFAULT_YEAR,
+            department: group.department ?? '',
+            course: group.course ?? '',
+            groupId: group.id,
+        };
+    }, [group]);
+
+    // Listen for panel comment release status
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setPanelCommentReleaseMap(createDefaultPanelCommentReleaseMap());
+            return;
+        }
+
+        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
+            onData: (releaseMap) => {
+                setPanelCommentReleaseMap(releaseMap);
+            },
+            onError: (err) => {
+                console.error('Failed to load panel comment release status:', err);
+                setPanelCommentReleaseMap(createDefaultPanelCommentReleaseMap());
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [panelCommentCtx]);
+
+    // Listen for panel comment completion (all comments approved) for each stage
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setPanelCommentCompletionMap({});
+            return;
+        }
+
+        // Listen for both proposal and defense stages
+        const stages: PanelCommentStage[] = ['proposal', 'defense'];
+        const unsubscribers = stages.map((stage) =>
+            listenPanelCommentCompletion(panelCommentCtx, stage, {
+                onData: (isComplete) => {
+                    setPanelCommentCompletionMap((prev) => ({
+                        ...prev,
+                        [stage]: isComplete,
+                    }));
+                },
+                onError: (err) => {
+                    console.error(`Failed to listen for panel comment completion (${stage}):`, err);
+                },
+            })
+        );
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [panelCommentCtx]);
+
+    // Listen for terminal requirement submissions for each stage
+    React.useEffect(() => {
+        if (!thesis?.id) {
+            setTerminalSubmissionsByStage({} as Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>);
+            return;
+        }
+
+        const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => {
+            const stageValue = stageMeta.value as ThesisStageName;
+            return findAndListenTerminalRequirements(thesis.id, stageValue, {
+                onData: (records) => {
+                    setTerminalSubmissionsByStage((prev) => ({
+                        ...prev,
+                        [stageValue]: records,
+                    }));
+                },
+                onError: (listenerError) => {
+                    console.error(`Terminal requirement listener error for ${stageValue}:`, listenerError);
+                },
+            });
+        });
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [thesis?.id]);
+
+    // Compute terminal requirement completion map from submissions
+    const terminalRequirementCompletionMap = React.useMemo(() => {
+        return THESIS_STAGE_METADATA.reduce<Record<ThesisStageName, boolean>>((acc, stageMeta) => {
+            const stageValue = stageMeta.value as ThesisStageName;
+            const submissions = terminalSubmissionsByStage[stageValue] ?? [];
+            // Stage is complete if there are submissions and ALL are approved
+            acc[stageValue] = submissions.length > 0 && submissions.every((s) => s.status === 'approved');
+            return acc;
+        }, {} as Record<ThesisStageName, boolean>);
+    }, [terminalSubmissionsByStage]);
+
     // Compute workflow steps before any conditional returns (hooks must be called unconditionally)
     const workflowSteps = React.useMemo(
-        () => buildThesisWorkflowSteps(thesis, teamMembers, group, proposalSets, stageChaptersMap),
-        [thesis, teamMembers, group, proposalSets, stageChaptersMap]
+        () => buildThesisWorkflowSteps(
+            thesis, teamMembers, group, proposalSets, stageChaptersMap,
+            panelCommentReleaseMap, panelCommentCompletionMap, terminalRequirementCompletionMap
+        ),
+        [thesis, teamMembers, group, proposalSets, stageChaptersMap,
+            panelCommentReleaseMap, panelCommentCompletionMap, terminalRequirementCompletionMap]
     );
     const activeStepIndex = React.useMemo(() => getActiveStepIndex(workflowSteps), [workflowSteps]);
 

@@ -49,15 +49,25 @@ export function getPanelCommentStageMeta(stage: PanelCommentStage): PanelComment
 export type StageCompletionMap = Partial<Record<ThesisStageName, boolean>>;
 
 /**
- * Determines whether a student should see a specific stage tab.
- * A stage becomes accessible when the linked thesis stage is completed and admin released the comments.
+ * Determines whether a student can access a specific panelist's table for a stage.
+ * A stage becomes accessible when the admin has released the specific panelist's table.
+ * @param stage - The panel comment stage
+ * @param releaseMap - The release map containing per-table release status
+ * @param panelUid - The panelist's UID whose table to check
  */
 export function canStudentAccessPanelStage(
     stage: PanelCommentStage,
-    _completionMap: StageCompletionMap | undefined,
-    releaseMap: PanelCommentReleaseMap | undefined
+    releaseMap: PanelCommentReleaseMap | undefined,
+    panelUid: string | null | undefined,
 ): boolean {
-    return Boolean(releaseMap?.[stage]?.sent);
+    if (!releaseMap || !panelUid) return false;
+    const stageRelease = releaseMap[stage];
+    // Check per-table release first
+    if (stageRelease?.tables?.[panelUid]?.sent) {
+        return true;
+    }
+    // Fall back to stage-level release (legacy behavior)
+    return Boolean(stageRelease?.sent);
 }
 
 /**
@@ -72,7 +82,33 @@ export function getPanelCommentStageLabel(stage: PanelCommentStage, variant: 'st
 }
 
 /**
+ * Checks if ANY panel table has been released for a stage.
+ * This checks both the legacy stage-level release and per-table releases.
+ * @param stage - The panel comment stage
+ * @param releaseMap - The release map containing release status
+ * @returns Whether any table has been released for the stage
+ */
+export function isAnyTableReleasedForStage(
+    stage: PanelCommentStage,
+    releaseMap: PanelCommentReleaseMap | undefined
+): boolean {
+    if (!releaseMap) return false;
+    const stageRelease = releaseMap[stage];
+    // Check stage-level release (legacy)
+    if (stageRelease?.sent) {
+        return true;
+    }
+    // Check if any per-table release exists
+    const tables = stageRelease?.tables;
+    if (tables) {
+        return Object.values(tables).some((tableRelease) => tableRelease?.sent === true);
+    }
+    return false;
+}
+
+/**
  * Helper exposing the release flag for convenience in UI bindings.
+ * @deprecated Use isAnyTableReleasedForStage for checking stage-level release status
  */
 export function isPanelCommentStageReleased(
     stage: PanelCommentStage,
