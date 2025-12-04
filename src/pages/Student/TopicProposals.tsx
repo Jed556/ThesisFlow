@@ -249,7 +249,13 @@ export default function StudentTopicProposalsPage() {
 
     const activeSet = React.useMemo(() => pickActiveProposalSet(proposalSets), [proposalSets]);
     const isLeader = group?.members.leader === userUid;
-    const editable = canEditProposalSet(activeSet) && isLeader;
+    const isMember = Boolean(userUid && (
+        group?.members.leader === userUid ||
+        group?.members.members.includes(userUid)
+    ));
+    // Members can add/edit entries in draft mode, but only leader can create cycles and submit
+    const canEditEntries = canEditProposalSet(activeSet) && isMember;
+    const canSubmitSet = canEditProposalSet(activeSet) && isLeader;
     const canStartNewSet = React.useMemo(() => {
         if (!isLeader || !activeSet) {
             return false;
@@ -518,9 +524,9 @@ export default function StudentTopicProposalsPage() {
                     </Typography>
                 </Box>
 
-                {!isLeader && (
+                {!isLeader && isMember && (
                     <Alert severity="info">
-                        Only the group leader can edit or submit topic proposals. You can still monitor the review status here.
+                        You can add and edit topic proposals. Only the group leader can submit proposals for review or start new cycles.
                     </Alert>
                 )}
 
@@ -583,23 +589,27 @@ export default function StudentTopicProposalsPage() {
                                 </Stack>
                             </Stack>
 
-                            {editable && (
+                            {(canEditEntries || canSubmitSet) && (
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 3 }}>
-                                    <Button
-                                        variant="contained"
-                                        disabled={activeSet.entries.length >= MAX_TOPIC_PROPOSALS}
-                                        onClick={() => handleOpenForm()}
-                                    >
-                                        Add proposal ({activeSet.entries.length}/{MAX_TOPIC_PROPOSALS})
-                                    </Button>
-                                    <Button
-                                        variant="outlined"
-                                        color="success"
-                                        disabled={activeSet.entries.length === 0 || submissionLoading}
-                                        onClick={handleSubmitSet}
-                                    >
-                                        Submit for review
-                                    </Button>
+                                    {canEditEntries && (
+                                        <Button
+                                            variant="contained"
+                                            disabled={activeSet.entries.length >= MAX_TOPIC_PROPOSALS}
+                                            onClick={() => handleOpenForm()}
+                                        >
+                                            Add proposal ({activeSet.entries.length}/{MAX_TOPIC_PROPOSALS})
+                                        </Button>
+                                    )}
+                                    {canSubmitSet && (
+                                        <Button
+                                            variant="outlined"
+                                            color="success"
+                                            disabled={activeSet.entries.length === 0 || submissionLoading}
+                                            onClick={handleSubmitSet}
+                                        >
+                                            Submit for review
+                                        </Button>
+                                    )}
                                 </Stack>
                             )}
 
@@ -610,7 +620,7 @@ export default function StudentTopicProposalsPage() {
                                         const isEntryInUse = entry.usedAsThesis === true;
                                         const lockedByAnotherEntry = Boolean(usedThesisEntry && !isEntryInUse);
                                         const entryActions: React.ReactNode[] = [];
-                                        if (editable) {
+                                        if (canEditEntries) {
                                             entryActions.push(
                                                 <Button key="edit" size="small" onClick={() => handleOpenForm(entry)}>
                                                     Edit

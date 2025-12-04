@@ -4,78 +4,58 @@
             "id": 1,
             "title": "Introduction",
             "description": "Background of the Study, Statement of the Problem, Objectives, Scope and Limitation, Significance of the Study",
-            "stage": "Pre-Proposal Oral Defense"
+            "stage": [
+                "Pre-Proposal Oral Defense",
+                "Post-Proposal Oral Defense",
+                "Pre-Final Oral Defense",
+                "Post-Final Oral Defense"
+            ]
         },
         {
             "id": 2,
             "title": "Review of Related Literature",
             "description": "Literature Review, Conceptual/Theoretical Framework, Definition of Terms",
-            "stage": "Pre-Proposal Oral Defense"
+            "stage": [
+                "Pre-Proposal Oral Defense",
+                "Post-Proposal Oral Defense",
+                "Pre-Final Oral Defense",
+                "Post-Final Oral Defense"
+            ]
         },
         {
             "id": 3,
             "title": "Research Methodology",
             "description": "Research Design, Participants/Respondents, Data Gathering Procedure, Data Analysis",
-            "stage": "Pre-Proposal Oral Defense"
+            "stage": [
+                "Pre-Proposal Oral Defense",
+                "Post-Proposal Oral Defense",
+                "Pre-Final Oral Defense",
+                "Post-Final Oral Defense"
+            ]
         },
         {
             "id": 4,
             "title": "Results and Discussion",
             "description": "Presentation of Data, Analysis and Interpretation of Results",
-            "stage": "Pre-Final Oral Defense"
+            "stage": [
+                "Pre-Final Oral Defense",
+                "Post-FFinal Oral Defense"
+            ]
         },
         {
             "id": 5,
             "title": "Summary, Conclusions, and Recommendations",
             "description": "Summary of Findings, Conclusions, Recommendations for Future Research",
-            "stage": "Pre-Final Oral Defense"
+            "stage": [
+                "Pre-Final Oral Defense",
+                "Post-Final Oral Defense"
+            ]
         }
     ],
     "departmentTemplates": [
         {
-            "department": "School of Computer Studies",
+            "department": "School of Computer Studies and Technology",
             "courses": [
-                {
-                    "course": "BS Information Technology",
-                    "chapters": [
-                        {
-                            "id": 1,
-                            "title": "Introduction",
-                            "description": "Background of the Study, Statement of the Problem, Objectives, Scope and Limitation, Significance of the Study",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 2,
-                            "title": "Review of Related Literature",
-                            "description": "Literature Review, Related Studies, Conceptual Framework, Definition of Terms",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 3,
-                            "title": "Research Methodology",
-                            "description": "Research Design, System Development Methodology, Data Gathering Procedure, Hardware and Software Requirements",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 4,
-                            "title": "System Design and Development",
-                            "description": "System Architecture, Database Design, User Interface Design, System Implementation",
-                            "stage": "Post-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 5,
-                            "title": "Results and Discussion",
-                            "description": "System Testing, User Acceptance Testing, Evaluation Results, Analysis",
-                            "stage": "Pre-Final Oral Defense"
-                        },
-                        {
-                            "id": 6,
-                            "title": "Summary, Conclusions, and Recommendations",
-                            "description": "Summary of Findings, Conclusions, Recommendations for Future Development",
-                            "stage": "Pre-Final Oral Defense"
-                        }
-                    ]
-                },
                 {
                     "course": "BS Computer Science",
                     "chapters": [
@@ -83,158 +63,63 @@
                             "id": 1,
                             "title": "Introduction",
                             "description": "Background of the Study, Statement of the Problem, Objectives, Scope and Limitation, Significance of the Study",
-                            "stage": "Pre-Proposal Oral Defense"
+                            "stage": [
+                                "Pre-Proposal Oral Defense",
+                                "Post-Proposal Oral Defense",
+                                "Pre-Final Oral Defense",
+                                "Post-Final Oral Defense"
+                            ]
                         },
                         {
                             "id": 2,
                             "title": "Review of Related Literature",
-                            "description": "Literature Review, Theoretical Framework, Conceptual Framework, Definition of Terms",
-                            "stage": "Pre-Proposal Oral Defense"
+                            "description": "Literature Review, Related Studies, Conceptual Framework, Definition of Terms",
+                            "stage": [
+                                "Pre-Proposal Oral Defense",
+                                "Post-Proposal Oral Defense",
+                                "Pre-Final Oral Defense",
+                                "Post-Final Oral Defense"
+                            ]
                         },
                         {
                             "id": 3,
                             "title": "Research Methodology",
-                            "description": "Research Design, Algorithm Design, Experimental Setup, Data Collection Methods",
-                            "stage": "Pre-Proposal Oral Defense"
+                            "description": "Research Design, System Development Methodology, Data Gathering Procedure, Hardware and Software Requirements",
+                            "stage": [
+                                "Pre-Proposal Oral Defense",
+                                "Post-Proposal Oral Defense",
+                                "Pre-Final Oral Defense",
+                                "Post-Final Oral Defense"
+                            ]
                         },
                         {
                             "id": 4,
-                            "title": "Implementation",
-                            "description": "System Architecture, Algorithm Implementation, Technical Specifications",
-                            "stage": "Post-Proposal Oral Defense"
+                            "title": "Algorithm",
+                            "description": "System Architecture, Database Design, User Interface Design, System Implementation",
+                            "stage": [
+                                "Pre-Proposal Oral Defense",
+                                "Post-Proposal Oral Defense",
+                                "Pre-Final Oral Defense",
+                                "Post-Final Oral Defense"
+                            ]
                         },
                         {
                             "id": 5,
                             "title": "Results and Discussion",
-                            "description": "Experimental Results, Performance Analysis, Comparative Analysis",
-                            "stage": "Pre-Final Oral Defense"
+                            "description": "System Testing, User Acceptance Testing, Evaluation Results, Analysis",
+                            "stage": [
+                                "Pre-Final Oral Defense",
+                                "Post-Final Oral Defense"
+                            ]
                         },
                         {
                             "id": 6,
                             "title": "Summary, Conclusions, and Recommendations",
-                            "description": "Summary of Findings, Conclusions, Recommendations for Future Research",
-                            "stage": "Pre-Final Oral Defense"
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "department": "School of Business, Management, and Accountancy",
-            "courses": [
-                {
-                    "course": "BS Accountancy",
-                    "chapters": [
-                        {
-                            "id": 1,
-                            "title": "Introduction",
-                            "description": "Background of the Study, Statement of the Problem, Research Questions, Objectives, Scope and Limitation, Significance of the Study",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 2,
-                            "title": "Review of Related Literature",
-                            "description": "Literature Review, Theoretical Framework, Conceptual Framework, Research Hypotheses, Definition of Terms",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 3,
-                            "title": "Research Methodology",
-                            "description": "Research Design, Population and Sample, Research Instruments, Data Gathering Procedure, Statistical Treatment",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 4,
-                            "title": "Results and Discussion",
-                            "description": "Presentation of Data, Statistical Analysis, Interpretation of Findings, Hypothesis Testing Results",
-                            "stage": "Pre-Final Oral Defense"
-                        },
-                        {
-                            "id": 5,
-                            "title": "Summary, Conclusions, and Recommendations",
-                            "description": "Summary of Findings, Conclusions, Recommendations for Practice and Future Research",
-                            "stage": "Pre-Final Oral Defense"
-                        }
-                    ]
-                },
-                {
-                    "course": "BS Business Administration",
-                    "chapters": [
-                        {
-                            "id": 1,
-                            "title": "Introduction",
-                            "description": "Background of the Study, Statement of the Problem, Objectives, Scope and Limitation, Significance of the Study",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 2,
-                            "title": "Review of Related Literature",
-                            "description": "Literature Review, Theoretical/Conceptual Framework, Definition of Terms",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 3,
-                            "title": "Research Methodology",
-                            "description": "Research Design, Respondents/Participants, Data Gathering Instruments, Statistical Treatment",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 4,
-                            "title": "Results and Discussion",
-                            "description": "Presentation and Analysis of Data, Interpretation of Findings",
-                            "stage": "Pre-Final Oral Defense"
-                        },
-                        {
-                            "id": 5,
-                            "title": "Summary, Conclusions, and Recommendations",
-                            "description": "Summary, Conclusions, Recommendations",
-                            "stage": "Pre-Final Oral Defense"
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "department": "School of Education, Arts, and Sciences",
-            "courses": [
-                {
-                    "course": "BS Psychology",
-                    "chapters": [
-                        {
-                            "id": 1,
-                            "title": "Introduction",
-                            "description": "Background of the Study, Statement of the Problem, Objectives, Hypotheses, Scope and Limitation, Significance of the Study",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 2,
-                            "title": "Review of Related Literature",
-                            "description": "Literature Review, Theoretical Framework, Conceptual Framework, Definition of Terms",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 3,
-                            "title": "Research Methodology",
-                            "description": "Research Design, Participants, Instruments, Procedure, Ethical Considerations, Data Analysis",
-                            "stage": "Pre-Proposal Oral Defense"
-                        },
-                        {
-                            "id": 4,
-                            "title": "Results",
-                            "description": "Presentation of Data, Statistical Analysis Results",
-                            "stage": "Pre-Final Oral Defense"
-                        },
-                        {
-                            "id": 5,
-                            "title": "Discussion",
-                            "description": "Interpretation of Findings, Implications, Limitations",
-                            "stage": "Pre-Final Oral Defense"
-                        },
-                        {
-                            "id": 6,
-                            "title": "Conclusions and Recommendations",
-                            "description": "Conclusions, Recommendations for Practice and Future Research",
-                            "stage": "Pre-Final Oral Defense"
+                            "description": "Summary of Findings, Conclusions, Recommendations for Future Development",
+                            "stage": [
+                                "Pre-Final Oral Defense",
+                                "Post-Final Oral Defense"
+                            ]
                         }
                     ]
                 }
@@ -242,4 +127,3 @@
         }
     ]
 }
-

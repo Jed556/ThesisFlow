@@ -77,13 +77,23 @@ export function canEditProposalSet(set: TopicProposalSet | null | undefined): bo
 }
 
 /**
- * Picks the most recent non-archived topic proposal set.
+ * Picks the most relevant topic proposal set to display prominently.
+ * Priority: 1) Sets with approved entries, 2) Most recent non-archived set
  */
 export function pickActiveProposalSet(sets: TopicProposalSetRecord[]): TopicProposalSetRecord | null {
     if (sets.length === 0) {
         return null;
     }
 
+    // First, check if any set has an approved entry - prioritize that
+    const approvedSet = sets.find((set) =>
+        set.entries.some((entry) => entry.status === 'head_approved')
+    );
+    if (approvedSet) {
+        return approvedSet;
+    }
+
+    // Otherwise, pick the most recent non-archived set
     const sorted = [...sets].sort((a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
