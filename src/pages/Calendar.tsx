@@ -18,12 +18,20 @@ import { useSnackbar } from '../contexts/SnackbarContext';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
 import type {
-    ScheduleEvent, EventStatus, EventLocation, Calendar as CalendarType, CalendarPermission
+    ScheduleEvent, EventStatus, EventLocation, Calendar as CalendarType,
+    CalendarPermission,
 } from '../types/schedule';
 import type { UserProfile } from '../types/profile';
 import { format, isWithinInterval } from 'date-fns';
-import { getUserCalendars, getEventIdsFromCalendars } from '../utils/firebase/firestore/calendars';
-import { setEvent, deleteEvent, getEventsByIds } from '../utils/firebase/firestore/events';
+import { DEFAULT_YEAR } from '../config/firestore';
+import {
+    getUserCalendarsHierarchical, setHierarchicalCalendar, seedAllCalendars,
+} from '../utils/firebase/firestore/calendars';
+import {
+    setCalendarEvent, deleteCalendarEvent, getEventsFromCalendars,
+} from '../utils/firebase/firestore/calendarEvents';
+import { findAllUsers } from '../utils/firebase/firestore/user';
+import { getAllGroups } from '../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     index: 2,
@@ -47,6 +55,23 @@ const defaultEventColor = '#bdbdbd';
 
 
 /**
+ * Find the calendar that an event belongs to based on its pathContext
+ */
+function findEventCalendar(
+    event: ScheduleEvent,
+    calendars: CalendarType[]
+): CalendarType | undefined {
+    return calendars.find(cal =>
+        cal.level === event.calendarLevel &&
+        cal.pathContext.year === event.calendarPathContext.year &&
+        cal.pathContext.department === event.calendarPathContext.department &&
+        cal.pathContext.course === event.calendarPathContext.course &&
+        cal.pathContext.groupId === event.calendarPathContext.groupId &&
+        cal.pathContext.userId === event.calendarPathContext.userId
+    );
+}
+
+/**
  * Check if user can edit/delete an event
  */
 function canModifyEvent(event: ScheduleEvent & { id: string }, uid?: string, userRole?: string): boolean {
@@ -57,8 +82,13 @@ function canModifyEvent(event: ScheduleEvent & { id: string }, uid?: string, use
 
 /**
  * Parse CSV content to events
+ * Note: CSV import requires specifying a default calendar since hierarchical context can't be
+ * easily expressed in CSV. The default calendar's level and pathContext will be used.
  */
-function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<ScheduleEvent>[] {
+function parseEventsCSV(
+    csvContent: string,
+    defaultCalendar: CalendarType
+): Partial<ScheduleEvent>[] {
     const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line);
     if (lines.length < 2) return [];
 
@@ -67,7 +97,11 @@ function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<
 
     for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
-        const event: Partial<ScheduleEvent> = {};
+        const event: Partial<ScheduleEvent> = {
+            // Set default calendar's hierarchical context
+            calendarLevel: defaultCalendar.level,
+            calendarPathContext: defaultCalendar.pathContext,
+        };
 
         headers.forEach((header, index) => {
             const value = values[index];
@@ -76,7 +110,7 @@ function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<
             // Map common header variations
             if (header === 'title' || header === 'name') event.title = value;
             else if (header === 'description' || header === 'desc') event.description = value;
-            else if (header === 'calendarid' || header === 'calendar') event.calendarId = value;
+            // Note: calendarid in CSV is ignored - we use the selected default calendar
             else if (header === 'status') event.status = value as EventStatus;
             else if (header === 'startdate' || header === 'start') event.startDate = value;
             else if (header === 'enddate' || header === 'end') event.endDate = value;
@@ -86,11 +120,6 @@ function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<
                 event.location = { address: value, type: 'physical' } as EventLocation;
             }
         });
-
-        // Use default calendar if not specified
-        if (!event.calendarId) {
-            event.calendarId = defaultCalendarId;
-        }
 
         if (event.title && event.startDate) {
             events.push(event);
@@ -102,20 +131,31 @@ function parseEventsCSV(csvContent: string, defaultCalendarId: string): Partial<
 
 /**
  * Export events to CSV
+ * Note: Calendar level and path context are exported for reference but may not be re-importable
  */
-function exportEventsToCSV(events: (ScheduleEvent & { id: string })[]): string {
-    const headers = ['Title', 'Description', 'CalendarId', 'Status', 'StartDate', 'EndDate', 'Color', 'Tags', 'Location'];
-    const rows = events.map(event => [
-        event.title || '',
-        event.description || '',
-        event.calendarId || '',
-        event.status || '',
-        event.startDate || '',
-        event.endDate || '',
-        event.color || '',
-        event.tags?.join(';') || '',
-        event.location?.address || event.location?.url || ''
-    ]);
+function exportEventsToCSV(
+    events: (ScheduleEvent & { id: string })[],
+    calendars: CalendarType[]
+): string {
+    const headers = [
+        'Title', 'Description', 'CalendarName', 'CalendarLevel', 'Status',
+        'StartDate', 'EndDate', 'Color', 'Tags', 'Location'
+    ];
+    const rows = events.map(event => {
+        const eventCalendar = findEventCalendar(event, calendars);
+        return [
+            event.title || '',
+            event.description || '',
+            eventCalendar?.name || '',
+            event.calendarLevel || '',
+            event.status || '',
+            event.startDate || '',
+            event.endDate || '',
+            event.color || '',
+            event.tags?.join(';') || '',
+            event.location?.address || event.location?.url || ''
+        ];
+    });
 
     return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
 }
@@ -147,11 +187,14 @@ export default function CalendarPage() {
     const [allTags, setAllTags] = React.useState<string[]>([]); // All available tags from events
     const [allUsers, setAllUsers] = React.useState<UserProfile[]>([]); // All users for calendar sharing
 
-    // Form state
-    const [formData, setFormData] = React.useState<Partial<ScheduleEvent> & { location?: Partial<EventLocation> }>({
+    // Form state - tracks selected calendar by ID, level and pathContext come from the selected calendar
+    const [formData, setFormData] = React.useState<Partial<ScheduleEvent> & {
+        location?: Partial<EventLocation>;
+        selectedCalendarId?: string; // Used to look up the calendar for level/pathContext
+    }>({
         title: '',
         description: '',
-        calendarId: '',
+        selectedCalendarId: '',
         status: 'scheduled',
         startDate: '',
         endDate: '',
@@ -205,43 +248,98 @@ export default function CalendarPage() {
         try {
             setLoading(true);
 
-            // Load user's accessible calendars
-            const userCalendars = await getUserCalendars(
-                session.user.uid,
-                session.user.role,
-                [] // TODO: Add user groups when available in user profile
-            );
+            // Use DEFAULT_YEAR (academic year format like "2025-2026") instead of calendar year
+            const userContext = {
+                year: DEFAULT_YEAR,
+                department: session.user.department,
+                course: session.user.course,
+            };
 
-            setCalendars(userCalendars);
-
-            // Select all calendars by default (Google Calendar style)
-            setSelectedCalendarIds(userCalendars.map(cal => cal.id));
-
-            // Step 2: Get event IDs from selected calendars
-            const eventIds = await getEventIdsFromCalendars(userCalendars);
-
-            // Step 3: Async load events by their IDs
-            const fetchedEvents = await getEventsByIds(eventIds);
-            setEvents(fetchedEvents);
-
-            // Extract all unique tags from events for autocomplete
-            const tagsSet = new Set<string>();
-            fetchedEvents.forEach(event => {
-                if (Array.isArray(event.tags)) {
-                    event.tags.forEach(tag => tagsSet.add(tag));
-                }
-            });
-            setAllTags(Array.from(tagsSet));
-
-            // Load all users for calendar sharing (admin/developer only)
+            // For admin/developer, seed ALL calendars (global, all departments, courses, groups)
+            // Similar to agendas and terminal requirements seeding pattern
             if (session.user.role === 'admin' || session.user.role === 'developer') {
                 try {
-                    const { findAllUsers } = await import('../utils/firebase/firestore');
-                    const users: UserProfile[] = await findAllUsers();
-                    setAllUsers(users);
+                    // Get all users and groups to seed calendars for all contexts
+                    const [allUsers, allGroups] = await Promise.all([
+                        findAllUsers().catch(() => []),
+                        getAllGroups().catch(() => []),
+                    ]);
+
+                    // Seed all calendars
+                    const seedResult = await seedAllCalendars(
+                        session.user.uid,
+                        DEFAULT_YEAR,
+                        allUsers.map(u => ({ department: u.department, course: u.course })),
+                        allGroups.map(g => ({
+                            id: g.id,
+                            name: g.name,
+                            department: g.department,
+                            course: g.course,
+                        }))
+                    );
+
+                    if (seedResult.totalSeeded > 0) {
+                        showNotification(
+                            `Initialized ${seedResult.totalSeeded} calendar(s)`,
+                            'success'
+                        );
+                    }
+
+                    // Store all users for calendar sharing
+                    setAllUsers(allUsers);
+
+                    // Load ALL calendars for admin/developer (pass allUsers and allGroups)
+                    const userCalendars = await getUserCalendarsHierarchical(
+                        session.user.uid,
+                        session.user.role,
+                        userContext,
+                        session.user.groups || [],
+                        allUsers.map(u => ({ department: u.department, course: u.course })),
+                        allGroups.map(g => ({ id: g.id, department: g.department, course: g.course }))
+                    );
+
+                    setCalendars(userCalendars);
+                    setSelectedCalendarIds(userCalendars.map((cal: CalendarType) => cal.id));
+
+                    // Load events from all calendars
+                    const fetchedEvents = await getEventsFromCalendars(userCalendars);
+                    setEvents(fetchedEvents);
+
+                    // Extract all unique tags from events for autocomplete
+                    const tagsSet = new Set<string>();
+                    fetchedEvents.forEach(event => {
+                        if (Array.isArray(event.tags)) {
+                            event.tags.forEach(tag => tagsSet.add(tag));
+                        }
+                    });
+                    setAllTags(Array.from(tagsSet));
                 } catch (error) {
-                    console.error('Failed to load users:', error);
+                    console.error('Error seeding calendars:', error);
                 }
+            } else {
+                // Regular user: load calendars based on their hierarchy
+                const userCalendars = await getUserCalendarsHierarchical(
+                    session.user.uid,
+                    session.user.role,
+                    userContext,
+                    session.user.groups || []
+                );
+
+                setCalendars(userCalendars);
+                setSelectedCalendarIds(userCalendars.map((cal: CalendarType) => cal.id));
+
+                // Load events from user's calendars
+                const fetchedEvents = await getEventsFromCalendars(userCalendars);
+                setEvents(fetchedEvents);
+
+                // Extract all unique tags from events for autocomplete
+                const tagsSet = new Set<string>();
+                fetchedEvents.forEach(event => {
+                    if (Array.isArray(event.tags)) {
+                        event.tags.forEach(tag => tagsSet.add(tag));
+                    }
+                });
+                setAllTags(Array.from(tagsSet));
             }
         } catch (error) {
             console.error('Error loading data:', error);
@@ -257,8 +355,9 @@ export default function CalendarPage() {
         if (selectedCalendarIds.length === 0) return [];
 
         return events.filter(event => {
-            // Filter by selected calendars (Google Calendar style)
-            const matchesCalendar = selectedCalendarIds.includes(event.calendarId);
+            // Filter by selected calendars - find the calendar matching event's pathContext
+            const eventCalendar = findEventCalendar(event, calendars);
+            const matchesCalendar = eventCalendar ? selectedCalendarIds.includes(eventCalendar.id) : false;
 
             const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 event.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -294,12 +393,24 @@ export default function CalendarPage() {
 
             return matchesCalendar && matchesSearch && matchesStatus && matchesDateFilter;
         }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-    }, [searchTerm, selectedCalendarIds, filterStatuses, events, selectedRange, selectedDate]);
+    }, [searchTerm, selectedCalendarIds, filterStatuses, events, selectedRange, selectedDate, calendars]);
 
     const handleOpenDialog = (event?: ScheduleEvent & { id: string }) => {
         if (event) {
             setEditingEvent(event);
-            setFormData(event);
+            // Find the calendar that matches the event's pathContext
+            const matchingCalendar = calendars.find(cal =>
+                cal.level === event.calendarLevel &&
+                cal.pathContext.year === event.calendarPathContext.year &&
+                cal.pathContext.department === event.calendarPathContext.department &&
+                cal.pathContext.course === event.calendarPathContext.course &&
+                cal.pathContext.groupId === event.calendarPathContext.groupId &&
+                cal.pathContext.userId === event.calendarPathContext.userId
+            );
+            setFormData({
+                ...event,
+                selectedCalendarId: matchingCalendar?.id || '',
+            });
         } else {
             setEditingEvent(null);
             // If range is selected, use it for the new event
@@ -307,12 +418,12 @@ export default function CalendarPage() {
             const endDate = selectedRange?.end || selectedDate || new Date();
 
             // Get default calendar (first personal calendar or first available)
-            const defaultCalendar = calendars.find(cal => cal.type === 'personal') || calendars[0];
+            const defaultCalendar = calendars.find(cal => cal.level === 'personal') || calendars[0];
 
             setFormData({
                 title: '',
                 description: '',
-                calendarId: defaultCalendar?.id || '',
+                selectedCalendarId: defaultCalendar?.id || '',
                 status: 'scheduled',
                 startDate: startDate instanceof Date && !isNaN(startDate.getTime())
                     ? format(startDate, "yyyy-MM-dd'T'HH:mm")
@@ -338,11 +449,11 @@ export default function CalendarPage() {
     const handleCloseDialog = () => {
         setOpenDialog(false);
         setEditingEvent(null);
-        const defaultCalendar = calendars.find(cal => cal.type === 'personal') || calendars[0];
+        const defaultCalendar = calendars.find(cal => cal.level === 'personal') || calendars[0];
         setFormData({
             title: '',
             description: '',
-            calendarId: defaultCalendar?.id || '',
+            selectedCalendarId: defaultCalendar?.id || '',
             status: 'scheduled',
             startDate: '',
             endDate: '',
@@ -365,8 +476,15 @@ export default function CalendarPage() {
                 return;
             }
 
-            if (!formData.calendarId) {
+            if (!formData.selectedCalendarId) {
                 showNotification('Please select a calendar', 'error');
+                return;
+            }
+
+            // Find the selected calendar to get its level and pathContext
+            const selectedCalendar = calendars.find(cal => cal.id === formData.selectedCalendarId);
+            if (!selectedCalendar) {
+                showNotification('Selected calendar not found', 'error');
                 return;
             }
 
@@ -377,7 +495,8 @@ export default function CalendarPage() {
                 id: editingEvent?.id || '',
                 title: formData.title,
                 description: formData.description || '',
-                calendarId: formData.calendarId,
+                calendarLevel: selectedCalendar.level,
+                calendarPathContext: selectedCalendar.pathContext,
                 status: formData.status as EventStatus,
                 startDate: formData.startDate,
                 endDate: formData.endDate || formData.startDate,
@@ -393,7 +512,8 @@ export default function CalendarPage() {
                 lastModifiedBy: session?.user?.uid || ''
             };
 
-            await setEvent(editingEvent?.id || null, eventData);
+            // Save event directly to calendar collection
+            await setCalendarEvent(editingEvent?.id || null, eventData);
             await loadCalendarsAndEvents();
             handleCloseDialog();
             showNotification(`Event ${editingEvent ? 'updated' : 'created'} successfully`, 'success');
@@ -412,7 +532,12 @@ export default function CalendarPage() {
         if (!eventToDelete) return;
 
         try {
-            await deleteEvent(eventToDelete.id);
+            // Delete event from its calendar collection
+            await deleteCalendarEvent(
+                eventToDelete.calendarLevel,
+                eventToDelete.calendarPathContext,
+                eventToDelete.id
+            );
             await loadCalendarsAndEvents();
             setDeleteConfirmOpen(false);
             setEventToDelete(null);
@@ -437,19 +562,21 @@ export default function CalendarPage() {
                     const csvContent = event.target?.result as string;
 
                     // Use personal calendar as default for imports
-                    const defaultCalendar = calendars.find(cal => cal.type === 'personal') || calendars[0];
+                    const defaultCalendar = calendars.find(cal => cal.level === 'personal') || calendars[0];
                     if (!defaultCalendar) {
                         showNotification('No calendar available for import', 'error');
                         return;
                     }
 
-                    const parsedEvents = parseEventsCSV(csvContent, defaultCalendar.id);
+                    const parsedEvents = parseEventsCSV(csvContent, defaultCalendar);
 
                     let successCount = 0;
                     for (const eventData of parsedEvents) {
                         try {
-                            await setEvent(null, {
+                            await setCalendarEvent(null, {
                                 ...eventData,
+                                calendarLevel: defaultCalendar.level,
+                                calendarPathContext: defaultCalendar.pathContext,
                                 createdBy: session?.user?.uid || '',
                                 createdAt: new Date().toISOString(),
                                 lastModified: new Date().toISOString()
@@ -476,7 +603,7 @@ export default function CalendarPage() {
     };
 
     const handleExportCSV = () => {
-        const csv = exportEventsToCSV(filteredEvents);
+        const csv = exportEventsToCSV(filteredEvents, calendars);
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -547,13 +674,11 @@ export default function CalendarPage() {
                 name: newCalendarName,
                 description: newCalendarDescription,
                 level: 'personal', // Custom calendars are treated as personal level
-                type: 'custom', // Legacy compatibility
                 color: newCalendarColor,
                 pathContext: {
-                    year: new Date().getFullYear().toString(),
+                    year: DEFAULT_YEAR,
                     userId: session?.user?.uid || '',
                 },
-                eventIds: [],
                 ownerUid: session?.user?.uid || '',
                 createdBy: session?.user?.uid || '',
                 createdAt: new Date().toISOString(),
@@ -563,8 +688,7 @@ export default function CalendarPage() {
                 isDefault: false
             };
 
-            const { setCalendar } = await import('../utils/firebase/firestore');
-            const calendarId = await setCalendar(null, newCalendar as CalendarType);
+            const calendarId = await setHierarchicalCalendar(newCalendar as CalendarType);
 
             await loadCalendarsAndEvents();
             setOpenNewCalendarDialog(false);
@@ -604,8 +728,8 @@ export default function CalendarPage() {
         }
 
         return calendars.filter(cal => {
-            if (cal.type === 'personal' && cal.ownerUid === uid) return true;
-            if (cal.type === 'group') return true; // Students/editors can add to group calendars
+            if (cal.level === 'personal' && cal.ownerUid === uid) return true;
+            if (cal.level === 'group') return true; // Students/editors can add to group calendars
             return false;
         });
     }, [calendars, session?.user?.role, session?.user?.uid]);
@@ -762,8 +886,7 @@ export default function CalendarPage() {
                                                                         session?.user?.uid ?? undefined,
                                                                         session?.user?.role,
                                                                     );
-                                                                    const eventCalendar =
-                                                                        calendars.find(cal => cal.id === ev.calendarId);
+                                                                    const eventCalendar = findEventCalendar(ev, calendars);
                                                                     return (
                                                                         <EventCard
                                                                             key={ev.id}
@@ -806,7 +929,7 @@ export default function CalendarPage() {
                                                         session?.user?.uid ?? undefined,
                                                         session?.user?.role,
                                                     );
-                                                    const eventCalendar = calendars.find(cal => cal.id === event.calendarId);
+                                                    const eventCalendar = findEventCalendar(event, calendars);
                                                     return (
                                                         <EventCard
                                                             key={event.id}
@@ -861,9 +984,9 @@ export default function CalendarPage() {
                                         <FormControl fullWidth required>
                                             <InputLabel>Calendar</InputLabel>
                                             <Select
-                                                value={formData.calendarId}
+                                                value={formData.selectedCalendarId}
                                                 label="Calendar"
-                                                onChange={(e) => setFormData({ ...formData, calendarId: e.target.value })}
+                                                onChange={(e) => setFormData({ ...formData, selectedCalendarId: e.target.value })}
                                             >
                                                 {writableCalendars.map(cal => (
                                                     <MenuItem key={cal.id} value={cal.id}>

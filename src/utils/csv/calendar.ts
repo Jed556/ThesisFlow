@@ -136,7 +136,7 @@ export function importCalendarsFromCsv(csvText: string): { parsed: ImportedCalen
 
         const id = get('id');
         const name = get('name');
-        const typeRaw = (get('type') || 'custom').toLowerCase();
+        const levelRaw = (get('level') || get('type') || 'personal').toLowerCase();
         const ownerUid = get('ownerUid') || get('owner_uid');
 
         if (!name) {
@@ -148,12 +148,10 @@ export function importCalendarsFromCsv(csvText: string): { parsed: ImportedCalen
             return;
         }
 
-        const allowedTypes: Calendar['type'][] = ['personal', 'group', 'custom'];
-        const type = allowedTypes.includes(typeRaw as Calendar['type'])
-            ? (typeRaw as Calendar['type'])
-            : 'custom';
-
-        const eventIds = splitArrayField(get('eventIds') || get('events')).filter(Boolean);
+        const allowedLevels: Calendar['level'][] = ['global', 'department', 'course', 'group', 'personal'];
+        const level = allowedLevels.includes(levelRaw as Calendar['level'])
+            ? (levelRaw as Calendar['level'])
+            : 'personal';
 
         // Helper to parse boolean values from various formats
         const parseBool = (value: unknown, fallback: boolean): boolean => {
@@ -213,7 +211,7 @@ export function importCalendarsFromCsv(csvText: string): { parsed: ImportedCalen
             id: id || undefined,
             name,
             description: get('description') || undefined,
-            type,
+            level,
             color: get('color') || '#4285F4',
             ownerUid,
             createdBy: get('createdBy') || get('created_by') || ownerUid,
@@ -223,7 +221,6 @@ export function importCalendarsFromCsv(csvText: string): { parsed: ImportedCalen
             groupName: get('groupName') || get('group_name') || undefined,
             isVisible: parseBoolean(get('isVisible') || 'true'),
             isDefault: get('isDefault') ? parseBoolean(get('isDefault')) : undefined,
-            eventIds,
             permissions: permissionEntries.length > 0 ? permissionEntries : undefined,
         };
 
@@ -241,7 +238,7 @@ export function exportCalendarsToCsv(calendars: Calendar[]): string {
         'id',
         'name',
         'description',
-        'type',
+        'level',
         'color',
         'ownerUid',
         'createdBy',
@@ -251,7 +248,6 @@ export function exportCalendarsToCsv(calendars: Calendar[]): string {
         'groupName',
         'isVisible',
         'isDefault',
-        'eventIds',
         'permissions',
     ];
 
@@ -281,7 +277,7 @@ export function exportCalendarsToCsv(calendars: Calendar[]): string {
             calendar.id || '',
             calendar.name,
             calendar.description ?? '',
-            calendar.type ?? calendar.level ?? '',
+            calendar.level,
             calendar.color,
             calendar.ownerUid,
             calendar.createdBy,
@@ -291,7 +287,6 @@ export function exportCalendarsToCsv(calendars: Calendar[]): string {
             calendar.groupName ?? '',
             calendar.isVisible ? 'true' : 'false',
             calendar.isDefault ? 'true' : 'false',
-            (calendar.eventIds ?? []).join(';'),
             serializedPermissions,
         ] as string[];
     });

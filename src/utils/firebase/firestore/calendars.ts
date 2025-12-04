@@ -1,6 +1,5 @@
 import {
-    doc, setDoc, onSnapshot, collection, query, where,
-    getDocs, addDoc, getDoc, deleteDoc, type WithFieldValue,
+    doc, setDoc, onSnapshot, getDoc, deleteDoc,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
 import { cleanData } from './firestore';
@@ -20,9 +19,6 @@ import type { UserRole } from '../../../types/profile';
 // ============================================================================
 // Constants
 // ============================================================================
-
-/** Firestore collection name for legacy flat calendars - used for migration */
-const LEGACY_CALENDARS_COLLECTION = 'calendars';
 
 /** Document ID for the calendar metadata document within each calendar subcollection */
 const CALENDAR_METADATA_DOC = 'metadata';
@@ -202,7 +198,6 @@ export async function createPersonalCalendarForUser(
         level: 'personal',
         color: DEFAULT_COLORS.personal,
         pathContext,
-        eventIds: [],
         ownerUid: uid,
         createdBy: uid,
         createdAt: new Date().toISOString(),
@@ -292,7 +287,6 @@ export async function createGroupCalendarHierarchical(
         level: 'group',
         color: DEFAULT_COLORS.group,
         pathContext,
-        eventIds: [],
         ownerUid: groupContext.groupId,
         createdBy: creatorUid,
         createdAt: new Date().toISOString(),
@@ -313,75 +307,139 @@ export async function createGroupCalendarHierarchical(
 
 /**
  * Get all calendars a user can view based on their role and context
- * Returns calendars from all levels the user has access to
+ * 
+ * Visibility hierarchy (user sees all levels above them + their own):
+ * - Global (year-level): visible to ALL users
+ * - Department: visible to all users in that department (including those in courses)
+ * - Course: visible to all users in that course
+ * - Group: visible to group members only
+ * - Personal: visible only to the owner
+ * 
+ * Admin/Developer special access:
+ * - Can see ALL calendars (global, all departments, all courses, all groups)
+ * - CANNOT see personal calendars of other users (only their own)
+ * 
  * @param uid - User's Firebase UID
  * @param userRole - User's role
  * @param userContext - User's path context (year/department/course)
  * @param groupIds - Array of group IDs the user belongs to
+ * @param allUsers - (Admin only) All users to get all department/course combinations
+ * @param allGroups - (Admin only) All groups to get all group calendars
  */
 export async function getUserCalendarsHierarchical(
     uid: string,
     userRole: UserRole,
     userContext: { year?: string; department?: string; course?: string },
-    groupIds?: string[]
+    groupIds?: string[],
+    allUsers?: { department?: string; course?: string }[],
+    allGroups?: { id: string; department?: string; course?: string }[]
 ): Promise<Calendar[]> {
     const calendars: Calendar[] = [];
     const year = userContext.year || DEFAULT_YEAR;
+    const isAdminOrDev = userRole === 'admin' || userRole === 'developer';
 
-    // 1. Always get global calendar if it exists
+    // 1. Always get global calendar if it exists (visible to ALL users)
     const globalCal = await getHierarchicalCalendar('global', { year });
     if (globalCal) calendars.push(globalCal);
 
-    // 2. Get department calendar if user has department context
-    if (userContext.department) {
-        const deptCal = await getHierarchicalCalendar('department', {
-            year,
-            department: userContext.department,
-        });
-        if (deptCal) calendars.push(deptCal);
-    }
+    if (isAdminOrDev && allUsers && allGroups) {
+        // Admin/Developer: Get ALL calendars except other users' personal calendars
 
-    // 3. Get course calendar if user has course context
-    if (userContext.department && userContext.course) {
-        const courseCal = await getHierarchicalCalendar('course', {
-            year,
-            department: userContext.department,
-            course: userContext.course,
-        });
-        if (courseCal) calendars.push(courseCal);
-    }
+        // Extract unique departments and department/course pairs
+        const departmentsSet = new Set<string>();
+        const coursePairsMap = new Map<string, { department: string; course: string }>();
 
-    // 4. Get group calendars for groups the user belongs to
-    if (groupIds?.length && userContext.department && userContext.course) {
-        for (const groupId of groupIds) {
+        for (const user of allUsers) {
+            if (user.department) {
+                departmentsSet.add(user.department);
+                if (user.course) {
+                    const key = `${user.department}|${user.course}`;
+                    if (!coursePairsMap.has(key)) {
+                        coursePairsMap.set(key, { department: user.department, course: user.course });
+                    }
+                }
+            }
+        }
+
+        // 2. Get ALL department calendars
+        for (const department of departmentsSet) {
+            const deptCal = await getHierarchicalCalendar('department', { year, department });
+            if (deptCal) calendars.push(deptCal);
+        }
+
+        // 3. Get ALL course calendars
+        for (const { department, course } of coursePairsMap.values()) {
+            const courseCal = await getHierarchicalCalendar('course', { year, department, course });
+            if (courseCal) calendars.push(courseCal);
+        }
+
+        // 4. Get ALL group calendars
+        for (const group of allGroups) {
+            if (!group.department || !group.course) continue;
             const groupCal = await getHierarchicalCalendar('group', {
                 year,
-                department: userContext.department,
-                course: userContext.course,
-                groupId,
+                department: group.department,
+                course: group.course,
+                groupId: group.id,
             });
             if (groupCal) calendars.push(groupCal);
         }
-    }
 
-    // 5. Get personal calendar
-    const personalCal = await getHierarchicalCalendar('personal', {
-        year,
-        department: userContext.department,
-        course: userContext.course,
-        userId: uid,
-    });
-    if (personalCal) calendars.push(personalCal);
-
-    // 6. Admins/developers: also fetch all calendars from legacy collection for migration
-    if (userRole === 'admin' || userRole === 'developer') {
-        const legacyCalendars = await getAllLegacyCalendars();
-        const existingIds = new Set(calendars.map((c) => c.id));
-        legacyCalendars.forEach((cal) => {
-            if (!existingIds.has(cal.id)) {
-                calendars.push(cal);
-            }
+        // 5. Get ONLY the admin's own personal calendar (not others')
+        const personalCal = await getHierarchicalCalendar('personal', {
+            year,
+            department: userContext.department,
+            course: userContext.course,
+            userId: uid,
         });
+        if (personalCal) calendars.push(personalCal);
+
+    } else {
+        // Regular user: Get calendars based on their hierarchy level
+
+        // 2. Get department calendar if user has department context
+        // (visible to all users in the department, including those in courses)
+        if (userContext.department) {
+            const deptCal = await getHierarchicalCalendar('department', {
+                year,
+                department: userContext.department,
+            });
+            if (deptCal) calendars.push(deptCal);
+        }
+
+        // 3. Get course calendar if user has course context
+        // (visible to all users in that course)
+        if (userContext.department && userContext.course) {
+            const courseCal = await getHierarchicalCalendar('course', {
+                year,
+                department: userContext.department,
+                course: userContext.course,
+            });
+            if (courseCal) calendars.push(courseCal);
+        }
+
+        // 4. Get group calendars for groups the user belongs to
+        // (visible only to group members)
+        if (groupIds?.length && userContext.department && userContext.course) {
+            for (const groupId of groupIds) {
+                const groupCal = await getHierarchicalCalendar('group', {
+                    year,
+                    department: userContext.department,
+                    course: userContext.course,
+                    groupId,
+                });
+                if (groupCal) calendars.push(groupCal);
+            }
+        }
+
+        // 5. Get user's own personal calendar (visible only to the owner)
+        const personalCal = await getHierarchicalCalendar('personal', {
+            year,
+            department: userContext.department,
+            course: userContext.course,
+            userId: uid,
+        });
+        if (personalCal) calendars.push(personalCal);
     }
 
     return calendars;
@@ -489,328 +547,343 @@ export function onHierarchicalCalendar(
 }
 
 // ============================================================================
-// Legacy Support (Flat Calendars Collection)
-// These functions maintain backward compatibility with the old flat structure
+// Calendar Seeding (for admin initialization)
 // ============================================================================
 
 /**
- * @deprecated Use setHierarchicalCalendar for new code
- * Create or update a calendar in the legacy flat collection
+ * Default calendar metadata for different levels
  */
-export async function setCalendar(id: string | null, calendar: Calendar): Promise<string> {
-    if (id) {
-        const cleanedData = cleanData(calendar, 'update');
-        const ref = doc(firebaseFirestore, LEGACY_CALENDARS_COLLECTION, id);
-        await setDoc(ref, cleanedData, { merge: true });
-        return id;
-    } else {
-        const cleanedData = cleanData(calendar, 'create');
-        const ref = await addDoc(
-            collection(firebaseFirestore, LEGACY_CALENDARS_COLLECTION),
-            cleanedData as WithFieldValue<Calendar>
-        );
-        return ref.id;
-    }
-}
-
-/**
- * @deprecated Use getHierarchicalCalendar for new code
- * Get a calendar by id from legacy collection
- */
-export async function getCalendarById(id: string): Promise<Calendar | null> {
-    const ref = doc(firebaseFirestore, LEGACY_CALENDARS_COLLECTION, id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    return { id: snap.id, ...snap.data() } as Calendar;
-}
-
-/**
- * @deprecated Use getUserCalendarsHierarchical for new code
- * Get all calendars a user can view from legacy collection
- */
-export async function getUserCalendars(
-    uid: string,
-    userRole?: string,
-    groupIds?: string[]
-): Promise<Calendar[]> {
-    const calendars: Calendar[] = [];
-
-    // Get personal calendar
-    const personalQuery = query(
-        collection(firebaseFirestore, LEGACY_CALENDARS_COLLECTION),
-        where('type', '==', 'personal'),
-        where('ownerUid', '==', uid)
-    );
-    const personalSnap = await getDocs(personalQuery);
-    calendars.push(...personalSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Calendar)));
-
-    // Get group calendars if user has groups
-    if (groupIds && groupIds.length > 0) {
-        const groupQuery = query(
-            collection(firebaseFirestore, LEGACY_CALENDARS_COLLECTION),
-            where('type', '==', 'group'),
-            where('groupId', 'in', groupIds)
-        );
-        const groupSnap = await getDocs(groupQuery);
-        calendars.push(...groupSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Calendar)));
-    }
-
-    // Admins and developers see all calendars
-    if (userRole === 'admin' || userRole === 'developer') {
-        const allQuery = query(collection(firebaseFirestore, LEGACY_CALENDARS_COLLECTION));
-        const allSnap = await getDocs(allQuery);
-        const allCalendars = allSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Calendar));
-
-        const existingIds = new Set(calendars.map((c) => c.id));
-        allCalendars.forEach((cal) => {
-            if (!existingIds.has(cal.id)) {
-                calendars.push(cal);
-            }
-        });
-    }
-
-    return calendars;
-}
-
-/**
- * @deprecated Use getHierarchicalCalendar for new code
- * Get calendars for a specific group from legacy collection
- */
-export async function getGroupCalendar(groupId: string): Promise<Calendar | null> {
-    const q = query(
-        collection(firebaseFirestore, LEGACY_CALENDARS_COLLECTION),
-        where('type', '==', 'group'),
-        where('groupId', '==', groupId)
-    );
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    const docSnap = snap.docs[0];
-    return { id: docSnap.id, ...docSnap.data() } as Calendar;
-}
-
-/**
- * Get all calendars from legacy collection (admin only)
- */
-export async function getAllLegacyCalendars(): Promise<Calendar[]> {
-    const snap = await getDocs(collection(firebaseFirestore, LEGACY_CALENDARS_COLLECTION));
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Calendar));
-}
-
-/**
- * @deprecated Use getAllLegacyCalendars
- */
-export const getAllCalendars = getAllLegacyCalendars;
-
-/**
- * @deprecated Use deleteHierarchicalCalendar for new code
- * Delete a calendar by id from legacy collection
- */
-export async function deleteCalendar(id: string): Promise<void> {
-    if (!id) throw new Error('Calendar ID required');
-    const ref = doc(firebaseFirestore, LEGACY_CALENDARS_COLLECTION, id);
-    await deleteDoc(ref);
-}
-
-/**
- * @deprecated
- * Delete multiple calendars from legacy collection
- */
-export async function bulkDeleteCalendars(ids: string[]): Promise<void> {
-    if (!ids || ids.length === 0) throw new Error('Calendar IDs required');
-    const deletePromises = ids.map((id) => {
-        const ref = doc(firebaseFirestore, LEGACY_CALENDARS_COLLECTION, id);
-        return deleteDoc(ref);
-    });
-    await Promise.all(deletePromises);
-}
-
-/**
- * @deprecated Use createPersonalCalendarForUser for new code
- * Create a personal calendar for a user in legacy collection
- */
-export async function createPersonalCalendar(uid: string): Promise<string> {
-    const calendar: Omit<Calendar, 'id'> = {
-        name: 'Personal',
-        description: 'Your personal calendar',
-        level: 'personal',
-        type: 'personal', // Legacy compatibility
-        color: DEFAULT_COLORS.personal,
-        pathContext: { year: DEFAULT_YEAR, userId: uid },
-        eventIds: [],
-        ownerUid: uid,
-        createdBy: uid,
-        createdAt: new Date().toISOString(),
-        lastModified: new Date().toISOString(),
+type CalendarMetadataFields = 'id' | 'pathContext' | 'createdAt' | 'lastModified' | 'createdBy' | 'ownerUid';
+const DEFAULT_CALENDAR_METADATA: Record<CalendarLevel, Omit<Calendar, CalendarMetadataFields>> = {
+    global: {
+        name: 'Institution Calendar',
+        description: 'Institution-wide events and announcements',
+        level: 'global',
+        color: DEFAULT_COLORS.global,
         permissions: [
-            {
-                uid,
-                canView: true,
-                canEdit: true,
-                canDelete: false,
-            },
+            { role: 'admin', canView: true, canEdit: true, canDelete: true },
+            { role: 'developer', canView: true, canEdit: true, canDelete: true },
+            { role: 'head', canView: true, canEdit: true, canDelete: false },
         ],
         isVisible: true,
         isDefault: true,
-    };
-
-    return await setCalendar(null, calendar as Calendar);
-}
-
-/**
- * @deprecated Use createGroupCalendarHierarchical for new code
- * Create a group calendar in legacy collection
- */
-export async function createGroupCalendar(
-    groupId: string,
-    groupName: string,
-    creatorUid: string,
-    adviserUids?: string[],
-    editorUids?: string[]
-): Promise<string> {
-    const permissions: CalendarPermission[] = [
-        {
-            groupId,
-            canView: true,
-            canEdit: true,
-            canDelete: false,
-        },
-    ];
-
-    if (adviserUids?.length) {
-        adviserUids.forEach((uid) => {
-            permissions.push({
-                uid,
-                canView: true,
-                canEdit: true,
-                canDelete: false,
-            });
-        });
-    }
-
-    if (editorUids?.length) {
-        editorUids.forEach((uid) => {
-            permissions.push({
-                uid,
-                canView: true,
-                canEdit: true,
-                canDelete: false,
-            });
-        });
-    }
-
-    permissions.push(
-        { role: 'admin', canView: true, canEdit: true, canDelete: true },
-        { role: 'developer', canView: true, canEdit: true, canDelete: true }
-    );
-
-    const calendar: Omit<Calendar, 'id'> = {
-        name: groupName,
-        description: `Calendar for ${groupName}`,
+    },
+    department: {
+        name: 'Department Calendar',
+        description: 'Department-wide events and announcements',
+        level: 'department',
+        color: DEFAULT_COLORS.department,
+        permissions: [
+            { role: 'admin', canView: true, canEdit: true, canDelete: true },
+            { role: 'developer', canView: true, canEdit: true, canDelete: true },
+            { role: 'head', canView: true, canEdit: true, canDelete: false },
+            { role: 'adviser', canView: true, canEdit: true, canDelete: false },
+        ],
+        isVisible: true,
+        isDefault: true,
+    },
+    course: {
+        name: 'Course Calendar',
+        description: 'Course-wide events and announcements',
+        level: 'course',
+        color: DEFAULT_COLORS.course,
+        permissions: [
+            { role: 'admin', canView: true, canEdit: true, canDelete: true },
+            { role: 'developer', canView: true, canEdit: true, canDelete: true },
+            { role: 'head', canView: true, canEdit: true, canDelete: false },
+            { role: 'adviser', canView: true, canEdit: true, canDelete: false },
+        ],
+        isVisible: true,
+        isDefault: true,
+    },
+    group: {
+        name: 'Group Calendar',
+        description: 'Group-specific events and deadlines',
         level: 'group',
-        type: 'group', // Legacy compatibility
         color: DEFAULT_COLORS.group,
-        pathContext: { year: DEFAULT_YEAR, groupId },
-        eventIds: [],
-        ownerUid: groupId,
-        createdBy: creatorUid,
-        createdAt: new Date().toISOString(),
-        lastModified: new Date().toISOString(),
-        permissions,
-        groupId,
-        groupName,
+        permissions: [
+            { role: 'admin', canView: true, canEdit: true, canDelete: true },
+            { role: 'developer', canView: true, canEdit: true, canDelete: true },
+        ],
         isVisible: true,
         isDefault: false,
+    },
+    personal: {
+        name: 'Personal Calendar',
+        description: 'Your personal calendar',
+        level: 'personal',
+        color: DEFAULT_COLORS.personal,
+        permissions: [],
+        isVisible: true,
+        isDefault: true,
+    },
+};
+
+/** Result of loading or seeding calendar data */
+export interface LoadOrSeedCalendarResult {
+    calendar: Calendar;
+    /** Whether new calendar was seeded (true) or existing one loaded (false) */
+    seeded: boolean;
+}
+
+/**
+ * Seed a hierarchical calendar if it doesn't exist
+ * Used by admin to initialize calendar structure
+ */
+export async function loadOrSeedCalendar(
+    level: CalendarLevel,
+    context: CalendarPathContext,
+    creatorUid: string,
+    customMetadata?: Partial<Calendar>
+): Promise<LoadOrSeedCalendarResult> {
+    const existing = await getHierarchicalCalendar(level, context);
+
+    if (existing) {
+        return { calendar: existing, seeded: false };
+    }
+
+    // Create new calendar with default metadata
+    const defaultMeta = DEFAULT_CALENDAR_METADATA[level];
+    const now = new Date().toISOString();
+
+    const calendar: Calendar = {
+        id: CALENDAR_METADATA_DOC,
+        ...defaultMeta,
+        ...customMetadata,
+        pathContext: context,
+        createdBy: creatorUid,
+        ownerUid: creatorUid,
+        createdAt: now,
+        lastModified: now,
     };
 
-    return await setCalendar(null, calendar as Calendar);
+    await setHierarchicalCalendar(calendar);
+    return { calendar, seeded: true };
 }
 
 /**
- * @deprecated Use onHierarchicalCalendar for new code
- * Subscribe to realtime updates for a legacy calendar
+ * Seed all hierarchical calendars for a user's context
+ * This creates global, department, course calendars if they don't exist
+ * @param userContext - User's path context (year/department/course)
+ * @param creatorUid - UID of the user creating the calendars
+ * @returns Array of seeding results
  */
-export function onCalendar(
-    id: string,
-    onData: (calendar: Calendar | null) => void,
-    onError?: (error: Error) => void
-): () => void {
-    const ref = doc(firebaseFirestore, LEGACY_CALENDARS_COLLECTION, id);
-    return onSnapshot(
-        ref,
-        (snap) => {
-            if (!snap.exists()) {
-                onData(null);
-                return;
-            }
-            onData({ id: snap.id, ...snap.data() } as Calendar);
-        },
-        (error) => {
-            if (onError) {
-                onError(error as Error);
-            } else {
-                console.error('Calendar listener error:', error);
-            }
-        }
+export async function seedCalendarsForContext(
+    userContext: { year?: string; department?: string; course?: string },
+    creatorUid: string
+): Promise<LoadOrSeedCalendarResult[]> {
+    const results: LoadOrSeedCalendarResult[] = [];
+    const year = userContext.year || DEFAULT_YEAR;
+
+    // 1. Seed global calendar
+    const globalResult = await loadOrSeedCalendar(
+        'global',
+        { year },
+        creatorUid
     );
-}
+    results.push(globalResult);
 
-// ============================================================================
-// Event Management Helpers (work with both hierarchical and legacy)
-// ============================================================================
-
-/**
- * Add an event ID to a calendar's eventIds array
- * Works with both hierarchical and legacy calendars
- */
-export async function addEventToCalendar(calendarId: string, eventId: string): Promise<void> {
-    // Try legacy first
-    const calendar = await getCalendarById(calendarId);
-    if (!calendar) throw new Error('Calendar not found');
-
-    const currentEventIds = calendar.eventIds || [];
-    if (!currentEventIds.includes(eventId)) {
-        const updatedEventIds = [...currentEventIds, eventId];
-        const ref = doc(firebaseFirestore, LEGACY_CALENDARS_COLLECTION, calendarId);
-        await setDoc(
-            ref,
-            {
-                eventIds: updatedEventIds,
-                lastModified: new Date().toISOString(),
-            },
-            { merge: true }
+    // 2. Seed department calendar if department context exists
+    if (userContext.department) {
+        const deptResult = await loadOrSeedCalendar(
+            'department',
+            { year, department: userContext.department },
+            creatorUid,
+            { name: `${userContext.department} Calendar` }
         );
+        results.push(deptResult);
     }
+
+    // 3. Seed course calendar if course context exists
+    if (userContext.department && userContext.course) {
+        const courseResult = await loadOrSeedCalendar(
+            'course',
+            { year, department: userContext.department, course: userContext.course },
+            creatorUid,
+            { name: `${userContext.course} Calendar` }
+        );
+        results.push(courseResult);
+    }
+
+    return results;
 }
 
 /**
- * Remove an event ID from a calendar's eventIds array
+ * Check if hierarchical calendars exist for a context
  */
-export async function removeEventFromCalendar(calendarId: string, eventId: string): Promise<void> {
-    const calendar = await getCalendarById(calendarId);
-    if (!calendar) throw new Error('Calendar not found');
+export async function checkCalendarsExist(
+    userContext: { year?: string; department?: string; course?: string }
+): Promise<{ global: boolean; department: boolean; course: boolean }> {
+    const year = userContext.year || DEFAULT_YEAR;
 
-    const currentEventIds = calendar.eventIds || [];
-    const updatedEventIds = currentEventIds.filter((id) => id !== eventId);
-    const ref = doc(firebaseFirestore, LEGACY_CALENDARS_COLLECTION, calendarId);
-    await setDoc(
-        ref,
-        {
-            eventIds: updatedEventIds,
-            lastModified: new Date().toISOString(),
-        },
-        { merge: true }
-    );
+    const globalCal = await getHierarchicalCalendar('global', { year });
+
+    let deptCal: Calendar | null = null;
+    if (userContext.department) {
+        deptCal = await getHierarchicalCalendar('department', {
+            year,
+            department: userContext.department,
+        });
+    }
+
+    let courseCal: Calendar | null = null;
+    if (userContext.department && userContext.course) {
+        courseCal = await getHierarchicalCalendar('course', {
+            year,
+            department: userContext.department,
+            course: userContext.course,
+        });
+    }
+
+    return {
+        global: globalCal !== null,
+        department: deptCal !== null,
+        course: courseCal !== null,
+    };
+}
+
+// ============================================================================
+// Comprehensive Calendar Seeding (Admin)
+// ============================================================================
+
+/** Result of seeding all calendars */
+export interface SeedAllCalendarsResult {
+    global: boolean;
+    departments: { department: string; seeded: boolean }[];
+    courses: { department: string; course: string; seeded: boolean }[];
+    groups: { department: string; course: string; groupId: string; groupName: string; seeded: boolean }[];
+    totalSeeded: number;
 }
 
 /**
- * Get all event IDs from user's visible calendars
+ * Seed all hierarchical calendars for all departments, courses, and groups
+ * Should be called by admin when opening the calendar page
+ * @param creatorUid - UID of the admin creating the calendars
+ * @param year - Academic year (defaults to DEFAULT_YEAR)
+ * @param users - All users to extract department/course pairs from
+ * @param groups - All groups to create group calendars for
+ * @returns Summary of what was seeded
  */
-export async function getEventIdsFromCalendars(calendars: Calendar[]): Promise<string[]> {
-    const eventIdsSet = new Set<string>();
-    calendars.forEach((calendar) => {
-        if (calendar.eventIds && Array.isArray(calendar.eventIds)) {
-            calendar.eventIds.forEach((eventId) => eventIdsSet.add(eventId));
+export async function seedAllCalendars(
+    creatorUid: string,
+    year: string = DEFAULT_YEAR,
+    users: { department?: string; course?: string }[],
+    groups: { id: string; name: string; department?: string; course?: string }[]
+): Promise<SeedAllCalendarsResult> {
+    const result: SeedAllCalendarsResult = {
+        global: false,
+        departments: [],
+        courses: [],
+        groups: [],
+        totalSeeded: 0,
+    };
+
+    // 1. Seed global calendar
+    const globalResult = await loadOrSeedCalendar('global', { year }, creatorUid);
+    result.global = globalResult.seeded;
+    if (globalResult.seeded) result.totalSeeded++;
+
+    // 2. Extract unique departments and department/course pairs
+    const departmentsSet = new Set<string>();
+    const coursePairsMap = new Map<string, { department: string; course: string }>();
+
+    for (const user of users) {
+        if (user.department) {
+            departmentsSet.add(user.department);
+            if (user.course) {
+                const key = `${user.department}|${user.course}`;
+                if (!coursePairsMap.has(key)) {
+                    coursePairsMap.set(key, { department: user.department, course: user.course });
+                }
+            }
         }
-    });
-    return Array.from(eventIdsSet);
+    }
+
+    // 3. Seed department calendars
+    for (const department of departmentsSet) {
+        const deptResult = await loadOrSeedCalendar(
+            'department',
+            { year, department },
+            creatorUid,
+            { name: `${department} Calendar` }
+        );
+        result.departments.push({ department, seeded: deptResult.seeded });
+        if (deptResult.seeded) result.totalSeeded++;
+    }
+
+    // 4. Seed course calendars
+    for (const { department, course } of coursePairsMap.values()) {
+        const courseResult = await loadOrSeedCalendar(
+            'course',
+            { year, department, course },
+            creatorUid,
+            { name: `${course} Calendar` }
+        );
+        result.courses.push({ department, course, seeded: courseResult.seeded });
+        if (courseResult.seeded) result.totalSeeded++;
+    }
+
+    // 5. Seed group calendars
+    for (const group of groups) {
+        if (!group.department || !group.course) continue;
+
+        const groupCal = await getHierarchicalCalendar('group', {
+            year,
+            department: group.department,
+            course: group.course,
+            groupId: group.id,
+        });
+
+        if (!groupCal) {
+            // Create group calendar if it doesn't exist
+            const permissions: CalendarPermission[] = [
+                { groupId: group.id, canView: true, canEdit: true, canDelete: false },
+                { role: 'admin', canView: true, canEdit: true, canDelete: true },
+                { role: 'developer', canView: true, canEdit: true, canDelete: true },
+            ];
+
+            const calendar: Calendar = {
+                id: CALENDAR_METADATA_DOC,
+                name: `${group.name} Calendar`,
+                description: `Calendar for ${group.name}`,
+                level: 'group',
+                color: DEFAULT_COLORS.group,
+                pathContext: {
+                    year,
+                    department: group.department,
+                    course: group.course,
+                    groupId: group.id,
+                },
+                ownerUid: group.id,
+                createdBy: creatorUid,
+                createdAt: new Date().toISOString(),
+                lastModified: new Date().toISOString(),
+                permissions,
+                groupId: group.id,
+                groupName: group.name,
+                isVisible: true,
+                isDefault: false,
+            };
+
+            await setHierarchicalCalendar(calendar);
+            result.groups.push({
+                department: group.department,
+                course: group.course,
+                groupId: group.id,
+                groupName: group.name,
+                seeded: true,
+            });
+            result.totalSeeded++;
+        } else {
+            result.groups.push({
+                department: group.department,
+                course: group.course,
+                groupId: group.id,
+                groupName: group.name,
+                seeded: false,
+            });
+        }
+    }
+
+    return result;
 }

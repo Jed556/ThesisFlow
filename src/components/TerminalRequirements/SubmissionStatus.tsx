@@ -61,6 +61,7 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
                     const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role];
                     const chipLabel = `${roleLabel} ${meta.label}`;
                     const IconComponent = meta.icon;
+                    const isHighlighted = highlightRole === role;
                     return (
                         <Chip
                             key={role}
@@ -68,7 +69,8 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
                             label={chipLabel}
                             color={meta.color}
                             size="small"
-                            variant="filled"
+                            variant={isHighlighted ? 'filled' : 'outlined'}
+                            sx={isHighlighted ? { fontWeight: 600 } : undefined}
                         />
                     );
                 })}

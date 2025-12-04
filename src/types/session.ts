@@ -7,6 +7,12 @@ import type { UserRole } from './profile';
 export interface ThesisFlowSessionUser extends NonNullable<ToolpadSession['user']> {
     uid: string;
     role: UserRole;
+    /** User's department or affiliation */
+    department?: string;
+    /** User's degree program or course */
+    course?: string;
+    /** Array of group IDs the user belongs to */
+    groups?: string[];
 }
 
 /**

@@ -1,5 +1,6 @@
 export * from './agendas';
 export * from './calendars';
+export * from './calendarEvents';
 export * from './chapter';
 export * from './chapters';
 export * from './events';
