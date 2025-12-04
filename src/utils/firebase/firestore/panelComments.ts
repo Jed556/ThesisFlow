@@ -6,8 +6,9 @@ import { firebaseFirestore } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
 import { buildPanelCommentEntriesCollectionPath, buildPanelCommentEntryDocPath, buildPanelCommentDocPath } from './paths';
 import {
-    createDefaultPanelCommentReleaseMap, type PanelCommentEntry, type PanelCommentEntryInput,
+    createDefaultPanelCommentReleaseMap, type PanelCommentApprovalStatus, type PanelCommentEntry, type PanelCommentEntryInput,
     type PanelCommentEntryUpdate, type PanelCommentReleaseMap, type PanelCommentStage, type PanelCommentStudentUpdate,
+    type PanelCommentTableReleaseMap,
 } from '../../../types/panelComment';
 
 // ============================================================================
@@ -42,6 +43,15 @@ interface PanelCommentSnapshot {
     studentUpdatedAt?: unknown;
     studentUpdatedBy?: string;
     panelUid?: string;
+    approvalStatus?: PanelCommentApprovalStatus;
+    approvalUpdatedAt?: unknown;
+    approvalUpdatedBy?: string;
+}
+
+interface PanelCommentTableReleaseSnapshot {
+    sent?: boolean;
+    sentAt?: unknown;
+    sentBy?: string;
 }
 
 interface PanelCommentReleaseSnapshot {
@@ -49,6 +59,7 @@ interface PanelCommentReleaseSnapshot {
         sent?: boolean;
         sentAt?: unknown;
         sentBy?: string;
+        tables?: Record<string, PanelCommentTableReleaseSnapshot>;
     }>;
 }
 
@@ -69,6 +80,9 @@ function mapEntry(docSnap: QueryDocumentSnapshot<DocumentData>): PanelCommentEnt
         studentStatus: data.studentStatus,
         studentUpdatedAt: normalizeTimestamp(data.studentUpdatedAt) || undefined,
         studentUpdatedBy: data.studentUpdatedBy,
+        approvalStatus: data.approvalStatus,
+        approvalUpdatedAt: normalizeTimestamp(data.approvalUpdatedAt) || undefined,
+        approvalUpdatedBy: data.approvalUpdatedBy,
     };
 }
 
@@ -76,6 +90,7 @@ type FirestoreReleaseState = {
     sent?: boolean;
     sentAt?: unknown;
     sentBy?: string;
+    tables?: Record<string, PanelCommentTableReleaseSnapshot>;
 };
 
 function readReleaseState(
@@ -95,6 +110,19 @@ function readReleaseState(
     return undefined;
 }
 
+function mapTableReleases(tables: Record<string, PanelCommentTableReleaseSnapshot> | undefined): PanelCommentTableReleaseMap | undefined {
+    if (!tables) return undefined;
+    const result: PanelCommentTableReleaseMap = {};
+    for (const [panelUid, tableState] of Object.entries(tables)) {
+        result[panelUid] = {
+            sent: Boolean(tableState?.sent),
+            sentAt: normalizeTimestamp(tableState?.sentAt) || undefined,
+            sentBy: tableState?.sentBy,
+        };
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function mapRelease(data: PanelCommentReleaseSnapshot | undefined): PanelCommentReleaseMap {
     const base = createDefaultPanelCommentReleaseMap();
     const proposalState = readReleaseState(data, 'proposal');
@@ -105,11 +133,13 @@ function mapRelease(data: PanelCommentReleaseSnapshot | undefined): PanelComment
             sent: Boolean(proposalState?.sent ?? base.proposal.sent),
             sentAt: normalizeTimestamp(proposalState?.sentAt) || undefined,
             sentBy: proposalState?.sentBy,
+            tables: mapTableReleases(proposalState?.tables),
         },
         defense: {
             sent: Boolean(defenseState?.sent ?? base.defense.sent),
             sentAt: normalizeTimestamp(defenseState?.sentAt) || undefined,
             sentBy: defenseState?.sentBy,
+            tables: mapTableReleases(defenseState?.tables),
         },
     };
 }
@@ -342,5 +372,90 @@ export async function setPanelCommentReleaseState(
             },
         },
         updatedAt: serverTimestamp(),
+    }, { merge: true });
+}
+
+/**
+ * Toggle whether students can view a specific panelist's comment table for a stage.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param stage - The panel comment stage
+ * @param panelUid - The panelist's UID whose table is being released
+ * @param sent - Whether comments are released to students
+ * @param userUid - The user ID performing the action
+ */
+export async function setPanelCommentTableReleaseState(
+    ctx: PanelCommentContext,
+    stage: PanelCommentStage,
+    panelUid: string,
+    sent: boolean,
+    userUid?: string | null,
+): Promise<void> {
+    if (!ctx.groupId) {
+        throw new Error('Group ID is required to update release state.');
+    }
+    if (!panelUid) {
+        throw new Error('Panel UID is required to update table release state.');
+    }
+    const releaseDocRef = getReleaseDoc(ctx);
+    await setDoc(releaseDocRef, {
+        groupId: ctx.groupId,
+        release: {
+            [stage]: {
+                tables: {
+                    [panelUid]: {
+                        sent,
+                        sentBy: sent ? userUid ?? null : null,
+                        sentAt: sent ? serverTimestamp() : null,
+                    },
+                },
+            },
+        },
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+}
+
+/**
+ * Check if a specific panelist's table has been released for a stage.
+ * @param releaseMap - The release map for the group
+ * @param stage - The panel comment stage
+ * @param panelUid - The panelist's UID
+ * @returns Whether the table has been released
+ */
+export function isPanelTableReleased(
+    releaseMap: PanelCommentReleaseMap | undefined,
+    stage: PanelCommentStage,
+    panelUid: string,
+): boolean {
+    if (!releaseMap) return false;
+    const stageRelease = releaseMap[stage];
+    // Check per-table release first
+    if (stageRelease?.tables?.[panelUid]?.sent) {
+        return true;
+    }
+    // Fall back to stage-level release (legacy behavior)
+    return Boolean(stageRelease?.sent);
+}
+
+/**
+ * Update approval status for a panel comment entry.
+ * @param ctx - Panel comment context
+ * @param entryId - The entry ID to update
+ * @param status - The new approval status
+ * @param userUid - The user ID performing the action
+ */
+export async function updatePanelCommentApprovalStatus(
+    ctx: PanelCommentContext,
+    entryId: string,
+    status: PanelCommentApprovalStatus,
+    userUid: string,
+): Promise<void> {
+    if (!ctx.groupId || !entryId) {
+        throw new Error('Group ID and entry ID are required to update approval status.');
+    }
+
+    await setDoc(getEntryDoc(ctx, entryId), {
+        approvalStatus: status,
+        approvalUpdatedAt: serverTimestamp(),
+        approvalUpdatedBy: userUid,
     }, { merge: true });
 }

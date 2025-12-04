@@ -17,7 +17,8 @@ import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../components/Snackbar';
 import {
     listenPanelCommentEntries, listenPanelCommentRelease,
-    updatePanelCommentStudentFields, type PanelCommentContext,
+    updatePanelCommentApprovalStatus, updatePanelCommentStudentFields,
+    type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
@@ -335,6 +336,34 @@ export default function StudentPanelCommentsPage() {
         }
     }, [panelCommentCtx, userUid, showNotification]);
 
+    /**
+     * Handle student requesting review after making revisions.
+     * Changes approval status from 'revision_required' to 'review_requested'.
+     */
+    const handleRequestReview = React.useCallback(async (entry: PanelCommentEntry) => {
+        if (!panelCommentCtx || !userUid) {
+            showNotification('Sign in to request review.', 'error');
+            return;
+        }
+        if (entry.approvalStatus !== 'revision_required') {
+            return;
+        }
+        setStudentSavingIds((prev) => new Set(prev).add(entry.id));
+        try {
+            await updatePanelCommentApprovalStatus(panelCommentCtx, entry.id, 'review_requested', userUid);
+            showNotification('Review requested. The panelist will be notified.', 'success');
+        } catch (error) {
+            console.error('Failed to request review for panel comment:', error);
+            showNotification('Unable to request review. Please try again.', 'error');
+        } finally {
+            setStudentSavingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(entry.id);
+                return next;
+            });
+        }
+    }, [panelCommentCtx, userUid, showNotification]);
+
     const renderTabs = () => (
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <Tabs
@@ -484,6 +513,7 @@ export default function StudentPanelCommentsPage() {
                             loading={entriesLoading}
                             busyEntryIds={studentSavingIds}
                             onStudentFieldChange={(entry, field, value) => handleStudentFieldChange(entry, field, value)}
+                            onRequestReview={handleRequestReview}
                         />
                     </Stack>
                 )}

@@ -1,8 +1,9 @@
 import * as React from 'react';
 import {
-    Alert, Autocomplete, Box, Button, Chip, Skeleton, Stack,
-    Tab, Tabs, TextField, Typography,
+    Alert, Autocomplete, Box, Button, Chip, Divider, List, ListItemButton,
+    ListItemText, Paper, Skeleton, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
+import { Send as SendIcon } from '@mui/icons-material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
@@ -20,7 +21,8 @@ import { findAndListenTerminalRequirements } from '../../utils/firebase/firestor
 import {
     listenPanelCommentEntries,
     listenPanelCommentRelease,
-    setPanelCommentReleaseState,
+    setPanelCommentTableReleaseState,
+    isPanelTableReleased,
     type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
@@ -353,6 +355,12 @@ export default function AdminPanelCommentsPage() {
         ? (terminalApprovalMap[activeStageMeta.terminalUnlockStage] ?? false)
         : false;
 
+    /** Check if the active panelist's table is released */
+    const isActivePanelTableReleased = React.useMemo(() => {
+        if (!activePanelUid) return false;
+        return isPanelTableReleased(releaseMap, activeStage, activePanelUid);
+    }, [releaseMap, activeStage, activePanelUid]);
+
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
     }, []);
@@ -373,28 +381,29 @@ export default function AdminPanelCommentsPage() {
         setSelectedGroupId(value?.id ?? '');
     };
 
-    const handleToggleRelease = React.useCallback(async () => {
+    /** Release a specific panelist's table to students */
+    const handleReleaseTable = React.useCallback(async (panelUid: string) => {
         if (!panelCommentCtx || !userUid) {
             showNotification('Select a group first.', 'error');
             return;
         }
-        const currentState = releaseMap[activeStage]?.sent ?? false;
-        if (!currentState && !canRelease) {
+        if (!canRelease) {
             const stageName = activeStageMeta?.releaseStageLabel ?? 'stage';
             showNotification(`Terminal requirements for ${stageName} must be approved first.`, 'warning');
             return;
         }
         setReleaseSaving(true);
         try {
-            await setPanelCommentReleaseState(panelCommentCtx, activeStage, !currentState, userUid);
-            showNotification(!currentState ? 'Comments sent to students.' : 'Student access revoked.', 'success');
+            await setPanelCommentTableReleaseState(panelCommentCtx, activeStage, panelUid, true, userUid);
+            const panelistName = panelists.find(p => p.uid === panelUid)?.label ?? 'Panel member';
+            showNotification(`${panelistName}'s comments sent to students.`, 'success');
         } catch (error) {
-            console.error('Failed to update panel release state:', error);
-            showNotification('Unable to update release state right now.', 'error');
+            console.error('Failed to release panel table:', error);
+            showNotification('Unable to release comments right now.', 'error');
         } finally {
             setReleaseSaving(false);
         }
-    }, [panelCommentCtx, userUid, releaseMap, activeStage, canRelease, activeStageMeta, showNotification]);
+    }, [panelCommentCtx, userUid, activeStage, canRelease, activeStageMeta, panelists, showNotification]);
 
     if (session?.loading) {
         return (
@@ -483,82 +492,102 @@ export default function AdminPanelCommentsPage() {
                             ))}
                         </Tabs>
 
-                        <Stack spacing={1.5}>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Panel member sheets
-                            </Typography>
-                            {panelistsLoading ? (
-                                <Skeleton variant="rectangular" height={48} />
-                            ) : panelistsError ? (
-                                <Alert severity="error">{panelistsError}</Alert>
-                            ) : panelists.length === 0 ? (
-                                <Alert severity="info">
-                                    Assign panel members to this group to review their sheets.
-                                </Alert>
-                            ) : (
-                                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                                    <Tabs
-                                        value={activePanelUid ?? panelists[0]?.uid}
-                                        onChange={handlePanelTabChange}
-                                        variant="scrollable"
-                                        scrollButtons="auto"
-                                        allowScrollButtonsMobile
-                                    >
-                                        {panelists.map((panel) => (
-                                            <Tab key={panel.uid} value={panel.uid} label={panel.label} />
-                                        ))}
-                                    </Tabs>
-                                </Box>
-                            )}
-                        </Stack>
-
-                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" justifyContent="space-between"
-                            sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-                            <Stack spacing={0.5}>
-                                <Typography variant="subtitle1">
-                                    {getPanelCommentStageLabel(activeStage, 'admin')} release
-                                </Typography>
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Chip
-                                        label={releaseMap[activeStage]?.sent ? 'Released to students' : 'Hidden from students'}
-                                        color={releaseMap[activeStage]?.sent ? 'success' : 'default'}
-                                    />
-                                    {!canRelease && !releaseMap[activeStage]?.sent && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            Waiting for {activeStageMeta?.releaseStageLabel ?? 'stage'} terminal requirements approval.
-                                        </Typography>
-                                    )}
-                                </Stack>
-                            </Stack>
-                            <Button
-                                variant={releaseMap[activeStage]?.sent ? 'outlined' : 'contained'}
-                                color={releaseMap[activeStage]?.sent ? 'warning' : 'primary'}
-                                onClick={handleToggleRelease}
-                                disabled={releaseSaving || (!releaseMap[activeStage]?.sent && !canRelease)}
-                            >
-                                {releaseMap[activeStage]?.sent ? 'Revoke student access' : 'Send to students'}
-                            </Button>
-                        </Stack>
-
-                        {activePanelUid ? (
-                            <>
-                                {entriesError && (
-                                    <Alert severity="error">{entriesError}</Alert>
-                                )}
-
-                                <PanelCommentTable
-                                    title=
-                                    {`${activePanelist?.label ?? 'Panel member'} · ${getPanelCommentStageLabel(activeStage, 'admin')}`}
-                                    entries={entries}
-                                    variant="admin"
-                                    loading={entriesLoading || thesisLoading || panelistsLoading}
-                                />
-                            </>
-                        ) : (
-                            <Alert severity="info">
-                                Select a panel member to review their comment sheet.
+                        {!canRelease && (
+                            <Alert severity="warning">
+                                Waiting for {activeStageMeta?.releaseStageLabel ?? 'stage'} terminal requirements approval
+                                before tables can be released to students.
                             </Alert>
                         )}
+
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                            {/* Table Rail - Left sidebar with panelist tables */}
+                            <Paper variant="outlined" sx={{ minWidth: 280, maxWidth: 320, flexShrink: 0 }}>
+                                <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Panel Member Tables
+                                    </Typography>
+                                </Box>
+                                {panelistsLoading ? (
+                                    <Stack spacing={1} sx={{ p: 2 }}>
+                                        <Skeleton variant="rectangular" height={48} />
+                                        <Skeleton variant="rectangular" height={48} />
+                                    </Stack>
+                                ) : panelistsError ? (
+                                    <Alert severity="error" sx={{ m: 2 }}>{panelistsError}</Alert>
+                                ) : panelists.length === 0 ? (
+                                    <Alert severity="info" sx={{ m: 2 }}>
+                                        Assign panel members to this group to manage their sheets.
+                                    </Alert>
+                                ) : (
+                                    <List disablePadding>
+                                        {panelists.map((panel) => {
+                                            const isReleased = isPanelTableReleased(releaseMap, activeStage, panel.uid);
+                                            const isSelected = activePanelUid === panel.uid;
+                                            return (
+                                                <React.Fragment key={panel.uid}>
+                                                    <ListItemButton
+                                                        selected={isSelected}
+                                                        onClick={() => setActivePanelUid(panel.uid)}
+                                                        sx={{ py: 1.5 }}
+                                                    >
+                                                        <ListItemText
+                                                            primary={panel.label}
+                                                            secondary={
+                                                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                                                                    <Chip
+                                                                        size="small"
+                                                                        label={isReleased ? 'Released' : 'Not released'}
+                                                                        color={isReleased ? 'success' : 'default'}
+                                                                    />
+                                                                    {!isReleased && canRelease && (
+                                                                        <Button
+                                                                            size="small"
+                                                                            variant="outlined"
+                                                                            startIcon={<SendIcon />}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                void handleReleaseTable(panel.uid);
+                                                                            }}
+                                                                            disabled={releaseSaving}
+                                                                        >
+                                                                            Send
+                                                                        </Button>
+                                                                    )}
+                                                                </Stack>
+                                                            }
+                                                        />
+                                                    </ListItemButton>
+                                                    <Divider />
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </List>
+                                )}
+                            </Paper>
+
+                            {/* Main content - Selected table entries */}
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                {activePanelUid ? (
+                                    <>
+                                        {entriesError && (
+                                            <Alert severity="error" sx={{ mb: 2 }}>{entriesError}</Alert>
+                                        )}
+
+                                        <PanelCommentTable
+                                            title={`${activePanelist?.label ?? 'Panel member'} · ${getPanelCommentStageLabel(activeStage, 'admin')}`}
+                                            entries={entries}
+                                            variant="admin"
+                                            loading={entriesLoading || thesisLoading || panelistsLoading}
+                                            released={isActivePanelTableReleased}
+                                        />
+                                    </>
+                                ) : (
+                                    <Alert severity="info">
+                                        Select a panel member from the list to view their comment sheet.
+                                    </Alert>
+                                )}
+                            </Box>
+                        </Stack>
                     </>
                 )}
             </Stack>

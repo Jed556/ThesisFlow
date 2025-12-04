@@ -5,6 +5,15 @@
 export type PanelCommentStage = 'proposal' | 'defense';
 
 /**
+ * Approval status for panel comment entries.
+ * - 'pending': Initial state, awaiting panelist review
+ * - 'approved': Panelist approved the student's compliance
+ * - 'revision_required': Panelist requested revisions
+ * - 'review_requested': Student requested re-review after making revisions
+ */
+export type PanelCommentApprovalStatus = 'pending' | 'approved' | 'revision_required' | 'review_requested';
+
+/**
  * Base data structure stored for every panel comment entry.
  */
 export interface PanelCommentEntry {
@@ -36,6 +45,12 @@ export interface PanelCommentEntry {
     studentUpdatedAt?: string;
     /** Firebase uid of the student who last updated page/status fields. */
     studentUpdatedBy?: string;
+    /** Approval status set by the panelist after reviewing student response. */
+    approvalStatus?: PanelCommentApprovalStatus;
+    /** ISO timestamp for when approval status was last updated. */
+    approvalUpdatedAt?: string;
+    /** Firebase uid who last updated the approval status. */
+    approvalUpdatedBy?: string;
 }
 
 export interface PanelCommentTable {
@@ -43,6 +58,23 @@ export interface PanelCommentTable {
     stage: PanelCommentStage;
     comments: PanelCommentEntry[];
 }
+
+/**
+ * Release status for a single panelist's comment table for a stage.
+ */
+export interface PanelCommentTableReleaseStatus {
+    /** Whether this panelist's comments for this stage have been released to students. */
+    sent: boolean;
+    /** ISO timestamp for when the comments were released. */
+    sentAt?: string;
+    /** Firebase uid of the admin who released the comments. */
+    sentBy?: string;
+}
+
+/**
+ * Map of release status by panelist UID for a single stage.
+ */
+export type PanelCommentTableReleaseMap = Record<string, PanelCommentTableReleaseStatus>;
 
 // TODO: Check if this can be simplified
 
@@ -56,6 +88,8 @@ export interface PanelCommentReleaseStatus {
     sentAt?: string;
     /** Firebase uid of the admin who released the comments. */
     sentBy?: string;
+    /** Per-panelist release status. When set, overrides the stage-level release. */
+    tables?: PanelCommentTableReleaseMap;
 }
 
 /**

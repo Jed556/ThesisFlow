@@ -1,5 +1,6 @@
 // User role types - System-wide roles
-export type UserRole = 'student' | 'statistician' | 'editor' | 'adviser' | 'panel' | 'moderator' | 'head' | 'admin' | 'developer';
+export type UserRole =
+    'student' | 'statistician' | 'editor' | 'adviser' | 'panel' | 'moderator' | 'chair' | 'head' | 'admin' | 'developer';
 
 export interface UserName {
     /**
@@ -27,13 +28,11 @@ export interface UserName {
 /**
  * Skill rating metadata for expert expertise
  */
-export interface SkillRating {
+export interface Skills {
     /** Display name of the skill */
     name: string;
     /** Expert self- or system-assessed rating using a 0-5 scale */
     rating: number;
-    /** Optional count of endorsements backing the rating */
-    endorsements?: number;
     /** Optional free-form note or description */
     note?: string;
 }
@@ -94,12 +93,7 @@ export interface UserProfile {
     /**
      * Expertise areas or skills (for advisers)
      */
-    skills?: string[];
-
-    /**
-     * Optional skill ratings with proficiency scores (0-5 scale)
-     */
-    skillRatings?: SkillRating[];
+    skillRatings?: Skills[];
 
     /**
      * Capacity for handled theses (only for advisers, editors and statisticians)
