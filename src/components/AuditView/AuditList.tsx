@@ -1,10 +1,11 @@
 import * as React from 'react';
 import {
-    Alert, Box, Chip, Divider, List, ListItem, ListItemAvatar,
+    Alert, Box, Button, Chip, Divider, List, ListItem, ListItemAvatar,
     ListItemText, Pagination, Skeleton, Stack, Tooltip, Typography,
     useMediaQuery
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow, isValid } from 'date-fns';
 import { AnimatedList } from '../Animate';
 import { Avatar, Name } from '../Avatar';
@@ -13,6 +14,7 @@ import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import { getCategoryIcon } from './icons';
 import { getAuditCategoryLabel, getAuditCategoryColor } from '../../utils/auditUtils';
+import { buildAuditNavigationPath } from '../../utils/auditNotificationUtils';
 
 interface AuditListProps {
     /** Audit entries to display */
@@ -101,11 +103,22 @@ export function AuditList({
     compact = false,
 }: AuditListProps): React.ReactElement {
     const theme = useTheme();
+    const navigate = useNavigate();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     // Internal page state for uncontrolled mode
     const [internalPage, setInternalPage] = React.useState(1);
     const page = controlledPage ?? internalPage;
+
+    /**
+     * Handle navigation to the relevant page for an audit entry
+     */
+    const handleViewDetails = React.useCallback((audit: AuditEntry) => {
+        const path = buildAuditNavigationPath(audit.category, audit.action, audit.details);
+        if (path) {
+            navigate(path);
+        }
+    }, [navigate]);
 
     const handlePageChange = React.useCallback(
         (_: React.ChangeEvent<unknown>, newPage: number) => {
@@ -267,6 +280,28 @@ export function AuditList({
                                                     </Typography>
                                                 </Tooltip>
                                             </Stack>
+                                            {/* View Details button */}
+                                            {buildAuditNavigationPath(audit.category, audit.action, audit.details) && (
+                                                <Button
+                                                    size="small"
+                                                    variant="text"
+                                                    onClick={() => handleViewDetails(audit)}
+                                                    sx={{
+                                                        textTransform: 'none',
+                                                        fontWeight: 500,
+                                                        fontSize: '0.75rem',
+                                                        p: 0,
+                                                        minWidth: 'auto',
+                                                        mt: 0.5,
+                                                        '&:hover': {
+                                                            backgroundColor: 'transparent',
+                                                            textDecoration: 'underline',
+                                                        },
+                                                    }}
+                                                >
+                                                    View Details →
+                                                </Button>
+                                            )}
                                         </Stack>
                                     }
                                 />

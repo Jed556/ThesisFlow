@@ -100,7 +100,7 @@ export function computeExpertCards(
                 : stats.statisticianCount;
         const openSlots = capacity > 0 ? Math.max(capacity - active, 0) : 0;
         const compatibility = computeCompatibility(profile, stats, role);
-        const score = compatibility + openSlots * 5 + (profile.skills?.length ?? 0) * 2;
+        const score = compatibility + openSlots * 5 + (profile.skillRatings?.length ?? 0) * 2;
 
         return {
             profile,
@@ -169,7 +169,7 @@ function computeCompatibility(
     const openSlots = capacity > 0 ? Math.max(capacity - active, 0) : 0;
     const availabilityRatio = capacity > 0 ? openSlots / capacity : 0;
     const availabilityScore = Math.round(availabilityRatio * 40);
-    const skillsScore = Math.min((profile.skills?.length ?? 0) * 5, 20);
+    const skillsScore = Math.min((profile.skillRatings?.length ?? 0) * 5, 20);
     const recencyScore = computeRecencyScore(normalizeDateInput(profile.lastActive));
     const penalty = Math.min(active * 3, 15);
     const baseScore = 40;

@@ -28,6 +28,7 @@ import {
     removeInviteFromGroup, submitGroupForReview,
 } from '../../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../../utils/firebase/firestore/user';
+import { auditAndNotify } from '../../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -550,7 +551,7 @@ export default function StudentGroupPage() {
     };
 
     const handleInviteUser = async () => {
-        if (!myGroup || !inviteUid.trim()) return;
+        if (!myGroup || !inviteUid.trim() || !userUid) return;
 
         if (isInviteLocked(myGroup.status)) {
             showNotification('Invites are disabled once your group has been submitted for review or approved.', 'info');
@@ -559,6 +560,26 @@ export default function StudentGroupPage() {
 
         try {
             await inviteUserToGroup(myGroup.id, inviteUid.trim());
+
+            // Create audit notification for invite
+            try {
+                await auditAndNotify({
+                    group: myGroup,
+                    userId: userUid,
+                    name: 'Invite Sent',
+                    description: 'A new member has been invited to join the group.',
+                    category: 'group',
+                    action: 'member_invited',
+                    targets: {
+                        userIds: [inviteUid.trim()],
+                        excludeUserId: userUid,
+                    },
+                    details: { invitedUserId: inviteUid.trim() },
+                });
+            } catch (auditError) {
+                console.error('Failed to create audit notification:', auditError);
+            }
+
             setInviteDialogOpen(false);
             setInviteUid('');
 
@@ -592,6 +613,26 @@ export default function StudentGroupPage() {
                 setIsLeader(updated.members.leader === userUid);
                 const profileMap = await buildGroupProfileMap(updated);
                 setMyGroupProfiles(profileMap);
+
+                // Create audit notification for accepted invite
+                try {
+                    await auditAndNotify({
+                        group: updated,
+                        userId: userUid,
+                        name: 'Invite Accepted',
+                        description: 'A new member has joined the group.',
+                        category: 'group',
+                        action: 'invite_accepted',
+                        targets: {
+                            groupMembers: true,
+                            leader: true,
+                            excludeUserId: userUid,
+                        },
+                        details: { newMemberId: userUid },
+                    });
+                } catch (auditError) {
+                    console.error('Failed to create audit notification:', auditError);
+                }
             }
 
             // Remove from invites list
@@ -617,10 +658,30 @@ export default function StudentGroupPage() {
     };
 
     const handleSubmitForReview = async () => {
-        if (!myGroup) return;
+        if (!myGroup || !userUid) return;
 
         try {
             await submitGroupForReview(myGroup.id);
+
+            // Create audit notification for group submission
+            try {
+                await auditAndNotify({
+                    group: myGroup,
+                    userId: userUid,
+                    name: 'Group Submitted for Review',
+                    description: `Group "${myGroup.name}" has been submitted for moderator review.`,
+                    category: 'group',
+                    action: 'group_status_changed',
+                    targets: {
+                        groupMembers: true,
+                        moderators: true,
+                        excludeUserId: userUid,
+                    },
+                    details: { previousStatus: 'draft', newStatus: 'pending' },
+                });
+            } catch (auditError) {
+                console.error('Failed to create audit notification:', auditError);
+            }
 
             // Reload my group
             const updated = await findGroupById(myGroup.id);
@@ -636,10 +697,30 @@ export default function StudentGroupPage() {
     };
 
     const handleAcceptJoinRequest = async (requesterUid: string) => {
-        if (!myGroup) return;
+        if (!myGroup || !userUid) return;
 
         try {
             await acceptJoinRequest(myGroup.id, requesterUid);
+
+            // Create audit notification for accepted join request
+            try {
+                await auditAndNotify({
+                    group: myGroup,
+                    userId: userUid,
+                    name: 'Join Request Accepted',
+                    description: 'A new member has joined the group.',
+                    category: 'group',
+                    action: 'join_request_accepted',
+                    targets: {
+                        groupMembers: true,
+                        userIds: [requesterUid],
+                        excludeUserId: userUid,
+                    },
+                    details: { newMemberId: requesterUid },
+                });
+            } catch (auditError) {
+                console.error('Failed to create audit notification:', auditError);
+            }
 
             // Reload my group
             const updated = await findGroupById(myGroup.id);
@@ -655,10 +736,29 @@ export default function StudentGroupPage() {
     };
 
     const handleRejectJoinRequest = async (requesterUid: string) => {
-        if (!myGroup) return;
+        if (!myGroup || !userUid) return;
 
         try {
             await rejectJoinRequest(myGroup.id, requesterUid);
+
+            // Create audit notification for rejected join request
+            try {
+                await auditAndNotify({
+                    group: myGroup,
+                    userId: userUid,
+                    name: 'Join Request Rejected',
+                    description: 'A join request has been declined.',
+                    category: 'group',
+                    action: 'join_request_rejected',
+                    targets: {
+                        userIds: [requesterUid],
+                        excludeUserId: userUid,
+                    },
+                    details: { rejectedUserId: requesterUid },
+                });
+            } catch (auditError) {
+                console.error('Failed to create audit notification:', auditError);
+            }
 
             // Reload my group
             const updated = await findGroupById(myGroup.id);

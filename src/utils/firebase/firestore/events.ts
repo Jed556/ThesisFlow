@@ -1,53 +1,17 @@
 import {
-    doc, setDoc, onSnapshot, collection, query, where, getDocs,
-    addDoc, getDoc, deleteDoc, documentId, writeBatch,
-    type WithFieldValue, type QueryConstraint, type QuerySnapshot, type DocumentData,
+    doc, onSnapshot, collection, query, where, getDocs,
+    getDoc, documentId,
+    type QueryConstraint, type QuerySnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import { cleanData } from './firestore';
 
 import type { ScheduleEvent, CalendarLevel, CalendarPathContext, Calendar } from '../../../types/schedule';
+import type { EventsListenerOptions } from './calendarEvents';
 
 type EventRecord = ScheduleEvent & { id: string };
 
-/**
- * @deprecated Use EventsListenerOptions from calendarEvents instead
- */
-export interface GlobalEventsListenerOptions {
-    onData: (events: EventRecord[]) => void;
-    onError?: (error: Error) => void;
-}
-
 /** Firestore collection name used for events documents */
 const EVENTS_COLLECTION = 'events';
-
-/**
- * Create or update a schedule event in the global events collection
- * @deprecated Use setCalendarEvent from calendarEvents for hierarchical calendar storage
- */
-export async function setEvent(id: string | null, event: ScheduleEvent): Promise<string> {
-    let eventId: string;
-
-    if (id) {
-        // Update existing event: use 'update' mode and remove 'id' field
-        const { id: _, ...eventWithoutId } = event;
-        const cleanedData = cleanData(eventWithoutId, 'update');
-        const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
-        await setDoc(ref, cleanedData, { merge: true });
-        eventId = id;
-    } else {
-        // Create new event: use 'create' mode and remove 'id' field
-        const { id: _, ...eventWithoutId } = event;
-        const cleanedData = cleanData(eventWithoutId, 'create');
-        const ref = await addDoc(
-            collection(firebaseFirestore, EVENTS_COLLECTION),
-            cleanedData as WithFieldValue<ScheduleEvent>
-        );
-        eventId = ref.id;
-    }
-
-    return eventId;
-}
 
 /**
  * Get an event by id
@@ -154,37 +118,6 @@ export async function getEventsByCalendar(
 }
 
 /**
- * Delete an event by id from the global events collection
- * @deprecated Use deleteCalendarEvent from calendarEvents for hierarchical calendar storage
- * @param id - Event document ID
- */
-export async function deleteEvent(id: string): Promise<void> {
-    if (!id) throw new Error('Event ID required');
-
-    // Delete the event from global collection
-    const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
-    await deleteDoc(ref);
-}
-
-/**
- * Delete multiple events by their IDs from the global events collection
- * @deprecated Use deleteCalendarEvent from calendarEvents for hierarchical calendar storage
- * @param ids - Array of event document IDs to delete
- */
-export async function bulkDeleteEvents(ids: string[]): Promise<void> {
-    if (!ids || ids.length === 0) throw new Error('Event IDs required');
-
-    // Batch-delete event documents atomically
-    const batch = writeBatch(firebaseFirestore);
-    ids.forEach((id) => {
-        const ref = doc(firebaseFirestore, EVENTS_COLLECTION, id);
-        batch.delete(ref);
-    });
-
-    await batch.commit();
-}
-
-/**
  * Subscribe to events collection updates with optional query constraints.
  * Mirrors the listener structure used in thesis.ts to provide a consistent API.
  * @param constraints - Optional Firestore query constraints to narrow the listener scope
@@ -193,7 +126,7 @@ export async function bulkDeleteEvents(ids: string[]): Promise<void> {
  */
 export function listenEvents(
     constraints: QueryConstraint[] | undefined,
-    options: GlobalEventsListenerOptions
+    options: EventsListenerOptions
 ): () => void {
     const { onData, onError } = options;
     const baseCollection = collection(firebaseFirestore, EVENTS_COLLECTION);
@@ -251,7 +184,7 @@ export async function getEventsByIds(eventIds: string[]): Promise<(ScheduleEvent
  */
 export function listenEventsByThesisIds(
     thesisIds: string[] | undefined,
-    options: GlobalEventsListenerOptions
+    options: EventsListenerOptions
 ): () => void {
     const uniqueIds = Array.from(new Set((thesisIds ?? []).filter((id): id is string => Boolean(id))));
 

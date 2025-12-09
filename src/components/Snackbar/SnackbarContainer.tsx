@@ -1,146 +1,366 @@
 import * as React from 'react';
-import { Box, Paper, IconButton, Typography, Button, Fade, Slide } from '@mui/material';
 import {
-    Close as CloseIcon,
-    CheckCircle as SuccessIcon,
-    Error as ErrorIcon,
-    Warning as WarningIcon,
-    Info as InfoIcon,
+    Box, Paper, IconButton, Typography, Button, Divider,
+    LinearProgress, Stack, useTheme, alpha
+} from '@mui/material';
+import {
+    Close as CloseIcon, CheckCircle as SuccessIcon, Error as ErrorIcon, Warning as WarningIcon, Info as InfoIcon
 } from '@mui/icons-material';
-import { useSnackbar, type Notification, type NotificationSeverity } from '../../contexts/SnackbarContext';
+import { useNavigate } from 'react-router-dom';
+import {
+    useSnackbar, type Notification, type NotificationSeverity, type NotificationAction,
+} from '../../contexts/SnackbarContext';
 
 /**
- * Icon mapping for notification severity
+ * Get default icon for severity
  */
-const SEVERITY_ICONS: Record<NotificationSeverity, React.ReactElement> = {
-    success: <SuccessIcon />,
-    error: <ErrorIcon />,
-    warning: <WarningIcon />,
-    info: <InfoIcon />,
-};
-
-/**
- * Color mapping for notification severity
- */
-const SEVERITY_COLORS: Record<NotificationSeverity, string> = {
-    success: '#4caf50',
-    error: '#f44336',
-    warning: '#ff9800',
-    info: '#2196f3',
-};
-
-/**
- * Individual notification item component
- */
-interface NotificationItemProps {
-    notification: Notification;
-    index: number;
-    isExpanded: boolean;
-    onClose: (id: string) => void;
+function getDefaultIcon(severity: NotificationSeverity): React.ReactElement {
+    switch (severity) {
+        case 'success':
+            return <SuccessIcon />;
+        case 'error':
+            return <ErrorIcon />;
+        case 'warning':
+            return <WarningIcon />;
+        case 'info':
+        default:
+            return <InfoIcon />;
+    }
 }
 
-function NotificationItem({ notification, index, isExpanded, onClose }: NotificationItemProps) {
-    const { message, severity, action } = notification;
-    const icon = SEVERITY_ICONS[severity];
-    const color = SEVERITY_COLORS[severity];
+/**
+ * Timer progress bar component
+ */
+interface TimerProgressProps {
+    duration: number;
+    createdAt: number;
+    severity: NotificationSeverity;
+}
+
+function TimerProgress({ duration, createdAt, severity }: TimerProgressProps) {
+    const theme = useTheme();
+    const [progress, setProgress] = React.useState(100);
+
+    React.useEffect(() => {
+        if (duration <= 0) return;
+
+        const updateProgress = () => {
+            const elapsed = Date.now() - createdAt;
+            const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
+            setProgress(remaining);
+        };
+
+        // Update every 50ms for smooth animation
+        const interval = setInterval(updateProgress, 50);
+        updateProgress();
+
+        return () => clearInterval(interval);
+    }, [duration, createdAt]);
+
+    if (duration <= 0) return null;
 
     return (
-        <Slide direction="up" in={true} timeout={300} style={{ transitionDelay: `${index * 50}ms` }}>
-            <Paper
-                elevation={3}
-                sx={{
-                    position: 'relative',
-                    width: 400,
-                    maxWidth: '90vw',
-                    p: 2,
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 1.5,
-                    backgroundColor: 'background.paper',
-                    border: `1px solid ${color}`,
-                    borderLeft: `4px solid ${color}`,
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    mb: isExpanded ? 1.5 : 0,
-                    opacity: isExpanded ? 1 : index === 0 ? 1 : 0.3,
-                    transform: isExpanded
-                        ? 'translateY(0) scale(1)'
-                        : `translateY(${index * -8}px) scale(${1 - index * 0.05})`,
-                    transformOrigin: 'bottom center',
-                    '&:hover': {
-                        boxShadow: 6,
-                    },
-                }}
-            >
-                {/* Icon */}
-                <Box
-                    sx={{
-                        color: color,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        mt: 0.5,
-                    }}
-                >
-                    {icon}
-                </Box>
-
-                {/* Content */}
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: 'text.primary',
-                            wordBreak: 'break-word',
-                            mb: action ? 1 : 0,
-                        }}
-                    >
-                        {message}
-                    </Typography>
-
-                    {/* Action Button */}
-                    {action && (
-                        <Button
-                            size="small"
-                            onClick={action.onClick}
-                            sx={{
-                                color: color,
-                                minWidth: 'auto',
-                                p: 0,
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                '&:hover': {
-                                    backgroundColor: 'transparent',
-                                    textDecoration: 'underline',
-                                },
-                            }}
-                        >
-                            {action.label}
-                        </Button>
-                    )}
-                </Box>
-
-                {/* Close Button */}
-                <IconButton
-                    size="small"
-                    onClick={() => onClose(notification.id)}
-                    sx={{
-                        color: 'text.secondary',
-                        p: 0.5,
-                        mt: 0.25,
-                        '&:hover': {
-                            backgroundColor: 'action.hover',
-                        },
-                    }}
-                >
-                    <CloseIcon fontSize="small" />
-                </IconButton>
-            </Paper>
-        </Slide>
+        <LinearProgress
+            variant="determinate"
+            value={progress}
+            sx={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 3,
+                borderRadius: '0 0 12px 12px',
+                backgroundColor: alpha(theme.palette[severity].main, 0.15),
+                '& .MuiLinearProgress-bar': {
+                    backgroundColor: theme.palette[severity].main,
+                    transition: 'transform 0.05s linear',
+                },
+            }}
+        />
     );
 }
 
 /**
- * Badge showing notification count (when stacked)
+ * Action button component
+ */
+interface ActionButtonProps {
+    action: NotificationAction;
+    severity: NotificationSeverity;
+    onClose: () => void;
+}
+
+function ActionButton({ action, severity, onClose }: ActionButtonProps) {
+    const navigate = useNavigate();
+    const theme = useTheme();
+
+    const handleClick = () => {
+        if (action.href) {
+            navigate(action.href);
+        }
+        action.onClick();
+        onClose();
+    };
+
+    const variant = action.variant ?? 'outlined';
+
+    return (
+        <Button
+            size="small"
+            variant={variant}
+            onClick={handleClick}
+            sx={{
+                minWidth: 'auto',
+                px: 2,
+                py: 0.5,
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                textTransform: 'none',
+                borderRadius: 2,
+                borderColor: variant === 'outlined' ? theme.palette[severity].main : undefined,
+                color: variant === 'contained'
+                    ? theme.palette[severity].contrastText
+                    : theme.palette[severity].main,
+                backgroundColor: variant === 'contained'
+                    ? theme.palette[severity].main
+                    : undefined,
+                '&:hover': {
+                    borderColor: variant === 'outlined' ? theme.palette[severity].dark : undefined,
+                    backgroundColor: variant === 'contained'
+                        ? theme.palette[severity].dark
+                        : alpha(theme.palette[severity].main, 0.08),
+                },
+            }}
+        >
+            {action.label}
+        </Button>
+    );
+}
+
+/**
+ * Individual notification item component - Modern design with enter/exit animations
+ * Stacking: Newest notification on top, older ones peek below with reduced scale
+ */
+interface NotificationItemProps {
+    notification: Notification;
+    index: number;
+    totalCount: number;
+    isExpanded: boolean;
+    onClose: (id: string) => void;
+}
+
+function NotificationItem({ notification, index, totalCount, isExpanded, onClose }: NotificationItemProps) {
+    const theme = useTheme();
+    const {
+        id, title, message, severity, icon, showDivider, actions, showProgress, duration, createdAt,
+    } = notification;
+
+    // Animation states
+    const [isVisible, setIsVisible] = React.useState(false);
+    const [isExiting, setIsExiting] = React.useState(false);
+
+    // Trigger enter animation on mount
+    React.useEffect(() => {
+        const enterTimer = setTimeout(() => setIsVisible(true), 10 + index * 50);
+        return () => clearTimeout(enterTimer);
+    }, [index]);
+
+    const handleClose = React.useCallback(() => {
+        if (isExiting) return; // Prevent double-close
+        setIsExiting(true);
+        // Wait for exit animation to complete before removing
+        setTimeout(() => onClose(id), 200);
+    }, [id, onClose, isExiting]);
+
+    // Auto-dismiss timer - triggers animated close
+    React.useEffect(() => {
+        if (duration <= 0) return;
+
+        const remainingTime = duration - (Date.now() - createdAt);
+        if (remainingTime <= 0) {
+            handleClose();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            handleClose();
+        }, remainingTime);
+
+        return () => clearTimeout(timer);
+    }, [duration, createdAt, handleClose]);
+
+    const displayIcon = icon ?? getDefaultIcon(severity);
+    const severityColor = theme.palette[severity].main;
+    const isDarkMode = theme.palette.mode === 'dark';
+
+    // Stacking calculations - index 0 is the newest/front card (at bottom visually)
+    // Older cards (higher index) peek out ABOVE the front card
+    const stackOffset = 10; // Vertical offset between stacked cards (peek amount)
+    const scaleReduction = 0.04; // Scale reduction per card in stack
+    const maxStackedCards = 3; // Maximum visible cards in stack
+
+    // For stacked mode: only show first 3 cards, rest are hidden
+    const isHiddenInStack = !isExpanded && index >= maxStackedCards;
+    const stackIndex = Math.min(index, maxStackedCards - 1);
+
+    // Calculate stacked transform - older cards move UP (negative Y) and shrink
+    // Index 0 (newest) = no offset, full scale
+    // Index 1+ (older) = negative offset (moves up), smaller scale
+    const stackedTransform = `translateY(${-stackIndex * stackOffset}px) scale(${1 - stackIndex * scaleReduction})`;
+    const expandedTransform = 'translateY(0) scale(1)';
+    const enterTransform = 'translateY(20px) scale(0.95)';
+    const exitTransform = 'translateY(10px) scale(0.98)';
+
+    return (
+        <Paper
+            elevation={isDarkMode ? 8 : 6}
+            sx={{
+                // In stacked mode, use absolute positioning for overlay effect
+                // In expanded mode, use relative for normal flow
+                position: isExpanded ? 'relative' : 'absolute',
+                bottom: 0, // Anchor to bottom
+                left: 0,
+                right: 0,
+                width: '100%',
+                overflow: 'hidden',
+                borderRadius: 3,
+                // Use theme's background.paper for proper light/dark mode support
+                backgroundColor: 'background.paper',
+                border: '1px solid var(--mui-palette-divider)',
+                // Enter/exit animation and stacking
+                // Stacked cards (not front) have reduced opacity for modern look
+                opacity: isExiting
+                    ? 0
+                    : isHiddenInStack
+                        ? 0
+                        : isVisible
+                            ? (isExpanded ? 1 : index === 0 ? 1 : 0.6)
+                            : 0,
+                transform: isExiting
+                    ? exitTransform
+                    : isVisible
+                        ? isExpanded
+                            ? expandedTransform
+                            : stackedTransform
+                        : enterTransform,
+                transition: isExiting
+                    ? 'opacity 0.2s ease-out, transform 0.2s ease-out'
+                    : 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                transitionDelay: isVisible && !isExiting ? `${index * 30}ms` : '0ms',
+                transformOrigin: 'bottom center',
+                zIndex: totalCount - index, // Front card (index 0) has highest z-index
+                mb: isExpanded ? 1.5 : 0,
+                boxShadow: theme.shadows[8],
+            }}
+        >
+            {/* Main content container */}
+            <Box sx={{ p: 2, pb: showProgress ? 2.5 : 2 }}>
+                {/* Header row: Icon + Title + Close */}
+                <Stack direction="row" alignItems="flex-start" spacing={1.5}>
+                    {/* Icon container */}
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            backgroundColor: alpha(severityColor, isDarkMode ? 0.2 : 0.12),
+                            color: severityColor,
+                            flexShrink: 0,
+                            '& .MuiSvgIcon-root': {
+                                fontSize: 22,
+                            },
+                        }}
+                    >
+                        {displayIcon}
+                    </Box>
+
+                    {/* Content area */}
+                    <Box sx={{ flex: 1, minWidth: 0, pt: 0.25 }}>
+                        {/* Title */}
+                        {title && (
+                            <Typography
+                                variant="subtitle1"
+                                sx={{
+                                    fontWeight: 600,
+                                    color: 'text.primary',
+                                    lineHeight: 1.3,
+                                    mb: showDivider ? 1 : 0.5,
+                                }}
+                            >
+                                {title}
+                            </Typography>
+                        )}
+
+                        {/* Divider */}
+                        {showDivider && (
+                            <Divider sx={{ mb: 1, borderColor: alpha(severityColor, 0.2) }} />
+                        )}
+
+                        {/* Message */}
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'text.secondary',
+                                lineHeight: 1.5,
+                                wordBreak: 'break-word',
+                            }}
+                        >
+                            {message}
+                        </Typography>
+
+                        {/* Action buttons */}
+                        {actions && actions.length > 0 && (
+                            <Stack
+                                direction="row"
+                                spacing={1}
+                                sx={{ mt: 1.5 }}
+                            >
+                                {actions.map((action, actionIndex) => (
+                                    <ActionButton
+                                        key={actionIndex}
+                                        action={action}
+                                        severity={severity}
+                                        onClose={handleClose}
+                                    />
+                                ))}
+                            </Stack>
+                        )}
+                    </Box>
+
+                    {/* Close button */}
+                    <IconButton
+                        size="small"
+                        onClick={handleClose}
+                        sx={{
+                            color: 'text.secondary',
+                            p: 0.5,
+                            '&:hover': {
+                                backgroundColor: alpha(severityColor, 0.08),
+                                color: severityColor,
+                            },
+                        }}
+                    >
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </Stack>
+            </Box>
+
+            {/* Timer progress bar */}
+            {showProgress && (
+                <TimerProgress
+                    duration={duration}
+                    createdAt={createdAt}
+                    severity={severity}
+                />
+            )}
+        </Paper>
+    );
+}
+
+/**
+ * Badge showing notification count (when stacked) - pill shaped, attached to bottom of front card
  */
 interface NotificationBadgeProps {
     count: number;
@@ -148,33 +368,42 @@ interface NotificationBadgeProps {
 }
 
 function NotificationBadge({ count, isExpanded }: NotificationBadgeProps) {
-    if (count <= 1 || isExpanded) return null;
+    const theme = useTheme();
+
+    if (count <= 1) return null;
 
     return (
-        <Fade in={!isExpanded}>
+        <Box
+            sx={{
+                position: 'absolute',
+                bottom: -16, // Attach to bottom of front card, overlapping slightly
+                left: '50%',
+                transform: 'translateX(-50%)',
+                opacity: isExpanded ? 0 : 1,
+                transition: 'opacity 0.2s ease-in-out',
+                pointerEvents: 'none',
+                zIndex: 100, // Above all cards
+            }}
+        >
             <Paper
                 elevation={4}
                 sx={{
-                    position: 'absolute',
-                    bottom: -12,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    backgroundColor: 'primary.main',
-                    color: 'primary.contrastText',
-                    px: 1.5,
+                    backgroundColor: theme.palette.text.primary,
+                    color: theme.palette.background.paper,
+                    px: 2.5,
                     py: 0.5,
-                    borderRadius: 10,
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    zIndex: 10,
-                    minWidth: 40,
+                    borderRadius: 3,
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    minWidth: 36,
                     textAlign: 'center',
-                    pointerEvents: 'none',
+                    border: `1px solid ${theme.palette.divider}`,
+                    boxShadow: theme.shadows[3],
                 }}
             >
                 {count}
             </Paper>
-        </Fade>
+        </Box>
     );
 }
 
@@ -183,20 +412,20 @@ function NotificationBadge({ count, isExpanded }: NotificationBadgeProps) {
  */
 export default function SnackbarContainer() {
     const { notifications, hideNotification } = useSnackbar();
+    // Expansion is only triggered by clicking, not hovering
     const [isExpanded, setIsExpanded] = React.useState(false);
-    const [isHovering, setIsHovering] = React.useState(false);
 
-    // Auto-collapse after a delay when mouse leaves
+    // Auto-collapse after a delay when clicking outside or after interaction
+    const handleToggleExpand = React.useCallback(() => {
+        setIsExpanded((prev) => !prev);
+    }, []);
+
+    // Auto-collapse when notifications change (new one added or one removed)
     React.useEffect(() => {
-        if (!isHovering && isExpanded) {
-            const timer = setTimeout(() => {
-                setIsExpanded(false);
-            }, 300);
-            return () => clearTimeout(timer);
-        } else if (isHovering) {
-            setIsExpanded(true);
+        if (isExpanded && notifications.length <= 1) {
+            setIsExpanded(false);
         }
-    }, [isHovering, isExpanded]);
+    }, [notifications.length, isExpanded]);
 
     if (notifications.length === 0) {
         return null;
@@ -204,8 +433,7 @@ export default function SnackbarContainer() {
 
     return (
         <Box
-            onMouseEnter={() => setIsHovering(true)}
-            onMouseLeave={() => setIsHovering(false)}
+            onClick={notifications.length > 1 ? handleToggleExpand : undefined}
             sx={{
                 position: 'fixed',
                 bottom: 24,
@@ -215,11 +443,9 @@ export default function SnackbarContainer() {
                 flexDirection: 'column',
                 alignItems: 'flex-end',
                 pointerEvents: 'auto',
-                maxHeight: 'calc(100vh - 100px)',
+                maxHeight: isExpanded ? 'calc(100vh - 100px)' : 'auto',
                 overflowY: isExpanded ? 'auto' : 'visible',
                 overflowX: 'visible',
-                pb: isExpanded ? 0 : 2,
-                pr: 1,
                 '&::-webkit-scrollbar': {
                     width: '6px',
                 },
@@ -239,24 +465,41 @@ export default function SnackbarContainer() {
                 sx={{
                     position: 'relative',
                     display: 'flex',
-                    flexDirection: 'column-reverse',
-                    alignItems: 'flex-end',
-                    width: '100%',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    width: 380,
+                    maxWidth: '90vw',
                 }}
             >
-                {/* Render notifications in reverse order (newest at bottom) */}
-                {notifications.map((notification, index) => (
-                    <NotificationItem
-                        key={notification.id}
-                        notification={notification}
-                        index={notifications.length - 1 - index}
-                        isExpanded={isExpanded}
-                        onClose={hideNotification}
-                    />
-                ))}
+                {/* Stack container - reserves height for absolute positioned cards */}
+                <Box
+                    sx={{
+                        position: 'relative',
+                        width: '100%',
+                        // Reserve space at TOP for cards peeking above
+                        // and at BOTTOM for the badge
+                        pt: isExpanded ? 0 : `${Math.min(notifications.length - 1, 2) * 10}px`,
+                        pb: isExpanded ? 0 : 2, // Space for badge
+                    }}
+                >
+                    {/* Render notifications - newest first (index 0 = front card) */}
+                    {notifications.map((notification, index) => (
+                        <NotificationItem
+                            key={notification.id}
+                            notification={notification}
+                            index={index}
+                            totalCount={notifications.length}
+                            isExpanded={isExpanded}
+                            onClose={hideNotification}
+                        />
+                    ))}
 
-                {/* Notification count badge */}
-                <NotificationBadge count={notifications.length} isExpanded={isExpanded} />
+                    {/* Notification count badge - attached to bottom of front card */}
+                    <NotificationBadge
+                        count={notifications.length}
+                        isExpanded={isExpanded}
+                    />
+                </Box>
             </Box>
         </Box>
     );

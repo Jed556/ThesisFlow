@@ -455,7 +455,8 @@ export function buildChatDocPath(
 // ============================================================================
 
 /**
- * Build path to audits collection under a group
+ * Build path to audits collection under a group (Group Audits)
+ * Path: year/{year}/departments/{dept}/courses/{course}/groups/{groupId}/audits
  */
 export function buildAuditsCollectionPath(
     year: string, department: string, course: string, groupId: string
@@ -464,12 +465,72 @@ export function buildAuditsCollectionPath(
 }
 
 /**
- * Build path to a specific audit document
+ * Build path to a specific audit document (Group Audits)
  */
 export function buildAuditDocPath(
     year: string, department: string, course: string, groupId: string, auditId: string
 ): string {
     return `${buildAuditsCollectionPath(year, department, course, groupId)}/${auditId}`;
+}
+
+// ============================================================================
+// User Audit Path Builders
+// ============================================================================
+
+/**
+ * Build path to user audits collection at year level
+ * Path: year/{year}/users/{userId}/audits
+ */
+export function buildYearUserAuditsCollectionPath(year: string, userId: string): string {
+    return `${buildYearUserDocPath(year, userId)}/${AUDITS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific user audit document at year level
+ * Path: year/{year}/users/{userId}/audits/{auditId}
+ */
+export function buildYearUserAuditDocPath(year: string, userId: string, auditId: string): string {
+    return `${buildYearUserAuditsCollectionPath(year, userId)}/${auditId}`;
+}
+
+/**
+ * Build path to user audits collection at department level
+ * Path: year/{year}/departments/{dept}/users/{userId}/audits
+ */
+export function buildDepartmentUserAuditsCollectionPath(
+    year: string, department: string, userId: string
+): string {
+    return `${buildDepartmentUserDocPath(year, department, userId)}/${AUDITS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific user audit document at department level
+ * Path: year/{year}/departments/{dept}/users/{userId}/audits/{auditId}
+ */
+export function buildDepartmentUserAuditDocPath(
+    year: string, department: string, userId: string, auditId: string
+): string {
+    return `${buildDepartmentUserAuditsCollectionPath(year, department, userId)}/${auditId}`;
+}
+
+/**
+ * Build path to user audits collection at course level
+ * Path: year/{year}/departments/{dept}/courses/{course}/users/{userId}/audits
+ */
+export function buildCourseUserAuditsCollectionPath(
+    year: string, department: string, course: string, userId: string
+): string {
+    return `${buildCourseUserDocPath(year, department, course, userId)}/${AUDITS_SUBCOLLECTION}`;
+}
+
+/**
+ * Build path to a specific user audit document at course level
+ * Path: year/{year}/departments/{dept}/courses/{course}/users/{userId}/audits/{auditId}
+ */
+export function buildCourseUserAuditDocPath(
+    year: string, department: string, course: string, userId: string, auditId: string
+): string {
+    return `${buildCourseUserAuditsCollectionPath(year, department, course, userId)}/${auditId}`;
 }
 
 // ============================================================================

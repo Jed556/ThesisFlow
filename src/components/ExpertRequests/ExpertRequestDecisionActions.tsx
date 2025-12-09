@@ -10,6 +10,7 @@ import { assignExpertToGroup } from '../../utils/firebase/firestore/groups';
 import { respondToExpertRequestById } from '../../utils/firebase/firestore/expertRequests';
 import { getGroupExpertByRole } from '../../utils/groupUtils';
 import { useSnackbar } from '../../contexts/SnackbarContext';
+import { notifyExpertAssignment, auditAndNotify } from '../../utils/auditNotificationUtils';
 
 export interface ExpertRequestDecisionActionsProps {
     request: ExpertRequest | null;
@@ -85,10 +86,38 @@ export default function ExpertRequestDecisionActions({ request, group, role, rol
                 await assignExpertToGroup(group.id, expertUid!, role);
                 await respondToExpertRequestById(request.id, 'approved', { responseNote: note });
                 showNotification('Request approved successfully.', 'success');
+
+                // Audit notification for expert assignment
+                void notifyExpertAssignment({
+                    group,
+                    assignerId: expertUid!,
+                    expertId: expertUid!,
+                    expertRole: role,
+                    details: { responseNote: note },
+                });
+
                 onCompleted?.('approved');
             } else {
                 await respondToExpertRequestById(request.id, 'rejected', { responseNote: note });
                 showNotification('Request rejected.', 'info');
+
+                // Audit notification for expert request rejection
+                if (group) {
+                    void auditAndNotify({
+                        group,
+                        userId: expertUid!,
+                        name: `${roleLabel} Request Rejected`,
+                        description: `Your ${roleLabel.toLowerCase()} request has been rejected.${note ? ` Reason: ${note}` : ''}`,
+                        category: 'expert',
+                        action: 'expert_request_rejected',
+                        targets: {
+                            groupMembers: true,
+                            excludeUserId: expertUid!,
+                        },
+                        details: { expertRole: role, responseNote: note },
+                    });
+                }
+
                 onCompleted?.('rejected');
             }
             setDialogMode(null);

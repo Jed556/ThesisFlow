@@ -17,6 +17,7 @@ import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { findUserById } from '../../utils/firebase/firestore/user';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 function splitSectionList(value?: string | null): string[] {
     if (!value) {
@@ -255,6 +256,34 @@ export default function ModeratorTopicProposalsPage() {
                 notes: decisionNotes.trim() || undefined,
             });
             showNotification('Decision recorded', 'success');
+
+            // Audit notification for moderator proposal decision
+            const group = assignedGroups.find((g) =>
+                groupProposalSets.get(g.id)?.id === decisionDialog.setId
+            );
+            if (group) {
+                const isApproved = decisionDialog.decision === 'approved';
+                void auditAndNotify({
+                    group,
+                    userId: moderatorUid,
+                    name: isApproved ? 'Proposal Approved by Moderator' : 'Proposal Rejected by Moderator',
+                    description: isApproved
+                        ? `Topic "${decisionDialog.proposal.title}" has been approved by moderator and sent to head for review.`
+                        : `Topic "${decisionDialog.proposal.title}" has been rejected by moderator.${decisionNotes.trim() ? ` Reason: ${decisionNotes.trim()}` : ''}`,
+                    category: 'proposal',
+                    action: isApproved ? 'proposal_approved' : 'proposal_rejected',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: moderatorUid,
+                    },
+                    details: {
+                        proposalTitle: decisionDialog.proposal.title,
+                        decision: decisionDialog.decision,
+                        notes: decisionNotes.trim() || undefined,
+                        reviewerRole: 'moderator',
+                    },
+                });
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to record decision';
             showNotification(message, 'error');

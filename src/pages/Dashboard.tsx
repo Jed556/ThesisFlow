@@ -363,7 +363,6 @@ function DashboardPage(): React.ReactElement {
                 devLog('[Dashboard] Stage derivation for first record:', {
                     thesisId: record.id,
                     stagesArray: record.stages,
-                    chaptersCount: record.chapters?.length ?? 0,
                     derivedStage: currentStageName,
                     stageFilter,
                     matchesStage,

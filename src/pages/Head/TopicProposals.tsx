@@ -17,6 +17,7 @@ import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordHeadDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { findUserById } from '../../utils/firebase/firestore/user';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -248,6 +249,30 @@ export default function HeadTopicProposalsPage() {
                 SDG: values.SDG || undefined,
             });
             showNotification('Topic approved successfully', 'success');
+
+            // Audit notification for head approval
+            const group = assignedGroups.find((g) =>
+                groupProposalSets.get(g.id)?.id === approvalDialog.setId
+            );
+            if (group) {
+                void auditAndNotify({
+                    group,
+                    userId: headUid,
+                    name: 'Topic Approved by Head',
+                    description: `Topic "${approvalDialog.proposal.title}" has been approved by the Research Head. Your group can now proceed with the thesis.`,
+                    category: 'proposal',
+                    action: 'proposal_approved',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: headUid,
+                    },
+                    details: {
+                        proposalTitle: approvalDialog.proposal.title,
+                        decision: 'approved',
+                        reviewerRole: 'head',
+                    },
+                });
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to approve topic';
             showNotification(message, 'error');
@@ -271,6 +296,31 @@ export default function HeadTopicProposalsPage() {
                 notes: rejectionNotes.trim() || undefined,
             });
             showNotification('Topic rejected', 'success');
+
+            // Audit notification for head rejection
+            const group = assignedGroups.find((g) =>
+                groupProposalSets.get(g.id)?.id === rejectionDialog.setId
+            );
+            if (group) {
+                void auditAndNotify({
+                    group,
+                    userId: headUid,
+                    name: 'Topic Rejected by Head',
+                    description: `Topic "${rejectionDialog.proposal.title}" has been rejected by the Research Head.${rejectionNotes.trim() ? ` Reason: ${rejectionNotes.trim()}` : ''}`,
+                    category: 'proposal',
+                    action: 'proposal_rejected',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: headUid,
+                    },
+                    details: {
+                        proposalTitle: rejectionDialog.proposal.title,
+                        decision: 'rejected',
+                        notes: rejectionNotes.trim() || undefined,
+                        reviewerRole: 'head',
+                    },
+                });
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to reject topic';
             showNotification(message, 'error');

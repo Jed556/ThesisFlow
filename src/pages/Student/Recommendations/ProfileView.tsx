@@ -231,7 +231,10 @@ export default function ExpertProfileViewPage() {
     }, [groups]);
 
     const loading = profileLoading || groupsLoading;
-    const skills = React.useMemo(() => profile?.skills ?? [], [profile?.skills]);
+    const skills = React.useMemo(
+        () => profile?.skillRatings?.map((s) => s.name) ?? [],
+        [profile?.skillRatings]
+    );
 
     const roleLabel = expertRole === 'adviser'
         ? 'Adviser'

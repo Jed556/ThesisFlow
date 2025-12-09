@@ -24,6 +24,7 @@ import {
     areAllProposalsRejected, canEditProposalSet, getProposalSetMeta, pickActiveProposalSet
 } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 
 export const metadata: NavigationItem = {
@@ -401,6 +402,24 @@ export default function StudentTopicProposalsPage() {
         try {
             await submitProposalSetBySetId(activeSet.id, userUid);
             showNotification('Topic proposals submitted for review', 'success');
+
+            // Audit notification for topic proposal submission
+            if (group) {
+                void auditAndNotify({
+                    group,
+                    userId: userUid,
+                    name: 'Topic Proposals Submitted',
+                    description: `Topic proposals (Cycle ${activeSet.set ?? 1}) have been submitted for review.`,
+                    category: 'proposal',
+                    action: 'proposal_submitted',
+                    targets: {
+                        groupMembers: true,
+                        moderators: true,
+                        excludeUserId: userUid,
+                    },
+                    details: { setId: activeSet.id, setNumber: activeSet.set ?? 1 },
+                });
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit proposals';
             showNotification(message, 'error');

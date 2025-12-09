@@ -647,9 +647,6 @@ export default function AgendasManagementPage() {
                     alignItems: { xs: 'stretch', sm: 'center' },
                     gap: 2,
                 }}>
-                    <Typography variant="h4" fontWeight={600}>
-                        Research Agendas Management
-                    </Typography>
                     <Stack direction="row" spacing={1} flexWrap="wrap">
                         <Button
                             variant="outlined"

@@ -9,6 +9,7 @@
  *   ├── ESGs/{esg}
  *   ├── SDGs/{sdg}
  *   ├── users/{user}
+ *   │   ├── audits/{audit}
  *   │   ├── salary/{salaryDistribution}
  *   │   └── calendar/{events}
  *   └── departments/{department}
@@ -16,6 +17,7 @@
  *       ├── calendar/{events} (department-wide events)
  *       ├── adviserSkills/{skill}
  *       ├── users/{user}
+ *       │   ├── audits/{audit}
  *       │   ├── salary/{salaryDistribution}
  *       │   └── calendar/{events} 
  *       └── courses/{course}
@@ -24,6 +26,7 @@
  *           ├── templates/"terminalRequirements" (parent doc with metadata)
  *           │   └── entries/{requirementId} (individual terminal requirement entries)
  *           ├── users/{user}
+ *           │   ├── audits/{audit}
  *           │   └── salary/{salaryDistribution}
  *           │   └── calendar/{events} (course-wide events)
  *           └── groups/{group}

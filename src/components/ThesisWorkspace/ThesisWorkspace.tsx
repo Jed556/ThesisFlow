@@ -230,7 +230,7 @@ export default function ThesisWorkspace({
 
     // Use chapters from subcollection (new hierarchical structure)
     const allChapters = React.useMemo(() => {
-        // Use subcollection chapters only - deprecated thesis.chapters field is no longer used
+        // Chapters are stored in subcollection only
         return allChaptersFromSub.map((chapter: ThesisChapter) => ({
             ...chapter,
             submissions: chapterSubmissionEntries[chapter.id]
@@ -767,7 +767,6 @@ export default function ThesisWorkspace({
             chapterId: activeChapter.id,
             chapterStage: activeStage,
             submissionId: activeVersionOption?.id,
-            versionIndex: activeVersionIndex,
             content: payload.content,
             files: payload.files,
             replyToId: payload.replyToId,
@@ -788,7 +787,6 @@ export default function ThesisWorkspace({
             thesisId,
             chapterId: activeChapter.id,
             chapterStage: activeStage,
-            versionIndex: activeVersionIndex,
             content: payload.content,
             files: payload.files,
             replyToId: payload.replyToId,
@@ -902,7 +900,6 @@ export default function ThesisWorkspace({
                 submissionId: targetVersion?.id,
                 decision: pendingDecision.decision,
                 role: expertRole,
-                versionIndex: targetVersionIndex ?? undefined,
                 requiredRoles: expertRoles,
             });
             setPendingDecision(null);

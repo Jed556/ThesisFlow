@@ -18,6 +18,7 @@ import {
 import { createDefaultPanelCommentReleaseMap, type PanelCommentReleaseMap } from '../../types/panelComment';
 import { PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel } from '../../utils/panelCommentUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -152,7 +153,7 @@ export default function PanelPanelCommentsPage() {
     }, [saving]);
 
     const handleSubmitEditor = React.useCallback(async (values: { comment: string; reference?: string }) => {
-        if (!panelCommentCtx || !userUid) {
+        if (!panelCommentCtx || !userUid || !selectedGroup) {
             showNotification('Select a group before adding comments.', 'error');
             return;
         }
@@ -166,6 +167,28 @@ export default function PanelPanelCommentsPage() {
                     createdBy: userUid,
                     panelUid: userUid,
                 });
+
+                // Create audit notification for new panel comment
+                try {
+                    const stageLabel = getPanelCommentStageLabel(activeStage);
+                    await auditAndNotify({
+                        group: selectedGroup,
+                        userId: userUid,
+                        name: 'Panel Comment Added',
+                        description: `A new panel comment was added for ${stageLabel} stage.`,
+                        category: 'panel',
+                        action: 'panel_comment_added',
+                        targets: {
+                            groupMembers: true,
+                            adviser: true,
+                            excludeUserId: userUid,
+                        },
+                        details: { stage: activeStage, commentPreview: values.comment.slice(0, 100) },
+                    });
+                } catch (auditError) {
+                    console.error('Failed to create audit notification:', auditError);
+                }
+
                 showNotification('Comment added.', 'success');
             } else if (editingEntry) {
                 await updatePanelCommentEntry(panelCommentCtx, editingEntry.id, {
@@ -203,9 +226,32 @@ export default function PanelPanelCommentsPage() {
         entry: PanelCommentEntry,
         status: PanelCommentApprovalStatus
     ) => {
-        if (!panelCommentCtx || !userUid || !isTableReleased) return;
+        if (!panelCommentCtx || !userUid || !isTableReleased || !selectedGroup) return;
         try {
             await updatePanelCommentApprovalStatus(panelCommentCtx, entry.id, status, userUid);
+
+            // Create audit notification for approval status change
+            try {
+                const stageLabel = getPanelCommentStageLabel(activeStage);
+                const actionLabel = status === 'approved' ? 'approved' : 'marked for revision';
+                await auditAndNotify({
+                    group: selectedGroup,
+                    userId: userUid,
+                    name: status === 'approved' ? 'Panel Comment Approved' : 'Panel Comment Revision Requested',
+                    description: `A panel comment for ${stageLabel} stage was ${actionLabel}.`,
+                    category: 'panel',
+                    action: status === 'approved' ? 'submission_approved' : 'submission_revision_requested',
+                    targets: {
+                        groupMembers: true,
+                        panels: true,
+                        excludeUserId: userUid,
+                    },
+                    details: { stage: activeStage, entryId: entry.id, newStatus: status },
+                });
+            } catch (auditError) {
+                console.error('Failed to create audit notification:', auditError);
+            }
+
             showNotification(
                 status === 'approved' ? 'Comment marked as approved.' : 'Revision requested.',
                 'success'
@@ -214,7 +260,7 @@ export default function PanelPanelCommentsPage() {
             console.error('Failed to update approval status:', error);
             showNotification('Unable to update approval status. Please try again.', 'error');
         }
-    }, [panelCommentCtx, userUid, isTableReleased, showNotification]);
+    }, [panelCommentCtx, userUid, isTableReleased, selectedGroup, activeStage, showNotification]);
 
     if (session?.loading) {
         return (

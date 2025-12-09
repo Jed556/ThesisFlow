@@ -27,6 +27,7 @@ import type { TerminalRequirementConfigEntry } from '../../types/terminalRequire
 import type { TerminalRequirement } from '../../types/terminalRequirement';
 import { listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 interface AssignmentOption {
     thesisId: string;
@@ -513,6 +514,25 @@ export function TerminalRequirementApprovalWorkspace({
                 action: 'approve',
             });
             showNotification('Stage approved.', 'success');
+
+            // Audit notification for terminal requirement approval
+            if (groupMeta) {
+                const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role] || role;
+                void auditAndNotify({
+                    group: groupMeta,
+                    userId: userUid,
+                    name: `Terminal Requirements Approved by ${roleLabel}`,
+                    description: `${resolvedStage} terminal requirements have been approved by ${roleLabel}.`,
+                    category: 'terminal',
+                    action: 'terminal_approved',
+                    targets: {
+                        groupMembers: true,
+                        adviser: true,
+                        excludeUserId: userUid,
+                    },
+                    details: { stage: resolvedStage, approverRole: role },
+                });
+            }
         } catch (error) {
             console.error('Failed to approve terminal requirements:', error);
             const message = error instanceof Error ? error.message : 'Unable to save your decision.';
@@ -520,7 +540,7 @@ export function TerminalRequirementApprovalWorkspace({
         } finally {
             setDecisionLoading(false);
         }
-    }, [thesis?.id, resolvedStage, activeSubmission, role, userUid, showNotification]);
+    }, [thesis?.id, resolvedStage, activeSubmission, role, userUid, showNotification, groupMeta]);
 
     const handleConfirmReturn = React.useCallback(async () => {
         if (!thesis?.id || !resolvedStage || !activeSubmission) {
@@ -541,6 +561,26 @@ export function TerminalRequirementApprovalWorkspace({
                 note: returnNote.trim() || undefined,
             });
             showNotification('Request sent back to students.', 'info');
+
+            // Audit notification for terminal requirement return
+            if (groupMeta) {
+                const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role] || role;
+                void auditAndNotify({
+                    group: groupMeta,
+                    userId: userUid,
+                    name: 'Terminal Requirements Returned',
+                    description: `${resolvedStage} terminal requirements have been returned by ${roleLabel}.${returnNote.trim() ? ` Note: ${returnNote.trim()}` : ''}`,
+                    category: 'terminal',
+                    action: 'terminal_rejected',
+                    targets: {
+                        groupMembers: true,
+                        leader: true,
+                        excludeUserId: userUid,
+                    },
+                    details: { stage: resolvedStage, approverRole: role, note: returnNote.trim() || undefined },
+                });
+            }
+
             setReturnDialogOpen(false);
             setReturnNote('');
         } catch (error) {
@@ -550,7 +590,7 @@ export function TerminalRequirementApprovalWorkspace({
         } finally {
             setDecisionLoading(false);
         }
-    }, [thesis?.id, resolvedStage, activeSubmission, role, userUid, returnNote, showNotification]);
+    }, [thesis?.id, resolvedStage, activeSubmission, role, userUid, returnNote, showNotification, groupMeta]);
 
     const handleCloseReturnDialog = React.useCallback(() => {
         if (decisionLoading) {

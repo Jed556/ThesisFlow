@@ -195,7 +195,7 @@ export interface ThesisChapter {
 /**
  * Main thesis data
  * Note: Status and expertApprovals are now per-submission (on FileAttachment), not per-chapter
- * Note: Chapters are stored in a subcollection, not embedded in thesis document
+ * Note: Chapters are stored in a subcollection via listenChaptersForStage or getChaptersForStage
  */
 export interface ThesisData {
     id?: string;
@@ -209,12 +209,6 @@ export interface ThesisData {
     ESG?: ESG;
     /** Sustainable Development Goal */
     SDG?: SDG;
-    /**
-     * @deprecated Chapters are stored in subcollection.
-     * Use listenChaptersForStage or getChaptersForStage from chapters.ts instead.
-     * This field may be populated for backward compatibility but should not be relied upon.
-     */
-    chapters?: ThesisChapter[];
 }
 
 /**

@@ -6,13 +6,19 @@
 
 import type {
     AuditEntry, AuditEntryFormData, AuditAction, AuditCategory,
-    AuditDetails, AuditQueryOptions, AuditListenerOptions
+    AuditDetails, AuditQueryOptions, AuditListenerOptions,
+    UserAuditEntry, UserAuditEntryFormData, UserAuditQueryOptions,
+    UserAuditListenerOptions, UserAuditContext, UserAuditLevel
 } from '../types/audit';
 import type { ThesisGroup, GroupStatus } from '../types/group';
+import type { UserProfile } from '../types/profile';
 import { createAuditEntry, type AuditContext } from './firebase/firestore/audits';
+import {
+    createUserAuditEntry, createUserAuditEntriesBatch
+} from './firebase/firestore/userAudits';
 import { getAcademicYear } from './dateUtils';
 
-// Re-export Firestore functions for direct use
+// Re-export Firestore functions for direct use (Group Audits)
 export {
     createAuditEntry,
     getAuditEntry,
@@ -24,8 +30,30 @@ export {
     type AuditContext
 } from './firebase/firestore/audits';
 
+// Re-export Firestore functions for direct use (User Audits)
+export {
+    createUserAuditEntry,
+    createUserAuditEntriesBatch,
+    getUserAuditEntry,
+    getUserAuditEntries,
+    getAllUserAuditEntries,
+    getUnreadUserAuditCount,
+    markUserAuditAsRead,
+    markUserAuditsAsRead,
+    markAllUserAuditsAsRead,
+    deleteUserAuditEntry,
+    deleteUserAuditEntries,
+    deleteReadUserAudits,
+    listenUserAuditEntries,
+    listenAllUserAuditEntries,
+} from './firebase/firestore/userAudits';
+
 // Re-export types for convenience
-export type { AuditEntry, AuditEntryFormData, AuditQueryOptions, AuditListenerOptions };
+export type {
+    AuditEntry, AuditEntryFormData, AuditQueryOptions, AuditListenerOptions,
+    UserAuditEntry, UserAuditEntryFormData, UserAuditQueryOptions,
+    UserAuditListenerOptions, UserAuditContext, UserAuditLevel
+};
 
 // ============================================================================
 // Context Builders
@@ -64,6 +92,112 @@ export function buildAuditContext(
         department,
         course,
         groupId,
+    };
+}
+
+// ============================================================================
+// User Audit Context Builders
+// ============================================================================
+
+/**
+ * Build user audit context at year level
+ * @param targetUserId - The user who will see this audit
+ * @param year - Academic year (defaults to current)
+ * @returns UserAuditContext for Firestore operations
+ */
+export function buildUserAuditContextYear(
+    targetUserId: string,
+    year?: string
+): UserAuditContext {
+    return {
+        year: year || getAcademicYear(),
+        targetUserId,
+        level: 'year',
+    };
+}
+
+/**
+ * Build user audit context at department level
+ * @param targetUserId - The user who will see this audit
+ * @param department - Department name
+ * @param year - Academic year (defaults to current)
+ * @returns UserAuditContext for Firestore operations
+ */
+export function buildUserAuditContextDepartment(
+    targetUserId: string,
+    department: string,
+    year?: string
+): UserAuditContext {
+    return {
+        year: year || getAcademicYear(),
+        targetUserId,
+        level: 'department',
+        department,
+    };
+}
+
+/**
+ * Build user audit context at course level
+ * @param targetUserId - The user who will see this audit
+ * @param department - Department name
+ * @param course - Course name
+ * @param year - Academic year (defaults to current)
+ * @returns UserAuditContext for Firestore operations
+ */
+export function buildUserAuditContextCourse(
+    targetUserId: string,
+    department: string,
+    course: string,
+    year?: string
+): UserAuditContext {
+    return {
+        year: year || getAcademicYear(),
+        targetUserId,
+        level: 'course',
+        department,
+        course,
+    };
+}
+
+/**
+ * Build user audit context from user profile
+ * Uses the most specific level available based on user's profile
+ * @param user - User profile
+ * @param year - Academic year (defaults to current)
+ * @returns UserAuditContext for Firestore operations
+ */
+export function buildUserAuditContextFromProfile(
+    user: UserProfile,
+    year?: string
+): UserAuditContext {
+    const baseYear = year || getAcademicYear();
+
+    // Use course level if available
+    if (user.department && user.course) {
+        return {
+            year: baseYear,
+            targetUserId: user.uid,
+            level: 'course',
+            department: user.department,
+            course: user.course,
+        };
+    }
+
+    // Use department level if available
+    if (user.department) {
+        return {
+            year: baseYear,
+            targetUserId: user.uid,
+            level: 'department',
+            department: user.department,
+        };
+    }
+
+    // Fall back to year level
+    return {
+        year: baseYear,
+        targetUserId: user.uid,
+        level: 'year',
     };
 }
 
@@ -889,6 +1023,8 @@ export function getAuditCategoryLabel(category: AuditCategory): string {
         file: 'File',
         stage: 'Stage',
         terminal: 'Terminal Requirement',
+        account: 'Account',
+        notification: 'Notification',
         other: 'Other',
     };
     return labels[category] || 'Unknown';
@@ -948,6 +1084,7 @@ export function getAuditActionLabel(action: AuditAction): string {
         proposal_created: 'Created',
         proposal_updated: 'Updated',
         proposal_deleted: 'Deleted',
+        proposal_submitted: 'Submitted',
         proposal_approved: 'Approved',
         proposal_rejected: 'Rejected',
         // Comment actions
@@ -964,6 +1101,20 @@ export function getAuditActionLabel(action: AuditAction): string {
         terminal_submitted: 'Submitted',
         terminal_approved: 'Approved',
         terminal_rejected: 'Rejected',
+        // Account actions
+        account_created: 'Account Created',
+        account_updated: 'Account Updated',
+        account_role_changed: 'Role Changed',
+        account_login: 'Logged In',
+        account_logout: 'Logged Out',
+        // Notification actions
+        notification_received: 'Received',
+        notification_read: 'Read',
+        notification_cleared: 'Cleared',
+        // Expert request actions
+        expert_request_received: 'Request Received',
+        expert_request_accepted: 'Request Accepted',
+        expert_request_rejected: 'Request Rejected',
         // Other
         custom: 'Custom Action',
     };
@@ -989,7 +1140,233 @@ export function getAuditCategoryColor(
         file: 'default',
         stage: 'warning',
         terminal: 'success',
+        account: 'primary',
+        notification: 'info',
         other: 'default',
     };
     return colors[category] || 'default';
+}
+
+// ============================================================================
+// User Audit Helper Functions
+// ============================================================================
+
+/**
+ * Send a personal notification to a user
+ * @param targetUserId - The user to notify
+ * @param name - Notification title
+ * @param description - Notification description
+ * @param action - Action type
+ * @param category - Category for filtering
+ * @param userId - User who triggered the action (can be same as target)
+ * @param options - Additional options
+ */
+export async function notifyUser(
+    targetUserId: string,
+    name: string,
+    description: string,
+    action: AuditAction,
+    category: AuditCategory,
+    userId: string,
+    options?: {
+        year?: string;
+        department?: string;
+        course?: string;
+        relatedGroupId?: string;
+        details?: AuditDetails;
+        showSnackbar?: boolean;
+    }
+): Promise<string> {
+    // Determine the appropriate level based on provided context
+    let level: UserAuditLevel = 'year';
+    if (options?.department && options?.course) {
+        level = 'course';
+    } else if (options?.department) {
+        level = 'department';
+    }
+
+    const ctx: UserAuditContext = {
+        year: options?.year || getAcademicYear(),
+        targetUserId,
+        level,
+        department: options?.department,
+        course: options?.course,
+    };
+
+    return createUserAuditEntry(ctx, {
+        name,
+        description,
+        userId,
+        category,
+        action,
+        targetUserId,
+        relatedGroupId: options?.relatedGroupId,
+        details: options?.details,
+        showSnackbar: options?.showSnackbar ?? true,
+    });
+}
+
+/**
+ * Notify multiple users about an event
+ * @param targetUserIds - Array of user IDs to notify
+ * @param name - Notification title
+ * @param description - Notification description
+ * @param action - Action type
+ * @param category - Category for filtering
+ * @param userId - User who triggered the action
+ * @param options - Additional options (applied to all notifications)
+ */
+export async function notifyUsers(
+    targetUserIds: string[],
+    name: string,
+    description: string,
+    action: AuditAction,
+    category: AuditCategory,
+    userId: string,
+    options?: {
+        year?: string;
+        department?: string;
+        course?: string;
+        relatedGroupId?: string;
+        details?: AuditDetails;
+        showSnackbar?: boolean;
+    }
+): Promise<string[]> {
+    // Determine the appropriate level based on provided context
+    let level: UserAuditLevel = 'year';
+    if (options?.department && options?.course) {
+        level = 'course';
+    } else if (options?.department) {
+        level = 'department';
+    }
+
+    const entries = targetUserIds.map((targetUserId) => ({
+        ctx: {
+            year: options?.year || getAcademicYear(),
+            targetUserId,
+            level,
+            department: options?.department,
+            course: options?.course,
+        } as UserAuditContext,
+        data: {
+            name,
+            description,
+            userId,
+            category,
+            action,
+            targetUserId,
+            relatedGroupId: options?.relatedGroupId,
+            details: options?.details,
+            showSnackbar: options?.showSnackbar ?? true,
+        } as UserAuditEntryFormData,
+    }));
+
+    return createUserAuditEntriesBatch(entries);
+}
+
+/**
+ * Notify user about an expert request
+ */
+export async function notifyExpertRequest(
+    targetUserId: string,
+    groupName: string,
+    requestType: 'adviser' | 'editor' | 'statistician' | 'panel',
+    userId: string,
+    options?: {
+        year?: string;
+        department?: string;
+        course?: string;
+        groupId?: string;
+    }
+): Promise<string> {
+    const requestTypeLabel =
+        requestType.charAt(0).toUpperCase() + requestType.slice(1);
+
+    return notifyUser(
+        targetUserId,
+        `${requestTypeLabel} Request`,
+        `You have received a request to be a ${requestType} for group "${groupName}"`,
+        'expert_request_received',
+        'expert',
+        userId,
+        {
+            ...options,
+            relatedGroupId: options?.groupId,
+            showSnackbar: true,
+        }
+    );
+}
+
+/**
+ * Notify user about group invitation
+ */
+export async function notifyGroupInvitation(
+    targetUserId: string,
+    groupName: string,
+    invitedByUserId: string,
+    options?: {
+        year?: string;
+        department?: string;
+        course?: string;
+        groupId?: string;
+    }
+): Promise<string> {
+    return notifyUser(
+        targetUserId,
+        'Group Invitation',
+        `You have been invited to join group "${groupName}"`,
+        'member_invited',
+        'member',
+        invitedByUserId,
+        {
+            ...options,
+            relatedGroupId: options?.groupId,
+            showSnackbar: true,
+        }
+    );
+}
+
+/**
+ * Notify group members about an event
+ * @param memberIds - Array of group member user IDs
+ * @param excludeUserId - User ID to exclude (usually the action performer)
+ * @param name - Notification title
+ * @param description - Notification description
+ * @param action - Action type
+ * @param category - Category for filtering
+ * @param userId - User who triggered the action
+ * @param options - Additional options
+ */
+export async function notifyGroupMembers(
+    memberIds: string[],
+    excludeUserId: string | null,
+    name: string,
+    description: string,
+    action: AuditAction,
+    category: AuditCategory,
+    userId: string,
+    options?: {
+        year?: string;
+        department?: string;
+        course?: string;
+        relatedGroupId?: string;
+        details?: AuditDetails;
+        showSnackbar?: boolean;
+    }
+): Promise<string[]> {
+    const targetUserIds = excludeUserId
+        ? memberIds.filter((id) => id !== excludeUserId)
+        : memberIds;
+
+    if (targetUserIds.length === 0) return [];
+
+    return notifyUsers(
+        targetUserIds,
+        name,
+        description,
+        action,
+        category,
+        userId,
+        options
+    );
 }

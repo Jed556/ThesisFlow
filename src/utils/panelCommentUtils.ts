@@ -107,17 +107,6 @@ export function isAnyTableReleasedForStage(
 }
 
 /**
- * Helper exposing the release flag for convenience in UI bindings.
- * @deprecated Use isAnyTableReleasedForStage for checking stage-level release status
- */
-export function isPanelCommentStageReleased(
-    stage: PanelCommentStage,
-    releaseMap: PanelCommentReleaseMap | undefined
-): boolean {
-    return Boolean(releaseMap?.[stage]?.sent);
-}
-
-/**
  * Formats a concise display name for panel members, falling back to their email prefix.
  */
 export function formatPanelistDisplayName(

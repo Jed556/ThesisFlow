@@ -26,8 +26,6 @@ export interface WorkspaceCommentPayload {
     chapterStage: ThesisStageName;
     /** Submission ID for chat messages */
     submissionId?: string;
-    /** @deprecated Use submissionId instead */
-    versionIndex: number | null;
     content: string;
     files: File[];
     replyToId?: string;
@@ -60,8 +58,6 @@ export interface WorkspaceChapterDecisionPayload {
     stage?: ThesisStageName;
     /** Specific submission/version ID to update */
     submissionId?: string;
-    /** @deprecated Use submissionId instead */
-    versionIndex?: number | null;
     decision: WorkspaceChapterDecision;
     role?: ExpertRole;
     /** Required expert roles for this thesis (determines approval flow) */

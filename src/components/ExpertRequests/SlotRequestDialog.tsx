@@ -10,7 +10,7 @@ import {
 } from '@mui/icons-material';
 import { GrowTransition } from '../Animate';
 import { DEFAULT_MAX_EXPERT_SLOTS, type SlotRequestRecord } from '../../types/slotRequest';
-import type { UserProfile, UserRole, Skills } from '../../types/profile';
+import type { UserProfile, UserRole } from '../../types/profile';
 import type { ExpertSkillRating, SkillTemplateRecord } from '../../types/skillTemplate';
 import {
     createSlotRequest,
@@ -25,27 +25,22 @@ import { useSnackbar } from '../../contexts/SnackbarContext';
 
 /**
  * Convert profile skillRatings to ExpertSkillRating format
- * Handles backward compatibility with old Skills format
  */
 function normalizeSkillRatings(
-    skillRatings: Skills[] | ExpertSkillRating[] | undefined
+    skillRatings: ExpertSkillRating[] | undefined
 ): ExpertSkillRating[] {
     if (!skillRatings || skillRatings.length === 0) {
         return [];
     }
 
     return skillRatings.map((skill) => {
-        // Check if it's already in ExpertSkillRating format
-        if ('skillId' in skill && skill.skillId) {
-            return skill as ExpertSkillRating;
-        }
-        // Convert from old Skills format - use name as a pseudo-ID
+        // Ensure it has the required format
         return {
-            skillId: skill.name.toLowerCase().replace(/\s+/g, '-'),
+            skillId: skill.skillId || skill.name.toLowerCase().replace(/\s+/g, '-'),
             name: skill.name,
             rating: skill.rating,
             note: skill.note,
-            updatedAt: (skill as Skills).updatedAt,
+            updatedAt: skill.updatedAt,
         } as ExpertSkillRating;
     });
 }

@@ -16,6 +16,7 @@ import { Avatar, Name } from '../../../components/Avatar';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { findUserById } from '../../../utils/firebase/firestore/user';
 import { getGroupsByCourse, approveGroup, rejectGroup } from '../../../utils/firebase/firestore/groups';
+import { auditAndNotify } from '../../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -149,15 +150,33 @@ export default function ModeratorGroupApprovalsPage() {
     }, [loadPendingGroups]);
 
     const handleApprove = React.useCallback(async (groupId: string) => {
+        const group = pendingGroups.find((g) => g.id === groupId);
         try {
             await approveGroup(groupId);
             showNotification('Group approved', 'success');
+
+            // Audit notification for group approval
+            if (group && moderatorUid) {
+                void auditAndNotify({
+                    group,
+                    userId: moderatorUid,
+                    name: 'Group Approved',
+                    description: `Group "${group.name}" has been approved by the moderator.`,
+                    category: 'group',
+                    action: 'group_approved',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: moderatorUid,
+                    },
+                });
+            }
+
             await loadPendingGroups();
         } catch (error) {
             console.error('Failed to approve group:', error);
             showNotification('Failed to approve group', 'error');
         }
-    }, [loadPendingGroups, showNotification]);
+    }, [loadPendingGroups, showNotification, pendingGroups, moderatorUid]);
 
     const handleOpenRejectDialog = (group: ThesisGroup) => {
         setSelectedGroup(group);
@@ -173,6 +192,24 @@ export default function ModeratorGroupApprovalsPage() {
         try {
             await rejectGroup(selectedGroup.id, rejectionReason.trim());
             showNotification('Group rejected', 'info');
+
+            // Audit notification for group rejection
+            if (moderatorUid) {
+                void auditAndNotify({
+                    group: selectedGroup,
+                    userId: moderatorUid,
+                    name: 'Group Rejected',
+                    description: `Group "${selectedGroup.name}" has been rejected. Reason: ${rejectionReason.trim()}`,
+                    category: 'group',
+                    action: 'group_rejected',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: moderatorUid,
+                    },
+                    details: { reason: rejectionReason.trim() },
+                });
+            }
+
             setRejectDialogOpen(false);
             setSelectedGroup(null);
             setRejectionReason('');
