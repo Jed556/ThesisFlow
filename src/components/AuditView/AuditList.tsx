@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow, isValid } from 'date-fns';
 import { AnimatedList } from '../Animate';
 import { Avatar, Name } from '../Avatar';
-import type { AuditEntry } from '../../types/audit';
+import type { AnyAuditEntry } from '../../types/audit';
 import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import { getCategoryIcon } from './icons';
@@ -18,7 +18,7 @@ import { buildAuditNavigationPath } from '../../utils/auditNotificationUtils';
 
 interface AuditListProps {
     /** Audit entries to display */
-    audits: AuditEntry[];
+    audits: AnyAuditEntry[];
     /** Whether data is loading */
     loading: boolean;
     /** User profiles map for display names */
@@ -113,7 +113,7 @@ export function AuditList({
     /**
      * Handle navigation to the relevant page for an audit entry
      */
-    const handleViewDetails = React.useCallback((audit: AuditEntry) => {
+    const handleViewDetails = React.useCallback((audit: AnyAuditEntry) => {
         const path = buildAuditNavigationPath(audit.category, audit.action, audit.details);
         if (path) {
             navigate(path);
@@ -260,7 +260,7 @@ export function AuditList({
                                                         )}
                                                     </strong>
                                                 </Typography>
-                                                {showGroupName && (
+                                                {showGroupName && audit.locationType === 'group' && (
                                                     <Typography
                                                         variant="caption"
                                                         color="text.secondary"

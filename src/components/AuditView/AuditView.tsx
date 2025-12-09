@@ -1,13 +1,12 @@
 import * as React from 'react';
 import {
-    Alert, Box, Card, CardContent, Chip, IconButton, Stack,
-    Tooltip, Typography
+    Alert, Box, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography
 } from '@mui/material';
-import {
-    Refresh as RefreshIcon, Clear as ClearIcon
-} from '@mui/icons-material';
+import { Refresh as RefreshIcon, Clear as ClearIcon } from '@mui/icons-material';
 import { isValid } from 'date-fns';
-import type { AuditEntry, AuditCategory, AuditQueryOptions } from '../../types/audit';
+import type {
+    AnyAuditEntry, AuditCategory, AuditQueryOptions, UserAuditQueryOptions
+} from '../../types/audit';
 import type { ThesisGroup } from '../../types/group';
 import type { UserProfile } from '../../types/profile';
 import {
@@ -16,13 +15,12 @@ import {
 } from '../../utils/firebase/firestore/groups';
 import { findUsersByIds, onUserProfile } from '../../utils/firebase/firestore/user';
 import {
-    listenAuditEntries, listenAllAuditEntries, buildAuditContext
+    listenAuditEntries, listenAllAuditEntries, listenAllUserAuditEntries, buildAuditContext
 } from '../../utils/auditUtils';
 import { AuditFilters } from './AuditFilters';
 import { AuditList } from './AuditList';
 import {
-    type AuditScope, type AuditViewProps,
-    getAvailableScopes, DEFAULT_FILTER_CONFIG, DEFAULT_DISPLAY_CONFIG
+    type AuditScope, type AuditViewProps, getAvailableScopes, DEFAULT_FILTER_CONFIG, DEFAULT_DISPLAY_CONFIG
 } from './types';
 
 /**
@@ -100,7 +98,7 @@ export function AuditView({
     const [departmentCourseMap, setDepartmentCourseMap] = React.useState<DepartmentCourseMap>({});
 
     // Audit state
-    const [audits, setAudits] = React.useState<AuditEntry[]>([]);
+    const [audits, setAudits] = React.useState<AnyAuditEntry[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [groupsLoading, setGroupsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -300,7 +298,53 @@ export function AuditView({
 
     // Load audits based on scope and selection
     React.useEffect(() => {
-        if (selectedScope === 'personal' || selectedScope === 'group') {
+        // Personal scope: Query user audits (users/{userId}/audits)
+        if (selectedScope === 'personal') {
+            if (!userUid) {
+                setAudits([]);
+                setLoading(false);
+                return () => { /* no-op */ };
+            }
+
+            setLoading(true);
+            setError(null);
+
+            const queryOptions: UserAuditQueryOptions = {
+                orderDirection: 'desc',
+            };
+
+            if (categoryFilter) queryOptions.category = categoryFilter;
+            if (startDate && isValid(startDate)) {
+                queryOptions.startDate = startDate.toISOString();
+            }
+            if (endDate && isValid(endDate)) {
+                queryOptions.endDate = endDate.toISOString();
+            }
+
+            const unsubscribe = listenAllUserAuditEntries(
+                userUid,
+                {
+                    onData: (userAuditData) => {
+                        // UserAuditEntry is compatible with AnyAuditEntry
+                        setAudits(userAuditData);
+                        setLoading(false);
+                    },
+                    onError: (err) => {
+                        console.error('Failed to load user audits:', err);
+                        setError('Unable to load personal audit history. Please try again later.');
+                        setLoading(false);
+                    },
+                },
+                queryOptions
+            );
+
+            return () => {
+                unsubscribe();
+            };
+        }
+
+        // Group scope: Query group audits (groups/{groupId}/audits)
+        if (selectedScope === 'group') {
             if (!selectedGroup) {
                 setAudits([]);
                 setLoading(false);
@@ -618,7 +662,11 @@ export function AuditView({
                     onEndDateChange={setEndDate}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
-                    config={mergedFilterConfig}
+                    config={{
+                        ...mergedFilterConfig,
+                        // Hide group selector for personal scope (user audits don't belong to groups)
+                        showGroupSelector: selectedScope !== 'personal' && mergedFilterConfig.showGroupSelector,
+                    }}
                 />
             </Box>
 
@@ -629,7 +677,7 @@ export function AuditView({
                 </Alert>
             )}
 
-            {(selectedScope === 'personal' || selectedScope === 'group') &&
+            {selectedScope === 'group' &&
                 !selectedGroupId &&
                 !groupsLoading &&
                 !dataConfig?.groupId && (
@@ -640,7 +688,7 @@ export function AuditView({
 
             {userGroups.length === 0 &&
                 !groupsLoading &&
-                (selectedScope === 'personal' || selectedScope === 'group') &&
+                selectedScope === 'group' &&
                 !dataConfig?.groups && (
                     <Alert severity="info" sx={{ mb: 2 }}>
                         You are not a member of any groups yet.
