@@ -1,7 +1,8 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardActions, CardContent, Chip, Dialog, DialogActions, DialogContent,
-    DialogContentText, DialogTitle, Paper, Skeleton, Stack, TextField, Typography,
+    DialogContentText, DialogTitle, Paper, Skeleton, Stack, TextField, ToggleButton,
+    ToggleButtonGroup, Typography,
 } from '@mui/material';
 import {
     CheckCircle as ApproveIcon, Cancel as RejectIcon, Group as GroupIcon,
@@ -15,8 +16,13 @@ import { AnimatedList, AnimatedPage } from '../../../components/Animate';
 import { Avatar, Name } from '../../../components/Avatar';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { findUserById } from '../../../utils/firebase/firestore/user';
-import { getGroupsByCourse, approveGroup, rejectGroup } from '../../../utils/firebase/firestore/groups';
+import {
+    approveGroup, rejectGroup, listenToGroupsByMultipleCourses,
+} from '../../../utils/firebase/firestore/groups';
 import { auditAndNotify } from '../../../utils/auditNotificationUtils';
+
+/** Filter options for moderator group view */
+type GroupFilterStatus = 'all' | 'review' | 'active' | 'rejected';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -49,9 +55,12 @@ export default function ModeratorGroupApprovalsPage() {
     const [profileLoading, setProfileLoading] = React.useState(true);
     const [profileError, setProfileError] = React.useState<string | null>(null);
 
-    const [pendingGroups, setPendingGroups] = React.useState<ThesisGroup[]>([]);
+    const [allGroups, setAllGroups] = React.useState<ThesisGroup[]>([]);
     const [groupsLoading, setGroupsLoading] = React.useState(false);
     const [groupsError, setGroupsError] = React.useState<string | null>(null);
+
+    // Status filter - defaults to 'review' (pending)
+    const [statusFilter, setStatusFilter] = React.useState<GroupFilterStatus>('review');
 
     const [rejectDialogOpen, setRejectDialogOpen] = React.useState(false);
     const [selectedGroup, setSelectedGroup] = React.useState<ThesisGroup | null>(null);
@@ -111,46 +120,101 @@ export default function ModeratorGroupApprovalsPage() {
         return [];
     }, [profile]);
 
-    const loadPendingGroups = React.useCallback(async () => {
+    // Track previous group IDs for new request detection
+    const prevGroupIdsRef = React.useRef<Set<string>>(new Set());
+    const isInitialLoadRef = React.useRef(true);
+
+    // Real-time listener for all groups (we filter client-side based on statusFilter)
+    React.useEffect(() => {
         if (moderatorSections.length === 0) {
-            setPendingGroups([]);
+            setAllGroups([]);
+            setGroupsLoading(false);
             return;
         }
 
-        try {
-            setGroupsLoading(true);
-            setGroupsError(null);
+        setGroupsLoading(true);
+        setGroupsError(null);
 
-            const resolvedGroups = await Promise.all(
-                moderatorSections.map((section) => getGroupsByCourse(section))
-            );
+        const unsubscribe = listenToGroupsByMultipleCourses(
+            moderatorSections,
+            {
+                onData: (groups) => {
+                    // Sort all groups by creation date
+                    const sortedGroups = groups.sort((a, b) =>
+                        a.createdAt.localeCompare(b.createdAt)
+                    );
 
-            const deduped = new Map<string, ThesisGroup>();
-            resolvedGroups
-                .flat()
-                .filter((group) => group.status === 'review')
-                .forEach((group) => {
-                    deduped.set(group.id, group);
-                });
+                    // Check for new group requests (only for 'review' status, after initial load)
+                    const reviewGroups = sortedGroups.filter((g) => g.status === 'review');
+                    if (!isInitialLoadRef.current) {
+                        const currentReviewIds = new Set(reviewGroups.map((g) => g.id));
+                        const newGroups = reviewGroups.filter(
+                            (g) => !prevGroupIdsRef.current.has(g.id)
+                        );
 
-            setPendingGroups(
-                Array.from(deduped.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-            );
-        } catch (error) {
-            console.error('Failed to load pending moderator groups:', error);
-            setGroupsError('Unable to load group requests for your sections.');
-            setPendingGroups([]);
-        } finally {
-            setGroupsLoading(false);
+                        if (newGroups.length > 0) {
+                            const groupNames = newGroups.map((g) => g.name).join(', ');
+                            showNotification({
+                                title: 'New Group Request',
+                                message: newGroups.length === 1
+                                    ? `"${groupNames}" has submitted a group request for review.`
+                                    : `${newGroups.length} new group requests: ${groupNames}`,
+                                severity: 'info',
+                                duration: 6000,
+                            });
+                        }
+
+                        prevGroupIdsRef.current = currentReviewIds;
+                    } else {
+                        // Initial load - just store the IDs without notification
+                        prevGroupIdsRef.current = new Set(reviewGroups.map((g) => g.id));
+                        isInitialLoadRef.current = false;
+                    }
+
+                    setAllGroups(sortedGroups);
+                    setGroupsLoading(false);
+                },
+                onError: (error) => {
+                    console.error('Failed to load moderator groups:', error);
+                    setGroupsError('Unable to load group requests for your sections.');
+                    setAllGroups([]);
+                    setGroupsLoading(false);
+                },
+            },
+        );
+
+        return () => {
+            unsubscribe();
+        };
+    }, [moderatorSections, showNotification]);
+
+    // Filter groups based on selected status
+    const filteredGroups = React.useMemo(() => {
+        if (statusFilter === 'all') {
+            return allGroups;
         }
-    }, [moderatorSections]);
+        return allGroups.filter((g) => g.status === statusFilter);
+    }, [allGroups, statusFilter]);
 
-    React.useEffect(() => {
-        void loadPendingGroups();
-    }, [loadPendingGroups]);
+    // Count by status for filter badges
+    const statusCounts = React.useMemo(() => ({
+        all: allGroups.length,
+        review: allGroups.filter((g) => g.status === 'review').length,
+        active: allGroups.filter((g) => g.status === 'active').length,
+        rejected: allGroups.filter((g) => g.status === 'rejected').length,
+    }), [allGroups]);
+
+    const handleStatusFilterChange = React.useCallback(
+        (_event: React.MouseEvent<HTMLElement>, newStatus: GroupFilterStatus | null) => {
+            if (newStatus !== null) {
+                setStatusFilter(newStatus);
+            }
+        },
+        []
+    );
 
     const handleApprove = React.useCallback(async (groupId: string) => {
-        const group = pendingGroups.find((g) => g.id === groupId);
+        const group = allGroups.find((g) => g.id === groupId);
         try {
             await approveGroup(groupId);
             showNotification('Group approved', 'success');
@@ -170,13 +234,12 @@ export default function ModeratorGroupApprovalsPage() {
                     },
                 });
             }
-
-            await loadPendingGroups();
+            // Real-time listener will automatically update the list
         } catch (error) {
             console.error('Failed to approve group:', error);
             showNotification('Failed to approve group', 'error');
         }
-    }, [loadPendingGroups, showNotification, pendingGroups, moderatorUid]);
+    }, [showNotification, allGroups, moderatorUid]);
 
     const handleOpenRejectDialog = (group: ThesisGroup) => {
         setSelectedGroup(group);
@@ -213,7 +276,7 @@ export default function ModeratorGroupApprovalsPage() {
             setRejectDialogOpen(false);
             setSelectedGroup(null);
             setRejectionReason('');
-            await loadPendingGroups();
+            // Real-time listener will automatically update the list
         } catch (error) {
             console.error('Failed to reject group:', error);
             showNotification('Failed to reject group', 'error');
@@ -244,7 +307,7 @@ export default function ModeratorGroupApprovalsPage() {
             <Stack spacing={3}>
                 <Box>
                     <Typography variant="body1" color="text.secondary">
-                        Review pending group requests for the sections assigned to you. Only groups within your
+                        Review and manage group requests for the sections assigned to you. Only groups within your
                         courses appear here.
                     </Typography>
                 </Box>
@@ -261,6 +324,28 @@ export default function ModeratorGroupApprovalsPage() {
                         ))
                     )}
                 </Stack>
+
+                {/* Status filter toggle buttons */}
+                <ToggleButtonGroup
+                    value={statusFilter}
+                    exclusive
+                    onChange={handleStatusFilterChange}
+                    size="small"
+                    aria-label="group status filter"
+                >
+                    <ToggleButton value="all" aria-label="all groups">
+                        All ({statusCounts.all})
+                    </ToggleButton>
+                    <ToggleButton value="review" aria-label="pending review">
+                        Pending ({statusCounts.review})
+                    </ToggleButton>
+                    <ToggleButton value="active" aria-label="approved groups">
+                        Approved ({statusCounts.active})
+                    </ToggleButton>
+                    <ToggleButton value="rejected" aria-label="rejected groups">
+                        Rejected ({statusCounts.rejected})
+                    </ToggleButton>
+                </ToggleButtonGroup>
 
                 {profileError && <Alert severity="error">{profileError}</Alert>}
                 {groupsError && <Alert severity="error">{groupsError}</Alert>}
@@ -279,17 +364,23 @@ export default function ModeratorGroupApprovalsPage() {
                     </Paper>
                 )}
 
-                {moderatorSections.length > 0 && !groupsLoading && pendingGroups.length === 0 && (
+                {moderatorSections.length > 0 && !groupsLoading && filteredGroups.length === 0 && (
                     <Paper sx={{ p: 3 }}>
                         <Typography variant="body1" color="text.secondary">
-                            No pending group requests for your sections right now.
+                            {statusFilter === 'all'
+                                ? 'No groups found for your sections.'
+                                : statusFilter === 'review'
+                                    ? 'No pending group requests for your sections right now.'
+                                    : statusFilter === 'active'
+                                        ? 'No approved groups for your sections.'
+                                        : 'No rejected groups for your sections.'}
                         </Typography>
                     </Paper>
                 )}
 
-                {pendingGroups.length > 0 && (
+                {filteredGroups.length > 0 && (
                     <AnimatedList variant="slideUp" staggerDelay={50}>
-                        {pendingGroups.map((group) => (
+                        {filteredGroups.map((group) => (
                             <GroupRequestCard
                                 key={group.id}
                                 group={group}
@@ -379,6 +470,26 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
         };
     }, [group.members.leader, group.members.members]);
 
+    // Determine status chip based on group status
+    const getStatusChip = () => {
+        switch (group.status) {
+            case 'review':
+                return <Chip label="Pending moderator review" color="warning" size="small" />;
+            case 'active':
+                return <Chip label="Approved" color="success" size="small" />;
+            case 'rejected':
+                return <Chip label="Rejected" color="error" size="small" />;
+            case 'draft':
+                return <Chip label="Draft" color="default" size="small" />;
+            case 'completed':
+                return <Chip label="Completed" color="info" size="small" />;
+            default:
+                return <Chip label={group.status} color="default" size="small" />;
+        }
+    };
+
+    const isPending = group.status === 'review';
+
     return (
         <Card sx={{ mb: 2 }}>
             <CardContent>
@@ -389,13 +500,22 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                             {group.course ?? 'Unassigned course'} • {group.department ?? 'No department'}
                         </Typography>
                     </Box>
-                    <Chip label="Pending moderator review" color="warning" size="small" />
+                    {getStatusChip()}
                 </Stack>
 
                 {group.description && (
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         {group.description}
                     </Typography>
+                )}
+
+                {/* Show rejection reason if rejected */}
+                {group.status === 'rejected' && group.rejectionReason && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                        <Typography variant="body2">
+                            <strong>Rejection reason:</strong> {group.rejectionReason}
+                        </Typography>
+                    </Alert>
                 )}
 
                 <Stack spacing={1} sx={{ mb: 2 }}>
@@ -451,14 +571,17 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                     </>
                 )}
             </CardContent>
-            <CardActions>
-                <Button startIcon={<ApproveIcon />} color="success" variant="contained" onClick={onApprove}>
-                    Approve
-                </Button>
-                <Button startIcon={<RejectIcon />} color="error" variant="outlined" onClick={onReject}>
-                    Reject
-                </Button>
-            </CardActions>
+            {/* Only show action buttons for pending groups */}
+            {isPending && (
+                <CardActions>
+                    <Button startIcon={<ApproveIcon />} color="success" variant="contained" onClick={onApprove}>
+                        Approve
+                    </Button>
+                    <Button startIcon={<RejectIcon />} color="error" variant="outlined" onClick={onReject}>
+                        Reject
+                    </Button>
+                </CardActions>
+            )}
         </Card>
     );
 }

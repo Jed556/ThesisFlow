@@ -1,7 +1,8 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, IconButton,
-    DialogTitle, Paper, Skeleton, Stack, TextField, Typography, InputAdornment,
+    DialogTitle, Paper, Skeleton, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
+    InputAdornment,
 } from '@mui/material';
 import {
     Group as GroupIcon, Check as CheckIcon, Close as CloseIcon, Add as AddIcon, Search as SearchIcon,
@@ -30,6 +31,9 @@ import {
 import { findUserById, findUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { auditAndNotify } from '../../../utils/auditNotificationUtils';
 
+/** Filter options for student's groups view */
+type MyGroupsFilterStatus = 'all' | 'draft' | 'review' | 'active' | 'rejected';
+
 export const metadata: NavigationItem = {
     group: 'thesis',
     index: 1,
@@ -53,9 +57,13 @@ export default function StudentGroupPage() {
     const userUid = session?.user?.uid;
     const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
 
-    // My group state
+    // My group state - the active/primary group
     const [myGroup, setMyGroup] = React.useState<ThesisGroup | null>(null);
     const [isLeader, setIsLeader] = React.useState(false);
+    // All groups where user is leader or member (for filtering)
+    const [allMyGroups, setAllMyGroups] = React.useState<ThesisGroup[]>([]);
+    // Filter for "My Groups" section
+    const [myGroupsFilter, setMyGroupsFilter] = React.useState<MyGroupsFilterStatus>('all');
     // Invites and requests for my group (fetched from join subcollection)
     const [myGroupInvites, setMyGroupInvites] = React.useState<string[]>([]);
     const [myGroupRequests, setMyGroupRequests] = React.useState<string[]>([]);
@@ -139,6 +147,32 @@ export default function StudentGroupPage() {
         return myGroup.status === 'review' || myGroup.status === 'active' || myGroup.status === 'completed';
     }, [myGroup]);
 
+    // Filter all my groups based on the selected status filter
+    const filteredMyGroups = React.useMemo(() => {
+        if (myGroupsFilter === 'all') {
+            return allMyGroups;
+        }
+        return allMyGroups.filter((g) => g.status === myGroupsFilter);
+    }, [allMyGroups, myGroupsFilter]);
+
+    // Count by status for filter badges
+    const myGroupStatusCounts = React.useMemo(() => ({
+        all: allMyGroups.length,
+        draft: allMyGroups.filter((g) => g.status === 'draft').length,
+        review: allMyGroups.filter((g) => g.status === 'review').length,
+        active: allMyGroups.filter((g) => g.status === 'active').length,
+        rejected: allMyGroups.filter((g) => g.status === 'rejected').length,
+    }), [allMyGroups]);
+
+    const handleMyGroupsFilterChange = React.useCallback(
+        (_event: React.MouseEvent<HTMLElement>, newStatus: MyGroupsFilterStatus | null) => {
+            if (newStatus !== null) {
+                setMyGroupsFilter(newStatus);
+            }
+        },
+        []
+    );
+
     // Load user profile
     React.useEffect(() => {
         if (!userUid) {
@@ -172,6 +206,7 @@ export default function StudentGroupPage() {
             setLoading(false);
             setMyGroup(null);
             setIsLeader(false);
+            setAllMyGroups([]);
             setMyGroupProfiles(new Map());
             return;
         }
@@ -192,24 +227,46 @@ export default function StudentGroupPage() {
                 // Get groups where I'm a member
                 const memberGroups = await getGroupsByMember(userUid);
 
-                // Combine and pick the first one as "my group"
-                const allMyGroups = [...leaderGroups, ...memberGroups];
+                // Combine and dedupe all groups
+                const combinedGroups = [...leaderGroups, ...memberGroups];
                 const uniqueGroups = Array.from(
-                    new Map(allMyGroups.map(g => [g.id, g])).values()
+                    new Map(combinedGroups.map(g => [g.id, g])).values()
                 );
 
+                // Sort by status priority and then by creation date
+                const statusPriority: Record<string, number> = {
+                    active: 0,
+                    review: 1,
+                    draft: 2,
+                    rejected: 3,
+                    completed: 4,
+                    inactive: 5,
+                    archived: 6,
+                };
+                uniqueGroups.sort((a, b) => {
+                    const priorityDiff = (statusPriority[a.status] ?? 10) - (statusPriority[b.status] ?? 10);
+                    if (priorityDiff !== 0) return priorityDiff;
+                    return b.createdAt.localeCompare(a.createdAt);
+                });
+
                 if (!cancelled) {
+                    // Store all user's groups for the filter view
+                    setAllMyGroups(uniqueGroups);
+
                     if (uniqueGroups.length > 0) {
-                        const group = uniqueGroups[0];
-                        setMyGroup(group);
-                        setIsLeader(group.members.leader === userUid);
+                        // Pick the first active/review group as "my primary group"
+                        const primaryGroup = uniqueGroups.find(
+                            g => g.status === 'active' || g.status === 'review'
+                        ) ?? uniqueGroups[0];
+                        setMyGroup(primaryGroup);
+                        setIsLeader(primaryGroup.members.leader === userUid);
 
                         // Fetch profiles and invites/requests in parallel
                         const year = getAcademicYear();
                         const [profileMap, invites, requests] = await Promise.all([
-                            buildGroupProfileMap(group),
-                            getGroupInvites(year, group.department ?? '', group.course ?? '', group.id),
-                            getGroupJoinRequests(year, group.department ?? '', group.course ?? '', group.id),
+                            buildGroupProfileMap(primaryGroup),
+                            getGroupInvites(year, primaryGroup.department ?? '', primaryGroup.course ?? '', primaryGroup.id),
+                            getGroupJoinRequests(year, primaryGroup.department ?? '', primaryGroup.course ?? '', primaryGroup.id),
                         ]);
                         if (!cancelled) {
                             setMyGroupProfiles(profileMap);
@@ -853,6 +910,75 @@ export default function StudentGroupPage() {
                 onRejectJoinRequest={handleRejectJoinRequest}
                 inviteActionsDisabled={myGroup ? isInviteLocked(myGroup.status) : false}
             />
+
+            {/* My Groups History - shows all groups with filters */}
+            {!loading && allMyGroups.length > 1 && (
+                <Box sx={{ mb: 3, mt: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                        My Groups
+                    </Typography>
+
+                    {/* Status filter toggle buttons */}
+                    <ToggleButtonGroup
+                        value={myGroupsFilter}
+                        exclusive
+                        onChange={handleMyGroupsFilterChange}
+                        size="small"
+                        aria-label="group status filter"
+                        sx={{ mb: 2 }}
+                    >
+                        <ToggleButton value="all" aria-label="all groups">
+                            All ({myGroupStatusCounts.all})
+                        </ToggleButton>
+                        <ToggleButton value="active" aria-label="active groups">
+                            Active ({myGroupStatusCounts.active})
+                        </ToggleButton>
+                        <ToggleButton value="review" aria-label="pending review">
+                            Pending ({myGroupStatusCounts.review})
+                        </ToggleButton>
+                        <ToggleButton value="draft" aria-label="draft groups">
+                            Draft ({myGroupStatusCounts.draft})
+                        </ToggleButton>
+                        <ToggleButton value="rejected" aria-label="rejected groups">
+                            Rejected ({myGroupStatusCounts.rejected})
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: {
+                                xs: '1fr',
+                                sm: 'repeat(2, 1fr)',
+                                lg: 'repeat(3, 1fr)',
+                            },
+                            gap: 2,
+                        }}
+                    >
+                        {filteredMyGroups.length > 0 ? (
+                            <AnimatedList variant="slideUp" staggerDelay={50}>
+                                {filteredMyGroups.map((group) => (
+                                    <Box key={group.id}>
+                                        <GroupCard
+                                            group={group}
+                                            usersByUid={usersByUid}
+                                            onClick={() => handleOpenGroupView(group.id)}
+                                        />
+                                    </Box>
+                                ))}
+                            </AnimatedList>
+                        ) : (
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ gridColumn: '1 / -1', textAlign: 'center' }}
+                            >
+                                No groups match the selected filter.
+                            </Typography>
+                        )}
+                    </Box>
+                </Box>
+            )}
 
             {/* My Invites - hidden when user has an established group */}
             {!loading && !hasEstablishedGroup && myInvites.length > 0 && (
