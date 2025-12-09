@@ -1,6 +1,24 @@
 {
     "indexes": [
         {
+            "collectionGroup": "audits",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "userId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "timestamp",
+                    "order": "DESCENDING"
+                },
+                {
+                    "fieldPath": "__name__",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "templates",
             "queryScope": "COLLECTION_GROUP",
             "fields": [
