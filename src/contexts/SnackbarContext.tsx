@@ -6,17 +6,55 @@ import * as React from 'react';
 export type NotificationSeverity = 'success' | 'error' | 'warning' | 'info';
 
 /**
- * Notification item interface
+ * Action button configuration for notifications
+ */
+export interface NotificationAction {
+    /** Button label */
+    label: string;
+    /** Click handler */
+    onClick: () => void;
+    /** Optional: navigate to a path instead of onClick */
+    href?: string;
+    /** Button variant */
+    variant?: 'text' | 'outlined' | 'contained';
+}
+
+/**
+ * Extended notification options for modern toast
+ */
+export interface NotificationOptions {
+    /** Main title (bold, above divider) */
+    title?: string;
+    /** Description message (below divider) */
+    message: string;
+    /** Notification severity for coloring */
+    severity?: NotificationSeverity;
+    /** Auto-dismiss duration in ms (0 = no auto-dismiss) */
+    duration?: number;
+    /** Custom icon React node (overrides severity icon) */
+    icon?: React.ReactNode;
+    /** Whether to show divider between title and message */
+    showDivider?: boolean;
+    /** Action buttons (up to 2 recommended) */
+    actions?: NotificationAction[];
+    /** Whether to show the progress timer bar */
+    showProgress?: boolean;
+}
+
+/**
+ * Internal notification item interface
  */
 export interface Notification {
     id: string;
+    title?: string;
     message: string;
     severity: NotificationSeverity;
-    duration?: number;
-    action?: {
-        label: string;
-        onClick: () => void;
-    };
+    duration: number;
+    icon?: React.ReactNode;
+    showDivider: boolean;
+    actions?: NotificationAction[];
+    showProgress: boolean;
+    createdAt: number;
 }
 
 /**
@@ -24,7 +62,15 @@ export interface Notification {
  */
 interface SnackbarContextValue {
     notifications: Notification[];
-    showNotification: (message: string, severity?: NotificationSeverity, duration?: number, action?: Notification['action']) => string;
+    /**
+     * Show a notification with modern options
+     */
+    showNotification: (
+        messageOrOptions: string | NotificationOptions,
+        severity?: NotificationSeverity,
+        duration?: number,
+        action?: NotificationAction
+    ) => string;
     hideNotification: (id: string) => void;
     clearAll: () => void;
 }
@@ -42,40 +88,59 @@ const DEFAULT_DURATION = 5000;
 export function SnackbarProvider({ children }: { children: React.ReactNode }) {
     const [notifications, setNotifications] = React.useState<Notification[]>([]);
 
+    const hideNotification = React.useCallback((id: string) => {
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
+    }, []);
+
     const showNotification = React.useCallback(
         (
-            message: string,
+            messageOrOptions: string | NotificationOptions,
             severity: NotificationSeverity = 'info',
             duration: number = DEFAULT_DURATION,
-            action?: Notification['action']
+            action?: NotificationAction
         ): string => {
-            const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const id = `notification-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
-            const notification: Notification = {
-                id,
-                message,
-                severity,
-                duration,
-                action,
-            };
+            let notification: Notification;
+
+            if (typeof messageOrOptions === 'string') {
+                // Legacy API: simple string message
+                notification = {
+                    id,
+                    message: messageOrOptions,
+                    severity,
+                    duration,
+                    showDivider: false,
+                    showProgress: duration > 0,
+                    actions: action ? [action] : undefined,
+                    createdAt: Date.now(),
+                };
+            } else {
+                // Modern API: options object
+                const opts = messageOrOptions;
+                notification = {
+                    id,
+                    title: opts.title,
+                    message: opts.message,
+                    severity: opts.severity ?? 'info',
+                    duration: opts.duration ?? DEFAULT_DURATION,
+                    icon: opts.icon,
+                    showDivider: opts.showDivider ?? Boolean(opts.title),
+                    showProgress: opts.showProgress ?? (opts.duration ?? DEFAULT_DURATION) > 0,
+                    actions: opts.actions,
+                    createdAt: Date.now(),
+                };
+            }
 
             setNotifications((prev) => [...prev, notification]);
 
-            // Auto-dismiss after duration (if duration is not 0)
-            if (duration > 0) {
-                setTimeout(() => {
-                    hideNotification(id);
-                }, duration);
-            }
+            // Auto-dismiss is now handled by NotificationItem component
+            // to properly trigger exit animation before removal
 
             return id;
         },
         []
     );
-
-    const hideNotification = React.useCallback((id: string) => {
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
-    }, []);
 
     const clearAll = React.useCallback(() => {
         setNotifications([]);

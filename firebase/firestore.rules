@@ -296,6 +296,23 @@ service cloud.firestore {
                 allow write: if isAdminOrDeveloper();
 
                 // ================================
+                // PERSONAL AUDITS (year-level users - admin, developer)
+                // Path: year/{year}/users/{userId}/audits/{auditId}
+                // User audits are personal notifications visible only to the owner
+                // ================================
+
+                match /audits/{auditId} {
+                    // Only the owner can read their personal audits
+                    allow read: if isAuthenticated() && isOwner(userId);
+                    // System and authenticated users can create audits for notification purposes
+                    allow create: if isAuthenticated();
+                    // Only the owner can mark as read (update)
+                    allow update: if isAuthenticated() && isOwner(userId);
+                    // Owner can delete their audits
+                    allow delete: if isOwner(userId) || isAdminOrDeveloper();
+                }
+
+                // ================================
                 // PERSONAL CALENDAR (year-level users - admin, developer)
                 // Path: year/{year}/users/{userId}/calendar/metadata
                 // ================================
@@ -377,6 +394,23 @@ service cloud.firestore {
                     allow write: if isAdminOrDeveloper() || isHead() || (isOwner(userId) && userInDepartment(department));
 
                     // ================================
+                    // PERSONAL AUDITS (department-level users)
+                    // Path: year/{year}/departments/{department}/users/{userId}/audits/{auditId}
+                    // User audits are personal notifications visible only to the owner
+                    // ================================
+
+                    match /audits/{auditId} {
+                        // Only the owner can read their personal audits
+                        allow read: if isAuthenticated() && isOwner(userId);
+                        // System and authenticated users can create audits for notification purposes
+                        allow create: if isAuthenticated();
+                        // Only the owner can mark as read (update)
+                        allow update: if isAuthenticated() && isOwner(userId);
+                        // Owner can delete their audits
+                        allow delete: if isOwner(userId) || isAdminOrDeveloper();
+                    }
+
+                    // ================================
                     // PERSONAL CALENDAR (department-level users)
                     // Path: year/{year}/departments/{department}/users/{userId}/calendar/metadata
                     // ================================
@@ -436,6 +470,23 @@ service cloud.firestore {
                     match /users/{userId} {
                         allow read: if isAuthenticated();
                         allow write: if isAdminOrDeveloper() || isHead() || isAdviser() || isOwner(userId);
+
+                        // ================================
+                        // PERSONAL AUDITS (course-level users - students)
+                        // Path: year/{year}/departments/{department}/courses/{course}/users/{userId}/audits/{auditId}
+                        // User audits are personal notifications visible only to the owner
+                        // ================================
+
+                        match /audits/{auditId} {
+                            // Only the owner can read their personal audits
+                            allow read: if isAuthenticated() && isOwner(userId);
+                            // System and authenticated users can create audits for notification purposes
+                            allow create: if isAuthenticated();
+                            // Only the owner can mark as read (update)
+                            allow update: if isAuthenticated() && isOwner(userId);
+                            // Owner can delete their audits
+                            allow delete: if isOwner(userId) || isAdminOrDeveloper();
+                        }
 
                         // ================================
                         // PERSONAL CALENDAR (course-level users - students)

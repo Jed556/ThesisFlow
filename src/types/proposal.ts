@@ -74,7 +74,7 @@ export interface TopicProposalReviewEvent {
 /**
  * Represents a submission cycle for up to three topic proposals.
  */
-export interface TopicProposalSet {
+export interface TopicProposalBatch {
     id: string;
     createdBy: string;
     createdAt: Date;
@@ -85,7 +85,7 @@ export interface TopicProposalSet {
     usedAsThesisAt?: string;
     audits: TopicProposalReviewEvent[];
     /** Set number for ordering multiple proposal sets */
-    set?: number;
+    batch?: number;
     /** Whether any entry is awaiting head review */
     awaitingHead?: boolean;
     /** Whether any entry is awaiting moderator review */
@@ -101,4 +101,4 @@ export interface TopicProposalSet {
 /**
  * TopicProposalSet with ID guaranteed
  */
-export type TopicProposalSetRecord = TopicProposalSet & { id: string };
+export type TopicProposalSetRecord = TopicProposalBatch & { id: string };

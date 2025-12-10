@@ -10,18 +10,17 @@ import {
     type DocumentSnapshot, type QueryDocumentSnapshot, type DocumentData, type Timestamp,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../firebaseConfig';
-import type { TopicProposalEntry, TopicProposalSet, TopicProposalReviewEvent } from '../../../types/proposal';
+import type { TopicProposalEntry, TopicProposalBatch, TopicProposalReviewEvent } from '../../../types/proposal';
 import type { ESG, SDG, ThesisAgenda } from '../../../types/thesis';
 import { PROPOSALS_SUBCOLLECTION, GROUPS_SUBCOLLECTION } from '../../../config/firestore';
 import { buildProposalsCollectionPath, buildProposalDocPath, extractPathParams } from './paths';
-import { updateGroupById } from './groups';
 
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type TopicProposalSetRecord = TopicProposalSet & { id: string };
+export type TopicProposalSetRecord = TopicProposalBatch & { id: string };
 
 export interface ProposalContext {
     year: string;
@@ -164,7 +163,7 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
         result.usedAsThesisAt = data.usedAsThesisAt;
     }
     if (typeof data.set === 'number') {
-        result.set = data.set;
+        result.batch = data.set;
     }
 
     return result;
@@ -328,7 +327,7 @@ export async function getActiveProposalForGroup(ctx: ProposalContext): Promise<T
 export async function updateProposalSet(
     ctx: ProposalContext,
     proposalId: string,
-    data: Partial<TopicProposalSet>
+    data: Partial<TopicProposalBatch>
 ): Promise<void> {
     const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, proposalId);
     const docRef = doc(firebaseFirestore, docPath);

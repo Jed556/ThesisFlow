@@ -3,7 +3,7 @@ import { useSession } from '@toolpad/core';
 import { Outlet, Navigate, useLocation, useMatches } from 'react-router';
 import { DashboardLayout, ThemeSwitcher } from '@toolpad/core/DashboardLayout';
 import { PageContainer } from '@toolpad/core/PageContainer';
-import { Account } from '@toolpad/core/Account';
+import AccountMenu from '../components/AccountMenu';
 import UnauthorizedNotice from './UnauthorizedNotice';
 import { hasRoleAccess } from '../utils/roleUtils';
 import type { Session } from '../types/session';
@@ -24,13 +24,7 @@ function CustomActions() {
  * CustomAccount chip for the dashboard toolbar
  */
 function CustomAccount() {
-    return (
-        <Account
-            slotProps={{
-                preview: { slotProps: { avatarIconButton: { sx: { border: '0' } } } },
-            }}
-        />
-    );
+    return <AccountMenu />;
 }
 
 /**

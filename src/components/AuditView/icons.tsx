@@ -3,7 +3,8 @@ import {
     Person as PersonIcon, Group as GroupIcon, Description as DescriptionIcon,
     Upload as UploadIcon, Comment as CommentIcon, Assignment as AssignmentIcon,
     Timeline as TimelineIcon, History as HistoryIcon,
-    Business as DepartmentIcon, AdminPanelSettings as AdminIcon
+    Business as DepartmentIcon, AdminPanelSettings as AdminIcon,
+    Notifications as NotificationsIcon, AccountCircle as AccountIcon
 } from '@mui/icons-material';
 import type { AuditCategory } from '../../types/audit';
 import type { AuditScope } from './types';
@@ -38,6 +39,8 @@ export function getCategoryIcon(category: AuditCategory): React.ReactElement {
         file: <UploadIcon fontSize="small" />,
         stage: <TimelineIcon fontSize="small" />,
         terminal: <AssignmentIcon fontSize="small" />,
+        notification: <NotificationsIcon fontSize="small" />,
+        account: <AccountIcon fontSize="small" />,
         other: <HistoryIcon fontSize="small" />,
     };
     return iconMap[category] || <HistoryIcon fontSize="small" />;

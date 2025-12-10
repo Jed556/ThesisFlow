@@ -9,7 +9,7 @@ import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage'
 import ProfileView from '../../../components/Profile/ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
 import { onUserProfile, findUsersByIds } from '../../../utils/firebase/firestore/user';
-import { getGroupsByLeader, listenGroupsByExpertRole } from '../../../utils/firebase/firestore/groups';
+import { listenGroupsByLeader, listenGroupsByExpertRole } from '../../../utils/firebase/firestore/groups';
 import {
     createExpertRequestByGroup, listenExpertRequestsByGroup,
 } from '../../../utils/firebase/firestore/expertRequests';
@@ -113,35 +113,29 @@ export default function ExpertProfileViewPage() {
         };
     }, [expertRole, uid]);
 
+    // Real-time listener for viewer's owned groups (so button state updates when expert accepts)
     React.useEffect(() => {
-        let cancelled = false;
-
         if (!viewerUid) {
             setOwnedGroups([]);
             setOwnedGroupsLoading(false);
-            return () => { cancelled = true; };
+            return () => { /* no-op */ };
         }
 
         setOwnedGroupsLoading(true);
-        void getGroupsByLeader(viewerUid)
-            .then((records) => {
-                if (!cancelled) {
-                    setOwnedGroups(records);
-                }
-            })
-            .catch((err) => {
-                if (!cancelled) {
-                    console.error('Failed to load owned groups:', err);
-                }
-            })
-            .finally(() => {
-                if (!cancelled) {
-                    setOwnedGroupsLoading(false);
-                }
-            });
+
+        const unsubscribe = listenGroupsByLeader(viewerUid, {
+            onData: (records) => {
+                setOwnedGroups(records);
+                setOwnedGroupsLoading(false);
+            },
+            onError: (err) => {
+                console.error('Failed to load owned groups:', err);
+                setOwnedGroupsLoading(false);
+            },
+        });
 
         return () => {
-            cancelled = true;
+            unsubscribe();
         };
     }, [viewerUid]);
 
@@ -231,7 +225,10 @@ export default function ExpertProfileViewPage() {
     }, [groups]);
 
     const loading = profileLoading || groupsLoading;
-    const skills = React.useMemo(() => profile?.skills ?? [], [profile?.skills]);
+    const skills = React.useMemo(
+        () => profile?.skillRatings?.map((s) => s.name) ?? [],
+        [profile?.skillRatings]
+    );
 
     const roleLabel = expertRole === 'adviser'
         ? 'Adviser'

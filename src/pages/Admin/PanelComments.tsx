@@ -19,20 +19,16 @@ import { getAllGroups } from '../../utils/firebase/firestore/groups';
 import { listenThesisByGroupId, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import {
-    listenPanelCommentEntries,
-    listenPanelCommentRelease,
-    setPanelCommentTableReleaseState,
-    isPanelTableReleased,
-    type PanelCommentContext,
+    listenPanelCommentEntries, listenPanelCommentRelease, setPanelCommentTableReleaseState,
+    isPanelTableReleased, isPanelTableReadyForReview, type PanelCommentContext
 } from '../../utils/firebase/firestore/panelComments';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import {
-    PANEL_COMMENT_STAGE_METADATA,
-    getPanelCommentStageLabel,
-    formatPanelistDisplayName,
+    PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel, formatPanelistDisplayName
 } from '../../utils/panelCommentUtils';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -396,6 +392,30 @@ export default function AdminPanelCommentsPage() {
         try {
             await setPanelCommentTableReleaseState(panelCommentCtx, activeStage, panelUid, true, userUid);
             const panelistName = panelists.find(p => p.uid === panelUid)?.label ?? 'Panel member';
+
+            // Create audit notification for panel comment release
+            if (selectedGroup) {
+                try {
+                    const stageLabel = getPanelCommentStageLabel(activeStage);
+                    await auditAndNotify({
+                        group: selectedGroup,
+                        userId: userUid,
+                        name: 'Panel Comments Released',
+                        description: `Panel comments for ${stageLabel} stage from ${panelistName} have been released to students.`,
+                        category: 'panel',
+                        action: 'panel_comment_released',
+                        targets: {
+                            groupMembers: true,
+                            leader: true,
+                            excludeUserId: userUid,
+                        },
+                        details: { stage: activeStage, panelUid, panelistName },
+                    });
+                } catch (auditError) {
+                    console.error('Failed to create audit notification:', auditError);
+                }
+            }
+
             showNotification(`${panelistName}'s comments sent to students.`, 'success');
         } catch (error) {
             console.error('Failed to release panel table:', error);
@@ -403,7 +423,7 @@ export default function AdminPanelCommentsPage() {
         } finally {
             setReleaseSaving(false);
         }
-    }, [panelCommentCtx, userUid, activeStage, canRelease, activeStageMeta, panelists, showNotification]);
+    }, [panelCommentCtx, userUid, activeStage, canRelease, activeStageMeta, panelists, selectedGroup, showNotification]);
 
     if (session?.loading) {
         return (
@@ -522,6 +542,7 @@ export default function AdminPanelCommentsPage() {
                                     <List disablePadding>
                                         {panelists.map((panel) => {
                                             const isReleased = isPanelTableReleased(releaseMap, activeStage, panel.uid);
+                                            const isReady = isPanelTableReadyForReview(releaseMap, activeStage, panel.uid);
                                             const isSelected = activePanelUid === panel.uid;
                                             return (
                                                 <React.Fragment key={panel.uid}>
@@ -536,8 +557,8 @@ export default function AdminPanelCommentsPage() {
                                                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                                                                     <Chip
                                                                         size="small"
-                                                                        label={isReleased ? 'Released' : 'Not released'}
-                                                                        color={isReleased ? 'success' : 'default'}
+                                                                        label={isReleased ? 'Released' : isReady ? 'Ready' : 'Not released'}
+                                                                        color={isReleased ? 'success' : isReady ? 'warning' : 'default'}
                                                                     />
                                                                     {!isReleased && canRelease && (
                                                                         <Button

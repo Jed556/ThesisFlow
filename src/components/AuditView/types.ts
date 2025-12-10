@@ -1,11 +1,20 @@
-import type { AuditCategory } from '../../types/audit';
+import type { AuditCategory, AuditLocationType } from '../../types/audit';
 import type { ThesisGroup } from '../../types/group';
 import type { UserRole } from '../../types/profile';
 
 /**
  * Audit scope levels based on user privileges
+ * - 'personal': User's personal notifications (user audits only visible to the user)
+ * - 'group': Audits for groups the user belongs to
+ * - 'departmental': Audits for all groups in the user's department (head/moderator)
+ * - 'admin': Audits for all groups across all departments (admin only)
  */
 export type AuditScope = 'personal' | 'group' | 'departmental' | 'admin';
+
+/**
+ * Audit data source type for filtering
+ */
+export type AuditDataSource = 'group' | 'user' | 'all';
 
 /**
  * Configuration for available audit scopes
@@ -17,6 +26,8 @@ export interface AuditScopeConfig {
     defaultScope?: AuditScope;
     /** Whether to show the scope selector */
     showScopeSelector?: boolean;
+    /** Data source filter (group audits, user audits, or all) */
+    dataSource?: AuditDataSource;
 }
 
 /**
@@ -129,9 +140,14 @@ export interface AuditViewProps {
 
 /**
  * Get available scopes based on user role
+ * - 'group': Primary scope - group audit history (preferred default)
+ * - 'personal': Always available - user's personal notifications
+ * - 'departmental': For heads and moderators - audits for all groups in their department
+ * - 'admin': For admins only - audits for all groups (not user-based audits)
  */
 export function getAvailableScopes(role: UserRole | undefined): AuditScope[] {
-    const scopes: AuditScope[] = ['personal', 'group'];
+    // Group scope is preferred, with personal as fallback
+    const scopes: AuditScope[] = ['group', 'personal'];
 
     if (role === 'moderator' || role === 'head') {
         scopes.push('departmental');
@@ -152,10 +168,23 @@ export function getScopeLabel(scope: AuditScope): string {
     const labels: Record<AuditScope, string> = {
         personal: 'Personal',
         group: 'Group',
-        departmental: 'Departmental',
-        admin: 'Admin',
+        departmental: 'Department',
+        admin: 'All Groups',
     };
     return labels[scope];
+}
+
+/**
+ * Get description for audit scope
+ */
+export function getScopeDescription(scope: AuditScope): string {
+    const descriptions: Record<AuditScope, string> = {
+        personal: 'Your personal notifications and alerts',
+        group: 'Activity history for your groups',
+        departmental: 'Activity for all groups in your department',
+        admin: 'Activity for all groups across all departments',
+    };
+    return descriptions[scope];
 }
 
 /**
@@ -170,9 +199,25 @@ export const DEFAULT_FILTER_CONFIG: Required<AuditFilterConfig> = {
     defaultCategory: undefined as unknown as AuditCategory,
     allowedCategories: [
         'group', 'thesis', 'submission', 'chapter', 'panel',
-        'proposal', 'member', 'expert', 'comment', 'file', 'stage', 'terminal', 'other'
+        'proposal', 'member', 'expert', 'comment', 'file', 'stage',
+        'terminal', 'account', 'notification', 'other'
     ],
 };
+
+/**
+ * Categories relevant for personal (user) audits
+ */
+export const PERSONAL_AUDIT_CATEGORIES: AuditCategory[] = [
+    'member', 'expert', 'notification', 'account', 'other'
+];
+
+/**
+ * Categories relevant for group audits
+ */
+export const GROUP_AUDIT_CATEGORIES: AuditCategory[] = [
+    'group', 'thesis', 'submission', 'chapter', 'panel',
+    'proposal', 'member', 'expert', 'comment', 'file', 'stage', 'terminal', 'other'
+];
 
 /**
  * Default display configuration

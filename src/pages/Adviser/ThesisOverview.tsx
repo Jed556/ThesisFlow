@@ -15,6 +15,8 @@ import { createChat } from '../../utils/firebase/firestore/chat';
 import { updateSubmissionDecision } from '../../utils/firebase/firestore/submissions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
+import { notifySubmissionApproval, notifyRevisionRequested } from '../../utils/auditNotificationUtils';
+import { findGroupById } from '../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -276,8 +278,40 @@ export default function AdviserThesisOverviewPage() {
             requiredRoles,
         });
 
+        // Create audit notification for the decision
+        try {
+            const group = await findGroupById(thesis.groupId);
+            if (group) {
+                const chapterName = `Chapter ${chapterId}`;
+                // Adviser approval may need to notify editor next in the chain
+                const hasEditor = Boolean(group.members.editor);
+                if (decision === 'approved') {
+                    await notifySubmissionApproval({
+                        group,
+                        approverId: adviserUid,
+                        approverRole: 'adviser',
+                        chapterName,
+                        isSequential: hasEditor,
+                        chain: 'statistical',
+                        isFinalApproval: !hasEditor,
+                        details: { thesisId: targetThesisId, stage, submissionId },
+                    });
+                } else if (decision === 'revision_required') {
+                    await notifyRevisionRequested({
+                        group,
+                        requesterId: adviserUid,
+                        requesterRole: 'adviser',
+                        chapterName,
+                        details: { thesisId: targetThesisId, stage, submissionId },
+                    });
+                }
+            }
+        } catch (auditError) {
+            console.error('Failed to create audit notification:', auditError);
+        }
+
         // Submission status is updated in Firestore, ThesisWorkspace will refresh via listener
-    }, [selectedThesisId, thesis]);
+    }, [selectedThesisId, thesis, adviserUid]);
 
     const isLoading = assignmentsLoading || thesisLoading;
     const noAssignments = !assignmentsLoading && assignments.length === 0;

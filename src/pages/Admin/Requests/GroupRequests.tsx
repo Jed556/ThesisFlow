@@ -23,7 +23,9 @@ import {
     Cancel as RejectIcon,
     Group as GroupIcon,
 } from '@mui/icons-material';
+import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../../types/navigation';
+import type { Session } from '../../../types/session';
 import type { ThesisGroup } from '../../../types/group';
 import type { UserProfile } from '../../../types/profile';
 import { AnimatedPage, AnimatedList } from '../../../components/Animate';
@@ -32,6 +34,7 @@ import {
     getAllGroupsByStatus, approveGroup, rejectGroup,
 } from '../../../utils/firebase/firestore/groups';
 import { findUserById } from '../../../utils/firebase/firestore/user';
+import { auditAndNotify } from '../../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'admin-management',
@@ -46,6 +49,9 @@ export const metadata: NavigationItem = {
  * Admin page to review and approve/reject group creation requests
  */
 export default function AdminGroupRequestsPage() {
+    const session = useSession<Session>();
+    const adminUid = session?.user?.uid;
+
     const [pendingGroups, setPendingGroups] = React.useState<ThesisGroup[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -76,8 +82,26 @@ export default function AdminGroupRequestsPage() {
     }, [loadPendingGroups]);
 
     const handleApprove = async (groupId: string) => {
+        const group = pendingGroups.find((g) => g.id === groupId);
         try {
             await approveGroup(groupId);
+
+            // Audit notification for group approval by admin
+            if (group && adminUid) {
+                void auditAndNotify({
+                    group,
+                    userId: adminUid,
+                    name: 'Group Approved',
+                    description: `Group "${group.name}" has been approved by administrator.`,
+                    category: 'group',
+                    action: 'group_approved',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: adminUid,
+                    },
+                });
+            }
+
             await loadPendingGroups(); // Reload the list
         } catch (err) {
             console.error('Failed to approve group:', err);
@@ -95,6 +119,24 @@ export default function AdminGroupRequestsPage() {
 
         try {
             await rejectGroup(selectedGroup.id, rejectionReason);
+
+            // Audit notification for group rejection by admin
+            if (adminUid) {
+                void auditAndNotify({
+                    group: selectedGroup,
+                    userId: adminUid,
+                    name: 'Group Rejected',
+                    description: `Group "${selectedGroup.name}" has been rejected. Reason: ${rejectionReason.trim()}`,
+                    category: 'group',
+                    action: 'group_rejected',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: adminUid,
+                    },
+                    details: { reason: rejectionReason.trim() },
+                });
+            }
+
             setRejectDialogOpen(false);
             setSelectedGroup(null);
             setRejectionReason('');

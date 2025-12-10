@@ -12,6 +12,7 @@ import type { FileAttachment } from '../../../types/file';
 import type { ChapterSubmissionStatus, ExpertApprovalState, ThesisStageName } from '../../../types/thesis';
 import { THESIS_STAGE_SLUGS } from '../../../config/firestore';
 import { buildSubmissionsCollectionPath, buildSubmissionDocPath } from './paths';
+import { devLog } from '../../devUtils';
 
 // ============================================================================
 // Types
@@ -90,7 +91,7 @@ function resolveSubmissionDocPath(ctx: FileQueryContext, submissionId: string): 
  */
 function deriveStatusFromExpertApprovals(
     expertApprovals: ExpertApprovalState | undefined,
-    requiredRoles: Array<'adviser' | 'editor' | 'statistician'> = ['adviser', 'editor']
+    requiredRoles: ('adviser' | 'editor' | 'statistician')[] = ['adviser', 'editor']
 ): ChapterSubmissionStatus {
     if (!expertApprovals || !Array.isArray(expertApprovals) || expertApprovals.length === 0) {
         return 'under_review';
@@ -330,21 +331,21 @@ function extractFileFromSubmission(submissionId: string, data: Record<string, un
 export async function getFilesForChapter(ctx: FileQueryContext): Promise<FileAttachment[]> {
     try {
         const collectionPath = resolveSubmissionsCollectionPath(ctx);
-        // console.log('[getFilesForChapter] Querying path:', collectionPath);
+        devLog('[getFilesForChapter] Querying path:', collectionPath);
         const submissionsRef = collection(firebaseFirestore, collectionPath);
         // Try without orderBy first to avoid index issues, then sort in memory
         const snapshot = await getDocs(submissionsRef);
-        // console.log('[getFilesForChapter] Found', snapshot.size, 'documents');
+        devLog('[getFilesForChapter] Found', snapshot.size, 'documents');
         const files: FileAttachment[] = [];
         for (const docSnap of snapshot.docs) {
             const rawData = docSnap.data() as Record<string, unknown>;
-            // console.log('[getFilesForChapter] Doc', docSnap.id, 'data:', JSON.stringify(rawData, null, 2));
+            devLog('[getFilesForChapter] Doc', docSnap.id, 'data:', JSON.stringify(rawData, null, 2));
             const file = extractFileFromSubmission(docSnap.id, rawData);
             if (file) {
-                // console.log('[getFilesForChapter] Extracted file:', file.id, file.name, file.url?.substring(0, 50));
+                devLog('[getFilesForChapter] Extracted file:', file.id, file.name, file.url?.substring(0, 50));
                 files.push(file);
             } else {
-                // console.log('[getFilesForChapter] No file extracted from doc', docSnap.id);
+                devLog('[getFilesForChapter] No file extracted from doc', docSnap.id);
             }
         }
 

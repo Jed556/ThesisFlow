@@ -26,6 +26,7 @@ import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRe
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -317,7 +318,7 @@ export default function StudentThesisOverviewPage() {
             thesisId: string; chapterId: number; stage: ThesisStageName; submissionId: string;
         }
     ) => {
-        if (!group) {
+        if (!group || !userUid) {
             throw new Error('Group context is not available.');
         }
 
@@ -332,7 +333,29 @@ export default function StudentThesisOverviewPage() {
         };
 
         await submitDraftSubmission(submissionCtx, submissionId);
-    }, [group]);
+
+        // Create audit notification for draft submission
+        try {
+            await auditAndNotify({
+                group,
+                userId: userUid,
+                name: 'Draft Submitted for Review',
+                description: `Chapter ${chapterId} draft has been submitted for expert review.`,
+                category: 'submission',
+                action: 'submission_created',
+                targets: {
+                    groupMembers: true,
+                    adviser: true,
+                    editor: true,
+                    statistician: true,
+                    excludeUserId: userUid,
+                },
+                details: { thesisId, chapterId, stage, submissionId },
+            });
+        } catch (auditError) {
+            console.error('Failed to create audit notification:', auditError);
+        }
+    }, [group, userUid]);
 
     /**
      * Handler for deleting a draft submission

@@ -24,6 +24,7 @@ import {
     areAllProposalsRejected, canEditProposalSet, getProposalSetMeta, pickActiveProposalSet
 } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 
 export const metadata: NavigationItem = {
@@ -106,7 +107,7 @@ function computeNextTopicSequence(groupId: string | undefined, sets: TopicPropos
 }
 
 /**
- * Student-facing topic proposal workspace for drafting, submitting, and tracking proposal cycles.
+ * Student-facing topic proposal workspace for drafting, submitting, and tracking proposal batches.
  */
 export default function StudentTopicProposalsPage() {
     const session = useSession<Session>();
@@ -253,7 +254,7 @@ export default function StudentTopicProposalsPage() {
         group?.members.leader === userUid ||
         group?.members.members.includes(userUid)
     ));
-    // Members can add/edit entries in draft mode, but only leader can create cycles and submit
+    // Members can add/edit entries in draft mode, but only leader can create batches and submit
     const canEditEntries = canEditProposalSet(activeSet) && isMember;
     const canSubmitSet = canEditProposalSet(activeSet) && isLeader;
     const canStartNewSet = React.useMemo(() => {
@@ -401,6 +402,24 @@ export default function StudentTopicProposalsPage() {
         try {
             await submitProposalSetBySetId(activeSet.id, userUid);
             showNotification('Topic proposals submitted for review', 'success');
+
+            // Audit notification for topic proposal submission
+            if (group) {
+                void auditAndNotify({
+                    group,
+                    userId: userUid,
+                    name: 'Topic Proposals Submitted',
+                    description: `Topic proposals (Batch ${activeSet.batch ?? 1}) have been submitted for review.`,
+                    category: 'proposal',
+                    action: 'proposal_submitted',
+                    targets: {
+                        groupMembers: true,
+                        moderators: true,
+                        excludeUserId: userUid,
+                    },
+                    details: { setId: activeSet.id, setNumber: activeSet.batch ?? 1 },
+                });
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit proposals';
             showNotification(message, 'error');
@@ -415,11 +434,11 @@ export default function StudentTopicProposalsPage() {
         }
         setCreateSetLoading(true);
         try {
-            const nextSetNumber = proposalSets.reduce((acc, set) => Math.max(acc, set.set ?? 0), 0) + 1;
+            const nextSetNumber = proposalSets.reduce((acc, set) => Math.max(acc, set.batch ?? 0), 0) + 1;
             await createProposalSetByGroup(group.id, { createdBy: userUid, set: nextSetNumber });
-            showNotification('New topic proposal cycle started', 'success');
+            showNotification('New topic proposal batch started', 'success');
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to start proposal cycle';
+            const message = error instanceof Error ? error.message : 'Failed to start proposal batch';
             showNotification(message, 'error');
         } finally {
             setCreateSetLoading(false);
@@ -526,7 +545,7 @@ export default function StudentTopicProposalsPage() {
 
                 {!isLeader && isMember && (
                     <Alert severity="info">
-                        You can add and edit topic proposals. Only the group leader can submit proposals for review or start new cycles.
+                        You can add and edit topic proposals. Only the group leader can submit proposals for review or start new batches.
                     </Alert>
                 )}
 
@@ -537,10 +556,10 @@ export default function StudentTopicProposalsPage() {
                 {canStartNewSet && (
                     <Alert severity="warning" action={
                         <Button onClick={handleCreateSet} disabled={createSetLoading} color="inherit" size="small">
-                            Start new set
+                            Start new batch
                         </Button>
                     }>
-                        All proposals in your current cycle were rejected. You can submit a fresh set of ideas.
+                        All proposals in your current batch were rejected. You can submit a fresh batch of ideas.
                     </Alert>
                 )}
 
@@ -556,7 +575,7 @@ export default function StudentTopicProposalsPage() {
                                     <Typography variant="h6">No topic proposals yet</Typography>
                                     {isLeader && (
                                         <Button variant="contained" onClick={handleCreateSet} disabled={createSetLoading}>
-                                            Start proposal cycle
+                                            Start proposal batch
                                         </Button>
                                     )}
                                 </Stack>
@@ -573,7 +592,7 @@ export default function StudentTopicProposalsPage() {
                                 alignItems={{ xs: 'flex-start', sm: 'center' }}
                             >
                                 <Box>
-                                    <Typography variant="h6">Cycle #{activeSet.set}</Typography>
+                                    <Typography variant="h6">Batch #{activeSet.batch}</Typography>
                                     <Typography variant="body2" color="text.secondary">
                                         {activeSetStatusLabel}
                                     </Typography>
@@ -646,7 +665,7 @@ export default function StudentTopicProposalsPage() {
                                             );
                                         }
 
-                                        // Get decision info from the proposal set audits
+                                        // Get decision info from the proposal batch audits
                                         const entryAudits = activeSet?.audits?.filter(
                                             audit => audit.proposalId === entry.id
                                         ) || [];
@@ -716,7 +735,7 @@ export default function StudentTopicProposalsPage() {
 
                 {historySets.length > 0 && (
                     <Stack spacing={2}>
-                        <Typography variant="h6">Previous submission cycles</Typography>
+                        <Typography variant="h6">Previous submission batches</Typography>
                         {historySets.map((set) => {
                             const meta = getProposalSetMeta(set);
                             const statusLabel = meta.hasApproved
@@ -742,7 +761,7 @@ export default function StudentTopicProposalsPage() {
                                     <CardContent>
                                         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
                                             <Box>
-                                                <Typography variant="subtitle1">Cycle #{set.set}</Typography>
+                                                <Typography variant="subtitle1">Batch #{set.batch}</Typography>
                                                 <Typography variant="body2" color="text.secondary">
                                                     {set.entries.length} topic(s) • {statusLabel}
                                                 </Typography>

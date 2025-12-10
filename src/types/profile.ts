@@ -28,23 +28,6 @@ export interface UserName {
 import type { ExpertSkillRating } from './skillTemplate';
 
 /**
- * Skill rating metadata for expert expertise
- * @deprecated Use ExpertSkillRating from skillTemplate.ts for new implementations
- */
-export interface Skills {
-    /** Reference to the skill template ID (optional for backward compatibility) */
-    skillId?: string;
-    /** Display name of the skill */
-    name: string;
-    /** Expert self- or system-assessed rating using a 0-5 scale */
-    rating: number;
-    /** Optional free-form note or description */
-    note?: string;
-    /** ISO timestamp when the rating was last updated */
-    updatedAt?: string;
-}
-
-/**
  * Interface for user profiles in the ThesisFlow system
  */
 export interface UserProfile {
@@ -99,9 +82,9 @@ export interface UserProfile {
 
     /**
      * Expertise areas or skills (for advisers, editors, statisticians)
-     * Use ExpertSkillRating for new implementations with department skill templates
+     * Uses ExpertSkillRating with department skill templates
      */
-    skillRatings?: Skills[] | ExpertSkillRating[];
+    skillRatings?: ExpertSkillRating[];
 
     /**
      * Capacity for handled theses (only for advisers, editors and statisticians)
@@ -115,20 +98,53 @@ export interface UserProfile {
      */
     maxSlots?: number;
 
-    preferences?: {
-        /**
-         * User's theme color preference (hex color)
-         */
-        themeColor?: string;
-        /**
-         * Whether to reduce animations for better performance or accessibility
-         */
-        reduceAnimations?: boolean;
-    }
+    preferences?: UserPreferences;
     /**
      * User's last active date
      */
     lastActive?: Date;
+}
+
+/**
+ * Calendar notification timing configuration
+ */
+export interface CalendarNotificationTiming {
+    /** Unique ID for this notification timing */
+    id: string;
+    /** Whether this notification is enabled */
+    enabled: boolean;
+    /** Value for the notification timing */
+    value: number;
+    /** Unit for the notification timing */
+    unit: 'minutes' | 'hours' | 'days';
+}
+
+/** Maximum number of calendar notification reminders allowed */
+export const MAX_CALENDAR_NOTIFICATIONS = 10;
+
+/** Default calendar notification settings */
+export const DEFAULT_CALENDAR_NOTIFICATIONS: CalendarNotificationTiming[] = [
+    { id: 'default-1', enabled: true, value: 1, unit: 'days' },
+    { id: 'default-2', enabled: true, value: 1, unit: 'hours' },
+    { id: 'default-3', enabled: true, value: 15, unit: 'minutes' },
+];
+
+/**
+ * User preferences for UI and notifications
+ */
+export interface UserPreferences {
+    /**
+     * User's theme color preference (hex color)
+     */
+    themeColor?: string;
+    /**
+     * Whether to reduce animations for better performance or accessibility
+     */
+    reduceAnimations?: boolean;
+    /**
+     * Calendar notification timing settings (array of up to 10 reminders)
+     */
+    calendarNotifications?: CalendarNotificationTiming[];
 }
 
 /**

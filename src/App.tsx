@@ -2,6 +2,7 @@ import * as React from 'react';
 import { authSignOut, signInWithGoogle, onAuthStateChanged } from './utils/firebase/auth/client';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { findUserById } from './utils/firebase/firestore/user';
+import { formatDisplayName } from './utils/avatarUtils';
 import { setCurrentAppTheme } from './utils/devUtils';
 import { buildNavigation } from './utils/navBuilder';
 import { getUserRole } from './utils/roleUtils';
@@ -12,6 +13,7 @@ import { Outlet } from 'react-router';
 import { SnackbarProvider, SnackbarContainer, useSnackbar } from './components/Snackbar';
 import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';
 import BackgroundJobNotifications from './components/BackgroundJobNotifications';
+import CalendarDeadlineNotifications from './components/CalendarDeadlineNotifications';
 
 import type { Navigation } from '@toolpad/core/AppProvider';
 import type { Session, ExtendedAuthentication } from './types/session';
@@ -122,8 +124,11 @@ function AppContent() {
                         user: {
                             uid: user.uid,
                             email: user.email || '',
-                            image: user.photoURL || '',
+                            name: profile ? formatDisplayName(profile) : (user.displayName || user.email || ''),
+                            image: profile?.avatar || user.photoURL || '',
                             role: userRole,
+                            department: profile?.department,
+                            course: profile?.course,
                         },
                     });
                 } catch (error) {
@@ -167,6 +172,7 @@ function AppContent() {
             <Outlet />
             <SnackbarContainer />
             <BackgroundJobNotifications />
+            <CalendarDeadlineNotifications />
         </ReactRouterAppProvider>
     );
 }

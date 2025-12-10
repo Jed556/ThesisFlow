@@ -39,6 +39,7 @@ import {
 import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { auditAndNotify } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -620,6 +621,22 @@ export default function TerminalRequirementsPage() {
                 });
             }
             showNotification('Submitted for expert review.', 'success');
+
+            // Audit notification for terminal requirement submission
+            void auditAndNotify({
+                group: groupMeta,
+                userId: userUid,
+                name: 'Terminal Requirements Submitted',
+                description: `Terminal requirements for ${activeStage} have been submitted for review.`,
+                category: 'terminal',
+                action: 'submission_created',
+                targets: {
+                    groupMembers: true,
+                    adviser: true,
+                    excludeUserId: userUid,
+                },
+                details: { stage: activeStage, requirementCount: stageRequirements.length },
+            });
         } catch (submitError) {
             console.error('Failed to submit terminal requirements:', submitError);
             const message = submitError instanceof Error

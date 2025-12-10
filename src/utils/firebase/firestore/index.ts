@@ -1,4 +1,5 @@
 export * from './agendas';
+export * from './audits';
 export * from './calendars';
 export * from './calendarEvents';
 export * from './chapter';
@@ -8,6 +9,7 @@ export * from './file';
 export * from './firestore';
 export * from './groups';
 export * from './user';
+export * from './userAudits';
 export * from './thesis';
 export * from './topicProposals';
 export * from './panelComments';

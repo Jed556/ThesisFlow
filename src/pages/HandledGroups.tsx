@@ -16,6 +16,7 @@ import { useSnackbar } from '../contexts/SnackbarContext';
 import { formatProfileLabel } from '../utils/userUtils';
 import { listenGroupsByExpertRole, approveGroup, rejectGroup } from '../utils/firebase/firestore/groups';
 import { findUsersByIds, onUserProfile, updateUserProfile } from '../utils/firebase/firestore/user';
+import { auditAndNotify } from '../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'adviser-editor',
@@ -174,10 +175,29 @@ export default function ExpertGroupsPage() {
 
     const handleApprove = React.useCallback(async (groupId: string) => {
         if (!groupId) return;
+        const group = groups.find((g) => g.id === groupId);
         setActionBusy((prev) => ({ ...prev, [groupId]: true }));
         try {
             await approveGroup(groupId);
             showNotification('Request approved. Group is now active.', 'success');
+
+            // Audit notification for expert request acceptance
+            if (group && expertUid && role) {
+                const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+                void auditAndNotify({
+                    group,
+                    userId: expertUid,
+                    name: `${roleLabel} Request Accepted`,
+                    description: `${roleLabel} has accepted the request for group "${group.name}".`,
+                    category: 'expert',
+                    action: 'expert_request_accepted',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: expertUid,
+                    },
+                    details: { expertRole: role },
+                });
+            }
         } catch (err) {
             console.error('Failed to approve group:', err);
             showNotification('Unable to approve the request. Please try again.', 'error');
@@ -188,15 +208,34 @@ export default function ExpertGroupsPage() {
                 return next;
             });
         }
-    }, [showNotification]);
+    }, [showNotification, groups, expertUid, role]);
 
     const handleReject = React.useCallback(async (groupId: string) => {
         if (!groupId) return;
+        const group = groups.find((g) => g.id === groupId);
         setActionBusy((prev) => ({ ...prev, [groupId]: true }));
         const reason = role === 'adviser' ? 'Adviser request declined' : 'Editor request declined';
         try {
             await rejectGroup(groupId, reason);
             showNotification('Request declined.', 'info');
+
+            // Audit notification for expert request rejection
+            if (group && expertUid && role) {
+                const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+                void auditAndNotify({
+                    group,
+                    userId: expertUid,
+                    name: `${roleLabel} Request Declined`,
+                    description: `${roleLabel} has declined the request for group "${group.name}".`,
+                    category: 'expert',
+                    action: 'expert_request_rejected',
+                    targets: {
+                        groupMembers: true,
+                        excludeUserId: expertUid,
+                    },
+                    details: { expertRole: role, reason },
+                });
+            }
         } catch (err) {
             console.error('Failed to reject group:', err);
             showNotification('Unable to decline the request. Please try again.', 'error');
@@ -207,7 +246,7 @@ export default function ExpertGroupsPage() {
                 return next;
             });
         }
-    }, [role, showNotification]);
+    }, [role, showNotification, groups, expertUid]);
 
     const handleSaveCapacity = React.useCallback(async () => {
         if (!expertUid || !role) return;

@@ -968,6 +968,38 @@ export function listenGroupsByPanelist(
 }
 
 /**
+ * Listen to groups where the given user is the leader (collectionGroup).
+ *
+ * @param userId Leader UID
+ * @param options Callbacks for data and errors
+ * @returns Unsubscribe function
+ */
+export function listenGroupsByLeader(
+    userId: string,
+    options: GroupListenerOptions
+): () => void {
+    const groupsQuery = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
+    const q = query(
+        groupsQuery,
+        where('members.leader', '==', userId),
+        orderBy('createdAt', 'desc')
+    );
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const groups = snapshot.docs
+                .map((d) => docToThesisGroup(d))
+                .filter((g): g is ThesisGroup => g !== null);
+            options.onData(groups);
+        },
+        (error) => {
+            if (options.onError) options.onError(error);
+            else console.error('Groups by leader listener error:', error);
+        }
+    );
+}
+
+/**
  * Listen to groups where the given user has a specific expert role (collectionGroup).
  *
  * @param role 'adviser' | 'editor' | 'statistician'
@@ -1442,4 +1474,114 @@ export async function deleteGroupById(groupId: string): Promise<void> {
         throw new Error(`Group not found: ${groupId}`);
     }
     return deleteGroup(ctx.year, ctx.department, ctx.course, groupId);
+}
+
+// ============================================================================
+// Real-Time Listeners
+// ============================================================================
+
+/**
+ * Listener options for group subscriptions
+ */
+export interface GroupListenerOptions {
+    onData: (groups: ThesisGroup[]) => void;
+    onError?: (error: Error) => void;
+}
+
+/**
+ * Subscribe to real-time updates for groups in a specific course.
+ * Returns an unsubscribe function.
+ *
+ * @param course Course identifier
+ * @param options Listener callbacks
+ * @param statusFilter Optional filter for group status
+ * @returns Unsubscribe function
+ */
+export function listenToGroupsByCourse(
+    course: string,
+    options: GroupListenerOptions,
+    statusFilter?: GroupStatus
+): () => void {
+    const groupsQuery = collectionGroup(firebaseFirestore, GROUPS_SUBCOLLECTION);
+    const constraints: QueryConstraint[] = [where('course', '==', course)];
+
+    if (statusFilter) {
+        constraints.push(where('status', '==', statusFilter));
+    }
+
+    const q = query(groupsQuery, ...constraints);
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const groups = snapshot.docs
+                .map((d) => docToThesisGroup(d))
+                .filter((g): g is ThesisGroup => g !== null);
+            options.onData(groups);
+        },
+        (error) => {
+            if (options.onError) {
+                options.onError(error);
+            } else {
+                console.error('Group listener error:', error);
+            }
+        }
+    );
+}
+
+/**
+ * Subscribe to real-time updates for groups in multiple courses.
+ * Useful for moderators who manage multiple courses.
+ * Returns an unsubscribe function that cleans up all listeners.
+ *
+ * @param courses Array of course identifiers
+ * @param options Listener callbacks
+ * @param statusFilter Optional filter for group status
+ * @returns Unsubscribe function
+ */
+export function listenToGroupsByMultipleCourses(
+    courses: string[],
+    options: GroupListenerOptions,
+    statusFilter?: GroupStatus
+): () => void {
+    if (courses.length === 0) {
+        options.onData([]);
+        return () => { /* no-op */ };
+    }
+
+    // Store groups from each course
+    const groupsBySection = new Map<string, ThesisGroup[]>();
+    const unsubscribers: (() => void)[] = [];
+
+    const mergeAndEmit = () => {
+        const deduped = new Map<string, ThesisGroup>();
+        for (const groups of groupsBySection.values()) {
+            for (const group of groups) {
+                deduped.set(group.id, group);
+            }
+        }
+        const sorted = Array.from(deduped.values()).sort((a, b) =>
+            a.createdAt.localeCompare(b.createdAt)
+        );
+        options.onData(sorted);
+    };
+
+    for (const course of courses) {
+        const unsubscribe = listenToGroupsByCourse(
+            course,
+            {
+                onData: (groups) => {
+                    groupsBySection.set(course, groups);
+                    mergeAndEmit();
+                },
+                onError: options.onError,
+            },
+            statusFilter
+        );
+        unsubscribers.push(unsubscribe);
+    }
+
+    return () => {
+        unsubscribers.forEach((unsub) => unsub());
+    };
 }

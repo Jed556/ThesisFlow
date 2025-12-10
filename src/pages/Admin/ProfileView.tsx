@@ -188,7 +188,7 @@ export default function AdminProfileViewPage() {
         <AnimatedPage variant="fade">
             <ProfileView
                 profile={profile}
-                skills={profile.skills}
+                skills={profile.skillRatings?.map((s) => s.name)}
                 skillRatings={profile.skillRatings}
                 currentGroups={(expertRole || profile.role === 'student') ? activeAssignments : undefined}
                 timeline={(expertRole || profile.role === 'student') ? history : undefined}

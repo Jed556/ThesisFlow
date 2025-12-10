@@ -15,6 +15,8 @@ import { createChat } from '../../utils/firebase/firestore/chat';
 import { updateSubmissionDecision } from '../../utils/firebase/firestore/submissions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
+import { notifySubmissionApproval, notifyRevisionRequested } from '../../utils/auditNotificationUtils';
+import { findGroupById } from '../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -271,8 +273,37 @@ export default function EditorThesisOverviewPage() {
             requiredRoles,
         });
 
+        // Create audit notification for the decision
+        try {
+            const group = await findGroupById(thesis.groupId);
+            if (group) {
+                const chapterName = `Chapter ${chapterId}`;
+                if (decision === 'approved') {
+                    await notifySubmissionApproval({
+                        group,
+                        approverId: editorUid,
+                        approverRole: 'editor',
+                        chapterName,
+                        isSequential: false,
+                        isFinalApproval: true,
+                        details: { thesisId: targetThesisId, stage, submissionId },
+                    });
+                } else if (decision === 'revision_required') {
+                    await notifyRevisionRequested({
+                        group,
+                        requesterId: editorUid,
+                        requesterRole: 'editor',
+                        chapterName,
+                        details: { thesisId: targetThesisId, stage, submissionId },
+                    });
+                }
+            }
+        } catch (auditError) {
+            console.error('Failed to create audit notification:', auditError);
+        }
+
         // Submission status is updated in Firestore, ThesisWorkspace will refresh via listener
-    }, [selectedThesisId, thesis]);
+    }, [selectedThesisId, thesis, editorUid]);
 
     const isLoading = assignmentsLoading || thesisLoading;
     const noAssignments = !assignmentsLoading && assignments.length === 0;

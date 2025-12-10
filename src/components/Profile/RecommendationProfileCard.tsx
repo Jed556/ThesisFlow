@@ -52,7 +52,8 @@ export default function RecommendationProfileCard({
         onSelect(card.profile);
     }, [card.profile, onSelect]);
 
-    const hasSkills = (card.profile.skills?.length ?? 0) > 0;
+    const hasSkills = (card.profile.skillRatings?.length ?? 0) > 0;
+    const skillNames = card.profile.skillRatings?.map((s) => s.name) ?? [];
 
     return (
         <Box sx={{ position: 'relative', opacity: disabled ? 0.65 : 1, filter: disabled ? 'grayscale(0.25)' : 'none' }}>
@@ -74,7 +75,7 @@ export default function RecommendationProfileCard({
                 showEmail={true}
                 showRole={showRoleLabel}
                 showDepartment={false}
-                skills={card.profile.skills ?? []}
+                skills={skillNames}
                 stats={stats}
                 cornerText={card.rank}
                 showDivider

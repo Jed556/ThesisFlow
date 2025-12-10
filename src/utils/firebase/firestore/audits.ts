@@ -44,6 +44,7 @@ function docToAuditEntry(
 
     return {
         id: docSnap.id,
+        locationType: 'group',
         name: (data.name as string) || '',
         description: (data.description as string) || '',
         userId: (data.userId as string) || '',
@@ -53,6 +54,8 @@ function docToAuditEntry(
             ? data.timestamp.toDate().toISOString()
             : (data.timestamp as string) || new Date().toISOString(),
         details: data.details as AuditDetails | undefined,
+        showSnackbar: data.showSnackbar as boolean | undefined,
+        read: data.read as boolean | undefined,
         groupId: groupId || (data.groupId as string) || '',
     };
 }
@@ -76,12 +79,15 @@ export async function createAuditEntry(
     const newDocRef = doc(auditsRef);
 
     const auditData = {
+        locationType: 'group',
         name: data.name,
         description: data.description,
         userId: data.userId,
         category: data.category,
         action: data.action,
         details: data.details || null,
+        showSnackbar: data.showSnackbar ?? false,
+        read: false,
         groupId: ctx.groupId,
         timestamp: serverTimestamp(),
     };

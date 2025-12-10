@@ -20,6 +20,7 @@ import { aggregateThesisStats, computeExpertCards, type ExpertCardData } from '.
 import type { UserProfile } from '../../../types/profile';
 import type { Session } from '../../../types/session';
 import type { ThesisGroup } from '../../../types/group';
+import { devError, devLog } from '../../../utils/devUtils';
 
 export const metadata: NavigationItem = {
     group: 'experts',
@@ -68,17 +69,17 @@ export default function AdviserEditorRecommendationsPage() {
         }
 
         let cancelled = false;
-        // console.log('[Recommendations] Checking thesis for group:', studentGroupId);
+        devLog('[Recommendations] Checking thesis for group:', studentGroupId);
         void findThesisByGroupId(studentGroupId)
             .then((thesis) => {
                 if (!cancelled) {
-                    // console.log('[Recommendations] Thesis found:', thesis);
+                    devLog('[Recommendations] Thesis found:', thesis);
                     setHasThesisDocument(Boolean(thesis));
                 }
             })
             .catch((err) => {
                 if (!cancelled) {
-                    // console.error('Failed to check thesis document:', err);
+                    devError('Failed to check thesis document:', err);
                     setHasThesisDocument(false);
                 }
             });
@@ -319,7 +320,7 @@ export default function AdviserEditorRecommendationsPage() {
     const statisticianTabLocked = !adviserAssigned;
 
     // Debug log
-    // console.log('[Recommendations] hasThesisDocument:', hasThesisDocument, 'adviserTabLocked:', adviserTabLocked);
+    devLog('[Recommendations] hasThesisDocument:', hasThesisDocument, 'adviserTabLocked:', adviserTabLocked);
 
     const handleTabChange = React.useCallback((_event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);

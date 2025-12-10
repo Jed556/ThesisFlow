@@ -11,6 +11,7 @@ import { AuthenticationContext } from '@toolpad/core/AppProvider';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import { signInWithCredentials } from '../utils/firebase/auth/client';
 import { findUserById } from '../utils/firebase/firestore/user';
+import { formatDisplayName } from '../utils/avatarUtils';
 
 import { buildAdminApiHeaders, resolveAdminApiBaseUrl } from '../utils/firebase/api';
 import { encryptPassword } from '../utils/cryptoUtils';
@@ -381,15 +382,19 @@ export default function SignIn() {
         // Use real Firebase sign-in (account must exist in Firebase Auth)
         const result = await signInWithCredentials(email, password);
         if (result?.success && result?.user) {
+            const profile = await findUserById(result.user.uid);
+            const displayName = profile ? formatDisplayName(profile) : (result.user.displayName || email.split('@')[0]);
             // For developer accounts, we may not have a Firestore profile
             // Create session from Firebase Auth user data
             const userSession: Session = {
                 user: {
-                    uid: result.user.uid,
-                    name: result.user.displayName || email.split('@')[0],
-                    email: result.user.email || email,
-                    image: result.user.photoURL || '',
-                    role: 'developer',
+                    uid: profile?.uid || result.user.uid,
+                    name: displayName,
+                    email: profile?.email || result.user.email || email,
+                    image: profile?.avatar || result.user.photoURL || '',
+                    role: profile?.role || 'developer',
+                    department: profile?.department,
+                    course: profile?.course,
                 },
             };
             authentication?.setSession?.(userSession);
@@ -473,10 +478,12 @@ export default function SignIn() {
                                 const userSession: Session = {
                                     user: {
                                         uid: profile.uid || result.user.uid,
-                                        name: `${profile.name.first} ${profile.name.last}`.trim(),
+                                        name: formatDisplayName(profile),
                                         email: profile.email,
                                         image: profile.avatar || '',
                                         role: profile.role,
+                                        department: profile.department,
+                                        course: profile.course,
                                     },
                                 };
                                 authentication?.setSession?.(userSession);

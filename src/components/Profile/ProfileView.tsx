@@ -10,7 +10,8 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { alpha, useTheme } from '@mui/material/styles';
 import ProfileHeader from './ProfileHeader';
 import { getInitialsFromFullName } from '../../utils/avatarUtils';
-import type { HistoricalThesisEntry, SkillRating, UserProfile, UserRole } from '../../types/profile';
+import type { HistoricalThesisEntry, UserProfile, UserRole } from '../../types/profile';
+import type { ExpertSkillRating } from '../../types/skillTemplate';
 import type { ThesisGroup } from '../../types/group';
 import GroupCard from '../Group/GroupCard';
 
@@ -53,7 +54,7 @@ export interface ProfileViewProps {
     /** Active groups to display in the current assignments section */
     currentGroups?: ThesisGroup[];
     skills?: string[];
-    skillRatings?: SkillRating[];
+    skillRatings?: ExpertSkillRating[];
     timeline?: HistoricalThesisEntry[];
     contacts?: { icon: React.ReactNode; text: string; href?: string }[];
     primaryAction?: ProfilePrimaryAction;
@@ -139,7 +140,7 @@ export default function ProfileView({
 
     const normalizedSkillRatings = React.useMemo(() => {
         if (!skillRatings || skillRatings.length === 0) {
-            return [] as SkillRating[];
+            return [] as ExpertSkillRating[];
         }
         return skillRatings.map((entry) => ({
             ...entry,
@@ -254,19 +255,6 @@ export default function ProfileView({
                                                                 value={(ratingValue / 5) * 100}
                                                                 sx={{ height: 6, borderRadius: 999 }}
                                                             />
-                                                            {(() => {
-                                                                const eCount = typeof skill.endorsements === 'number'
-                                                                    ? skill.endorsements
-                                                                    : 0;
-                                                                const endorsements = eCount > 0
-                                                                    ? `${eCount} endorsement${eCount === 1 ? '' : 's'}`
-                                                                    : null;
-                                                                return endorsements ? (
-                                                                    <Typography variant="caption" color="text.secondary">
-                                                                        {endorsements}
-                                                                    </Typography>
-                                                                ) : null;
-                                                            })()}
                                                         </Stack>
                                                     );
                                                 })}

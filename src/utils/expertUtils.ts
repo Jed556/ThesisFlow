@@ -26,14 +26,6 @@ export const getAssignedExpertRoles = (thesis?: ThesisWithGroupContext | null): 
 };
 
 /**
- * Create empty expert approvals array (new format)
- * @deprecated Expert approvals are now an array, use empty array [] instead
- */
-export const createEmptyExpertApprovals = (): ExpertApprovalState => {
-    return [];
-};
-
-/**
  * Check if a role has approved in the expertApprovals array
  */
 export const hasRoleApproved = (

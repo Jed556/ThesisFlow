@@ -1,28 +1,25 @@
 import * as React from 'react';
 import {
-    Alert, Box, Card, CardContent, Chip, IconButton, Stack,
-    Tooltip, Typography
+    Alert, Box, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography
 } from '@mui/material';
-import {
-    Refresh as RefreshIcon, Clear as ClearIcon
-} from '@mui/icons-material';
+import { Refresh as RefreshIcon, Clear as ClearIcon } from '@mui/icons-material';
 import { isValid } from 'date-fns';
-import type { AuditEntry, AuditCategory, AuditQueryOptions } from '../../types/audit';
+import type {
+    AnyAuditEntry, AuditCategory, AuditQueryOptions, UserAuditQueryOptions
+} from '../../types/audit';
 import type { ThesisGroup } from '../../types/group';
 import type { UserProfile } from '../../types/profile';
 import {
-    listenAllGroups, getGroupsByMember, getGroupsByDepartment,
-    getGroupsByCourse
+    listenAllGroups, getGroupsByMember, getGroupsByDepartment, getGroupsByCourse, getAllGroupsByPanelMember
 } from '../../utils/firebase/firestore/groups';
 import { findUsersByIds, onUserProfile } from '../../utils/firebase/firestore/user';
 import {
-    listenAuditEntries, listenAllAuditEntries, buildAuditContext
+    listenAuditEntries, listenAllAuditEntries, listenAllUserAuditEntries, buildAuditContext
 } from '../../utils/auditUtils';
 import { AuditFilters } from './AuditFilters';
 import { AuditList } from './AuditList';
 import {
-    type AuditScope, type AuditViewProps,
-    getAvailableScopes, DEFAULT_FILTER_CONFIG, DEFAULT_DISPLAY_CONFIG
+    type AuditScope, type AuditViewProps, getAvailableScopes, DEFAULT_FILTER_CONFIG, DEFAULT_DISPLAY_CONFIG
 } from './types';
 
 /**
@@ -100,7 +97,7 @@ export function AuditView({
     const [departmentCourseMap, setDepartmentCourseMap] = React.useState<DepartmentCourseMap>({});
 
     // Audit state
-    const [audits, setAudits] = React.useState<AuditEntry[]>([]);
+    const [audits, setAudits] = React.useState<AnyAuditEntry[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [groupsLoading, setGroupsLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -177,6 +174,7 @@ export function AuditView({
     }, [availableScopes]);
 
     // Load user's groups (for personal/group scope)
+    // Also loads groups where user is a panel member
     React.useEffect(() => {
         if (!userUid) {
             setUserGroups([]);
@@ -188,19 +186,35 @@ export function AuditView({
 
         void (async () => {
             try {
-                const groups = await getGroupsByMember(userUid);
+                // Fetch both member groups and panel groups
+                const [memberGroups, panelGroups] = await Promise.all([
+                    getGroupsByMember(userUid),
+                    getAllGroupsByPanelMember(userUid),
+                ]);
                 if (cancelled) return;
-                setUserGroups(groups);
+
+                // Merge and deduplicate groups
+                const groupMap = new Map<string, ThesisGroup>();
+                memberGroups.forEach((g: ThesisGroup) => groupMap.set(g.id, g));
+                panelGroups.forEach((g: ThesisGroup) => groupMap.set(g.id, g));
+                const allUserGroups = Array.from(groupMap.values());
+
+                setUserGroups(allUserGroups);
                 setGroupsLoading(false);
 
-                // Auto-select first group for personal scope if not pre-configured
+                // Auto-select first group for group scope if not pre-configured
                 if (
                     !dataConfig?.groupId &&
-                    selectedScope === 'personal' &&
-                    groups.length > 0 &&
+                    (selectedScope === 'group' || selectedScope === 'personal') &&
+                    allUserGroups.length > 0 &&
                     !selectedGroupId
                 ) {
-                    setSelectedGroupId(groups[0].id);
+                    setSelectedGroupId(allUserGroups[0].id);
+                }
+
+                // Fall back to personal scope if no groups and currently on group scope
+                if (allUserGroups.length === 0 && selectedScope === 'group') {
+                    setSelectedScope('personal');
                 }
             } catch (err) {
                 console.error('Failed to load user groups:', err);
@@ -300,7 +314,53 @@ export function AuditView({
 
     // Load audits based on scope and selection
     React.useEffect(() => {
-        if (selectedScope === 'personal' || selectedScope === 'group') {
+        // Personal scope: Query user audits (users/{userId}/audits)
+        if (selectedScope === 'personal') {
+            if (!userUid) {
+                setAudits([]);
+                setLoading(false);
+                return () => { /* no-op */ };
+            }
+
+            setLoading(true);
+            setError(null);
+
+            const queryOptions: UserAuditQueryOptions = {
+                orderDirection: 'desc',
+            };
+
+            if (categoryFilter) queryOptions.category = categoryFilter;
+            if (startDate && isValid(startDate)) {
+                queryOptions.startDate = startDate.toISOString();
+            }
+            if (endDate && isValid(endDate)) {
+                queryOptions.endDate = endDate.toISOString();
+            }
+
+            const unsubscribe = listenAllUserAuditEntries(
+                userUid,
+                {
+                    onData: (userAuditData) => {
+                        // UserAuditEntry is compatible with AnyAuditEntry
+                        setAudits(userAuditData);
+                        setLoading(false);
+                    },
+                    onError: (err) => {
+                        console.error('Failed to load user audits:', err);
+                        setError('Unable to load personal audit history. Please try again later.');
+                        setLoading(false);
+                    },
+                },
+                queryOptions
+            );
+
+            return () => {
+                unsubscribe();
+            };
+        }
+
+        // Group scope: Query group audits (groups/{groupId}/audits)
+        if (selectedScope === 'group') {
             if (!selectedGroup) {
                 setAudits([]);
                 setLoading(false);
@@ -618,7 +678,11 @@ export function AuditView({
                     onEndDateChange={setEndDate}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
-                    config={mergedFilterConfig}
+                    config={{
+                        ...mergedFilterConfig,
+                        // Hide group selector for personal scope (user audits don't belong to groups)
+                        showGroupSelector: selectedScope !== 'personal' && mergedFilterConfig.showGroupSelector,
+                    }}
                 />
             </Box>
 
@@ -629,7 +693,7 @@ export function AuditView({
                 </Alert>
             )}
 
-            {(selectedScope === 'personal' || selectedScope === 'group') &&
+            {selectedScope === 'group' &&
                 !selectedGroupId &&
                 !groupsLoading &&
                 !dataConfig?.groupId && (
@@ -640,7 +704,7 @@ export function AuditView({
 
             {userGroups.length === 0 &&
                 !groupsLoading &&
-                (selectedScope === 'personal' || selectedScope === 'group') &&
+                selectedScope === 'group' &&
                 !dataConfig?.groups && (
                     <Alert severity="info" sx={{ mb: 2 }}>
                         You are not a member of any groups yet.

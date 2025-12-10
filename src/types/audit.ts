@@ -1,7 +1,25 @@
 /**
- * Audit entry types for tracking group activities
- * Stored under: groups/{groupId}/audits/{auditId}
+ * Audit entry types for tracking activities at different hierarchy levels
+ * 
+ * Stored at multiple levels:
+ * - Group audits: year/{year}/departments/{dept}/courses/{course}/groups/{groupId}/audits/{auditId}
+ * - User audits (year level): year/{year}/users/{userId}/audits/{auditId}
+ * - User audits (department level): year/{year}/departments/{dept}/users/{userId}/audits/{auditId}
+ * - User audits (course level): year/{year}/departments/{dept}/courses/{course}/users/{userId}/audits/{auditId}
+ * 
+ * Group audits are visible to group members, admins, and departmental roles.
+ * User audits are visible only to the user themselves (personal notifications).
  */
+
+/**
+ * Audit storage location type
+ */
+export type AuditLocationType = 'group' | 'user';
+
+/**
+ * User audit hierarchy level
+ */
+export type UserAuditLevel = 'year' | 'department' | 'course';
 
 /**
  * Audit action categories for organizing different types of audited events
@@ -19,6 +37,8 @@ export type AuditCategory =
     | 'file'
     | 'stage'
     | 'terminal'
+    | 'account'
+    | 'notification'
     | 'other';
 
 /**
@@ -74,6 +94,7 @@ export type AuditAction =
     | 'proposal_created'
     | 'proposal_updated'
     | 'proposal_deleted'
+    | 'proposal_submitted'
     | 'proposal_approved'
     | 'proposal_rejected'
     // Comment actions
@@ -82,6 +103,7 @@ export type AuditAction =
     | 'comment_deleted'
     | 'panel_comment_added'
     | 'panel_comment_released'
+    | 'panel_comments_ready'
     // File actions
     | 'file_uploaded'
     | 'file_deleted'
@@ -90,6 +112,25 @@ export type AuditAction =
     | 'terminal_submitted'
     | 'terminal_approved'
     | 'terminal_rejected'
+    // Account actions (for user-level audits)
+    | 'account_created'
+    | 'account_updated'
+    | 'account_role_changed'
+    | 'account_password_changed'
+    | 'account_preferences_updated'
+    | 'account_theme_changed'
+    | 'account_avatar_changed'
+    | 'account_banner_changed'
+    | 'account_login'
+    | 'account_logout'
+    // Notification actions (for user-level audits)
+    | 'notification_received'
+    | 'notification_read'
+    | 'notification_cleared'
+    // Expert request actions (for user-level audits)
+    | 'expert_request_received'
+    | 'expert_request_accepted'
+    | 'expert_request_rejected'
     // Other
     | 'custom';
 
@@ -111,9 +152,9 @@ export interface AuditDetails {
 }
 
 /**
- * Audit entry stored in Firestore
+ * Base audit entry stored in Firestore (common fields)
  */
-export interface AuditEntry {
+export interface BaseAuditEntry {
     /** Unique identifier for the audit entry */
     id: string;
     /** Name/title of the audit entry for quick identification */
@@ -130,12 +171,52 @@ export interface AuditEntry {
     timestamp: string;
     /** Optional additional details about the action */
     details?: AuditDetails;
+    /** Whether this audit should show as a snackbar notification */
+    showSnackbar?: boolean;
+    /** Whether the audit entry has been read (for user audits) */
+    read?: boolean;
+}
+
+/**
+ * Group audit entry stored in Firestore
+ * Path: year/{year}/departments/{dept}/courses/{course}/groups/{groupId}/audits/{auditId}
+ */
+export interface AuditEntry extends BaseAuditEntry {
+    /** Audit location type - always 'group' for group audits */
+    locationType: 'group';
     /** Group ID this audit belongs to */
     groupId: string;
 }
 
 /**
- * Form data for creating audit entries (without auto-generated fields)
+ * User audit entry stored in Firestore
+ * Path varies by level:
+ * - year/{year}/users/{userId}/audits/{auditId}
+ * - year/{year}/departments/{dept}/users/{userId}/audits/{auditId}
+ * - year/{year}/departments/{dept}/courses/{course}/users/{userId}/audits/{auditId}
+ */
+export interface UserAuditEntry extends BaseAuditEntry {
+    /** Audit location type - always 'user' for user audits */
+    locationType: 'user';
+    /** The user ID this audit belongs to */
+    targetUserId: string;
+    /** The hierarchy level where this audit is stored */
+    level: UserAuditLevel;
+    /** Department (for department or course level audits) */
+    department?: string;
+    /** Course (for course level audits) */
+    course?: string;
+    /** Related group ID (optional, for reference) */
+    relatedGroupId?: string;
+}
+
+/**
+ * Combined audit entry type for unified handling
+ */
+export type AnyAuditEntry = AuditEntry | UserAuditEntry;
+
+/**
+ * Form data for creating group audit entries (without auto-generated fields)
  */
 export interface AuditEntryFormData {
     name: string;
@@ -144,6 +225,17 @@ export interface AuditEntryFormData {
     category: AuditCategory;
     action: AuditAction;
     details?: AuditDetails;
+    showSnackbar?: boolean;
+}
+
+/**
+ * Form data for creating user audit entries
+ */
+export interface UserAuditEntryFormData extends AuditEntryFormData {
+    /** Target user who will see this audit */
+    targetUserId: string;
+    /** Related group ID (optional) */
+    relatedGroupId?: string;
 }
 
 /**
@@ -154,7 +246,7 @@ export interface AuditQueryOptions {
     category?: AuditCategory;
     /** Filter by action */
     action?: AuditAction;
-    /** Filter by user ID */
+    /** Filter by user ID (who performed the action) */
     userId?: string;
     /** Start date for time range filter (ISO string) */
     startDate?: string;
@@ -164,6 +256,20 @@ export interface AuditQueryOptions {
     limit?: number;
     /** Order direction */
     orderDirection?: 'asc' | 'desc';
+    /** Filter by read status (for user audits) */
+    read?: boolean;
+}
+
+/**
+ * Options for querying user audit entries
+ */
+export interface UserAuditQueryOptions extends AuditQueryOptions {
+    /** The hierarchy level to query */
+    level?: UserAuditLevel;
+    /** Department filter (for department/course level) */
+    department?: string;
+    /** Course filter (for course level) */
+    course?: string;
 }
 
 /**
@@ -172,4 +278,23 @@ export interface AuditQueryOptions {
 export interface AuditListenerOptions {
     onData: (audits: AuditEntry[]) => void;
     onError?: (error: Error) => void;
+}
+
+/**
+ * Listener options for real-time user audit updates
+ */
+export interface UserAuditListenerOptions {
+    onData: (audits: UserAuditEntry[]) => void;
+    onError?: (error: Error) => void;
+}
+
+/**
+ * Context for creating user audits
+ */
+export interface UserAuditContext {
+    year: string;
+    targetUserId: string;
+    level: UserAuditLevel;
+    department?: string;
+    course?: string;
 }
