@@ -418,7 +418,7 @@ export default function HeadTopicProposalsPage() {
                                         </Typography>
                                     </Box>
                                     <Stack direction="row" spacing={1}>
-                                        <Chip label={`Set #${record?.set ?? 1}`} size="small" />
+                                        <Chip label={`Batch ${record?.batch ?? 1}`} size="small" />
                                         {awaitingHead && <Chip label="Head queue" color="warning" size="small" />}
                                         {!awaitingHead && awaitingModerator && (
                                             <Chip label="Moderator queue" color="info" size="small" />
@@ -428,10 +428,10 @@ export default function HeadTopicProposalsPage() {
 
                                 {record === undefined && <Skeleton variant="rectangular" height={100} />}
                                 {record === null && (
-                                    <Alert severity="info">This group has not started a topic proposal set yet.</Alert>
+                                    <Alert severity="info">This group has not started a topic proposal batch yet.</Alert>
                                 )}
                                 {record && entries.length === 0 && (
-                                    <Alert severity="info">No topic proposals exist for this cycle yet.</Alert>
+                                    <Alert severity="info">No topic proposals exist for this batch yet.</Alert>
                                 )}
 
                                 {record && entries.length > 0 && (

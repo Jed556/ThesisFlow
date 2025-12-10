@@ -384,7 +384,7 @@ export default function ModeratorTopicProposalsPage() {
                                         </Typography>
                                     </Box>
                                     <Stack direction="row" spacing={1}>
-                                        <Chip label={`Cycle #${record?.set ?? 1}`} size="small" />
+                                        <Chip label={`Batch ${record?.batch ?? 1}`} size="small" />
                                         {awaitingHead && <Chip label="Head queue" size="small" color="warning" />}
                                     </Stack>
                                 </Stack>
@@ -398,7 +398,7 @@ export default function ModeratorTopicProposalsPage() {
                                 )}
 
                                 {record && entries.length === 0 && (
-                                    <Alert severity="info">No topic proposals have been drafted in this cycle.</Alert>
+                                    <Alert severity="info">No topic proposals have been drafted in this batch.</Alert>
                                 )}
 
                                 {record && entries.length > 0 && (

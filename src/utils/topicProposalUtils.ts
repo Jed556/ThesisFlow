@@ -1,7 +1,7 @@
 import type {
     TopicProposalEntry,
     TopicProposalEntryStatus,
-    TopicProposalSet,
+    TopicProposalBatch,
     TopicProposalSetRecord,
 } from '../types/proposal';
 
@@ -68,7 +68,7 @@ export function getStatusChipConfig(status: TopicProposalEntryStatus): ProposalS
 /**
  * Determines if the current topic proposal set is still editable by students.
  */
-export function canEditProposalSet(set: TopicProposalSet | null | undefined): boolean {
+export function canEditProposalSet(set: TopicProposalBatch | null | undefined): boolean {
     if (!set) {
         return false;
     }
@@ -104,7 +104,7 @@ export function pickActiveProposalSet(sets: TopicProposalSetRecord[]): TopicProp
 /**
  * Determines whether at least one proposal entry received head approval.
  */
-export function hasApprovedProposal(set: TopicProposalSet | null | undefined): boolean {
+export function hasApprovedProposal(set: TopicProposalBatch | null | undefined): boolean {
     if (!set) {
         return false;
     }
@@ -154,14 +154,14 @@ export function summarizeProposalEntries(entries: TopicProposalEntry[]): TopicPr
 /**
  * Safely summarizes a full topic proposal set record.
  */
-export function getProposalSetMeta(set: TopicProposalSet | null | undefined): TopicProposalSetMeta {
+export function getProposalSetMeta(set: TopicProposalBatch | null | undefined): TopicProposalSetMeta {
     return summarizeProposalEntries(set?.entries ?? []);
 }
 
 /**
  * Treats topic proposal sets that have already seeded a thesis as archived.
  */
-export function isProposalSetArchived(set: TopicProposalSet | null | undefined): boolean {
+export function isProposalSetArchived(set: TopicProposalBatch | null | undefined): boolean {
     if (!set) {
         return false;
     }

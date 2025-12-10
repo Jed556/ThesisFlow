@@ -91,7 +91,7 @@ function resolveSubmissionDocPath(ctx: FileQueryContext, submissionId: string): 
  */
 function deriveStatusFromExpertApprovals(
     expertApprovals: ExpertApprovalState | undefined,
-    requiredRoles: Array<'adviser' | 'editor' | 'statistician'> = ['adviser', 'editor']
+    requiredRoles: ('adviser' | 'editor' | 'statistician')[] = ['adviser', 'editor']
 ): ChapterSubmissionStatus {
     if (!expertApprovals || !Array.isArray(expertApprovals) || expertApprovals.length === 0) {
         return 'under_review';

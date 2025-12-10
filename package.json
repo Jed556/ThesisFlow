@@ -1,6 +1,6 @@
 {
     "name": "thesisflow",
-    "version": "5.2.1",
+    "version": "5.3.1",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -42,7 +42,7 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.0.1",
         "globals": "^16.5.0",
-        "googleapis": "^167.0.0",
+        "googleapis": "^168.0.0",
         "jiti": "^2.6.1",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.49.0",
