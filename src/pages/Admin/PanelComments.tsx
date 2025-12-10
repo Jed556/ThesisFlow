@@ -19,17 +19,12 @@ import { getAllGroups } from '../../utils/firebase/firestore/groups';
 import { listenThesisByGroupId, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import {
-    listenPanelCommentEntries,
-    listenPanelCommentRelease,
-    setPanelCommentTableReleaseState,
-    isPanelTableReleased,
-    type PanelCommentContext,
+    listenPanelCommentEntries, listenPanelCommentRelease, setPanelCommentTableReleaseState,
+    isPanelTableReleased, isPanelTableReadyForReview, type PanelCommentContext
 } from '../../utils/firebase/firestore/panelComments';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
 import {
-    PANEL_COMMENT_STAGE_METADATA,
-    getPanelCommentStageLabel,
-    formatPanelistDisplayName,
+    PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel, formatPanelistDisplayName
 } from '../../utils/panelCommentUtils';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 import { DEFAULT_YEAR } from '../../config/firestore';
@@ -547,6 +542,7 @@ export default function AdminPanelCommentsPage() {
                                     <List disablePadding>
                                         {panelists.map((panel) => {
                                             const isReleased = isPanelTableReleased(releaseMap, activeStage, panel.uid);
+                                            const isReady = isPanelTableReadyForReview(releaseMap, activeStage, panel.uid);
                                             const isSelected = activePanelUid === panel.uid;
                                             return (
                                                 <React.Fragment key={panel.uid}>
@@ -561,8 +557,8 @@ export default function AdminPanelCommentsPage() {
                                                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                                                                     <Chip
                                                                         size="small"
-                                                                        label={isReleased ? 'Released' : 'Not released'}
-                                                                        color={isReleased ? 'success' : 'default'}
+                                                                        label={isReleased ? 'Released' : isReady ? 'Ready' : 'Not released'}
+                                                                        color={isReleased ? 'success' : isReady ? 'warning' : 'default'}
                                                                     />
                                                                     {!isReleased && canRelease && (
                                                                         <Button

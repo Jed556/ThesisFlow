@@ -140,13 +140,14 @@ export interface AuditViewProps {
 
 /**
  * Get available scopes based on user role
+ * - 'group': Primary scope - group audit history (preferred default)
  * - 'personal': Always available - user's personal notifications
- * - 'group': Always available for users in groups - group audit history
  * - 'departmental': For heads and moderators - audits for all groups in their department
  * - 'admin': For admins only - audits for all groups (not user-based audits)
  */
 export function getAvailableScopes(role: UserRole | undefined): AuditScope[] {
-    const scopes: AuditScope[] = ['personal', 'group'];
+    // Group scope is preferred, with personal as fallback
+    const scopes: AuditScope[] = ['group', 'personal'];
 
     if (role === 'moderator' || role === 'head') {
         scopes.push('departmental');
@@ -165,9 +166,9 @@ export function getAvailableScopes(role: UserRole | undefined): AuditScope[] {
  */
 export function getScopeLabel(scope: AuditScope): string {
     const labels: Record<AuditScope, string> = {
-        personal: 'Personal Notifications',
-        group: 'Group Activity',
-        departmental: 'Department Activity',
+        personal: 'Personal',
+        group: 'Group',
+        departmental: 'Department',
         admin: 'All Groups',
     };
     return labels[scope];

@@ -25,6 +25,7 @@ import {
     buildDepartmentUserAuditsCollectionPath, buildDepartmentUserAuditDocPath,
     buildCourseUserAuditsCollectionPath, buildCourseUserAuditDocPath
 } from './paths';
+import { devLog } from '../../devUtils';
 
 // ============================================================================
 // Helper Functions
@@ -126,6 +127,7 @@ export async function createUserAuditEntry(
     data: UserAuditEntryFormData
 ): Promise<string> {
     const collectionPath = buildUserAuditCollectionPath(ctx);
+    devLog('Creating user audit at path:', collectionPath);
     const auditsRef = collection(firebaseFirestore, collectionPath);
     const newDocRef = doc(auditsRef);
 

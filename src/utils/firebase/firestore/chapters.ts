@@ -16,6 +16,7 @@ import type { ThesisChapter, ThesisStageName, ChapterSubmissionEntry } from '../
 import { CHAPTERS_SUBCOLLECTION, THESIS_STAGE_SLUGS } from '../../../config/firestore';
 import { buildChaptersCollectionPath, buildChapterDocPath, buildSubmissionsCollectionPath } from './paths';
 import StagesConfig from '../../../config/stages.json';
+import { devLog } from '../../devUtils';
 
 // ============================================================================
 // Types
@@ -264,7 +265,7 @@ export function listenChaptersForStage(
         ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage
     );
 
-    console.log('[listenChaptersForStage] Listening to path:', collectionPath);
+    devLog('[listenChaptersForStage] Listening to path:', collectionPath);
 
     const chaptersRef = collection(firebaseFirestore, collectionPath);
     // Note: We don't use orderBy('id') because id is the document ID, not a field
@@ -273,7 +274,7 @@ export function listenChaptersForStage(
     return onSnapshot(
         chaptersRef,
         async (snapshot) => {
-            console.log('[listenChaptersForStage] Received', snapshot.docs.length, 'chapters for stage:', ctx.stage);
+            devLog('[listenChaptersForStage] Received', snapshot.docs.length, 'chapters for stage:', ctx.stage);
 
             // Convert stage slug back to stage name for filtering
             const stageConfig = StagesConfig.stages.find(s => s.slug === ctx.stage);
@@ -341,13 +342,13 @@ export function listenAllChaptersForThesis(
     const stageChapters: Record<string, ThesisChapter[]> = {};
     const unsubscribers: (() => void)[] = [];
 
-    console.log('[listenAllChaptersForThesis] Context:', ctx);
-    console.log('[listenAllChaptersForThesis] Stage slugs to listen:', THESIS_STAGE_SLUG_VALUES);
+    devLog('[listenAllChaptersForThesis] Context:', ctx);
+    devLog('[listenAllChaptersForThesis] Stage slugs to listen:', THESIS_STAGE_SLUG_VALUES);
 
     const emitCombinedChapters = () => {
         // Combine chapters from all stage slugs
         const allChapters = THESIS_STAGE_SLUG_VALUES.flatMap((slug) => stageChapters[slug] ?? []);
-        console.log('[listenAllChaptersForThesis] Emitting combined chapters:', allChapters.length);
+        devLog('[listenAllChaptersForThesis] Emitting combined chapters:', allChapters.length);
         options.onData(allChapters);
     };
 
@@ -384,14 +385,14 @@ export async function seedChaptersFromTemplate(
 ): Promise<void> {
     const batch = writeBatch(firebaseFirestore);
 
-    console.log('[seedChaptersFromTemplate] Seeding', chapters.length, 'chapters to stage:', ctx.stage);
+    devLog('[seedChaptersFromTemplate] Seeding', chapters.length, 'chapters to stage:', ctx.stage);
 
     chapters.forEach((chapterData, index) => {
         const chapterId = String(index + 1);
         const docPath = buildChapterDocPath(
             ctx.year, ctx.department, ctx.course, ctx.groupId, ctx.thesisId, ctx.stage, chapterId
         );
-        console.log('[seedChaptersFromTemplate] Writing chapter to path:', docPath);
+        devLog('[seedChaptersFromTemplate] Writing chapter to path:', docPath);
         const docRef = doc(firebaseFirestore, docPath);
 
         // Remove 'stage' field - it's only used for routing during seeding
@@ -406,7 +407,7 @@ export async function seedChaptersFromTemplate(
     });
 
     await batch.commit();
-    console.log('[seedChaptersFromTemplate] Batch committed for stage:', ctx.stage);
+    devLog('[seedChaptersFromTemplate] Batch committed for stage:', ctx.stage);
 }
 
 /**
@@ -421,8 +422,8 @@ export async function seedAllChaptersForThesis(
     ctx: ThesisChaptersContext,
     chapters: ThesisChapter[]
 ): Promise<void> {
-    console.log('[seedAllChaptersForThesis] Context:', ctx);
-    console.log('[seedAllChaptersForThesis] Chapters to seed:', chapters.length);
+    devLog('[seedAllChaptersForThesis] Context:', ctx);
+    devLog('[seedAllChaptersForThesis] Chapters to seed:', chapters.length);
 
     // Group chapters by stage slug
     const chaptersByStage = new Map<string, ThesisChapter[]>();
@@ -433,7 +434,7 @@ export async function seedAllChaptersForThesis(
             ? chapter.stage
             : [THESIS_STAGES[0]];
 
-        console.log('[seedAllChaptersForThesis] Chapter', chapter.id, 'stages:', chapterStages);
+        devLog('[seedAllChaptersForThesis] Chapter', chapter.id, 'stages:', chapterStages);
 
         for (const stageName of chapterStages) {
             // Convert stage name to slug
@@ -442,7 +443,7 @@ export async function seedAllChaptersForThesis(
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
 
-            console.log('[seedAllChaptersForThesis] Stage name:', stageName, '-> slug:', stageSlug);
+            devLog('[seedAllChaptersForThesis] Stage name:', stageName, '-> slug:', stageSlug);
 
             if (!chaptersByStage.has(stageSlug)) {
                 chaptersByStage.set(stageSlug, []);
@@ -451,7 +452,7 @@ export async function seedAllChaptersForThesis(
         }
     }
 
-    console.log('[seedAllChaptersForThesis] Chapters by stage:', Object.fromEntries(chaptersByStage));
+    devLog('[seedAllChaptersForThesis] Chapters by stage:', Object.fromEntries(chaptersByStage));
 
     // Seed chapters for each stage
     const seedPromises = Array.from(chaptersByStage.entries()).map(
@@ -460,7 +461,7 @@ export async function seedAllChaptersForThesis(
                 ...ctx,
                 stage: stageSlug,
             };
-            console.log('[seedAllChaptersForThesis] Seeding', stageChapters.length, 'chapters to stage:', stageSlug);
+            devLog('[seedAllChaptersForThesis] Seeding', stageChapters.length, 'chapters to stage:', stageSlug);
             // Strip 'id' from chapters for seeding (seedChaptersFromTemplate generates new IDs)
             const chaptersWithoutId = stageChapters.map(({ id: _id, ...rest }) => rest);
             return seedChaptersFromTemplate(chapterContext, chaptersWithoutId);
@@ -468,5 +469,5 @@ export async function seedAllChaptersForThesis(
     );
 
     await Promise.all(seedPromises);
-    console.log('[seedAllChaptersForThesis] Seeding complete');
+    devLog('[seedAllChaptersForThesis] Seeding complete');
 }

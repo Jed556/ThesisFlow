@@ -1093,6 +1093,7 @@ export function getAuditActionLabel(action: AuditAction): string {
         comment_deleted: 'Deleted',
         panel_comment_added: 'Added',
         panel_comment_released: 'Released',
+        panel_comments_ready: 'Ready for Sending',
         // File actions
         file_uploaded: 'Uploaded',
         file_deleted: 'Deleted',
@@ -1105,6 +1106,11 @@ export function getAuditActionLabel(action: AuditAction): string {
         account_created: 'Account Created',
         account_updated: 'Account Updated',
         account_role_changed: 'Role Changed',
+        account_password_changed: 'Password Changed',
+        account_preferences_updated: 'Preferences Updated',
+        account_theme_changed: 'Theme Changed',
+        account_avatar_changed: 'Avatar Changed',
+        account_banner_changed: 'Banner Changed',
         account_login: 'Logged In',
         account_logout: 'Logged Out',
         // Notification actions

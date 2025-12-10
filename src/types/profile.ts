@@ -98,20 +98,53 @@ export interface UserProfile {
      */
     maxSlots?: number;
 
-    preferences?: {
-        /**
-         * User's theme color preference (hex color)
-         */
-        themeColor?: string;
-        /**
-         * Whether to reduce animations for better performance or accessibility
-         */
-        reduceAnimations?: boolean;
-    }
+    preferences?: UserPreferences;
     /**
      * User's last active date
      */
     lastActive?: Date;
+}
+
+/**
+ * Calendar notification timing configuration
+ */
+export interface CalendarNotificationTiming {
+    /** Unique ID for this notification timing */
+    id: string;
+    /** Whether this notification is enabled */
+    enabled: boolean;
+    /** Value for the notification timing */
+    value: number;
+    /** Unit for the notification timing */
+    unit: 'minutes' | 'hours' | 'days';
+}
+
+/** Maximum number of calendar notification reminders allowed */
+export const MAX_CALENDAR_NOTIFICATIONS = 10;
+
+/** Default calendar notification settings */
+export const DEFAULT_CALENDAR_NOTIFICATIONS: CalendarNotificationTiming[] = [
+    { id: 'default-1', enabled: true, value: 1, unit: 'days' },
+    { id: 'default-2', enabled: true, value: 1, unit: 'hours' },
+    { id: 'default-3', enabled: true, value: 15, unit: 'minutes' },
+];
+
+/**
+ * User preferences for UI and notifications
+ */
+export interface UserPreferences {
+    /**
+     * User's theme color preference (hex color)
+     */
+    themeColor?: string;
+    /**
+     * Whether to reduce animations for better performance or accessibility
+     */
+    reduceAnimations?: boolean;
+    /**
+     * Calendar notification timing settings (array of up to 10 reminders)
+     */
+    calendarNotifications?: CalendarNotificationTiming[];
 }
 
 /**

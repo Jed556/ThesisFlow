@@ -69,6 +69,12 @@ export interface PanelCommentTableReleaseStatus {
     sentAt?: string;
     /** Firebase uid of the admin who released the comments. */
     sentBy?: string;
+    /** Whether the panelist has marked their comments as ready for admin review/release. */
+    readyForReview?: boolean;
+    /** ISO timestamp for when the panelist marked comments as ready. */
+    readyAt?: string;
+    /** Firebase uid of the panelist who marked comments as ready. */
+    readyBy?: string;
 }
 
 /**

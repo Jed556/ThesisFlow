@@ -11,14 +11,13 @@
  */
 
 import type {
-    AuditAction, AuditCategory, AuditDetails,
-    UserAuditEntryFormData, UserAuditContext
+    AuditAction, AuditCategory, AuditDetails, UserAuditEntryFormData, UserAuditContext, UserAuditLevel
 } from '../types/audit';
 import type { ThesisGroup, ThesisGroupMembers } from '../types/group';
-import {
-    createAuditEntry, buildAuditContextFromGroup
-} from './auditUtils';
+import type { UserProfile } from '../types/profile';
+import {    createAuditEntry, buildAuditContextFromGroup} from './auditUtils';
 import { createUserAuditEntriesBatch } from './firebase/firestore/userAudits';
+import { findUsersByIds, getPathLevelForRole } from './firebase/firestore/user';
 import { getAcademicYear } from './dateUtils';
 
 // ============================================================================
@@ -382,16 +381,64 @@ export async function auditAndNotify(
         return result;
     }
 
-    // Create user notifications
-    const notificationEntries = targetUserIds.map((targetUserId) => {
-        const ctx: UserAuditContext = {
-            year: group.year || getAcademicYear(),
+    // Fetch target user profiles to determine their correct audit path level
+    const targetProfiles = await findUsersByIds(targetUserIds);
+    const profileMap = new Map<string, UserProfile>(
+        targetProfiles.map(p => [p.uid, p])
+    );
+
+    // Helper to build the correct context based on user's profile
+    const buildUserContext = (targetUserId: string): UserAuditContext => {
+        const profile = profileMap.get(targetUserId);
+        const baseYear = group.year || getAcademicYear();
+
+        if (profile) {
+            // Determine the user's path level based on their role
+            const pathLevel = getPathLevelForRole(profile.role);
+
+            switch (pathLevel) {
+                case 'year':
+                    // Year-level users (admin, developer) - no department/course needed
+                    return {
+                        year: baseYear,
+                        targetUserId,
+                        level: 'year' as UserAuditLevel,
+                    };
+                case 'department':
+                    // Department-level users (adviser, panel, editor, etc.)
+                    return {
+                        year: baseYear,
+                        targetUserId,
+                        level: 'department' as UserAuditLevel,
+                        department: profile.department || group.department,
+                    };
+                case 'course':
+                default:
+                    // Course-level users (students)
+                    return {
+                        year: baseYear,
+                        targetUserId,
+                        level: 'course' as UserAuditLevel,
+                        department: profile.department || group.department,
+                        course: profile.course || group.course,
+                    };
+            }
+        }
+
+        // Fallback: use group's context if profile not found
+        return {
+            year: baseYear,
             targetUserId,
             level: group.department && group.course ? 'course' :
                 group.department ? 'department' : 'year',
             department: group.department,
             course: group.course,
         };
+    };
+
+    // Create user notifications with correct path for each user
+    const notificationEntries = targetUserIds.map((targetUserId) => {
+        const ctx = buildUserContext(targetUserId);
 
         const data: UserAuditEntryFormData = {
             name,

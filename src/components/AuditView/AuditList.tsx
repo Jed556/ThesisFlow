@@ -1,6 +1,6 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Chip, Divider, List, ListItem, ListItemAvatar,
+    Alert, Box, Button, Chip, List, ListItem, ListItemAvatar,
     ListItemText, Pagination, Skeleton, Stack, Tooltip, Typography,
     useMediaQuery
 } from '@mui/material';
@@ -147,22 +147,32 @@ export function AuditList({
     const totalPages = Math.ceil(audits.length / itemsPerPage);
 
     // Loading skeleton
+    // Loading skeleton - matching card style
     if (loading) {
         return (
-            <Stack spacing={2}>
+            <Stack spacing={1}>
                 {Array.from({ length: 5 }).map((_, index) => (
-                    <Box key={index}>
-                        <Stack direction="row" spacing={2} alignItems="center">
+                    <Box
+                        key={index}
+                        sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            border: 1,
+                            borderColor: 'divider',
+                            bgcolor: 'background.paper',
+                        }}
+                    >
+                        <Stack direction="row" spacing={2} alignItems="flex-start">
                             {showAvatars && (
                                 <Skeleton variant="circular" width={40} height={40} />
                             )}
                             <Box sx={{ flexGrow: 1 }}>
                                 <Skeleton width="60%" height={24} />
-                                <Skeleton width="40%" height={20} />
+                                <Skeleton width="90%" height={20} sx={{ mt: 0.5 }} />
+                                <Skeleton width="40%" height={16} sx={{ mt: 0.5 }} />
                             </Box>
-                            <Skeleton width={80} height={24} />
+                            <Skeleton width={100} height={32} sx={{ borderRadius: 1 }} />
                         </Stack>
-                        {index < 4 && <Divider sx={{ mt: 2 }} />}
                     </Box>
                 ))}
             </Stack>
@@ -189,16 +199,23 @@ export function AuditList({
                             <ListItem
                                 alignItems="flex-start"
                                 sx={{
-                                    px: 0,
-                                    py: compact ? 1 : 1.5,
+                                    px: 2,
+                                    py: compact ? 1.5 : 2,
+                                    borderRadius: 2,
+                                    mb: index < paginatedAudits.length - 1 ? 1 : 0,
+                                    bgcolor: 'background.paper',
+                                    border: 1,
+                                    borderColor: 'divider',
+                                    transition: 'all 0.2s ease-in-out',
                                     '&:hover': {
                                         bgcolor: 'action.hover',
-                                        borderRadius: 1,
+                                        borderColor: 'primary.main',
+                                        boxShadow: 1,
                                     },
                                 }}
                             >
                                 {showAvatars && (
-                                    <ListItemAvatar>
+                                    <ListItemAvatar sx={{ mt: 0.5 }}>
                                         <Avatar
                                             uid={audit.userId}
                                             tooltip="full"
@@ -207,80 +224,88 @@ export function AuditList({
                                     </ListItemAvatar>
                                 )}
                                 <ListItemText
+                                    sx={{ my: 0 }}
                                     primary={
                                         <Stack
-                                            direction={{ xs: 'column', sm: 'row' }}
-                                            spacing={1}
-                                            alignItems={{
-                                                xs: 'flex-start',
-                                                sm: 'center',
-                                            }}
+                                            direction="row"
+                                            justifyContent="space-between"
+                                            alignItems="flex-start"
+                                            spacing={2}
                                         >
-                                            <Typography
-                                                variant={compact ? 'body2' : 'subtitle1'}
-                                                component="span"
-                                                fontWeight="medium"
-                                            >
-                                                {audit.name}
-                                            </Typography>
-                                            <Chip
-                                                icon={getCategoryIcon(audit.category)}
-                                                label={getAuditCategoryLabel(audit.category)}
-                                                size="small"
-                                                color={getAuditCategoryColor(audit.category)}
-                                                variant="outlined"
-                                            />
-                                        </Stack>
-                                    }
-                                    secondary={
-                                        <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                                            {!compact && (
-                                                <Typography
-                                                    variant="body2"
-                                                    color="text.primary"
+                                            <Stack spacing={0.5} sx={{ flex: 1 }}>
+                                                <Stack
+                                                    direction={{ xs: 'column', sm: 'row' }}
+                                                    spacing={1}
+                                                    alignItems={{
+                                                        xs: 'flex-start',
+                                                        sm: 'center',
+                                                    }}
                                                 >
-                                                    {audit.description}
-                                                </Typography>
-                                            )}
-                                            <Stack
-                                                direction="row"
-                                                spacing={2}
-                                                alignItems="center"
-                                                flexWrap="wrap"
-                                            >
-                                                <Typography
-                                                    variant="caption"
-                                                    color="text.secondary"
-                                                >
-                                                    by{' '}
-                                                    <strong>
-                                                        {getUserDisplayName(
-                                                            audit.userId,
-                                                            userProfiles
-                                                        )}
-                                                    </strong>
-                                                </Typography>
-                                                {showGroupName && audit.locationType === 'group' && (
                                                     <Typography
-                                                        variant="caption"
-                                                        color="text.secondary"
+                                                        variant={compact ? 'body2' : 'subtitle1'}
+                                                        component="span"
+                                                        fontWeight="medium"
                                                     >
-                                                        in{' '}
-                                                        <strong>
-                                                            {getGroupName(audit.groupId, groups)}
-                                                        </strong>
+                                                        {audit.name}
+                                                    </Typography>
+                                                    <Chip
+                                                        icon={getCategoryIcon(audit.category)}
+                                                        label={getAuditCategoryLabel(audit.category)}
+                                                        size="small"
+                                                        color={getAuditCategoryColor(audit.category)}
+                                                        variant="outlined"
+                                                    />
+                                                </Stack>
+                                                {!compact && (
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="text.primary"
+                                                        sx={{ mt: 0.5 }}
+                                                    >
+                                                        {audit.description}
                                                     </Typography>
                                                 )}
-                                                <Tooltip title={formatTimestamp(audit.timestamp)}>
+                                                <Stack
+                                                    direction="row"
+                                                    spacing={2}
+                                                    alignItems="center"
+                                                    flexWrap="wrap"
+                                                    sx={{ mt: 0.5 }}
+                                                >
                                                     <Typography
                                                         variant="caption"
                                                         color="text.secondary"
                                                     >
-                                                        {formatRelativeTime(audit.timestamp)}
+                                                        by{' '}
+                                                        <strong>
+                                                            {getUserDisplayName(
+                                                                audit.userId,
+                                                                userProfiles
+                                                            )}
+                                                        </strong>
                                                     </Typography>
-                                                </Tooltip>
+                                                    {showGroupName && audit.locationType === 'group' && (
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                        >
+                                                            in{' '}
+                                                            <strong>
+                                                                {getGroupName(audit.groupId, groups)}
+                                                            </strong>
+                                                        </Typography>
+                                                    )}
+                                                    <Tooltip title={formatTimestamp(audit.timestamp)}>
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                        >
+                                                            {formatRelativeTime(audit.timestamp)}
+                                                        </Typography>
+                                                    </Tooltip>
+                                                </Stack>
                                             </Stack>
-                                            {/* View Details button */}
+                                            {/* View Details button - positioned on right */}
                                             {buildAuditNavigationPath(audit.category, audit.action, audit.details) && (
                                                 <Button
                                                     size="small"
@@ -289,13 +314,12 @@ export function AuditList({
                                                     sx={{
                                                         textTransform: 'none',
                                                         fontWeight: 500,
-                                                        fontSize: '0.75rem',
-                                                        p: 0,
-                                                        minWidth: 'auto',
-                                                        mt: 0.5,
+                                                        fontSize: '0.8rem',
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0,
+                                                        color: 'primary.main',
                                                         '&:hover': {
-                                                            backgroundColor: 'transparent',
-                                                            textDecoration: 'underline',
+                                                            backgroundColor: 'action.hover',
                                                         },
                                                     }}
                                                 >
@@ -306,9 +330,6 @@ export function AuditList({
                                     }
                                 />
                             </ListItem>
-                            {index < paginatedAudits.length - 1 && (
-                                <Divider component="li" />
-                            )}
                         </React.Fragment>
                     ))}
                 </AnimatedList>

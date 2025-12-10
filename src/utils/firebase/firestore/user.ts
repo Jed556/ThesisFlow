@@ -4,14 +4,17 @@ import {
 } from 'firebase/firestore';
 import { firebaseFirestore, firebaseAuth } from '../firebaseConfig';
 import { cleanData } from './firestore';
-import { USERS_SUBCOLLECTION } from '../../../config/firestore';
+import { USERS_SUBCOLLECTION, DEFAULT_YEAR } from '../../../config/firestore';
 import {
     buildCourseUsersCollectionPath, buildCourseUserDocPath, buildDepartmentUsersCollectionPath,
     buildDepartmentUserDocPath, buildYearUsersCollectionPath, buildYearUserDocPath,
+    extractPathParams,
 } from './paths';
 import { createPersonalCalendarForUser } from './calendars';
 
 import type { UserProfile, UserRole } from '../../../types/profile';
+import type { UserAuditContext, UserAuditLevel } from '../../../types/audit';
+import { devLog } from '../../devUtils';
 
 // ============================================================================
 // Role-Based Path Classification
@@ -110,6 +113,55 @@ export async function findUserById(uid: string): Promise<UserProfile | null> {
 
     if (snap.empty) return null;
     return snap.docs[0].data() as UserProfile;
+}
+
+/**
+ * Get the audit context for a user based on their actual document path in Firestore.
+ * This is more reliable than buildUserAuditContextFromProfile because it uses
+ * the actual path where the user document exists.
+ * @param uid - User ID to look up
+ * @returns UserAuditContext or null when user not found
+ */
+export async function getUserAuditContext(uid: string): Promise<UserAuditContext | null> {
+    if (!uid) return null;
+
+    const usersGroup = collectionGroup(firebaseFirestore, USERS_SUBCOLLECTION);
+    const q = query(usersGroup, where('uid', '==', uid));
+    const snap = await getDocs(q);
+
+    if (snap.empty) return null;
+
+    const docRef = snap.docs[0].ref;
+    const pathParams = extractPathParams(docRef.path);
+
+    devLog('User document path:', docRef.path);
+    devLog('Extracted path params:', pathParams);
+
+    // Determine level based on path params
+    let level: UserAuditLevel = 'year';
+    if (pathParams.course && pathParams.department) {
+        level = 'course';
+    } else if (pathParams.department) {
+        level = 'department';
+    }
+
+    return {
+        year: pathParams.year || DEFAULT_YEAR,
+        targetUserId: uid,
+        level,
+        department: pathParams.department,
+        course: pathParams.course,
+    };
+}
+
+/**
+ * Get the current user's audit context based on their actual document path.
+ * @returns UserAuditContext or null when no user is signed in
+ */
+export async function getCurrentUserAuditContext(): Promise<UserAuditContext | null> {
+    const uid = getCurrentUserId();
+    if (!uid) return null;
+    return await getUserAuditContext(uid);
 }
 
 /**

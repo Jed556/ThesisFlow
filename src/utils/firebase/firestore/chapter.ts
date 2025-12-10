@@ -23,6 +23,7 @@ import {
     normalizeCourseTemplateContext,
     type NormalizedCourseTemplateContext,
 } from './courseTemplateHelpers';
+import { devLog } from '../../devUtils';
 
 function getChapterTemplateDocRef(context: NormalizedCourseTemplateContext) {
     return doc(
@@ -611,7 +612,7 @@ export async function saveFullChapterTemplatesData(
         }
     }
 
-    console.log(`Saved chapter templates at ${now}`);
+    devLog(`Saved chapter templates at ${now}`);
 }
 
 /** Result of loading or seeding chapter templates */

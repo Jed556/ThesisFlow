@@ -103,6 +103,7 @@ export type AuditAction =
     | 'comment_deleted'
     | 'panel_comment_added'
     | 'panel_comment_released'
+    | 'panel_comments_ready'
     // File actions
     | 'file_uploaded'
     | 'file_deleted'
@@ -115,6 +116,11 @@ export type AuditAction =
     | 'account_created'
     | 'account_updated'
     | 'account_role_changed'
+    | 'account_password_changed'
+    | 'account_preferences_updated'
+    | 'account_theme_changed'
+    | 'account_avatar_changed'
+    | 'account_banner_changed'
     | 'account_login'
     | 'account_logout'
     // Notification actions (for user-level audits)

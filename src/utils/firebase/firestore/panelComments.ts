@@ -52,6 +52,9 @@ interface PanelCommentTableReleaseSnapshot {
     sent?: boolean;
     sentAt?: unknown;
     sentBy?: string;
+    readyForReview?: boolean;
+    readyAt?: unknown;
+    readyBy?: string;
 }
 
 interface PanelCommentReleaseSnapshot {
@@ -118,6 +121,9 @@ function mapTableReleases(tables: Record<string, PanelCommentTableReleaseSnapsho
             sent: Boolean(tableState?.sent),
             sentAt: normalizeTimestamp(tableState?.sentAt) || undefined,
             sentBy: tableState?.sentBy,
+            readyForReview: Boolean(tableState?.readyForReview),
+            readyAt: normalizeTimestamp(tableState?.readyAt) || undefined,
+            readyBy: tableState?.readyBy,
         };
     }
     return Object.keys(result).length > 0 ? result : undefined;
@@ -412,6 +418,65 @@ export async function setPanelCommentTableReleaseState(
         },
         updatedAt: serverTimestamp(),
     }, { merge: true });
+}
+
+/**
+ * Mark a panelist's comment table as ready for admin review.
+ * This notifies the admin that the panelist has finished their comments and they are ready to be released.
+ * @param ctx - Panel comment context with year, department, course, groupId
+ * @param stage - The panel comment stage
+ * @param panelUid - The panelist's UID whose table is being marked as ready
+ * @param ready - Whether comments are ready for review
+ * @param userUid - The user ID performing the action (should be the panelist)
+ */
+export async function setPanelCommentTableReadyState(
+    ctx: PanelCommentContext,
+    stage: PanelCommentStage,
+    panelUid: string,
+    ready: boolean,
+    userUid?: string | null,
+): Promise<void> {
+    if (!ctx.groupId) {
+        throw new Error('Group ID is required to update ready state.');
+    }
+    if (!panelUid) {
+        throw new Error('Panel UID is required to update table ready state.');
+    }
+    const releaseDocRef = getReleaseDoc(ctx);
+    await setDoc(releaseDocRef, {
+        groupId: ctx.groupId,
+        release: {
+            [stage]: {
+                tables: {
+                    [panelUid]: {
+                        readyForReview: ready,
+                        readyBy: ready ? userUid ?? null : null,
+                        readyAt: ready ? serverTimestamp() : null,
+                    },
+                },
+            },
+        },
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+}
+
+/**
+ * Check if a specific panelist's table is marked as ready for review.
+ * @param releaseMap - The release map for the group
+ * @param stage - The panel comment stage
+ * @param panelUid - The panelist's UID
+ * @returns Whether the table is ready for review
+ */
+export function isPanelTableReadyForReview(
+    releaseMap: PanelCommentReleaseMap | undefined,
+    stage: PanelCommentStage,
+    panelUid: string,
+): boolean {
+    if (!releaseMap) return false;
+    const stageRelease = releaseMap[stage];
+    if (!stageRelease) return false;
+    const tableRelease = stageRelease.tables?.[panelUid];
+    return tableRelease?.readyForReview === true;
 }
 
 /**

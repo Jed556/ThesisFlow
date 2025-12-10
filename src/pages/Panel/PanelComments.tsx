@@ -1,5 +1,8 @@
 import * as React from 'react';
-import { Alert, Autocomplete, Box, Skeleton, Stack, Tab, Tabs, TextField, Typography, } from '@mui/material';
+import {
+    Alert, Autocomplete, Box, Button, Skeleton, Stack, Tab, Tabs, TextField, Typography
+} from '@mui/material';
+import { Send as SendIcon } from '@mui/icons-material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
@@ -13,6 +16,7 @@ import { listenGroupsByPanelist } from '../../utils/firebase/firestore/groups';
 import {
     addPanelCommentEntry, deletePanelCommentEntry, listenPanelCommentEntries,
     updatePanelCommentEntry, listenPanelCommentRelease, isPanelTableReleased,
+    isPanelTableReadyForReview, setPanelCommentTableReadyState,
     updatePanelCommentApprovalStatus, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { createDefaultPanelCommentReleaseMap, type PanelCommentReleaseMap } from '../../types/panelComment';
@@ -109,6 +113,15 @@ export default function PanelPanelCommentsPage() {
         if (!userUid) return false;
         return isPanelTableReleased(releaseMap, activeStage, userUid);
     }, [releaseMap, activeStage, userUid]);
+
+    // Check if current user's table is marked as ready for review
+    const isTableReadyForReview = React.useMemo(() => {
+        if (!userUid) return false;
+        return isPanelTableReadyForReview(releaseMap, activeStage, userUid);
+    }, [releaseMap, activeStage, userUid]);
+
+    // State for saving ready status
+    const [readySaving, setReadySaving] = React.useState(false);
 
     React.useEffect(() => {
         if (!panelCommentCtx || !userUid) {
@@ -262,6 +275,49 @@ export default function PanelPanelCommentsPage() {
         }
     }, [panelCommentCtx, userUid, isTableReleased, selectedGroup, activeStage, showNotification]);
 
+    /** Mark comments as ready for admin to release to students */
+    const handleMarkAsReady = React.useCallback(async () => {
+        if (!panelCommentCtx || !userUid || !selectedGroup) {
+            showNotification('Select a group first.', 'error');
+            return;
+        }
+        if (entries.length === 0) {
+            showNotification('Add at least one comment before marking as ready.', 'warning');
+            return;
+        }
+        setReadySaving(true);
+        try {
+            await setPanelCommentTableReadyState(panelCommentCtx, activeStage, userUid, true, userUid);
+
+            // Create audit notification for ready status
+            try {
+                const stageLabel = getPanelCommentStageLabel(activeStage);
+                await auditAndNotify({
+                    group: selectedGroup,
+                    userId: userUid,
+                    name: 'Panel Comments Ready for Release',
+                    description: `Panel comments for ${stageLabel} stage are ready to be released to students.`,
+                    category: 'panel',
+                    action: 'panel_comments_ready',
+                    targets: {
+                        admins: true,
+                        excludeUserId: userUid,
+                    },
+                    details: { stage: activeStage, panelUid: userUid, commentCount: entries.length },
+                });
+            } catch (auditError) {
+                console.error('Failed to create audit notification:', auditError);
+            }
+
+            showNotification('Comments marked as ready. Admin will be notified.', 'success');
+        } catch (error) {
+            console.error('Failed to mark comments as ready:', error);
+            showNotification('Unable to mark comments as ready. Please try again.', 'error');
+        } finally {
+            setReadySaving(false);
+        }
+    }, [panelCommentCtx, userUid, selectedGroup, activeStage, entries.length, showNotification]);
+
     if (session?.loading) {
         return (
             <AnimatedPage variant="slideUp">
@@ -321,11 +377,34 @@ export default function PanelPanelCommentsPage() {
                                 Your comment sheet has been released to students.
                                 You can now review their responses and approve or request revisions.
                             </Alert>
-                        ) : (
+                        ) : isTableReadyForReview ? (
                             <Alert severity="info">
-                                Students will provide their page references and status separately. Focus on the concrete comments here.
-                                {' '}Each panelist works on a dedicated sheet, so you will only see entries that belong to you.
+                                Your comments are marked as ready for release.
+                                An admin will review and release them to students soon.
                             </Alert>
+                        ) : (
+                            <Stack spacing={2}>
+                                <Alert severity="info">
+                                    Students will provide their page references and status separately. Focus on the concrete comments here.
+                                    {' '}Each panelist works on a dedicated sheet, so you will only see entries that belong to you.
+                                </Alert>
+                                {entries.length > 0 && (
+                                    <Box>
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            startIcon={<SendIcon />}
+                                            onClick={handleMarkAsReady}
+                                            disabled={readySaving || saving}
+                                        >
+                                            {readySaving ? 'Marking as Ready...' : 'Mark as Ready for Release'}
+                                        </Button>
+                                        <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                                            This will notify the admin that your comments are ready to be sent to students.
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </Stack>
                         )}
                         {entriesError && (
                             <Alert severity="error">{entriesError}</Alert>
