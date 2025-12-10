@@ -259,6 +259,7 @@ export default function HeadTopicProposalsPage() {
                     group,
                     userId: headUid,
                     name: 'Topic Approved by Head',
+                    // eslint-disable-next-line max-len
                     description: `Topic "${approvalDialog.proposal.title}" has been approved by the Research Head. Your group can now proceed with the thesis.`,
                     category: 'proposal',
                     action: 'proposal_approved',
@@ -306,6 +307,7 @@ export default function HeadTopicProposalsPage() {
                     group,
                     userId: headUid,
                     name: 'Topic Rejected by Head',
+                    // eslint-disable-next-line max-len
                     description: `Topic "${rejectionDialog.proposal.title}" has been rejected by the Research Head.${rejectionNotes.trim() ? ` Reason: ${rejectionNotes.trim()}` : ''}`,
                     category: 'proposal',
                     action: 'proposal_rejected',

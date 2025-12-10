@@ -1,5 +1,4 @@
 import React from 'react';
-import { getAvatarInitials } from '../../utils/avatarUtils';
 import { findUserById } from '../../utils/firebase/firestore/user';
 import { getDisplayName as getDisplayNameAsync } from '../../utils/userUtils';
 import type { UserProfile } from '../../types/profile';
@@ -29,6 +28,7 @@ export type InitialsConfig = Name[] | 'auto';
  * Common predefined name configurations for convenience 
  */
 export const NAME_PRESETS = {
+    first: [Name.FIRST] as Name[],
     firstLast: [Name.FIRST, Name.LAST] as Name[],
     firstMiddle: [Name.FIRST, Name.MIDDLE] as Name[],
     lastFirst: [Name.LAST, Name.FIRST] as Name[],
@@ -160,9 +160,9 @@ const sizeMap = {
  */
 function generateInitials(profile: UserProfile, config: InitialsConfig): string {
     if (profile) {
-        // Handle 'auto' mode - defaults to first + last
+        // Handle 'auto' mode - defaults to first name initial only
         if (config === 'auto') {
-            return getAvatarInitials(profile.name.first, profile.name.last);
+            return profile.name.first.charAt(0).toUpperCase();
         }
 
         // Handle array of name parts
@@ -218,7 +218,7 @@ function generateInitials(profile: UserProfile, config: InitialsConfig): string 
  * @param onAvatarChange - Callback when avatar file is selected
  * @param uploading - Whether avatar upload is in progress
  */
-export default function Avatar({ uid, initials = NAME_PRESETS.firstLast, mode = 'default',
+export default function Avatar({ uid, initials = NAME_PRESETS.first, mode = 'default',
     label, chipProps, sx, size = 'medium', onClick, tooltip = 'none', tooltipText, loading = false,
     editable = false, onAvatarChange, uploading = false }: AvatarProps) {
     const [resolvedProfile, setResolvedProfile] = React.useState<UserProfile | null>(null);

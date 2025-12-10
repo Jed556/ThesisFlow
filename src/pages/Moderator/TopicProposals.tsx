@@ -269,6 +269,7 @@ export default function ModeratorTopicProposalsPage() {
                     name: isApproved ? 'Proposal Approved by Moderator' : 'Proposal Rejected by Moderator',
                     description: isApproved
                         ? `Topic "${decisionDialog.proposal.title}" has been approved by moderator and sent to head for review.`
+                        // eslint-disable-next-line max-len
                         : `Topic "${decisionDialog.proposal.title}" has been rejected by moderator.${decisionNotes.trim() ? ` Reason: ${decisionNotes.trim()}` : ''}`,
                     category: 'proposal',
                     action: isApproved ? 'proposal_approved' : 'proposal_rejected',
