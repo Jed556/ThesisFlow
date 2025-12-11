@@ -1,26 +1,23 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Chip, Divider, LinearProgress, List, ListItem,
-    ListItemIcon, ListItemText, Paper, Skeleton, Stack, Step, StepContent, StepLabel,
-    Stepper, Typography
+    Alert, Box, Button, Chip, Divider, IconButton, LinearProgress, List, ListItem, ListItemIcon,
+    ListItemText, Paper, Skeleton, Stack, Step, StepContent, StepLabel, Stepper, Tooltip, Typography
 } from '@mui/material';
 import {
     School as SchoolIcon, Groups as GroupsIcon, PersonAdd as PersonAddIcon,
-    Topic as TopicIcon, Article as ArticleIcon, Upload as UploadIcon,
-    Event as EventIcon, Notifications as NotificationsIcon, CommentBank as CommentBankIcon
+    Topic as TopicIcon, Article as ArticleIcon, Upload as UploadIcon, Event as EventIcon,
+    Notifications as NotificationsIcon, CommentBank as CommentBankIcon, CalendarMonth as CalendarMonthIcon
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisChapter, ThesisData } from '../../types/thesis';
-import type { UserProfile } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import type { PanelCommentReleaseMap, PanelCommentStage } from '../../types/panelComment';
 import type { TopicProposalSetRecord } from '../../utils/firebase/firestore/topicProposals';
 import type { ScheduleEvent } from '../../types/schedule';
 import type { GroupNotificationDoc } from '../../types/notification';
 import { AnimatedPage } from '../../components/Animate';
-import { Avatar, Name } from '../../components/Avatar';
 import type { deriveChapterStatus } from '../../components/ThesisWorkspace/ChapterRail';
 import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
@@ -66,11 +63,6 @@ type EventRecord = ScheduleEvent & { id: string };
 type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembersById>> extends (infer Member)[]
     ? Member
     : never;
-
-function formatUserName(name: UserProfile['name']): string {
-    const parts = [name.prefix, name.first, name.middle, name.last, name.suffix].filter((value): value is string => Boolean(value));
-    return parts.join(' ');
-}
 
 /**
  * Derive chapter status from its submissions
@@ -421,7 +413,7 @@ function buildThesisWorkflowSteps(
             // Step is available when terminal is complete but waiting for release
             // Step is locked when terminal requirements not complete
             if (isReleased) {
-                panelCommentDescription = `Panel comments released. Review and address panel feedback.`;
+                panelCommentDescription = 'Panel comments released. Review and address panel feedback.';
                 panelCommentState = 'completed';
             } else if (terminalCompleted) {
                 panelCommentDescription = `Waiting for panel comments to be released for ${stageName}.`;
@@ -923,16 +915,60 @@ export default function ThesisPage() {
         });
     }, []);
 
+    // Ref for stepper container to enable auto-scroll
+    const stepperContainerRef = React.useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to current step when activeStepIndex changes
+    React.useEffect(() => {
+        if (stepperContainerRef.current && activeStepIndex >= 0) {
+            const stepElements = stepperContainerRef.current.querySelectorAll('.MuiStep-root');
+            const activeStep = stepElements[activeStepIndex] as HTMLElement;
+            if (activeStep) {
+                // Scroll the step into view with smooth behavior
+                activeStep.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [activeStepIndex]);
+
     if (session?.loading) {
         return (
             <AnimatedPage variant="slideUp">
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Skeleton variant="text" width={260} height={42} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={32} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={10} sx={{ mt: 2 }} />
-                </Paper>
+                <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 120px)' }}>
+                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                        <Paper sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <Skeleton variant="text" width={180} height={32} sx={{ mb: 1 }} />
+                            <Skeleton variant="text" width={300} height={20} sx={{ mb: 2 }} />
+                            <Stack spacing={2} sx={{ flex: 1 }}>
+                                {Array.from({ length: 5 }).map((_, idx) => (
+                                    <Skeleton key={idx} variant="rectangular" height={60} />
+                                ))}
+                            </Stack>
+                        </Paper>
+                    </Box>
+                    <Box
+                        sx={{
+                            width: 340,
+                            display: { xs: 'none', lg: 'flex' },
+                            flexDirection: 'column',
+                        }}
+                    >
+                        <Stack spacing={2} sx={{ height: '100%' }}>
+                            <Skeleton
+                                variant="rectangular"
+                                height={100}
+                                sx={{ borderRadius: 1, flexShrink: 0 }}
+                            />
+                            <Skeleton
+                                variant="rectangular"
+                                sx={{ borderRadius: 1, flex: 1 }}
+                            />
+                            <Skeleton
+                                variant="rectangular"
+                                sx={{ borderRadius: 1, flex: 1 }}
+                            />
+                        </Stack>
+                    </Box>
+                </Box>
             </AnimatedPage>
         );
     }
@@ -940,19 +976,42 @@ export default function ThesisPage() {
     if (loading) {
         return (
             <AnimatedPage variant="slideUp">
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Skeleton variant="text" width={260} height={42} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={32} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={16} sx={{ mb: 2 }} />
-                    <Skeleton variant="rectangular" height={10} sx={{ mt: 2 }} />
-                </Paper>
-                <Skeleton variant="text" width={180} height={32} sx={{ mb: 2 }} />
-                <Stack spacing={2}>
-                    {Array.from({ length: 3 }).map((_, idx) => (
-                        <Skeleton key={idx} variant="rectangular" height={96} />
-                    ))}
-                </Stack>
+                <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 120px)' }}>
+                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                        <Paper sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <Skeleton variant="text" width={180} height={32} sx={{ mb: 1 }} />
+                            <Skeleton variant="text" width={300} height={20} sx={{ mb: 2 }} />
+                            <Stack spacing={2} sx={{ flex: 1 }}>
+                                {Array.from({ length: 5 }).map((_, idx) => (
+                                    <Skeleton key={idx} variant="rectangular" height={60} />
+                                ))}
+                            </Stack>
+                        </Paper>
+                    </Box>
+                    <Box
+                        sx={{
+                            width: 340,
+                            display: { xs: 'none', lg: 'flex' },
+                            flexDirection: 'column',
+                        }}
+                    >
+                        <Stack spacing={2} sx={{ height: '100%' }}>
+                            <Skeleton
+                                variant="rectangular"
+                                height={100}
+                                sx={{ borderRadius: 1, flexShrink: 0 }}
+                            />
+                            <Skeleton
+                                variant="rectangular"
+                                sx={{ borderRadius: 1, flex: 1 }}
+                            />
+                            <Skeleton
+                                variant="rectangular"
+                                sx={{ borderRadius: 1, flex: 1 }}
+                            />
+                        </Stack>
+                    </Box>
+                </Box>
             </AnimatedPage>
         );
     }
@@ -974,354 +1033,732 @@ export default function ThesisPage() {
     }
 
     if (hasNoThesis || !thesis) {
-        // Show workflow even without thesis record
+        // Show workflow even without thesis record - with sidebar layout
+        const sidebarWidth = 340;
+
         return (
             <AnimatedPage variant="slideUp">
-                <Paper sx={{ p: 3, mb: 3 }}>
-                    <Typography variant="h4" gutterBottom>
-                        My Thesis Journey
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                        Follow these steps to complete your thesis from group formation to final submission.
-                    </Typography>
-
-                    <Stepper orientation="vertical" activeStep={activeStepIndex} sx={{ mt: 3 }}>
-                        {workflowSteps.map((step) => {
-                            const stepMeta = getStepMeta(step);
-                            const isExpanded = expandedSteps.has(step.id);
-                            const isLocked = step.state === 'locked';
-                            const isStepCompleted = step.state === 'completed';
-                            const iconColor = isStepCompleted ? 'success.main' : undefined;
-                            const stepTitleColor = isStepCompleted
-                                ? 'success.main'
-                                : stepMeta.accessible
-                                    ? 'text.primary'
-                                    : 'text.secondary';
-
-                            return (
-                                <Step
-                                    key={step.id}
-                                    completed={step.state === 'completed'}
-                                    disabled={!stepMeta.accessible}
-                                    expanded={isExpanded}
+                <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 120px)' }}>
+                    {/* Main Content - Left Side */}
+                    <Box
+                        sx={{
+                            flex: 1,
+                            minWidth: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                        }}
+                    >
+                        <Paper
+                            sx={{
+                                p: 3,
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {/* Fixed Header */}
+                            <Box sx={{ flexShrink: 0 }}>
+                                <Typography variant="h4" gutterBottom>
+                                    My Thesis Journey
+                                </Typography>
+                                <Typography
+                                    variant="body1"
+                                    color="text.secondary"
+                                    sx={{ mb: 2 }}
                                 >
-                                    <StepLabel
-                                        icon={step.icon}
-                                        slotProps={{
-                                            stepIcon: {
-                                                sx: { color: iconColor },
-                                            },
-                                        }}
-                                        onClick={() => handleStepToggle(step.id, stepMeta.expandable)}
-                                        sx={{
-                                            cursor: stepMeta.expandable ? 'pointer' : 'default',
-                                            opacity: stepMeta.accessible ? 1 : 0.5,
-                                        }}
-                                    >
-                                        <Typography variant="body1" color={stepTitleColor}>
-                                            {step.title}
-                                        </Typography>
-                                    </StepLabel>
-                                    <StepContent>
-                                        {isLocked ? (
-                                            <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
-                                                {formatPrerequisiteMessage(step, workflowSteps)}
-                                            </Typography>
-                                        ) : (
-                                            <>
-                                                <Typography variant="body2" sx={{ mb: 2 }}>
-                                                    {stepMeta.displayMessage}
-                                                </Typography>
-                                                {stepMeta.showActionButton && step.actionPath && step.actionLabel && (
-                                                    <Button
-                                                        variant="contained"
-                                                        size="small"
-                                                        onClick={() => handleNavigateToStep(step.actionPath)}
+                                    Follow these steps to complete your thesis from group formation
+                                    to final submission.
+                                </Typography>
+                            </Box>
+
+                            {/* Scrollable Stepper */}
+                            <Box
+                                sx={{
+                                    flex: 1,
+                                    overflowY: 'auto',
+                                    pr: 1,
+                                    '&::-webkit-scrollbar': { width: 6 },
+                                    '&::-webkit-scrollbar-thumb': {
+                                        bgcolor: 'action.hover',
+                                        borderRadius: 3,
+                                    },
+                                }}
+                            >
+                                <Stepper
+                                    orientation="vertical"
+                                    activeStep={activeStepIndex}
+                                >
+                                    {workflowSteps.map((step) => {
+                                        const stepMeta = getStepMeta(step);
+                                        const isExpanded = expandedSteps.has(step.id);
+                                        const isLocked = step.state === 'locked';
+                                        const isStepCompleted = step.state === 'completed';
+                                        const iconColor = isStepCompleted
+                                            ? 'success.main'
+                                            : undefined;
+                                        const stepTitleColor = isStepCompleted
+                                            ? 'success.main'
+                                            : stepMeta.accessible
+                                                ? 'text.primary'
+                                                : 'text.secondary';
+
+                                        return (
+                                            <Step
+                                                key={step.id}
+                                                completed={step.state === 'completed'}
+                                                disabled={!stepMeta.accessible}
+                                                expanded={isExpanded}
+                                            >
+                                                <StepLabel
+                                                    icon={step.icon}
+                                                    slotProps={{
+                                                        stepIcon: {
+                                                            sx: { color: iconColor },
+                                                        },
+                                                    }}
+                                                    onClick={() =>
+                                                        handleStepToggle(step.id, stepMeta.expandable)
+                                                    }
+                                                    sx={{
+                                                        cursor: stepMeta.expandable
+                                                            ? 'pointer'
+                                                            : 'default',
+                                                        opacity: stepMeta.accessible ? 1 : 0.5,
+                                                    }}
+                                                >
+                                                    <Typography
+                                                        variant="body1"
+                                                        color={stepTitleColor}
                                                     >
-                                                        {step.actionLabel}
-                                                    </Button>
-                                                )}
-                                                {stepMeta.showActionButton && !step.actionPath && step.actionLabel && (
-                                                    <Button variant="outlined" size="small" disabled>
-                                                        {step.actionLabel}
-                                                    </Button>
-                                                )}
-                                            </>
-                                        )}
-                                    </StepContent>
-                                </Step>
-                            );
-                        })}
-                    </Stepper>
-                </Paper>
+                                                        {step.title}
+                                                    </Typography>
+                                                </StepLabel>
+                                                <StepContent>
+                                                    {isLocked ? (
+                                                        <Typography
+                                                            variant="body2"
+                                                            color="text.disabled"
+                                                            sx={{ fontStyle: 'italic' }}
+                                                        >
+                                                            {formatPrerequisiteMessage(
+                                                                step,
+                                                                workflowSteps
+                                                            )}
+                                                        </Typography>
+                                                    ) : (
+                                                        <>
+                                                            <Typography
+                                                                variant="body2"
+                                                                sx={{ mb: 2 }}
+                                                            >
+                                                                {stepMeta.displayMessage}
+                                                            </Typography>
+                                                            {stepMeta.showActionButton &&
+                                                                step.actionPath &&
+                                                                step.actionLabel && (
+                                                                    <Button
+                                                                        variant="contained"
+                                                                        size="small"
+                                                                        onClick={() =>
+                                                                            handleNavigateToStep(
+                                                                                step.actionPath
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {step.actionLabel}
+                                                                    </Button>
+                                                                )}
+                                                            {stepMeta.showActionButton &&
+                                                                !step.actionPath &&
+                                                                step.actionLabel && (
+                                                                    <Button
+                                                                        variant="outlined"
+                                                                        size="small"
+                                                                        disabled
+                                                                    >
+                                                                        {step.actionLabel}
+                                                                    </Button>
+                                                                )}
+                                                        </>
+                                                    )}
+                                                </StepContent>
+                                            </Step>
+                                        );
+                                    })}
+                                </Stepper>
+                            </Box>
+                        </Paper>
+                    </Box>
+
+                    {/* Sidebar - Right Side (Fixed) */}
+                    <Box
+                        sx={{
+                            width: sidebarWidth,
+                            flexShrink: 0,
+                            display: { xs: 'none', lg: 'flex' },
+                            flexDirection: 'column',
+                        }}
+                    >
+                        <Stack spacing={2} sx={{ height: '100%' }}>
+                            {/* Progress Card - Shows 0% when no thesis */}
+                            <Paper sx={{ p: 2.5, flexShrink: 0 }}>
+                                <Typography
+                                    variant="subtitle1"
+                                    sx={{ fontWeight: 600, mb: 1 }}
+                                >
+                                    Getting Started
+                                </Typography>
+                                <Stack
+                                    direction="row"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    sx={{ mb: 0.5 }}
+                                >
+                                    <Typography variant="body2" color="text.secondary">
+                                        Progress
+                                    </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ fontWeight: 600, color: 'text.secondary' }}
+                                    >
+                                        0%
+                                    </Typography>
+                                </Stack>
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={0}
+                                    sx={{
+                                        height: 8,
+                                        borderRadius: 4,
+                                        bgcolor: 'action.hover',
+                                    }}
+                                />
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block', mt: 1 }}
+                                >
+                                    Start your thesis journey
+                                </Typography>
+                            </Paper>
+
+                            {/* Upcoming Events Card - Flex to fill space */}
+                            <Paper
+                                sx={{
+                                    p: 2.5,
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    minHeight: 0,
+                                }}
+                            >
+                                <Stack
+                                    direction="row"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    sx={{ mb: 1.5, flexShrink: 0 }}
+                                >
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <EventIcon color="primary" fontSize="small" />
+                                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                            Upcoming Events
+                                        </Typography>
+                                    </Stack>
+                                    <Tooltip title="View Calendar">
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => navigate('/calendar')}
+                                            sx={{
+                                                color: 'primary.main',
+                                                '&:hover': { bgcolor: 'action.hover' },
+                                            }}
+                                        >
+                                            <CalendarMonthIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                </Stack>
+                                <Box
+                                    sx={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <CalendarMonthIcon
+                                        sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
+                                    />
+                                    <Typography variant="body2" color="text.secondary">
+                                        No upcoming events
+                                    </Typography>
+                                    <Button
+                                        size="small"
+                                        onClick={() => navigate('/calendar')}
+                                        sx={{ mt: 1 }}
+                                    >
+                                        View Calendar
+                                    </Button>
+                                </Box>
+                            </Paper>
+
+                            {/* Recent Updates Card - Flex to fill space */}
+                            <Paper
+                                sx={{
+                                    p: 2.5,
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    minHeight: 0,
+                                }}
+                            >
+                                <Stack
+                                    direction="row"
+                                    alignItems="center"
+                                    spacing={1}
+                                    sx={{ mb: 1.5, flexShrink: 0 }}
+                                >
+                                    <NotificationsIcon color="primary" fontSize="small" />
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                        Recent Updates
+                                    </Typography>
+                                </Stack>
+                                <Box
+                                    sx={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <NotificationsIcon
+                                        sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
+                                    />
+                                    <Typography variant="body2" color="text.secondary">
+                                        No recent updates
+                                    </Typography>
+                                </Box>
+                            </Paper>
+                        </Stack>
+                    </Box>
+                </Box>
             </AnimatedPage>
         );
     }
 
-    const formattedSubmissionDate = formatDateLabel(thesis.submissionDate);
-    const formattedLastUpdated = formatDateLabel(thesis.lastUpdated);
+    // Sidebar width for fixed positioning
+    const sidebarWidth = 340;
 
     return (
         <AnimatedPage variant="slideUp">
-            <Paper sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    {thesis.title}
-                </Typography>
-
-                <Box sx={{ mt: 2, mb: 3 }}>
-                    <Typography variant="h6" gutterBottom>
-                        Research Group Members
-                    </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        {teamMembers.map((member) => (
-                            <Avatar
-                                key={member.uid}
-                                uid={member.uid}
-                                initials={[Name.FIRST]}
-                                mode="chip"
-                                tooltip="email"
-                                label={`${formatUserName(member.name)} (${member.thesisRole})`}
-                                size="small"
-                                chipProps={{ variant: 'outlined', size: 'small' }}
-                                editable={false}
-                            />
-                        ))}
-                        {teamMembers.length === 0 && (
-                            <Typography variant="body2" color="text.secondary">
-                                No team members listed yet.
+            <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 120px)' }}>
+                {/* Main Content - Left Side */}
+                <Box
+                    sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }}
+                >
+                    {/* Thesis Workflow */}
+                    <Paper
+                        sx={{
+                            p: 3,
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        {/* Fixed Header */}
+                        <Box sx={{ flexShrink: 0 }}>
+                            <Typography variant="h5" gutterBottom>
+                                Thesis Workflow
                             </Typography>
-                        )}
-                    </Stack>
-                </Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                Follow these steps to complete your thesis journey.
+                            </Typography>
+                        </Box>
 
-                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, mt: 2 }}>
-                    <Box sx={{ flex: 1 }}>
-                        <Typography variant="body1">
-                            <strong>Submission Date:</strong> {formattedSubmissionDate}
-                        </Typography>
-                        <Typography variant="body1">
-                            <strong>Last Updated:</strong> {formattedLastUpdated}
-                        </Typography>
-                        <Typography variant="body1">
-                            <strong>Status:</strong> {group?.status === 'completed' ? 'Completed' : 'In Progress'}
-                        </Typography>
-                    </Box>
-                </Box>
+                        {/* Scrollable Stepper */}
+                        <Box
+                            ref={stepperContainerRef}
+                            sx={{
+                                flex: 1,
+                                overflowY: 'auto',
+                                pr: 1,
+                                '&::-webkit-scrollbar': { width: 6 },
+                                '&::-webkit-scrollbar-thumb': {
+                                    bgcolor: 'action.hover',
+                                    borderRadius: 3,
+                                },
+                            }}
+                        >
+                            <Stepper orientation="vertical" activeStep={activeStepIndex}>
+                                {workflowSteps.map((step) => {
+                                    const stepMeta = getStepMeta(step);
+                                    const isExpanded = expandedSteps.has(step.id);
+                                    const isLocked = step.state === 'locked';
+                                    const isStepCompleted = step.state === 'completed';
+                                    const iconColor = isStepCompleted ? 'success.main' : undefined;
+                                    const stepTitleColor = isStepCompleted
+                                        ? 'success.main'
+                                        : stepMeta.accessible
+                                            ? 'text.primary'
+                                            : 'text.secondary';
 
-                <Box sx={{ mt: 3 }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Overall Progress: {Math.round(progress)}% Complete
-                    </Typography>
-                    <LinearProgress
-                        variant="determinate"
-                        value={progress}
-                        sx={{ height: 8, borderRadius: 4 }}
-                    />
-                </Box>
-            </Paper>
-
-            <Paper sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h5" gutterBottom>
-                    Thesis Workflow
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Follow these steps to complete your thesis journey.
-                </Typography>
-
-                <Stepper orientation="vertical" activeStep={activeStepIndex} sx={{ mt: 2 }}>
-                    {workflowSteps.map((step) => {
-                        const stepMeta = getStepMeta(step);
-                        const isExpanded = expandedSteps.has(step.id);
-                        const isLocked = step.state === 'locked';
-                        const isStepCompleted = step.state === 'completed';
-                        const iconColor = isStepCompleted ? 'success.main' : undefined;
-                        const stepTitleColor = isStepCompleted
-                            ? 'success.main'
-                            : stepMeta.accessible
-                                ? 'text.primary'
-                                : 'text.secondary';
-
-                        return (
-                            <Step
-                                key={step.id}
-                                completed={step.state === 'completed'}
-                                disabled={!stepMeta.accessible}
-                                expanded={isExpanded}
-                            >
-                                <StepLabel
-                                    icon={step.icon}
-                                    slotProps={{
-                                        stepIcon: {
-                                            sx: { color: iconColor },
-                                        },
-                                    }}
-                                    onClick={() => handleStepToggle(step.id, stepMeta.expandable)}
-                                    sx={{
-                                        cursor: stepMeta.expandable ? 'pointer' : 'default',
-                                        opacity: stepMeta.accessible ? 1 : 0.5,
-                                    }}
-                                >
-                                    <Typography variant="body1" color={stepTitleColor} >
-                                        {step.title}
-                                    </Typography>
-                                </StepLabel>
-                                <StepContent>
-                                    {isLocked ? (
-                                        <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
-                                            {formatPrerequisiteMessage(step, workflowSteps)}
-                                        </Typography>
-                                    ) : (
-                                        <>
-                                            <Typography variant="body2" sx={{ mb: 2 }}>
-                                                {stepMeta.displayMessage}
-                                            </Typography>
-                                            {stepMeta.showActionButton && step.actionPath && step.actionLabel && (
-                                                <Button
-                                                    variant="contained"
-                                                    size="small"
-                                                    onClick={() => handleNavigateToStep(step.actionPath)}
-                                                >
-                                                    {step.actionLabel}
-                                                </Button>
-                                            )}
-                                            {stepMeta.showActionButton && !step.actionPath && step.actionLabel && (
-                                                <Button variant="outlined" size="small" disabled>
-                                                    {step.actionLabel}
-                                                </Button>
-                                            )}
-                                        </>
-                                    )}
-                                </StepContent>
-                            </Step>
-                        );
-                    })}
-                </Stepper>
-            </Paper>
-
-            {/* Upcoming Events and Recent Updates */}
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-                {/* Upcoming Events */}
-                <Paper sx={{ p: 3, flex: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                        <EventIcon color="primary" />
-                        <Typography variant="h6">Upcoming Events</Typography>
-                    </Stack>
-                    {eventsLoading ? (
-                        <Stack spacing={1}>
-                            {Array.from({ length: 3 }).map((_, idx) => (
-                                <Skeleton key={idx} variant="rectangular" height={48} />
-                            ))}
-                        </Stack>
-                    ) : upcomingEvents.length > 0 ? (
-                        <List disablePadding>
-                            {upcomingEvents.map((event, index) => (
-                                <React.Fragment key={event.id}>
-                                    {index > 0 && <Divider />}
-                                    <ListItem disableGutters sx={{ py: 1 }}>
-                                        <ListItemIcon sx={{ minWidth: 40 }}>
-                                            <EventIcon fontSize="small" color="action" />
-                                        </ListItemIcon>
-                                        <ListItemText
-                                            primary={event.title}
-                                            secondary={new Date(event.startDate).toLocaleDateString(undefined, {
-                                                weekday: 'short',
-                                                month: 'short',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                            slotProps={{
-                                                primary: { variant: 'body2', fontWeight: 500 },
-                                                secondary: { variant: 'caption' },
-                                            }}
-                                        />
-                                        {event.status && (
-                                            <Chip
-                                                label={event.status}
-                                                size="small"
-                                                color={event.status === 'confirmed' ? 'success' : 'default'}
-                                                variant="outlined"
-                                            />
-                                        )}
-                                    </ListItem>
-                                </React.Fragment>
-                            ))}
-                        </List>
-                    ) : (
-                        <Typography variant="body2" color="text.secondary">
-                            No upcoming events scheduled.
-                        </Typography>
-                    )}
-                </Paper>
-
-                {/* Recent Updates */}
-                <Paper sx={{ p: 3, flex: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                        <NotificationsIcon color="primary" />
-                        <Typography variant="h6">Recent Updates</Typography>
-                    </Stack>
-                    {notificationsLoading ? (
-                        <Stack spacing={1}>
-                            {Array.from({ length: 3 }).map((_, idx) => (
-                                <Skeleton key={idx} variant="rectangular" height={48} />
-                            ))}
-                        </Stack>
-                    ) : groupNotifications.length > 0 &&
-                        groupNotifications.some((doc) => doc.notifications.length > 0) ? (
-                        <List disablePadding>
-                            {groupNotifications
-                                .flatMap((doc) => doc.notifications)
-                                .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
-                                .slice(0, 5)
-                                .map((notification, index) => (
-                                    <React.Fragment key={notification.id}>
-                                        {index > 0 && <Divider />}
-                                        <ListItem disableGutters sx={{ py: 1 }}>
-                                            <ListItemIcon sx={{ minWidth: 40 }}>
-                                                <NotificationsIcon fontSize="small" color="action" />
-                                            </ListItemIcon>
-                                            <ListItemText
-                                                primary={notification.title}
-                                                secondary={notification.message}
+                                    return (
+                                        <Step
+                                            key={step.id}
+                                            completed={step.state === 'completed'}
+                                            disabled={!stepMeta.accessible}
+                                            expanded={isExpanded}
+                                        >
+                                            <StepLabel
+                                                icon={step.icon}
                                                 slotProps={{
-                                                    primary: { variant: 'body2', fontWeight: 500 },
-                                                    secondary: {
-                                                        variant: 'caption',
-                                                        sx: {
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis',
-                                                            display: '-webkit-box',
-                                                            WebkitLineClamp: 2,
-                                                            WebkitBoxOrient: 'vertical',
-                                                        },
+                                                    stepIcon: {
+                                                        sx: { color: iconColor },
                                                     },
                                                 }}
-                                            />
-                                            <Chip
-                                                label={notification.category}
-                                                size="small"
-                                                color={
-                                                    notification.category === 'milestone'
-                                                        ? 'success'
-                                                        : notification.category === 'deadline'
-                                                            ? 'warning'
-                                                            : notification.category === 'feedback'
-                                                                ? 'info'
-                                                                : 'default'
+                                                onClick={() =>
+                                                    handleStepToggle(step.id, stepMeta.expandable)
                                                 }
-                                                variant="outlined"
-                                            />
-                                        </ListItem>
-                                    </React.Fragment>
-                                ))}
-                        </List>
-                    ) : (
-                        <Typography variant="body2" color="text.secondary">
-                            No recent updates.
-                        </Typography>
-                    )}
-                </Paper>
-            </Stack>
+                                                sx={{
+                                                    cursor: stepMeta.expandable ? 'pointer' : 'default',
+                                                    opacity: stepMeta.accessible ? 1 : 0.5,
+                                                }}
+                                            >
+                                                <Typography variant="body1" color={stepTitleColor}>
+                                                    {step.title}
+                                                </Typography>
+                                            </StepLabel>
+                                            <StepContent>
+                                                {isLocked ? (
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="text.disabled"
+                                                        sx={{ fontStyle: 'italic' }}
+                                                    >
+                                                        {formatPrerequisiteMessage(step, workflowSteps)}
+                                                    </Typography>
+                                                ) : (
+                                                    <>
+                                                        <Typography variant="body2" sx={{ mb: 2 }}>
+                                                            {stepMeta.displayMessage}
+                                                        </Typography>
+                                                        {stepMeta.showActionButton &&
+                                                            step.actionPath &&
+                                                            step.actionLabel && (
+                                                                <Button
+                                                                    variant="contained"
+                                                                    size="small"
+                                                                    onClick={() =>
+                                                                        handleNavigateToStep(step.actionPath)
+                                                                    }
+                                                                >
+                                                                    {step.actionLabel}
+                                                                </Button>
+                                                            )}
+                                                        {stepMeta.showActionButton &&
+                                                            !step.actionPath &&
+                                                            step.actionLabel && (
+                                                                <Button variant="outlined" size="small" disabled>
+                                                                    {step.actionLabel}
+                                                                </Button>
+                                                            )}
+                                                    </>
+                                                )}
+                                            </StepContent>
+                                        </Step>
+                                    );
+                                })}
+                            </Stepper>
+                        </Box>
+                    </Paper>
+                </Box>
+
+                {/* Sidebar - Right Side (Fixed) */}
+                <Box
+                    sx={{
+                        width: sidebarWidth,
+                        flexShrink: 0,
+                        display: { xs: 'none', lg: 'flex' },
+                        flexDirection: 'column',
+                    }}
+                >
+                    <Stack spacing={2} sx={{ height: '100%' }}>
+                        {/* Progress Card with Thesis Title */}
+                        <Paper sx={{ p: 2.5, flexShrink: 0 }}>
+                            <Typography
+                                variant="subtitle1"
+                                sx={{
+                                    fontWeight: 600,
+                                    mb: 1,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                }}
+                            >
+                                {thesis.title}
+                            </Typography>
+                            <Stack
+                                direction="row"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                sx={{ mb: 0.5 }}
+                            >
+                                <Typography variant="body2" color="text.secondary">
+                                    Progress
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontWeight: 600,
+                                        color: (theme) =>
+                                            progress >= 100
+                                                ? theme.palette.success.main
+                                                : progress >= 50
+                                                    ? theme.palette.primary.main
+                                                    : theme.palette.warning.main,
+                                    }}
+                                >
+                                    {Math.round(progress)}%
+                                </Typography>
+                            </Stack>
+                            <LinearProgress
+                                variant="determinate"
+                                value={progress}
+                                sx={{
+                                    height: 8,
+                                    borderRadius: 4,
+                                    bgcolor: 'action.hover',
+                                }}
+                            />
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mt: 1 }}
+                            >
+                                {progress >= 100
+                                    ? 'All chapters approved!'
+                                    : `${Math.round(progress)}% of chapters completed`}
+                            </Typography>
+                        </Paper>
+
+                        {/* Upcoming Events Card - Flex to fill space */}
+                        <Paper sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                            <Stack
+                                direction="row"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                sx={{ mb: 1.5, flexShrink: 0 }}
+                            >
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <EventIcon color="primary" fontSize="small" />
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                        Upcoming Events
+                                    </Typography>
+                                </Stack>
+                                <Tooltip title="View Calendar">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => navigate('/calendar')}
+                                        sx={{
+                                            color: 'primary.main',
+                                            '&:hover': { bgcolor: 'action.hover' },
+                                        }}
+                                    >
+                                        <CalendarMonthIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Stack>
+                            <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                                {eventsLoading ? (
+                                    <Stack spacing={1}>
+                                        {Array.from({ length: 3 }).map((_, idx) => (
+                                            <Skeleton key={idx} variant="rectangular" height={40} />
+                                        ))}
+                                    </Stack>
+                                ) : upcomingEvents.length > 0 ? (
+                                    <List disablePadding dense>
+                                        {upcomingEvents.map((event, index) => (
+                                            <React.Fragment key={event.id}>
+                                                {index > 0 && <Divider />}
+                                                <ListItem
+                                                    disableGutters
+                                                    disablePadding
+                                                    sx={{ py: 0.75 }}
+                                                >
+                                                    <ListItemIcon sx={{ minWidth: 32 }}>
+                                                        <EventIcon fontSize="small" color="action" />
+                                                    </ListItemIcon>
+                                                    <ListItemText
+                                                        primary={event.title}
+                                                        secondary={new Date(
+                                                            event.startDate
+                                                        ).toLocaleDateString(undefined, {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        })}
+                                                        slotProps={{
+                                                            primary: {
+                                                                variant: 'body2',
+                                                                fontWeight: 500,
+                                                                noWrap: true,
+                                                            },
+                                                            secondary: { variant: 'caption' },
+                                                        }}
+                                                    />
+                                                </ListItem>
+                                            </React.Fragment>
+                                        ))}
+                                    </List>
+                                ) : (
+                                    <Box
+                                        sx={{
+                                            textAlign: 'center',
+                                            py: 2,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            height: '100%',
+                                        }}
+                                    >
+                                        <CalendarMonthIcon
+                                            sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
+                                        />
+                                        <Typography variant="body2" color="text.secondary">
+                                            No upcoming events
+                                        </Typography>
+                                        <Button
+                                            size="small"
+                                            onClick={() => navigate('/calendar')}
+                                            sx={{ mt: 1 }}
+                                        >
+                                            View Calendar
+                                        </Button>
+                                    </Box>
+                                )}
+                            </Box>
+                        </Paper>
+
+                        {/* Recent Updates Card - Flex to fill space */}
+                        <Paper sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                            <Stack
+                                direction="row"
+                                alignItems="center"
+                                spacing={1}
+                                sx={{ mb: 1.5, flexShrink: 0 }}
+                            >
+                                <NotificationsIcon color="primary" fontSize="small" />
+                                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                    Recent Updates
+                                </Typography>
+                            </Stack>
+                            <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                                {notificationsLoading ? (
+                                    <Stack spacing={1}>
+                                        {Array.from({ length: 3 }).map((_, idx) => (
+                                            <Skeleton key={idx} variant="rectangular" height={40} />
+                                        ))}
+                                    </Stack>
+                                ) : groupNotifications.length > 0 &&
+                                    groupNotifications.some((doc) => doc.notifications.length > 0) ? (
+                                    <List disablePadding dense>
+                                        {groupNotifications
+                                            .flatMap((doc) => doc.notifications)
+                                            .sort(
+                                                (a, b) =>
+                                                    (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+                                            )
+                                            .map((notification, index) => (
+                                                <React.Fragment key={notification.id}>
+                                                    {index > 0 && <Divider />}
+                                                    <ListItem
+                                                        disableGutters
+                                                        disablePadding
+                                                        sx={{ py: 0.75 }}
+                                                    >
+                                                        <ListItemIcon sx={{ minWidth: 32 }}>
+                                                            <NotificationsIcon
+                                                                fontSize="small"
+                                                                color="action"
+                                                            />
+                                                        </ListItemIcon>
+                                                        <ListItemText
+                                                            primary={notification.title}
+                                                            secondary={notification.message}
+                                                            slotProps={{
+                                                                primary: {
+                                                                    variant: 'body2',
+                                                                    fontWeight: 500,
+                                                                    noWrap: true,
+                                                                },
+                                                                secondary: {
+                                                                    variant: 'caption',
+                                                                    sx: {
+                                                                        overflow: 'hidden',
+                                                                        textOverflow: 'ellipsis',
+                                                                        display: '-webkit-box',
+                                                                        WebkitLineClamp: 2,
+                                                                        WebkitBoxOrient: 'vertical',
+                                                                    },
+                                                                },
+                                                            }}
+                                                        />
+                                                        <Chip
+                                                            label={notification.category}
+                                                            size="small"
+                                                            color={
+                                                                notification.category === 'milestone'
+                                                                    ? 'success'
+                                                                    : notification.category === 'deadline'
+                                                                        ? 'warning'
+                                                                        : notification.category === 'feedback'
+                                                                            ? 'info'
+                                                                            : 'default'
+                                                            }
+                                                            variant="outlined"
+                                                            sx={{ ml: 1, flexShrink: 0 }}
+                                                        />
+                                                    </ListItem>
+                                                </React.Fragment>
+                                            ))}
+                                    </List>
+                                ) : (
+                                    <Box
+                                        sx={{
+                                            textAlign: 'center',
+                                            py: 2,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            height: '100%',
+                                        }}
+                                    >
+                                        <NotificationsIcon
+                                            sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
+                                        />
+                                        <Typography variant="body2" color="text.secondary">
+                                            No recent updates
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </Box>
+                        </Paper>
+                    </Stack>
+                </Box>
+            </Box>
         </AnimatedPage>
     );
 }

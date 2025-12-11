@@ -142,3 +142,49 @@ export interface PanelCommentStudentUpdate {
     studentStatus?: string;
     studentUpdatedBy: string;
 }
+
+// ============================================================================
+// Panel Comment Manuscript Types
+// ============================================================================
+
+/**
+ * Manuscript attachment uploaded by student for panel review.
+ */
+export interface PanelCommentManuscript {
+    /** Unique ID for the manuscript */
+    id: string;
+    /** Group ID this manuscript belongs to */
+    groupId: string;
+    /** Stage that the manuscript is tied to */
+    stage: PanelCommentStage;
+    /** Original file name */
+    fileName: string;
+    /** File size in bytes */
+    fileSize: number;
+    /** MIME type of the file */
+    mimeType: string;
+    /** Download URL for the file */
+    url: string;
+    /** Storage path for the file */
+    storagePath: string;
+    /** Firebase UID of the uploader */
+    uploadedBy: string;
+    /** ISO timestamp for when the manuscript was uploaded */
+    uploadedAt: string;
+    /** Whether review has been requested */
+    reviewRequested: boolean;
+    /** ISO timestamp for when review was requested */
+    reviewRequestedAt?: string;
+    /** Firebase UID who requested the review */
+    reviewRequestedBy?: string;
+}
+
+/**
+ * Input payload for uploading a new manuscript.
+ */
+export interface PanelCommentManuscriptInput {
+    groupId: string;
+    stage: PanelCommentStage;
+    file: File;
+    uploadedBy: string;
+}

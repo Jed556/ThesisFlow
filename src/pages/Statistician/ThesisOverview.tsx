@@ -16,7 +16,7 @@ import { createChat } from '../../utils/firebase/firestore/chat';
 import { updateSubmissionDecision } from '../../utils/firebase/firestore/submissions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
-import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
+import { THESIS_STAGE_METADATA, getStageLabel } from '../../utils/thesisStageUtils';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { notifySubmissionApproval, notifyRevisionRequested } from '../../utils/auditNotificationUtils';
@@ -320,6 +320,7 @@ export default function StatisticianThesisOverviewPage() {
             const group = await findGroupById(thesis.groupId);
             if (group) {
                 const chapterName = `Chapter ${chapterId}`;
+                const stageName = getStageLabel(stage);
                 // Statistician approval notifies adviser next in the chain
                 if (decision === 'approved') {
                     await notifySubmissionApproval({
@@ -327,6 +328,7 @@ export default function StatisticianThesisOverviewPage() {
                         approverId: statisticianUid,
                         approverRole: 'statistician',
                         chapterName,
+                        stageName,
                         isSequential: true,
                         chain: 'statistical',
                         isFinalApproval: false,
@@ -338,6 +340,7 @@ export default function StatisticianThesisOverviewPage() {
                         requesterId: statisticianUid,
                         requesterRole: 'statistician',
                         chapterName,
+                        stageName,
                         details: { thesisId: targetThesisId, stage, submissionId },
                     });
                 }

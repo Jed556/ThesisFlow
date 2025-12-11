@@ -303,8 +303,8 @@ export default function FileCard({
                 borderColor: selected ? 'primary.main' : 'divider',
                 bgcolor: selected ? 'primary.50' : 'background.paper',
                 cursor: interactive ? 'pointer' : 'default',
-                transition: 'border-color 120ms ease, transform 120ms ease',
-                '&:hover': interactive ? { borderColor: 'primary.main', transform: 'translateY(-1px)' } : undefined,
+                transition: 'border-color 120ms ease',
+                '&:hover': interactive ? { borderColor: 'primary.main' } : undefined,
                 opacity: disabled ? 0.6 : 1,
             }}
         >

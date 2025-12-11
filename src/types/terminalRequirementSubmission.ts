@@ -4,12 +4,28 @@ export type TerminalRequirementApprovalRole = 'panel' | 'adviser' | 'editor' | '
 export type TerminalRequirementApprovalStatus = 'pending' | 'approved' | 'returned';
 export type TerminalRequirementSubmissionStatus = 'draft' | 'in_review' | 'returned' | 'approved';
 
+/**
+ * Individual member approval entry for roles that require multiple approvers (e.g., panel).
+ */
+export interface TerminalRequirementMemberApproval {
+    uid: string;
+    status: TerminalRequirementApprovalStatus;
+    decidedAt?: string;
+    note?: string;
+}
+
 export interface TerminalRequirementApprovalState {
     role: TerminalRequirementApprovalRole;
     status: TerminalRequirementApprovalStatus;
     decidedAt?: string;
     decidedBy?: string;
     note?: string;
+    /**
+     * For roles with multiple assigned approvers (e.g., panel), tracks individual approval status.
+     * The overall `status` is 'approved' only when ALL members have approved.
+     * Key is the approver's UID.
+     */
+    memberApprovals?: Record<string, TerminalRequirementMemberApproval>;
 }
 
 export interface TerminalRequirementSubmissionHistoryEntry {

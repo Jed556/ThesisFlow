@@ -232,6 +232,7 @@ export default function ModeratorGroupApprovalsPage() {
                         groupMembers: true,
                         excludeUserId: moderatorUid,
                     },
+                    sendEmail: true,
                 });
             }
             // Real-time listener will automatically update the list
@@ -270,6 +271,7 @@ export default function ModeratorGroupApprovalsPage() {
                         excludeUserId: moderatorUid,
                     },
                     details: { reason: rejectionReason.trim() },
+                    sendEmail: true,
                 });
             }
 

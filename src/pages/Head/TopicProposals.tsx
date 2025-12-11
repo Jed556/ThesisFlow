@@ -272,6 +272,7 @@ export default function HeadTopicProposalsPage() {
                         decision: 'approved',
                         reviewerRole: 'head',
                     },
+                    sendEmail: true,
                 });
             }
         } catch (error) {
@@ -321,6 +322,7 @@ export default function HeadTopicProposalsPage() {
                         notes: rejectionNotes.trim() || undefined,
                         reviewerRole: 'head',
                     },
+                    sendEmail: true,
                 });
             }
         } catch (error) {

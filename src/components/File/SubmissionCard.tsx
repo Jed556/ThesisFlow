@@ -15,7 +15,6 @@ import {
 } from '@mui/material';
 import {
     CheckCircle as ApproveIcon,
-    HourglassEmpty as PendingIcon,
     Send as SubmitIcon,
     Undo as RevisionIcon,
 } from '@mui/icons-material';
@@ -24,6 +23,7 @@ import type { FileAttachment } from '../../types/file';
 import type { ExpertRole, ChapterSubmissionStatus } from '../../types/thesis';
 import type { ConversationParticipant } from '../Conversation';
 import { buildFileSizeLabel, buildSubmissionMeta, buildSubmissionStatusChip } from '../ThesisWorkspace/ChapterRail';
+import { ApprovalStatusChip, type ApprovalChipStatus } from '../StatusChip';
 
 /**
  * Submission status for the workflow
@@ -151,8 +151,6 @@ interface ApprovalStatusChipsProps {
     status?: string;
 }
 
-type ChipState = 'approved' | 'awaiting' | 'revision_requested';
-
 const ApprovalStatusChips: React.FC<ApprovalStatusChipsProps> = ({
     expertApprovals,
     hasStatistician,
@@ -172,97 +170,48 @@ const ApprovalStatusChips: React.FC<ApprovalStatusChipsProps> = ({
 
     const revisionRequester = getRevisionRequester();
 
-    const getChipState = (role: ExpertRole): ChipState => {
+    /**
+     * Map expert role state to unified ApprovalChipStatus
+     */
+    const getChipStatus = (role: ExpertRole): ApprovalChipStatus => {
         if (hasRoleApproved(expertApprovals, role)) return 'approved';
-        if (isRevisionRequested && revisionRequester === role) return 'revision_requested';
-        return 'awaiting';
-    };
-
-    const getChipProps = (role: string, state: ChipState) => {
-        switch (state) {
-            case 'approved':
-                return {
-                    icon: <ApproveIcon fontSize="small" />,
-                    label: `${role} Approved`,
-                    color: 'success' as const,
-                    variant: 'filled' as const,
-                };
-            case 'revision_requested':
-                return {
-                    icon: <RevisionIcon fontSize="small" />,
-                    label: `${role} Needs Revision`,
-                    color: 'warning' as const,
-                    variant: 'filled' as const,
-                };
-            default: // awaiting
-                return {
-                    icon: <PendingIcon fontSize="small" />,
-                    label: `Awaiting ${role}`,
-                    color: 'default' as const,
-                    variant: 'outlined' as const,
-                };
-        }
+        if (isRevisionRequested && revisionRequester === role) return 'revision_required';
+        return 'pending';
     };
 
     /**
      * Get the decidedAt timestamp for a role from expertApprovals
-     * @param role - The expert role to get the timestamp for
-     * @returns Formatted date/time string or null if not available
      */
-    const getDecidedAtTooltip = (role: ExpertRole, state: ChipState): string => {
-        if (state === 'awaiting') return 'Pending approval';
-
+    const getDecidedAt = (role: ExpertRole): string | undefined => {
         const approval = expertApprovals?.find((a) => a.role === role);
-        if (!approval?.decidedAt) {
-            return state === 'revision_requested' ? 'Revision requested' : 'Decision date not available';
-        }
-
-        try {
-            const date = new Date(approval.decidedAt);
-            const formattedDate = date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-            });
-            const formattedTime = date.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-            });
-            const actionLabel = state === 'revision_requested' ? 'Revision requested' : 'Approved';
-            return `${actionLabel} on ${formattedDate} at ${formattedTime}`;
-        } catch {
-            return state === 'revision_requested' ? 'Revision requested' : 'Approved';
-        }
+        return approval?.decidedAt;
     };
 
-    const chips: { role: string; expertRole: ExpertRole }[] = [];
+    const ROLE_LABELS: Record<ExpertRole, string> = {
+        statistician: 'Statistician',
+        adviser: 'Adviser',
+        editor: 'Editor',
+    };
 
+    const chips: ExpertRole[] = [];
     if (hasStatistician) {
-        chips.push({ role: 'Statistician', expertRole: 'statistician' });
+        chips.push('statistician');
     }
-    chips.push({ role: 'Adviser', expertRole: 'adviser' });
-    chips.push({ role: 'Editor', expertRole: 'editor' });
+    chips.push('adviser');
+    chips.push('editor');
 
     return (
         <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-            {chips.map(({ role, expertRole }) => {
-                const state = getChipState(expertRole);
-                const { icon, label, color, variant } = getChipProps(role, state);
-                const tooltipText = getDecidedAtTooltip(expertRole, state);
-                return (
-                    <Tooltip key={role} title={tooltipText} arrow>
-                        <Chip
-                            size="small"
-                            icon={icon}
-                            label={label}
-                            color={color}
-                            variant={variant}
-                            sx={{ height: 24, fontSize: '0.7rem' }}
-                        />
-                    </Tooltip>
-                );
-            })}
+            {chips.map((role) => (
+                <ApprovalStatusChip
+                    key={role}
+                    roleLabel={ROLE_LABELS[role]}
+                    status={getChipStatus(role)}
+                    decidedAt={getDecidedAt(role)}
+                    size="small"
+                    sx={{ height: 24, fontSize: '0.7rem' }}
+                />
+            ))}
         </Stack>
     );
 };

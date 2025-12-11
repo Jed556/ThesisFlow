@@ -14,7 +14,7 @@ import type { TerminalRequirementApprovalRole, TerminalRequirementSubmissionReco
 import { SubmissionStatus, TERMINAL_REQUIREMENT_ROLE_LABELS } from './SubmissionStatus';
 import { TerminalRequirementCard } from './RequirementCard';
 import { FileViewer } from '../File';
-import { THESIS_STAGE_METADATA, canonicalizeStageValue } from '../../utils/thesisStageUtils';
+import { THESIS_STAGE_METADATA, canonicalizeStageValue, getStageLabel } from '../../utils/thesisStageUtils';
 import { useSnackbar } from '../Snackbar';
 import {
     getReviewerAssignmentsForUser, findThesisById, findThesisByGroupId, type ReviewerRole, type ReviewerAssignment,
@@ -518,11 +518,12 @@ export function TerminalRequirementApprovalWorkspace({
             // Audit notification for terminal requirement approval
             if (groupMeta) {
                 const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role] || role;
+                const stageName = getStageLabel(resolvedStage);
                 void auditAndNotify({
                     group: groupMeta,
                     userId: userUid,
-                    name: `Terminal Requirements Approved by ${roleLabel}`,
-                    description: `${resolvedStage} terminal requirements have been approved by ${roleLabel}.`,
+                    name: `${stageName}: Terminal Requirements Approved by ${roleLabel}`,
+                    description: `${stageName} terminal requirements have been approved by ${roleLabel}.`,
                     category: 'terminal',
                     action: 'terminal_approved',
                     targets: {
@@ -530,7 +531,8 @@ export function TerminalRequirementApprovalWorkspace({
                         adviser: true,
                         excludeUserId: userUid,
                     },
-                    details: { stage: resolvedStage, approverRole: role },
+                    details: { stage: resolvedStage, stageName, approverRole: role },
+                    sendEmail: true,
                 });
             }
         } catch (error) {
@@ -565,11 +567,12 @@ export function TerminalRequirementApprovalWorkspace({
             // Audit notification for terminal requirement return
             if (groupMeta) {
                 const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role] || role;
+                const stageName = getStageLabel(resolvedStage);
                 void auditAndNotify({
                     group: groupMeta,
                     userId: userUid,
-                    name: 'Terminal Requirements Returned',
-                    description: `${resolvedStage} terminal requirements have been returned by ${roleLabel}.${returnNote.trim() ? ` Note: ${returnNote.trim()}` : ''}`,
+                    name: `${stageName}: Terminal Requirements Returned`,
+                    description: `${stageName} terminal requirements have been returned by ${roleLabel}.${returnNote.trim() ? ` Note: ${returnNote.trim()}` : ''}`,
                     category: 'terminal',
                     action: 'terminal_rejected',
                     targets: {
@@ -577,7 +580,8 @@ export function TerminalRequirementApprovalWorkspace({
                         leader: true,
                         excludeUserId: userUid,
                     },
-                    details: { stage: resolvedStage, approverRole: role, note: returnNote.trim() || undefined },
+                    details: { stage: resolvedStage, stageName, approverRole: role, note: returnNote.trim() || undefined },
+                    sendEmail: true,
                 });
             }
 

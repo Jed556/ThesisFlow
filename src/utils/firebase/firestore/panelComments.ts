@@ -1,14 +1,15 @@
 import {
-    addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, where,
+    addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, where, getDoc,
     type DocumentData, type QueryConstraint, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { firebaseFirestore } from '../firebaseConfig';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { firebaseFirestore, firebaseStorage } from '../firebaseConfig';
 import { normalizeTimestamp } from '../../dateUtils';
 import { buildPanelCommentEntriesCollectionPath, buildPanelCommentEntryDocPath, buildPanelCommentDocPath } from './paths';
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentApprovalStatus, type PanelCommentEntry, type PanelCommentEntryInput,
     type PanelCommentEntryUpdate, type PanelCommentReleaseMap, type PanelCommentStage, type PanelCommentStudentUpdate,
-    type PanelCommentTableReleaseMap,
+    type PanelCommentTableReleaseMap, type PanelCommentManuscript,
 } from '../../../types/panelComment';
 
 // ============================================================================
@@ -576,4 +577,274 @@ export function listenPanelCommentCompletion(
             console.error('Panel comments completion listener error:', error);
         }
     });
+}
+
+// ============================================================================
+// Manuscript Management
+// ============================================================================
+
+interface ManuscriptSnapshot {
+    id: string;
+    groupId: string;
+    stage: PanelCommentStage;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    url: string;
+    storagePath: string;
+    uploadedBy: string;
+    uploadedAt?: unknown;
+    reviewRequested?: boolean;
+    reviewRequestedAt?: unknown;
+    reviewRequestedBy?: string;
+}
+
+function mapManuscript(data: ManuscriptSnapshot): PanelCommentManuscript {
+    return {
+        id: data.id,
+        groupId: data.groupId,
+        stage: data.stage,
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        mimeType: data.mimeType,
+        url: data.url,
+        storagePath: data.storagePath,
+        uploadedBy: data.uploadedBy,
+        uploadedAt: normalizeTimestamp(data.uploadedAt, true),
+        reviewRequested: data.reviewRequested ?? false,
+        reviewRequestedAt: normalizeTimestamp(data.reviewRequestedAt) || undefined,
+        reviewRequestedBy: data.reviewRequestedBy,
+    };
+}
+
+/**
+ * Generate storage path for manuscript files.
+ * Path format: {year}/{department}/{course}/{group}/thesis/{thesis}/panel/manuscript/{filename}
+ */
+function generateManuscriptStoragePath(
+    ctx: PanelCommentContext,
+    stage: PanelCommentStage,
+    fileName: string,
+    userUid: string
+): string {
+    const timestamp = Date.now();
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const yearSegment = ctx.year || 'current';
+    const deptSegment = ctx.department || 'general';
+    const courseSegment = ctx.course || 'common';
+    const groupSegment = ctx.groupId;
+
+    return `${yearSegment}/${deptSegment}/${courseSegment}/${groupSegment}/thesis/panel/manuscript/${stage}/${userUid}_${timestamp}_${sanitizedFileName}`;
+}
+
+/**
+ * Upload a manuscript file for panel review.
+ * @param ctx - Panel comment context
+ * @param stage - The panel comment stage
+ * @param file - The file to upload
+ * @param userUid - The user uploading the file
+ * @returns The created manuscript record
+ */
+export async function uploadPanelManuscript(
+    ctx: PanelCommentContext,
+    stage: PanelCommentStage,
+    file: File,
+    userUid: string
+): Promise<PanelCommentManuscript> {
+    if (!ctx.groupId) {
+        throw new Error('Group ID is required to upload manuscript.');
+    }
+
+    const storagePath = generateManuscriptStoragePath(ctx, stage, file.name, userUid);
+    const storageRef = ref(firebaseStorage, storagePath);
+
+    // Upload file to storage
+    const storageMetadata = {
+        contentType: file.type,
+        customMetadata: {
+            uploadedBy: userUid,
+            groupId: ctx.groupId,
+            stage,
+            originalName: file.name,
+        },
+    };
+
+    const snapshot = await uploadBytes(storageRef, file, storageMetadata);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+
+    const manuscriptId = `${stage}_${Date.now()}`;
+    const manuscriptData = {
+        id: manuscriptId,
+        groupId: ctx.groupId,
+        stage,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        url: downloadURL,
+        storagePath,
+        uploadedBy: userUid,
+        uploadedAt: serverTimestamp(),
+        reviewRequested: false,
+    };
+
+    // Save manuscript metadata to Firestore
+    const releaseDocRef = getReleaseDoc(ctx);
+    await setDoc(releaseDocRef, {
+        groupId: ctx.groupId,
+        manuscripts: {
+            [stage]: manuscriptData,
+        },
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    return {
+        ...manuscriptData,
+        uploadedAt: new Date().toISOString(),
+    };
+}
+
+/**
+ * Get the current manuscript for a stage.
+ * @param ctx - Panel comment context
+ * @param stage - The panel comment stage
+ * @returns The manuscript or null if none exists
+ */
+export async function getPanelManuscript(
+    ctx: PanelCommentContext,
+    stage: PanelCommentStage
+): Promise<PanelCommentManuscript | null> {
+    if (!ctx.groupId) {
+        return null;
+    }
+
+    const docRef = getReleaseDoc(ctx);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+        return null;
+    }
+
+    const data = docSnap.data();
+    const manuscriptData = data?.manuscripts?.[stage] as ManuscriptSnapshot | undefined;
+
+    if (!manuscriptData) {
+        return null;
+    }
+
+    return mapManuscript(manuscriptData);
+}
+
+/**
+ * Listener options for manuscript changes.
+ */
+export interface ManuscriptListenerOptions {
+    onData: (manuscript: PanelCommentManuscript | null) => void;
+    onError?: (error: Error) => void;
+}
+
+/**
+ * Listen to manuscript changes for a specific stage.
+ * @param ctx - Panel comment context
+ * @param stage - The panel comment stage
+ * @param options - Callback options
+ * @returns Unsubscribe function
+ */
+export function listenPanelManuscript(
+    ctx: PanelCommentContext | null | undefined,
+    stage: PanelCommentStage,
+    options: ManuscriptListenerOptions
+): () => void {
+    if (!ctx?.groupId) {
+        options.onData(null);
+        return () => { /* no-op */ };
+    }
+
+    const docRef = getReleaseDoc(ctx);
+    return onSnapshot(docRef, (snapshot) => {
+        if (!snapshot.exists()) {
+            options.onData(null);
+            return;
+        }
+
+        const data = snapshot.data();
+        const manuscriptData = data?.manuscripts?.[stage] as ManuscriptSnapshot | undefined;
+
+        if (!manuscriptData) {
+            options.onData(null);
+            return;
+        }
+
+        options.onData(mapManuscript(manuscriptData));
+    }, (error) => {
+        if (options.onError) {
+            options.onError(error as Error);
+        } else {
+            console.error('Manuscript listener error:', error);
+        }
+    });
+}
+
+/**
+ * Request panel review for the uploaded manuscript.
+ * This notifies panels that a manuscript is ready for review.
+ * @param ctx - Panel comment context
+ * @param stage - The panel comment stage
+ * @param userUid - The user requesting the review
+ */
+export async function requestManuscriptReview(
+    ctx: PanelCommentContext,
+    stage: PanelCommentStage,
+    userUid: string
+): Promise<void> {
+    if (!ctx.groupId) {
+        throw new Error('Group ID is required to request review.');
+    }
+
+    const releaseDocRef = getReleaseDoc(ctx);
+    await setDoc(releaseDocRef, {
+        groupId: ctx.groupId,
+        manuscripts: {
+            [stage]: {
+                reviewRequested: true,
+                reviewRequestedAt: serverTimestamp(),
+                reviewRequestedBy: userUid,
+            },
+        },
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+}
+
+/**
+ * Delete the manuscript for a stage.
+ * @param ctx - Panel comment context
+ * @param stage - The panel comment stage
+ */
+export async function deletePanelManuscript(
+    ctx: PanelCommentContext,
+    stage: PanelCommentStage
+): Promise<void> {
+    if (!ctx.groupId) {
+        throw new Error('Group ID is required to delete manuscript.');
+    }
+
+    // Get current manuscript to delete from storage
+    const manuscript = await getPanelManuscript(ctx, stage);
+    if (manuscript?.storagePath) {
+        try {
+            const storageRef = ref(firebaseStorage, manuscript.storagePath);
+            await deleteObject(storageRef);
+        } catch (storageError) {
+            console.warn('Failed to delete manuscript from storage:', storageError);
+        }
+    }
+
+    // Remove manuscript from Firestore
+    const releaseDocRef = getReleaseDoc(ctx);
+    await setDoc(releaseDocRef, {
+        groupId: ctx.groupId,
+        manuscripts: {
+            [stage]: null,
+        },
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
 }

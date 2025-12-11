@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { Chip, Stack, Typography } from '@mui/material';
-import { CheckCircle as ApprovedIcon, Pending as PendingIcon, Cancel as ReturnedIcon } from '@mui/icons-material';
+import { Stack, Tooltip, Typography } from '@mui/material';
 import type {
-    TerminalRequirementApprovalRole, TerminalRequirementSubmissionRecord
+    TerminalRequirementApprovalRole, TerminalRequirementApprovalState, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
+import { ApprovalStatusChip, type ApprovalChipStatus } from '../StatusChip';
 
 export const TERMINAL_REQUIREMENT_ROLE_LABELS: Record<TerminalRequirementApprovalRole, string> = {
     panel: 'Panel',
@@ -14,11 +14,61 @@ export const TERMINAL_REQUIREMENT_ROLE_LABELS: Record<TerminalRequirementApprova
 
 const APPROVAL_FLOW: TerminalRequirementApprovalRole[] = ['panel', 'adviser', 'editor', 'statistician'];
 
-const STATUS_META = {
-    pending: { label: 'Pending', color: 'default' as const, icon: PendingIcon },
-    approved: { label: 'Approved', color: 'success' as const, icon: ApprovedIcon },
-    returned: { label: 'Returned', color: 'error' as const, icon: ReturnedIcon },
-};
+/**
+ * Maps terminal requirement approval status to unified chip status
+ */
+function mapToChipStatus(status?: 'pending' | 'approved' | 'returned'): ApprovalChipStatus {
+    switch (status) {
+        case 'approved':
+            return 'approved';
+        case 'returned':
+            return 'rejected';
+        default:
+            return 'pending';
+    }
+}
+
+/**
+ * Counts approved members for a multi-approver role.
+ */
+function countApprovedMembers(approval: TerminalRequirementApprovalState | undefined): {
+    approved: number;
+    total: number;
+} {
+    if (!approval?.memberApprovals) {
+        return { approved: 0, total: 0 };
+    }
+    const members = Object.values(approval.memberApprovals);
+    return {
+        approved: members.filter((m) => m.status === 'approved').length,
+        total: members.length,
+    };
+}
+
+/**
+ * Builds a tooltip showing individual member approval status.
+ */
+function buildMemberTooltip(
+    approval: TerminalRequirementApprovalState | undefined,
+    assignedApprovers?: string[],
+): string | null {
+    if (!approval?.memberApprovals || !assignedApprovers || assignedApprovers.length <= 1) {
+        return null;
+    }
+
+    const lines: string[] = [];
+    for (const uid of assignedApprovers) {
+        const member = approval.memberApprovals[uid];
+        const statusLabel = member?.status === 'approved'
+            ? '✓ Approved'
+            : member?.status === 'returned'
+                ? '✗ Returned'
+                : '○ Pending';
+        // Show UID as fallback (in real app, would resolve to display name)
+        lines.push(`${statusLabel}`);
+    }
+    return lines.join('\n');
+}
 
 export interface SubmissionStatusProps {
     submission?: TerminalRequirementSubmissionRecord | null;
@@ -57,22 +107,50 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 {orderedRoles.map((role) => {
                     const approval = submission.approvals[role];
-                    const meta = approval ? STATUS_META[approval.status] : STATUS_META.pending;
-                    const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role];
-                    const chipLabel = `${roleLabel} ${meta.label}`;
-                    const IconComponent = meta.icon;
+                    const assignedApprovers = submission.assignedApprovers?.[role];
+                    const isMultiApprover = assignedApprovers && assignedApprovers.length > 1;
+
+                    // For multi-approver roles, show count progress
+                    const { approved, total } = countApprovedMembers(approval);
+                    const roleLabel = isMultiApprover && total > 0
+                        ? `${TERMINAL_REQUIREMENT_ROLE_LABELS[role]} (${approved}/${total})`
+                        : TERMINAL_REQUIREMENT_ROLE_LABELS[role];
+
+                    const status = mapToChipStatus(approval?.status);
                     const isHighlighted = highlightRole === role;
-                    return (
-                        <Chip
+                    const memberTooltip = buildMemberTooltip(approval, assignedApprovers);
+
+                    const chip = (
+                        <ApprovalStatusChip
                             key={role}
-                            icon={<IconComponent fontSize="small" />}
-                            label={chipLabel}
-                            color={meta.color}
+                            roleLabel={roleLabel}
+                            status={status}
+                            decidedAt={approval?.decidedAt}
+                            highlightDecided={isHighlighted}
                             size="small"
-                            variant={isHighlighted ? 'filled' : 'outlined'}
-                            sx={isHighlighted ? { fontWeight: 600 } : undefined}
                         />
                     );
+
+                    if (memberTooltip) {
+                        return (
+                            <Tooltip
+                                key={role}
+                                title={
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ whiteSpace: 'pre-line' }}
+                                    >
+                                        {memberTooltip}
+                                    </Typography>
+                                }
+                                arrow
+                            >
+                                <span>{chip}</span>
+                            </Tooltip>
+                        );
+                    }
+
+                    return chip;
                 })}
             </Stack>
         </Stack>

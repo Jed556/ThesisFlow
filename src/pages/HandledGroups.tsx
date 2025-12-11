@@ -196,6 +196,7 @@ export default function ExpertGroupsPage() {
                         excludeUserId: expertUid,
                     },
                     details: { expertRole: role },
+                    sendEmail: true,
                 });
             }
         } catch (err) {
@@ -234,6 +235,7 @@ export default function ExpertGroupsPage() {
                         excludeUserId: expertUid,
                     },
                     details: { expertRole: role, reason },
+                    sendEmail: true,
                 });
             }
         } catch (err) {

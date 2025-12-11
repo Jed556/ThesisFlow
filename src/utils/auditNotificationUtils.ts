@@ -15,7 +15,7 @@ import type {
 } from '../types/audit';
 import type { ThesisGroup, ThesisGroupMembers } from '../types/group';
 import type { UserProfile } from '../types/profile';
-import {    createAuditEntry, buildAuditContextFromGroup} from './auditUtils';
+import { createAuditEntry, buildAuditContextFromGroup } from './auditUtils';
 import { createUserAuditEntriesBatch } from './firebase/firestore/userAudits';
 import { findUsersByIds, getPathLevelForRole } from './firebase/firestore/user';
 import { getAcademicYear } from './dateUtils';
@@ -85,6 +85,12 @@ export interface AuditAndNotifyOptions {
     adminUserIds?: string[];
     /** List of moderator user IDs to notify (for moderator notifications) */
     moderatorUserIds?: string[];
+    /** Whether to send email notifications to target users (default: false) */
+    sendEmail?: boolean;
+    /** Optional action URL for email notifications (e.g., link to view details) */
+    emailActionUrl?: string;
+    /** Optional action button text for email notifications */
+    emailActionText?: string;
 }
 
 /**
@@ -97,6 +103,8 @@ export interface AuditAndNotifyResult {
     notificationIds: string[];
     /** Number of users notified */
     notifiedCount: number;
+    /** Number of emails sent successfully */
+    emailsSentCount: number;
 }
 
 // ============================================================================
@@ -196,6 +204,9 @@ function resolveTargetUserIds(
 
     return Array.from(uids);
 }
+
+// Email notification functions imported from emailUtils.ts
+import { sendBulkAuditEmails } from './emailUtils';
 
 /**
  * Determine notification severity based on action
@@ -342,11 +353,15 @@ export async function auditAndNotify(
         notificationMessage,
         adminUserIds,
         moderatorUserIds,
+        sendEmail = false,
+        emailActionUrl,
+        emailActionText,
     } = options;
 
     const result: AuditAndNotifyResult = {
         notificationIds: [],
         notifiedCount: 0,
+        emailsSentCount: 0,
     };
 
     // Build group audit context
@@ -466,6 +481,22 @@ export async function auditAndNotify(
         console.error('Failed to create user notifications:', error);
     }
 
+    // Send email notifications if enabled
+    if (sendEmail && targetProfiles.length > 0) {
+        try {
+            result.emailsSentCount = await sendBulkAuditEmails(
+                targetProfiles,
+                name,
+                notificationMessage || description,
+                action,
+                emailActionUrl,
+                emailActionText
+            );
+        } catch (error) {
+            console.error('Failed to send email notifications:', error);
+        }
+    }
+
     return result;
 }
 
@@ -563,6 +594,7 @@ export async function notifyNextApprover(options: {
             itemName,
             itemType,
         },
+        sendEmail: true,
     });
 }
 
@@ -602,6 +634,7 @@ export async function notifyTerminalRequirementsComplete(options: {
             stageName,
             completedAt: new Date().toISOString(),
         },
+        sendEmail: true,
     });
 }
 
@@ -612,16 +645,19 @@ export async function notifyNewSubmission(options: {
     group: ThesisGroup;
     userId: string;
     chapterName: string;
+    stageName?: string;
     submissionVersion: number;
     details?: AuditDetails;
 }): Promise<AuditAndNotifyResult> {
-    const { group, userId, chapterName, submissionVersion, details } = options;
+    const { group, userId, chapterName, stageName, submissionVersion, details } = options;
+
+    const chapterDisplay = stageName ? `${stageName}: ${chapterName}` : chapterName;
 
     return auditAndNotify({
         group,
         userId,
         name: 'New Submission',
-        description: `New submission (v${submissionVersion}) uploaded for chapter "${chapterName}".`,
+        description: `New submission (v${submissionVersion}) uploaded for chapter "${chapterDisplay}".`,
         category: 'submission',
         action: 'submission_created',
         targets: {
@@ -632,9 +668,11 @@ export async function notifyNewSubmission(options: {
         },
         details: {
             ...details,
+            stageName,
             chapterName,
             submissionVersion,
         },
+        sendEmail: true,
     });
 }
 
@@ -646,51 +684,34 @@ export async function notifySubmissionApproval(options: {
     approverId: string;
     approverRole: ApprovalRole;
     chapterName: string;
+    stageName?: string;
     isSequential: boolean;
     chain?: 'statistical' | 'defense';
     isFinalApproval?: boolean;
     details?: AuditDetails;
 }): Promise<AuditAndNotifyResult> {
     const {
-        group, approverId, approverRole, chapterName,
+        group, approverId, approverRole, chapterName, stageName,
         isSequential, chain = 'statistical', isFinalApproval, details
     } = options;
 
     const roleLabel = approverRole.charAt(0).toUpperCase() + approverRole.slice(1);
+    const chapterDisplay = stageName ? `${stageName}: ${chapterName}` : chapterName;
 
     // If it's a sequential approval and not the final one, notify the next approver
+    // The notifyNextApprover already creates an audit entry, so we don't need another
     if (isSequential && !isFinalApproval) {
         const result = await notifyNextApprover({
             group,
             currentApproverId: approverId,
             currentRole: approverRole,
             chain,
-            itemName: chapterName,
+            itemName: chapterDisplay,
             itemType: 'Chapter',
-            details,
+            details: { ...details, stageName },
         });
 
         if (result) {
-            // Also notify group members about the partial approval
-            await auditAndNotify({
-                group,
-                userId: approverId,
-                name: `${roleLabel} Approved`,
-                description: `Chapter "${chapterName}" was approved by ${roleLabel}.`,
-                category: 'submission',
-                action: 'submission_approved',
-                targets: {
-                    groupMembers: true,
-                    excludeUserId: approverId,
-                },
-                createGroupAudit: true,
-                details: {
-                    ...details,
-                    approverRole,
-                    isPartialApproval: true,
-                },
-            });
-
             return result;
         }
     }
@@ -701,8 +722,8 @@ export async function notifySubmissionApproval(options: {
         userId: approverId,
         name: isFinalApproval ? 'Submission Fully Approved' : `${roleLabel} Approved`,
         description: isFinalApproval
-            ? `Chapter "${chapterName}" has been fully approved by all reviewers.`
-            : `Chapter "${chapterName}" was approved by ${roleLabel}.`,
+            ? `Chapter "${chapterDisplay}" has been fully approved by all reviewers.`
+            : `Chapter "${chapterDisplay}" was approved by ${roleLabel}.`,
         category: 'submission',
         action: 'submission_approved',
         targets: {
@@ -713,9 +734,11 @@ export async function notifySubmissionApproval(options: {
         },
         details: {
             ...details,
+            stageName,
             approverRole,
             isFinalApproval,
         },
+        sendEmail: true,
     });
 }
 
@@ -727,18 +750,20 @@ export async function notifySubmissionRejection(options: {
     rejectorId: string;
     rejectorRole: ApprovalRole;
     chapterName: string;
+    stageName?: string;
     reason?: string;
     details?: AuditDetails;
 }): Promise<AuditAndNotifyResult> {
-    const { group, rejectorId, rejectorRole, chapterName, reason, details } = options;
+    const { group, rejectorId, rejectorRole, chapterName, stageName, reason, details } = options;
 
     const roleLabel = rejectorRole.charAt(0).toUpperCase() + rejectorRole.slice(1);
+    const chapterDisplay = stageName ? `${stageName}: ${chapterName}` : chapterName;
 
     return auditAndNotify({
         group,
         userId: rejectorId,
         name: 'Submission Rejected',
-        description: `Chapter "${chapterName}" was rejected by ${roleLabel}.${reason ? ` Reason: ${reason}` : ''}`,
+        description: `Chapter "${chapterDisplay}" was rejected by ${roleLabel}.${reason ? ` Reason: ${reason}` : ''}`,
         category: 'submission',
         action: 'submission_rejected',
         targets: {
@@ -748,9 +773,11 @@ export async function notifySubmissionRejection(options: {
         },
         details: {
             ...details,
+            stageName,
             rejectorRole,
             reason,
         },
+        sendEmail: true,
     });
 }
 
@@ -762,18 +789,20 @@ export async function notifyRevisionRequested(options: {
     requesterId: string;
     requesterRole: ApprovalRole;
     chapterName: string;
+    stageName?: string;
     comments?: string;
     details?: AuditDetails;
 }): Promise<AuditAndNotifyResult> {
-    const { group, requesterId, requesterRole, chapterName, comments, details } = options;
+    const { group, requesterId, requesterRole, chapterName, stageName, comments, details } = options;
 
     const roleLabel = requesterRole.charAt(0).toUpperCase() + requesterRole.slice(1);
+    const chapterDisplay = stageName ? `${stageName}: ${chapterName}` : chapterName;
 
     return auditAndNotify({
         group,
         userId: requesterId,
         name: 'Revision Requested',
-        description: `${roleLabel} requested revisions for chapter "${chapterName}".`,
+        description: `${roleLabel} requested revisions for chapter "${chapterDisplay}".`,
         category: 'submission',
         action: 'submission_revision_requested',
         targets: {
@@ -783,9 +812,11 @@ export async function notifyRevisionRequested(options: {
         },
         details: {
             ...details,
+            stageName,
             requesterRole,
             comments,
         },
+        sendEmail: true,
     });
 }
 
@@ -820,6 +851,7 @@ export async function notifyModerators(options: {
         },
         moderatorUserIds,
         details,
+        sendEmail: true,
     });
 }
 
@@ -864,6 +896,7 @@ export async function notifyExpertAssignment(options: {
             expertRole,
             expertName,
         },
+        sendEmail: true,
     });
 }
 
@@ -900,6 +933,7 @@ export async function notifyStageChange(options: {
             previousStage,
             newStage,
         },
+        sendEmail: true,
     });
 }
 
@@ -930,5 +964,6 @@ export async function notifyPanelCommentsReleased(options: {
             ...details,
             commentCount,
         },
+        sendEmail: true,
     });
 }

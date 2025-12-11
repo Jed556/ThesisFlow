@@ -1,6 +1,13 @@
 import * as React from 'react';
-import { Alert, Box, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material';
-import CommentBankIcon from '@mui/icons-material/CommentBank';
+import {
+    Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton,
+    Paper, Skeleton, Stack, Tab, Tabs, Tooltip, Typography,
+} from '@mui/material';
+import {
+    CommentBank as CommentBankIcon, CloudUpload as CloudUploadIcon,
+    RateReview as RequestReviewIcon, Delete as DeleteIcon,
+    Close as CloseIcon, Download as DownloadIcon,
+} from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
@@ -9,7 +16,7 @@ import type { ThesisGroup } from '../../types/group';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentEntry,
-    type PanelCommentReleaseMap, type PanelCommentStage,
+    type PanelCommentManuscript, type PanelCommentReleaseMap, type PanelCommentStage,
 } from '../../types/panelComment';
 import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable } from '../../components/PanelComments';
@@ -17,7 +24,8 @@ import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../components/Snackbar';
 import {
     listenPanelCommentEntries, listenPanelCommentRelease,
-    updatePanelCommentApprovalStatus, updatePanelCommentStudentFields,
+    updatePanelCommentStudentFields, listenPanelManuscript,
+    uploadPanelManuscript, requestManuscriptReview, deletePanelManuscript,
     type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
@@ -28,6 +36,14 @@ import {
     PANEL_COMMENT_STAGE_METADATA, canStudentAccessPanelStage, formatPanelistDisplayName, getPanelCommentStageLabel
 } from '../../utils/panelCommentUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { formatFileSize } from '../../utils/fileUtils';
+import { FileCard, FileViewer } from '../../components/File';
+import type { FileAttachment } from '../../types/file';
+import {
+    buildAuditContextFromGroup, createAuditEntry, createUserAuditEntry,
+    buildUserAuditContextFromProfile
+} from '../../utils/auditUtils';
+import { findUsersByIds as findUserProfilesByIds } from '../../utils/firebase/firestore/user';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -68,6 +84,13 @@ export default function StudentPanelCommentsPage() {
     const [terminalSubmissionsByStage, setTerminalSubmissionsByStage] = React.useState<
         Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
+    /** Manuscript state */
+    const [manuscript, setManuscript] = React.useState<PanelCommentManuscript | null>(null);
+    const [manuscriptLoading, setManuscriptLoading] = React.useState(false);
+    const [uploadingManuscript, setUploadingManuscript] = React.useState(false);
+    const [requestingReview, setRequestingReview] = React.useState(false);
+    const [fileViewerOpen, setFileViewerOpen] = React.useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     /** Build panel comment context from group */
     const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
@@ -189,6 +212,28 @@ export default function StudentPanelCommentsPage() {
         }, activePanelUid);
         return () => unsubscribe();
     }, [panelCommentCtx, activeStage, activePanelUid]);
+
+    // Listen for manuscript changes for the active stage
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setManuscript(null);
+            setManuscriptLoading(false);
+            return;
+        }
+        setManuscriptLoading(true);
+        const unsubscribe = listenPanelManuscript(panelCommentCtx, activeStage, {
+            onData: (next) => {
+                setManuscript(next);
+                setManuscriptLoading(false);
+            },
+            onError: (error) => {
+                console.error('Manuscript listener error:', error);
+                setManuscript(null);
+                setManuscriptLoading(false);
+            },
+        });
+        return () => unsubscribe();
+    }, [panelCommentCtx, activeStage]);
 
     React.useEffect(() => {
         let isMounted = true;
@@ -344,32 +389,169 @@ export default function StudentPanelCommentsPage() {
     }, [panelCommentCtx, userUid, showNotification]);
 
     /**
-     * Handle student requesting review after making revisions.
-     * Changes approval status from 'revision_required' to 'review_requested'.
+     * Handle manuscript file selection and upload.
      */
-    const handleRequestReview = React.useCallback(async (entry: PanelCommentEntry) => {
+    const handleFileSelect = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
         if (!panelCommentCtx || !userUid) {
-            showNotification('Sign in to request review.', 'error');
+            showNotification('Sign in to upload a manuscript.', 'error');
             return;
         }
-        if (entry.approvalStatus !== 'revision_required') {
+
+        // Validate file type (allow PDF and DOCX)
+        const allowedTypes = [
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword',
+        ];
+        if (!allowedTypes.includes(file.type)) {
+            showNotification('Only PDF and DOCX files are allowed.', 'error');
             return;
         }
-        setStudentSavingIds((prev) => new Set(prev).add(entry.id));
+
+        // Validate file size (50MB max)
+        const maxSize = 50 * 1024 * 1024;
+        if (file.size > maxSize) {
+            showNotification('File size must be less than 50MB.', 'error');
+            return;
+        }
+
+        setUploadingManuscript(true);
         try {
-            await updatePanelCommentApprovalStatus(panelCommentCtx, entry.id, 'review_requested', userUid);
-            showNotification('Review requested. The panelist will be notified.', 'success');
+            await uploadPanelManuscript(panelCommentCtx, activeStage, file, userUid);
+
+            // Create group audit entry
+            if (group) {
+                const auditCtx = buildAuditContextFromGroup(group);
+                await createAuditEntry(auditCtx, {
+                    name: 'Manuscript Uploaded',
+                    description: `Manuscript "${file.name}" uploaded for ${getPanelCommentStageLabel(activeStage)} panel review`,
+                    userId: userUid,
+                    category: 'thesis',
+                    action: 'file_uploaded',
+                    details: {
+                        fileName: file.name,
+                        fileSize: file.size,
+                        stage: activeStage,
+                    },
+                });
+            }
+
+            showNotification('Manuscript uploaded successfully.', 'success');
         } catch (error) {
-            console.error('Failed to request review for panel comment:', error);
+            console.error('Failed to upload manuscript:', error);
+            showNotification('Unable to upload manuscript. Please try again.', 'error');
+        } finally {
+            setUploadingManuscript(false);
+            // Reset file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    }, [panelCommentCtx, userUid, activeStage, group, showNotification]);
+
+    /**
+     * Handle delete manuscript.
+     */
+    const handleDeleteManuscript = React.useCallback(async () => {
+        if (!panelCommentCtx || !userUid || !manuscript) {
+            return;
+        }
+
+        setUploadingManuscript(true);
+        try {
+            await deletePanelManuscript(panelCommentCtx, activeStage);
+
+            // Create group audit entry
+            if (group) {
+                const auditCtx = buildAuditContextFromGroup(group);
+                await createAuditEntry(auditCtx, {
+                    name: 'Manuscript Deleted',
+                    description: `Manuscript "${manuscript.fileName}" deleted for ${getPanelCommentStageLabel(activeStage)} panel review`,
+                    userId: userUid,
+                    category: 'thesis',
+                    action: 'file_deleted',
+                    details: {
+                        fileName: manuscript.fileName,
+                        stage: activeStage,
+                    },
+                });
+            }
+
+            showNotification('Manuscript deleted.', 'success');
+        } catch (error) {
+            console.error('Failed to delete manuscript:', error);
+            showNotification('Unable to delete manuscript. Please try again.', 'error');
+        } finally {
+            setUploadingManuscript(false);
+        }
+    }, [panelCommentCtx, userUid, manuscript, activeStage, group, showNotification]);
+
+    /**
+     * Handle requesting panel review for the uploaded manuscript.
+     * This notifies all panels and creates audit entries.
+     */
+    const handleRequestReview = React.useCallback(async () => {
+        if (!panelCommentCtx || !userUid || !manuscript || !group) {
+            showNotification('Upload a manuscript first before requesting review.', 'error');
+            return;
+        }
+
+        if (manuscript.reviewRequested) {
+            showNotification('Review has already been requested.', 'info');
+            return;
+        }
+
+        setRequestingReview(true);
+        try {
+            await requestManuscriptReview(panelCommentCtx, activeStage, userUid);
+
+            // Create group audit entry
+            const auditCtx = buildAuditContextFromGroup(group);
+            await createAuditEntry(auditCtx, {
+                name: 'Panel Review Requested',
+                description: `Panel review requested for ${getPanelCommentStageLabel(activeStage)} manuscript`,
+                userId: userUid,
+                category: 'thesis',
+                action: 'review_requested',
+                details: {
+                    fileName: manuscript.fileName,
+                    stage: activeStage,
+                },
+            });
+
+            // Send notifications to all panel members
+            const panelUids = group.members?.panels ?? [];
+            if (panelUids.length > 0) {
+                const panelProfiles = await findUserProfilesByIds(panelUids);
+                for (const panelProfile of panelProfiles) {
+                    const userAuditCtx = buildUserAuditContextFromProfile(panelProfile);
+                    await createUserAuditEntry(userAuditCtx, {
+                        name: 'Panel Review Requested',
+                        description: `${group.name || 'A group'} has uploaded a manuscript for ${getPanelCommentStageLabel(activeStage)} panel review`,
+                        actorUserId: userUid,
+                        category: 'thesis',
+                        action: 'review_requested',
+                        details: {
+                            groupId: group.id,
+                            groupName: group.name,
+                            fileName: manuscript.fileName,
+                            stage: activeStage,
+                        },
+                    });
+                }
+            }
+
+            showNotification('Review requested. All panel members have been notified.', 'success');
+        } catch (error) {
+            console.error('Failed to request review:', error);
             showNotification('Unable to request review. Please try again.', 'error');
         } finally {
-            setStudentSavingIds((prev) => {
-                const next = new Set(prev);
-                next.delete(entry.id);
-                return next;
-            });
+            setRequestingReview(false);
         }
-    }, [panelCommentCtx, userUid, showNotification]);
+    }, [panelCommentCtx, userUid, manuscript, activeStage, group, showNotification]);
 
     const renderTabs = () => (
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -463,6 +645,86 @@ export default function StudentPanelCommentsPage() {
 
                 {renderTabs()}
 
+                {/* Manuscript Upload Section - shared across all panels */}
+                {stageAccessible && (
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                        <Stack spacing={2}>
+                            <Typography variant="subtitle1" fontWeight="medium">
+                                Manuscript for Panel Review
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Upload your revised manuscript for the panel to review.
+                                You must upload a file before requesting a review.
+                            </Typography>
+
+                            {manuscriptLoading ? (
+                                <Skeleton variant="rectangular" height={56} />
+                            ) : manuscript ? (
+                                <Stack spacing={2}>
+                                    <FileCard
+                                        file={{
+                                            name: manuscript.fileName,
+                                            size: manuscript.fileSize,
+                                            mimeType: manuscript.mimeType,
+                                            url: manuscript.url,
+                                        } as FileAttachment}
+                                        title={manuscript.fileName}
+                                        sizeLabel={formatFileSize(manuscript.fileSize)}
+                                        metaLabel={`Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}`}
+                                        onClick={() => setFileViewerOpen(true)}
+                                        onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                                        onDelete={!manuscript.reviewRequested ? handleDeleteManuscript : undefined}
+                                        showDownloadButton
+                                        showDeleteButton={!manuscript.reviewRequested}
+                                        disabled={uploadingManuscript}
+                                    />
+
+                                    <Stack direction="row" spacing={2} alignItems="center">
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            startIcon={requestingReview ? <CircularProgress size={16} /> : <RequestReviewIcon />}
+                                            onClick={handleRequestReview}
+                                            disabled={requestingReview || manuscript.reviewRequested}
+                                        >
+                                            {manuscript.reviewRequested
+                                                ? 'Review Requested'
+                                                : 'Request Panel Review'}
+                                        </Button>
+                                        {manuscript.reviewRequested && (
+                                            <Typography variant="body2" color="success.main">
+                                                ✓ Review requested on{' '}
+                                                {new Date(manuscript.reviewRequestedAt || '').toLocaleDateString()}
+                                            </Typography>
+                                        )}
+                                    </Stack>
+                                </Stack>
+                            ) : (
+                                <Stack direction="row" spacing={2} alignItems="center">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        style={{ display: 'none' }}
+                                        onChange={handleFileSelect}
+                                    />
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={uploadingManuscript ? <CircularProgress size={16} /> : <CloudUploadIcon />}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={uploadingManuscript}
+                                    >
+                                        {uploadingManuscript ? 'Uploading...' : 'Upload Manuscript'}
+                                    </Button>
+                                    <Typography variant="caption" color="text.secondary">
+                                        PDF or DOCX, max 50MB
+                                    </Typography>
+                                </Stack>
+                            )}
+                        </Stack>
+                    </Paper>
+                )}
+
                 <Stack spacing={1.5}>
                     <Typography variant="subtitle2" color="text.secondary">
                         Panel sheets
@@ -520,11 +782,54 @@ export default function StudentPanelCommentsPage() {
                             loading={entriesLoading}
                             busyEntryIds={studentSavingIds}
                             onStudentFieldChange={(entry, field, value) => handleStudentFieldChange(entry, field, value)}
-                            onRequestReview={handleRequestReview}
                         />
                     </Stack>
                 )}
             </Stack>
+
+            {/* File Viewer Dialog */}
+            <Dialog
+                open={fileViewerOpen}
+                onClose={() => setFileViewerOpen(false)}
+                maxWidth="lg"
+                fullWidth
+                PaperProps={{ sx: { height: '80vh' } }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+                    <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
+                        {manuscript?.fileName ?? 'Manuscript'}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                        <Tooltip title="Download file">
+                            <IconButton
+                                size="small"
+                                onClick={() => manuscript?.url && window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                            >
+                                <DownloadIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Close">
+                            <IconButton size="small" onClick={() => setFileViewerOpen(false)}>
+                                <CloseIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </DialogTitle>
+                <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
+                    {manuscript && (
+                        <FileViewer
+                            file={{
+                                name: manuscript.fileName,
+                                size: manuscript.fileSize,
+                                mimeType: manuscript.mimeType,
+                                url: manuscript.url,
+                            } as FileAttachment}
+                            showToolbar={false}
+                            height="100%"
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </AnimatedPage>
     );
 }

@@ -47,7 +47,7 @@ import type {
 } from '../../../types/terminalRequirementTemplate';
 import type {
     TerminalRequirementApprovalRole, TerminalRequirementApprovalState, TerminalRequirementApprovalStatus,
-    TerminalRequirementApproverAssignments, TerminalRequirementSubmissionHistoryEntry,
+    TerminalRequirementApproverAssignments, TerminalRequirementMemberApproval, TerminalRequirementSubmissionHistoryEntry,
     TerminalRequirementSubmissionRecord, TerminalRequirementSubmissionStatus,
 } from '../../../types/terminalRequirementSubmission';
 
@@ -131,18 +131,112 @@ function sanitizeAssignments(
     }, {});
 }
 
+/**
+ * Checks if a role's approval is fully complete.
+ * For roles with multiple assigned approvers (e.g., panel), ALL members must have approved.
+ * For single-approver roles, checks the overall status.
+ */
+function isRoleFullyApproved(
+    approval: TerminalRequirementApprovalState | undefined,
+    assignedApprovers?: string[],
+): boolean {
+    if (!approval) return false;
+
+    // If there are multiple assigned approvers, check memberApprovals
+    if (assignedApprovers && assignedApprovers.length > 1 && approval.memberApprovals) {
+        return assignedApprovers.every((uid) =>
+            approval.memberApprovals?.[uid]?.status === 'approved'
+        );
+    }
+
+    // Single approver or no member tracking - use overall status
+    return approval.status === 'approved';
+}
+
+/**
+ * Checks if any member has returned the submission for a multi-approver role.
+ */
+function hasAnyMemberReturned(
+    approval: TerminalRequirementApprovalState | undefined,
+): boolean {
+    if (!approval?.memberApprovals) return false;
+    return Object.values(approval.memberApprovals).some((m) => m.status === 'returned');
+}
+
+/**
+ * Derives the overall approval status from member approvals for multi-approver roles.
+ */
+function deriveOverallStatusFromMembers(
+    memberApprovals: Record<string, TerminalRequirementMemberApproval> | undefined,
+    assignedApprovers: string[],
+): TerminalRequirementApprovalStatus {
+    if (!memberApprovals || assignedApprovers.length === 0) {
+        return 'pending';
+    }
+
+    // If any member returned, the overall status is returned
+    const hasReturned = assignedApprovers.some((uid) =>
+        memberApprovals[uid]?.status === 'returned'
+    );
+    if (hasReturned) {
+        return 'returned';
+    }
+
+    // If all members approved, the overall status is approved
+    const allApproved = assignedApprovers.every((uid) =>
+        memberApprovals[uid]?.status === 'approved'
+    );
+    if (allApproved) {
+        return 'approved';
+    }
+
+    return 'pending';
+}
+
 function normalizeApprovals(
     roles: TerminalRequirementApprovalRole[],
     existing?: Partial<Record<TerminalRequirementApprovalRole, TerminalRequirementApprovalState>>,
+    assignments?: TerminalRequirementApproverAssignments,
 ): Partial<Record<TerminalRequirementApprovalRole, TerminalRequirementApprovalState>> {
     return roles.reduce<
         Partial<Record<TerminalRequirementApprovalRole, TerminalRequirementApprovalState>>
     >((acc, role) => {
         const previous = existing?.[role];
-        if (previous && previous.status === 'approved') {
-            acc[role] = { ...previous, role };
+        const assignedApprovers = assignments?.[role] ?? [];
+
+        // For roles with multiple approvers, track member approvals
+        if (assignedApprovers.length > 1) {
+            // Initialize or preserve member approvals
+            const memberApprovals: Record<string, TerminalRequirementMemberApproval> = {};
+            for (const uid of assignedApprovers) {
+                const previousMember = previous?.memberApprovals?.[uid];
+                if (previousMember && previousMember.status === 'approved') {
+                    // Preserve approved status
+                    memberApprovals[uid] = { ...previousMember };
+                } else {
+                    // Reset to pending
+                    memberApprovals[uid] = { uid, status: 'pending' };
+                }
+            }
+
+            const overallStatus = deriveOverallStatusFromMembers(memberApprovals, assignedApprovers);
+            acc[role] = {
+                role,
+                status: overallStatus,
+                memberApprovals,
+                // Preserve decidedAt/decidedBy if all approved
+                ...(overallStatus === 'approved' && previous?.decidedAt ? {
+                    decidedAt: previous.decidedAt,
+                    decidedBy: previous.decidedBy,
+                } : {}),
+            };
         } else {
-            acc[role] = { role, status: 'pending' };
+            // Single approver - use simple status tracking
+            if (previous && previous.status === 'approved') {
+                acc[role] = { ...previous, role };
+            } else {
+                acc[role] = { role, status: 'pending' };
+            }
         }
         return acc;
     }, {});
@@ -178,6 +272,10 @@ function mapApprovalsRecord(
             if (entry.decidedAt) approval.decidedAt = entry.decidedAt;
             if (entry.decidedBy) approval.decidedBy = entry.decidedBy;
             if (entry.note) approval.note = entry.note;
+            // Preserve memberApprovals for roles with multiple approvers
+            if (entry.memberApprovals) {
+                approval.memberApprovals = entry.memberApprovals;
+            }
             acc[role] = approval;
         }
         return acc;
@@ -376,7 +474,7 @@ export async function submitTerminalRequirement(
     const orderedRoles = APPROVAL_FLOW.filter((role) => Boolean(normalizedAssignments[role]));
     const now = new Date().toISOString();
 
-    const approvals = normalizeApprovals(orderedRoles, existing?.approvals);
+    const approvals = normalizeApprovals(orderedRoles, existing?.approvals, normalizedAssignments);
     let history = trimHistory([
         ...(existing?.history ?? []),
         createHistoryEntry('submitted', submittedBy, 'student')
@@ -476,10 +574,11 @@ export async function recordTerminalRequirementDecision(
     const orderedRoles = APPROVAL_FLOW.filter((r) => allowedRoles.includes(r));
     const targetIndex = orderedRoles.indexOf(role);
 
+    // Check if previous roles in the workflow are fully approved
     if (targetIndex > 0) {
         const blockingRole = orderedRoles
             .slice(0, targetIndex)
-            .find((r) => existing.approvals[r]?.status !== 'approved');
+            .find((r) => !isRoleFullyApproved(existing.approvals[r], existing.assignedApprovers?.[r]));
         if (blockingRole) {
             throw new Error('Awaiting previous approvals.');
         }
@@ -493,41 +592,122 @@ export async function recordTerminalRequirementDecision(
     const now = new Date().toISOString();
     const approvals = { ...existing.approvals };
     let history = [...(existing.history ?? [])];
+    const isMultiApprover = assigned && assigned.length > 1;
 
     if (action === 'approve') {
-        const approvalEntry: TerminalRequirementApprovalState = {
-            role,
-            status: 'approved',
-            decidedAt: now,
-            decidedBy: approverUid,
-        };
-        if (note) approvalEntry.note = note;
-        approvals[role] = approvalEntry;
-        history = trimHistory([
-            ...history,
-            createHistoryEntry('approved', approverUid, role, note)
-        ]);
+        if (isMultiApprover) {
+            // Multi-approver role (e.g., panel): track individual member approval
+            const currentApproval = approvals[role] ?? { role, status: 'pending' };
+            const memberApprovals = { ...currentApproval.memberApprovals };
 
-        const allApproved = orderedRoles.every((r) => approvals[r]?.status === 'approved');
-        const payloadToSet: Partial<TerminalRequirementDocument> = {
-            approvals,
-            status: allApproved ? 'approved' : 'in_review',
-            currentRole: determineCurrentRole(approvals, orderedRoles),
-            locked: true,
-            completedAt: allApproved ? now : existing.completedAt,
-            updatedAt: now,
-            history,
-        };
-        await setDoc(ref, cleanData(payloadToSet, 'update'), { merge: true });
+            // Record this member's approval
+            memberApprovals[approverUid] = {
+                uid: approverUid,
+                status: 'approved',
+                decidedAt: now,
+                ...(note ? { note } : {}),
+            };
+
+            // Derive overall status from all member approvals
+            const overallStatus = deriveOverallStatusFromMembers(memberApprovals, assigned);
+
+            approvals[role] = {
+                role,
+                status: overallStatus,
+                memberApprovals,
+                // Set decidedAt/decidedBy when ALL members have approved
+                ...(overallStatus === 'approved' ? {
+                    decidedAt: now,
+                    decidedBy: approverUid, // Last approver
+                } : {}),
+            };
+
+            history = trimHistory([
+                ...history,
+                createHistoryEntry('approved', approverUid, role, note)
+            ]);
+
+            // Check if this role is now fully approved (all members approved)
+            const roleFullyApproved = overallStatus === 'approved';
+            // Check if all roles in the workflow are fully approved
+            const allApproved = roleFullyApproved && orderedRoles.every((r) =>
+                isRoleFullyApproved(approvals[r], existing.assignedApprovers?.[r])
+            );
+
+            const payloadToSet: Partial<TerminalRequirementDocument> = {
+                approvals,
+                status: allApproved ? 'approved' : 'in_review',
+                currentRole: roleFullyApproved
+                    ? determineCurrentRole(approvals, orderedRoles)
+                    : role, // Stay on current role if not all members approved
+                locked: true,
+                completedAt: allApproved ? now : existing.completedAt,
+                updatedAt: now,
+                history,
+            };
+            await setDoc(ref, cleanData(payloadToSet, 'update'), { merge: true });
+        } else {
+            // Single approver role: use simple status tracking
+            const approvalEntry: TerminalRequirementApprovalState = {
+                role,
+                status: 'approved',
+                decidedAt: now,
+                decidedBy: approverUid,
+            };
+            if (note) approvalEntry.note = note;
+            approvals[role] = approvalEntry;
+            history = trimHistory([
+                ...history,
+                createHistoryEntry('approved', approverUid, role, note)
+            ]);
+
+            const allApproved = orderedRoles.every((r) =>
+                isRoleFullyApproved(approvals[r], existing.assignedApprovers?.[r])
+            );
+            const payloadToSet: Partial<TerminalRequirementDocument> = {
+                approvals,
+                status: allApproved ? 'approved' : 'in_review',
+                currentRole: determineCurrentRole(approvals, orderedRoles),
+                locked: true,
+                completedAt: allApproved ? now : existing.completedAt,
+                updatedAt: now,
+                history,
+            };
+            await setDoc(ref, cleanData(payloadToSet, 'update'), { merge: true });
+        }
     } else {
-        const approvalEntry: TerminalRequirementApprovalState = {
-            role,
-            status: 'returned',
-            decidedAt: now,
-            decidedBy: approverUid,
-        };
-        if (note) approvalEntry.note = note;
-        approvals[role] = approvalEntry;
+        // Return action - any member returning causes the submission to be returned
+        if (isMultiApprover) {
+            const currentApproval = approvals[role] ?? { role, status: 'pending' };
+            const memberApprovals = { ...currentApproval.memberApprovals };
+
+            // Record this member's return
+            memberApprovals[approverUid] = {
+                uid: approverUid,
+                status: 'returned',
+                decidedAt: now,
+                ...(note ? { note } : {}),
+            };
+
+            approvals[role] = {
+                role,
+                status: 'returned',
+                decidedAt: now,
+                decidedBy: approverUid,
+                memberApprovals,
+                ...(note ? { note } : {}),
+            };
+        } else {
+            const approvalEntry: TerminalRequirementApprovalState = {
+                role,
+                status: 'returned',
+                decidedAt: now,
+                decidedBy: approverUid,
+            };
+            if (note) approvalEntry.note = note;
+            approvals[role] = approvalEntry;
+        }
+
         history = trimHistory([
             ...history,
             createHistoryEntry('returned', approverUid, role, note)
@@ -1063,6 +1243,7 @@ export type {
     TerminalRequirementApprovalState,
     TerminalRequirementApprovalStatus,
     TerminalRequirementApproverAssignments,
+    TerminalRequirementMemberApproval,
     TerminalRequirementSubmissionHistoryEntry,
     TerminalRequirementSubmissionRecord,
     TerminalRequirementSubmissionStatus,

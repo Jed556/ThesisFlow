@@ -1,14 +1,20 @@
 import * as React from 'react';
 import {
-    Alert, Autocomplete, Box, Button, Skeleton, Stack, Tab, Tabs, TextField, Typography
+    Alert, Autocomplete, Box, Button, Dialog, DialogContent, DialogTitle, IconButton,
+    Paper, Skeleton, Stack, Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
-import { Send as SendIcon } from '@mui/icons-material';
+import {
+    Send as SendIcon, Close as CloseIcon, Download as DownloadIcon,
+} from '@mui/icons-material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
 import type { NavigationItem } from '../../types/navigation';
 import type { ThesisGroup } from '../../types/group';
-import type { PanelCommentApprovalStatus, PanelCommentEntry, PanelCommentStage } from '../../types/panelComment';
+import type {
+    PanelCommentApprovalStatus, PanelCommentEntry,
+    PanelCommentManuscript, PanelCommentStage,
+} from '../../types/panelComment';
 import { AnimatedPage } from '../../components/Animate';
 import { PanelCommentTable, PanelCommentEditorDialog } from '../../components/PanelComments';
 import { useSnackbar } from '../../components/Snackbar';
@@ -17,12 +23,16 @@ import {
     addPanelCommentEntry, deletePanelCommentEntry, listenPanelCommentEntries,
     updatePanelCommentEntry, listenPanelCommentRelease, isPanelTableReleased,
     isPanelTableReadyForReview, setPanelCommentTableReadyState,
-    updatePanelCommentApprovalStatus, type PanelCommentContext,
+    updatePanelCommentApprovalStatus, listenPanelManuscript,
+    type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { createDefaultPanelCommentReleaseMap, type PanelCommentReleaseMap } from '../../types/panelComment';
 import { PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel } from '../../utils/panelCommentUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
 import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import { formatFileSize } from '../../utils/fileUtils';
+import { FileCard, FileViewer } from '../../components/File';
+import type { FileAttachment } from '../../types/file';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -54,6 +64,12 @@ export default function PanelPanelCommentsPage() {
     const [releaseMap, setReleaseMap] = React.useState<PanelCommentReleaseMap>(
         createDefaultPanelCommentReleaseMap()
     );
+    /** Manuscript state */
+    const [manuscript, setManuscript] = React.useState<PanelCommentManuscript | null>(null);
+    const [manuscriptLoading, setManuscriptLoading] = React.useState(false);
+    /** File viewer dialog state */
+    const [fileViewerOpen, setFileViewerOpen] = React.useState(false);
+
     const selectedGroup = React.useMemo(
         () => groups.find((group) => group.id === selectedGroupId) ?? null,
         [groups, selectedGroupId]
@@ -146,6 +162,28 @@ export default function PanelPanelCommentsPage() {
         return () => unsubscribe();
     }, [panelCommentCtx, activeStage, userUid]);
 
+    // Listen for manuscript changes for the active stage
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setManuscript(null);
+            setManuscriptLoading(false);
+            return;
+        }
+        setManuscriptLoading(true);
+        const unsubscribe = listenPanelManuscript(panelCommentCtx, activeStage, {
+            onData: (next) => {
+                setManuscript(next);
+                setManuscriptLoading(false);
+            },
+            onError: (error) => {
+                console.error('Manuscript listener error:', error);
+                setManuscript(null);
+                setManuscriptLoading(false);
+            },
+        });
+        return () => unsubscribe();
+    }, [panelCommentCtx, activeStage]);
+
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, value: PanelCommentStage) => {
         setActiveStage(value);
     }, []);
@@ -197,6 +235,7 @@ export default function PanelPanelCommentsPage() {
                             excludeUserId: userUid,
                         },
                         details: { stage: activeStage, commentPreview: values.comment.slice(0, 100) },
+                        sendEmail: true,
                     });
                 } catch (auditError) {
                     console.error('Failed to create audit notification:', auditError);
@@ -239,7 +278,11 @@ export default function PanelPanelCommentsPage() {
         entry: PanelCommentEntry,
         status: PanelCommentApprovalStatus
     ) => {
-        if (!panelCommentCtx || !userUid || !isTableReleased || !selectedGroup) return;
+        // Only allow approval changes when table is released AND manuscript review is requested
+        if (!panelCommentCtx || !userUid || !isTableReleased || !selectedGroup || !manuscript?.reviewRequested) {
+            showNotification('Cannot update approval status. Student must request review first.', 'warning');
+            return;
+        }
         try {
             await updatePanelCommentApprovalStatus(panelCommentCtx, entry.id, status, userUid);
 
@@ -260,6 +303,7 @@ export default function PanelPanelCommentsPage() {
                         excludeUserId: userUid,
                     },
                     details: { stage: activeStage, entryId: entry.id, newStatus: status },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -273,7 +317,7 @@ export default function PanelPanelCommentsPage() {
             console.error('Failed to update approval status:', error);
             showNotification('Unable to update approval status. Please try again.', 'error');
         }
-    }, [panelCommentCtx, userUid, isTableReleased, selectedGroup, activeStage, showNotification]);
+    }, [panelCommentCtx, userUid, isTableReleased, selectedGroup, activeStage, manuscript, showNotification]);
 
     /** Mark comments as ready for admin to release to students */
     const handleMarkAsReady = React.useCallback(async () => {
@@ -304,6 +348,7 @@ export default function PanelPanelCommentsPage() {
                         excludeUserId: userUid,
                     },
                     details: { stage: activeStage, panelUid: userUid, commentCount: entries.length },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -406,6 +451,40 @@ export default function PanelPanelCommentsPage() {
                                 )}
                             </Stack>
                         )}
+
+                        {/* Manuscript Viewer - Show when manuscript exists */}
+                        {manuscriptLoading ? (
+                            <Skeleton variant="rectangular" height={80} />
+                        ) : manuscript && (
+                            <Paper variant="outlined" sx={{ p: 2 }}>
+                                <Stack spacing={1.5}>
+                                    <Typography variant="subtitle1" fontWeight="medium">
+                                        {manuscript.reviewRequested ? 'Manuscript for Review' : 'Manuscript Uploaded'}
+                                    </Typography>
+                                    {!manuscript.reviewRequested && (
+                                        <Alert severity="info" sx={{ py: 0.5 }}>
+                                            Waiting for student to request review. You can view the file but cannot approve/request revisions yet.
+                                        </Alert>
+                                    )}
+                                    <FileCard
+                                        file={{
+                                            name: manuscript.fileName,
+                                            size: manuscript.fileSize,
+                                            mimeType: manuscript.mimeType,
+                                            url: manuscript.url,
+                                        } as FileAttachment}
+                                        title={manuscript.fileName}
+                                        sizeLabel={formatFileSize(manuscript.fileSize)}
+                                        metaLabel={`Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}${manuscript.reviewRequestedAt ? ` · Review requested ${new Date(manuscript.reviewRequestedAt).toLocaleDateString()}` : ''}`}
+                                        onClick={() => setFileViewerOpen(true)}
+                                        onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                                        showDownloadButton
+                                        showDeleteButton={false}
+                                    />
+                                </Stack>
+                            </Paper>
+                        )}
+
                         {entriesError && (
                             <Alert severity="error">{entriesError}</Alert>
                         )}
@@ -419,7 +498,7 @@ export default function PanelPanelCommentsPage() {
                             onAddEntry={() => handleOpenEditor('create')}
                             onEditEntry={(entry) => handleOpenEditor('edit', entry)}
                             onDeleteEntry={handleDeleteEntry}
-                            onApprovalChange={handleApprovalChange}
+                            onApprovalChange={manuscript?.reviewRequested ? handleApprovalChange : undefined}
                         />
                     </>
                 )}
@@ -433,6 +512,50 @@ export default function PanelPanelCommentsPage() {
                 onSubmit={handleSubmitEditor}
                 submitting={saving}
             />
+
+            {/* File Viewer Dialog */}
+            <Dialog
+                open={fileViewerOpen}
+                onClose={() => setFileViewerOpen(false)}
+                maxWidth="lg"
+                fullWidth
+                PaperProps={{ sx: { height: '80vh' } }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+                    <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
+                        {manuscript?.fileName ?? 'Manuscript'}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                        <Tooltip title="Download file">
+                            <IconButton
+                                size="small"
+                                onClick={() => manuscript?.url && window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                            >
+                                <DownloadIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Close">
+                            <IconButton size="small" onClick={() => setFileViewerOpen(false)}>
+                                <CloseIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </DialogTitle>
+                <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
+                    {manuscript && (
+                        <FileViewer
+                            file={{
+                                name: manuscript.fileName,
+                                size: manuscript.fileSize,
+                                mimeType: manuscript.mimeType,
+                                url: manuscript.url,
+                            } as FileAttachment}
+                            showToolbar={false}
+                            height="100%"
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </AnimatedPage>
     );
 }
