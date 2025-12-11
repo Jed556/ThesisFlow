@@ -47,8 +47,10 @@
  * {year}/{department}/{course}/{group}
  *   ├── expertRequests/{requestAttachments}
  *   ├── proposals/{proposalAttachments}
- *   ├── panelComments/{commentAttachments}
  *   └── thesis/{thesis}
+ *       ├── panel
+ *       │   ├── comments/{attachments} (panels can attach files to comment rows)
+ *       │   └── manuscript/{attachments} (uploaded by the group for the panel to check)
  *       └── {stage}/{chapter}
  *           └── submissions/{submissionAttachments}
  *               └── chats/{chatAttachments}

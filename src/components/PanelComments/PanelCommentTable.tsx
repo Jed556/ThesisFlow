@@ -8,7 +8,7 @@ import {
 } from '@mui/x-data-grid';
 import {
     Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon,
-    CheckCircle as ApproveIcon, Replay as RevisionIcon, RateReview as RequestReviewIcon
+    CheckCircle as ApproveIcon, Replay as RevisionIcon,
 } from '@mui/icons-material';
 import type { PanelCommentApprovalStatus, PanelCommentEntry } from '../../types/panelComment';
 import { formatRelative, normalizeDateInput } from '../../utils/dateUtils';
@@ -35,8 +35,6 @@ export interface PanelCommentTableProps {
     ) => void;
     /** Callback for panel to set approval status on an entry */
     onApprovalChange?: (entry: PanelCommentEntry, status: PanelCommentApprovalStatus) => void;
-    /** Callback for student to request review after making revisions */
-    onRequestReview?: (entry: PanelCommentEntry) => void;
 }
 
 /**
@@ -92,7 +90,6 @@ export function PanelCommentTable({
     onDeleteEntry,
     onStudentFieldChange,
     onApprovalChange,
-    onRequestReview,
 }: PanelCommentTableProps) {
     // Show student columns for student/admin views, or for panel when table is released (for review)
     const showStudentColumns = variant !== 'panel' || released;
@@ -103,10 +100,8 @@ export function PanelCommentTable({
     const showApprovalColumn = variant === 'student' || (variant === 'panel' && released) || variant === 'admin';
     // Panel can set approval status only after table is released
     const canSetApproval = variant === 'panel' && released && Boolean(onApprovalChange);
-    // Student can request review when status is revision_required
-    const canRequestReview = variant === 'student' && Boolean(onRequestReview);
-    // Show actions column for panel or student (when can request review)
-    const showActions = (variant === 'panel' && (!!onEditEntry || !!onDeleteEntry || !!onApprovalChange)) || canRequestReview;
+    // Show actions column for panel only (students use the Request Review button above the table)
+    const showActions = variant === 'panel' && (!!onEditEntry || !!onDeleteEntry || !!onApprovalChange);
 
     // Local state for student field edits (controlled inputs)
     const [editingFields, setEditingFields] = React.useState<
@@ -409,28 +404,6 @@ export function PanelCommentTable({
                         );
                     }
 
-                    // Student request review action (always show, disable when not applicable)
-                    if (canRequestReview) {
-                        const canRequest = entry.approvalStatus === 'revision_required';
-                        const alreadyRequested = entry.approvalStatus === 'review_requested';
-                        actions.push(
-                            <GridActionsCellItem
-                                key="requestReview"
-                                icon={
-                                    <RequestReviewIcon
-                                        color={alreadyRequested ? 'info' : (canRequest ? 'inherit' : 'disabled')}
-                                    />
-                                }
-                                label={alreadyRequested
-                                    ? 'Review already requested'
-                                    : 'Request panel to review your revisions'}
-                                onClick={() => onRequestReview?.(entry)}
-                                disabled={disabled || busy || !canRequest || alreadyRequested}
-                                color="inherit"
-                            />
-                        );
-                    }
-
                     return actions;
                 },
             } as GridColDef<PanelCommentRow>);
@@ -439,8 +412,7 @@ export function PanelCommentTable({
         return cols;
     }, [
         showStudentColumns, showApprovalColumn, showActions, canPanelEdit, canSetApproval,
-        canRequestReview, disabled, busyEntryIds, onEditEntry, onDeleteEntry, onApprovalChange,
-        onRequestReview, renderStudentField
+        disabled, busyEntryIds, onEditEntry, onDeleteEntry, onApprovalChange, renderStudentField
     ]);
 
     return (
