@@ -283,6 +283,7 @@ export default function ModeratorTopicProposalsPage() {
                         notes: decisionNotes.trim() || undefined,
                         reviewerRole: 'moderator',
                     },
+                    sendEmail: true,
                 });
             }
         } catch (error) {

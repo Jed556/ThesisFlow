@@ -632,6 +632,7 @@ export default function StudentGroupPage() {
                         excludeUserId: userUid,
                     },
                     details: { invitedUserId: inviteUid.trim() },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -686,6 +687,7 @@ export default function StudentGroupPage() {
                             excludeUserId: userUid,
                         },
                         details: { newMemberId: userUid },
+                        sendEmail: true,
                     });
                 } catch (auditError) {
                     console.error('Failed to create audit notification:', auditError);
@@ -735,6 +737,7 @@ export default function StudentGroupPage() {
                         excludeUserId: userUid,
                     },
                     details: { previousStatus: 'draft', newStatus: 'pending' },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -774,6 +777,7 @@ export default function StudentGroupPage() {
                         excludeUserId: userUid,
                     },
                     details: { newMemberId: requesterUid },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -812,6 +816,7 @@ export default function StudentGroupPage() {
                         excludeUserId: userUid,
                     },
                     details: { rejectedUserId: requesterUid },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);

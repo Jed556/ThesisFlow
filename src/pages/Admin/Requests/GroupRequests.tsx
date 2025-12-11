@@ -99,6 +99,7 @@ export default function AdminGroupRequestsPage() {
                         groupMembers: true,
                         excludeUserId: adminUid,
                     },
+                    sendEmail: true,
                 });
             }
 
@@ -134,6 +135,7 @@ export default function AdminGroupRequestsPage() {
                         excludeUserId: adminUid,
                     },
                     details: { reason: rejectionReason.trim() },
+                    sendEmail: true,
                 });
             }
 

@@ -115,6 +115,7 @@ export default function ExpertRequestDecisionActions({ request, group, role, rol
                             excludeUserId: expertUid!,
                         },
                         details: { expertRole: role, responseNote: note },
+                        sendEmail: true,
                     });
                 }
 

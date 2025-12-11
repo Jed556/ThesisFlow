@@ -90,6 +90,19 @@ export function canonicalizeStageValue(value?: ThesisStageName | string | null):
     return STAGE_LOOKUP.get(normalized) ?? null;
 }
 
+/**
+ * Gets the display label for a stage slug.
+ * @param stageSlug - The stage slug (e.g., "proposal", "pre-proposal")
+ * @returns The display label (e.g., "Proposal", "Pre-Proposal") or the slug if not found
+ */
+export function getStageLabel(stageSlug?: ThesisStageName | string | null): string {
+    if (!stageSlug) return '';
+    const canonicalized = canonicalizeStageValue(stageSlug);
+    if (!canonicalized) return stageSlug;
+    const stageMeta = THESIS_STAGE_METADATA.find(s => s.value === canonicalized);
+    return stageMeta?.label || canonicalized;
+}
+
 function normalizeChapterStages(stage?: ThesisStageName | ThesisStageName[] | null): ThesisStageName[] {
     const values = Array.isArray(stage)
         ? stage

@@ -386,6 +386,7 @@ export default function StudentThesisOverviewPage() {
                     excludeUserId: userUid,
                 },
                 details: { thesisId, chapterId, stage, submissionId },
+                sendEmail: true,
             });
         } catch (auditError) {
             console.error('Failed to create audit notification:', auditError);

@@ -14,6 +14,7 @@ import { SnackbarProvider, SnackbarContainer, useSnackbar } from './components/S
 import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';
 import BackgroundJobNotifications from './components/BackgroundJobNotifications';
 import CalendarDeadlineNotifications from './components/CalendarDeadlineNotifications';
+import AuditNotifications from './components/AuditNotifications';
 
 import type { Navigation } from '@toolpad/core/AppProvider';
 import type { Session, ExtendedAuthentication } from './types/session';
@@ -173,6 +174,7 @@ function AppContent() {
             <SnackbarContainer />
             <BackgroundJobNotifications />
             <CalendarDeadlineNotifications />
+            <AuditNotifications />
         </ReactRouterAppProvider>
     );
 }

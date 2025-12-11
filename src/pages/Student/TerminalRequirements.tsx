@@ -682,6 +682,7 @@ export default function TerminalRequirementsPage() {
                     excludeUserId: userUid,
                 },
                 details: { stage: activeStage, requirementCount: stageRequirements.length },
+                sendEmail: true,
             });
         } catch (submitError) {
             console.error('Failed to submit terminal requirements:', submitError);

@@ -1,11 +1,10 @@
 import * as React from 'react';
 import {
-    Alert, Autocomplete, Box, Button, Link, Paper, Skeleton,
-    Stack, Tab, Tabs, TextField, Typography,
+    Alert, Autocomplete, Box, Button, Dialog, DialogContent, DialogTitle, IconButton,
+    Paper, Skeleton, Stack, Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
-    Send as SendIcon, Description as FileIcon,
-    OpenInNew as OpenInNewIcon,
+    Send as SendIcon, Close as CloseIcon, Download as DownloadIcon,
 } from '@mui/icons-material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
@@ -32,6 +31,8 @@ import { PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel } from '../../u
 import { DEFAULT_YEAR } from '../../config/firestore';
 import { auditAndNotify } from '../../utils/auditNotificationUtils';
 import { formatFileSize } from '../../utils/fileUtils';
+import { FileCard, FileViewer } from '../../components/File';
+import type { FileAttachment } from '../../types/file';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -66,6 +67,8 @@ export default function PanelPanelCommentsPage() {
     /** Manuscript state */
     const [manuscript, setManuscript] = React.useState<PanelCommentManuscript | null>(null);
     const [manuscriptLoading, setManuscriptLoading] = React.useState(false);
+    /** File viewer dialog state */
+    const [fileViewerOpen, setFileViewerOpen] = React.useState(false);
 
     const selectedGroup = React.useMemo(
         () => groups.find((group) => group.id === selectedGroupId) ?? null,
@@ -232,6 +235,7 @@ export default function PanelPanelCommentsPage() {
                             excludeUserId: userUid,
                         },
                         details: { stage: activeStage, commentPreview: values.comment.slice(0, 100) },
+                        sendEmail: true,
                     });
                 } catch (auditError) {
                     console.error('Failed to create audit notification:', auditError);
@@ -299,6 +303,7 @@ export default function PanelPanelCommentsPage() {
                         excludeUserId: userUid,
                     },
                     details: { stage: activeStage, entryId: entry.id, newStatus: status },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -343,6 +348,7 @@ export default function PanelPanelCommentsPage() {
                         excludeUserId: userUid,
                     },
                     details: { stage: activeStage, panelUid: userUid, commentCount: entries.length },
+                    sendEmail: true,
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -460,42 +466,21 @@ export default function PanelPanelCommentsPage() {
                                             Waiting for student to request review. You can view the file but cannot approve/request revisions yet.
                                         </Alert>
                                     )}
-                                    <Paper
-                                        variant="outlined"
-                                        sx={{
-                                            p: 2,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 2,
-                                            backgroundColor: 'action.hover'
-                                        }}
-                                    >
-                                        <FileIcon color="primary" />
-                                        <Box sx={{ flexGrow: 1 }}>
-                                            <Typography variant="body2" fontWeight="medium">
-                                                {manuscript.fileName}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {formatFileSize(manuscript.fileSize)} · Uploaded{' '}
-                                                {new Date(manuscript.uploadedAt).toLocaleDateString()}
-                                                {manuscript.reviewRequestedAt && (
-                                                    <> · Review requested{' '}
-                                                        {new Date(manuscript.reviewRequestedAt).toLocaleDateString()}</>
-                                                )}
-                                            </Typography>
-                                        </Box>
-                                        <Button
-                                            variant="contained"
-                                            size="small"
-                                            startIcon={<OpenInNewIcon />}
-                                            component={Link}
-                                            href={manuscript.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            View File
-                                        </Button>
-                                    </Paper>
+                                    <FileCard
+                                        file={{
+                                            name: manuscript.fileName,
+                                            size: manuscript.fileSize,
+                                            mimeType: manuscript.mimeType,
+                                            url: manuscript.url,
+                                        } as FileAttachment}
+                                        title={manuscript.fileName}
+                                        sizeLabel={formatFileSize(manuscript.fileSize)}
+                                        metaLabel={`Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}${manuscript.reviewRequestedAt ? ` · Review requested ${new Date(manuscript.reviewRequestedAt).toLocaleDateString()}` : ''}`}
+                                        onClick={() => setFileViewerOpen(true)}
+                                        onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                                        showDownloadButton
+                                        showDeleteButton={false}
+                                    />
                                 </Stack>
                             </Paper>
                         )}
@@ -527,6 +512,50 @@ export default function PanelPanelCommentsPage() {
                 onSubmit={handleSubmitEditor}
                 submitting={saving}
             />
+
+            {/* File Viewer Dialog */}
+            <Dialog
+                open={fileViewerOpen}
+                onClose={() => setFileViewerOpen(false)}
+                maxWidth="lg"
+                fullWidth
+                PaperProps={{ sx: { height: '80vh' } }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+                    <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
+                        {manuscript?.fileName ?? 'Manuscript'}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                        <Tooltip title="Download file">
+                            <IconButton
+                                size="small"
+                                onClick={() => manuscript?.url && window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                            >
+                                <DownloadIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Close">
+                            <IconButton size="small" onClick={() => setFileViewerOpen(false)}>
+                                <CloseIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </DialogTitle>
+                <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
+                    {manuscript && (
+                        <FileViewer
+                            file={{
+                                name: manuscript.fileName,
+                                size: manuscript.fileSize,
+                                mimeType: manuscript.mimeType,
+                                url: manuscript.url,
+                            } as FileAttachment}
+                            showToolbar={false}
+                            height="100%"
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </AnimatedPage>
     );
 }

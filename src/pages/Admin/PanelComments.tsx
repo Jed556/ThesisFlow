@@ -410,6 +410,7 @@ export default function AdminPanelCommentsPage() {
                             excludeUserId: userUid,
                         },
                         details: { stage: activeStage, panelUid, panelistName },
+                        sendEmail: true,
                     });
                 } catch (auditError) {
                     console.error('Failed to create audit notification:', auditError);

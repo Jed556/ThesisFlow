@@ -419,6 +419,7 @@ export default function StudentTopicProposalsPage() {
                         excludeUserId: userUid,
                     },
                     details: { setId: activeSet.id, setNumber: activeSet.batch ?? 1 },
+                    sendEmail: true,
                 });
             }
         } catch (error) {

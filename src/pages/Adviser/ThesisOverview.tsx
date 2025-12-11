@@ -16,6 +16,7 @@ import { updateSubmissionDecision } from '../../utils/firebase/firestore/submiss
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
 import { notifySubmissionApproval, notifyRevisionRequested } from '../../utils/auditNotificationUtils';
+import { getStageLabel } from '../../utils/thesisStageUtils';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
@@ -283,6 +284,7 @@ export default function AdviserThesisOverviewPage() {
             const group = await findGroupById(thesis.groupId);
             if (group) {
                 const chapterName = `Chapter ${chapterId}`;
+                const stageName = getStageLabel(stage);
                 // Adviser approval may need to notify editor next in the chain
                 const hasEditor = Boolean(group.members.editor);
                 if (decision === 'approved') {
@@ -291,6 +293,7 @@ export default function AdviserThesisOverviewPage() {
                         approverId: adviserUid,
                         approverRole: 'adviser',
                         chapterName,
+                        stageName,
                         isSequential: hasEditor,
                         chain: 'statistical',
                         isFinalApproval: !hasEditor,
@@ -302,6 +305,7 @@ export default function AdviserThesisOverviewPage() {
                         requesterId: adviserUid,
                         requesterRole: 'adviser',
                         chapterName,
+                        stageName,
                         details: { thesisId: targetThesisId, stage, submissionId },
                     });
                 }
