@@ -16,9 +16,12 @@ import {
     createSubmission, submitDraftSubmission, deleteSubmission, type SubmissionContext,
 } from '../../utils/firebase/firestore/submissions';
 import {
-    listenPanelCommentCompletion, type PanelCommentContext,
+    listenPanelCommentCompletion, listenPanelCommentRelease, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
-import type { PanelCommentStage } from '../../types/panelComment';
+import {
+    createDefaultPanelCommentReleaseMap, type PanelCommentReleaseMap, type PanelCommentStage,
+} from '../../types/panelComment';
+import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
 import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
@@ -71,7 +74,12 @@ export default function StudentThesisOverviewPage() {
     const [terminalSubmissions, setTerminalSubmissions] = React.useState<
         Partial<Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>>
     >({});
-    const [panelCommentCompletionMap, setPanelCommentCompletionMap] = React.useState<
+    // Panel comment release map - used to determine if Post stages should unlock
+    const [panelCommentReleaseMap, setPanelCommentReleaseMap] = React.useState<PanelCommentReleaseMap>(
+        createDefaultPanelCommentReleaseMap()
+    );
+    // Panel comment approval map - used to gate Post terminal requirements
+    const [panelCommentApprovalMap, setPanelCommentApprovalMap] = React.useState<
         Partial<Record<ThesisStageName, boolean>>
     >({});
 
@@ -214,10 +222,37 @@ export default function StudentThesisOverviewPage() {
         };
     }, [userUid]);
 
-    // Listen for panel comment completion (all entries approved) for each stage
+    // Listen for panel comment RELEASE status - gates Post-Proposal/Post-Defense chapters
     React.useEffect(() => {
         if (!group?.id || !group?.department || !group?.course) {
-            setPanelCommentCompletionMap({});
+            setPanelCommentReleaseMap(createDefaultPanelCommentReleaseMap());
+            return;
+        }
+
+        const panelCommentCtx: PanelCommentContext = {
+            year: DEFAULT_YEAR,
+            department: group.department,
+            course: group.course,
+            groupId: group.id,
+        };
+
+        const unsubscribe = listenPanelCommentRelease(panelCommentCtx, {
+            onData: (releaseMap) => {
+                setPanelCommentReleaseMap(releaseMap);
+            },
+            onError: (err) => {
+                console.error('Failed to listen for panel comment release:', err);
+                setPanelCommentReleaseMap(createDefaultPanelCommentReleaseMap());
+            },
+        });
+
+        return () => unsubscribe();
+    }, [group?.id, group?.department, group?.course]);
+
+    // Listen for panel comment APPROVAL status - gates Post-Proposal/Post-Defense terminal requirements
+    React.useEffect(() => {
+        if (!group?.id || !group?.department || !group?.course) {
+            setPanelCommentApprovalMap({});
             return;
         }
 
@@ -234,13 +269,13 @@ export default function StudentThesisOverviewPage() {
                 onData: (allApproved) => {
                     // Map PanelCommentStage to ThesisStageName for lock map compatibility
                     const thesisStage = PANEL_COMMENT_STAGE_TO_THESIS_STAGE[panelCommentStage];
-                    setPanelCommentCompletionMap((prev) => ({
+                    setPanelCommentApprovalMap((prev) => ({
                         ...prev,
                         [thesisStage]: allApproved,
                     }));
                 },
                 onError: (err) => {
-                    console.error(`Failed to listen for panel comment completion (${panelCommentStage}):`, err);
+                    console.error(`Failed to listen for panel comment approval (${panelCommentStage}):`, err);
                 },
             })
         ));
@@ -382,9 +417,33 @@ export default function StudentThesisOverviewPage() {
         await deleteSubmission(submissionCtx, submissionId);
     }, [group]);
 
-    // Stage gate overrides - currently no additional gates beyond terminal requirement and panel comment sequence
-    // The flow is: chapters → terminal → panel comments (all approved) → next stage chapters
-    const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({}), []);
+    /**
+     * Panel comment completion map based on RELEASE status.
+     * This is used to unlock Post-Proposal/Post-Defense chapters.
+     * When any panelist's table is released for a stage, the next stage chapters unlock.
+     */
+    const panelCommentCompletionMap = React.useMemo<Partial<Record<ThesisStageName, boolean>>>(() => {
+        const stages: PanelCommentStage[] = ['proposal', 'defense'];
+        return stages.reduce<Partial<Record<ThesisStageName, boolean>>>((acc, panelStage) => {
+            const thesisStage = PANEL_COMMENT_STAGE_TO_THESIS_STAGE[panelStage];
+            acc[thesisStage] = isAnyTableReleasedForStage(panelStage, panelCommentReleaseMap);
+            return acc;
+        }, {});
+    }, [panelCommentReleaseMap]);
+
+    /**
+     * Stage gate overrides for terminal requirements.
+     * Post-Proposal and Post-Defense terminals require panel comments to be APPROVED (not just released).
+     * The gate is satisfied when panel comments for the preceding stage are all approved.
+     */
+    const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({
+        terminalRequirements: {
+            // Post-proposal terminal requires proposal panel comments to be approved
+            'post-proposal': panelCommentApprovalMap['pre-proposal'] ?? false,
+            // Post-defense terminal requires defense panel comments to be approved
+            'post-defense': panelCommentApprovalMap['pre-defense'] ?? false,
+        },
+    }), [panelCommentApprovalMap]);
 
     return (
         <AnimatedPage variant="slideUp">

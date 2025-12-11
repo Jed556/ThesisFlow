@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { Chip, Stack, Typography } from '@mui/material';
-import { CheckCircle as ApprovedIcon, Pending as PendingIcon, Cancel as ReturnedIcon } from '@mui/icons-material';
+import { Stack, Typography } from '@mui/material';
 import type {
     TerminalRequirementApprovalRole, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
+import { ApprovalStatusChip, type ApprovalChipStatus } from '../StatusChip';
 
 export const TERMINAL_REQUIREMENT_ROLE_LABELS: Record<TerminalRequirementApprovalRole, string> = {
     panel: 'Panel',
@@ -14,11 +14,19 @@ export const TERMINAL_REQUIREMENT_ROLE_LABELS: Record<TerminalRequirementApprova
 
 const APPROVAL_FLOW: TerminalRequirementApprovalRole[] = ['panel', 'adviser', 'editor', 'statistician'];
 
-const STATUS_META = {
-    pending: { label: 'Pending', color: 'default' as const, icon: PendingIcon },
-    approved: { label: 'Approved', color: 'success' as const, icon: ApprovedIcon },
-    returned: { label: 'Returned', color: 'error' as const, icon: ReturnedIcon },
-};
+/**
+ * Maps terminal requirement approval status to unified chip status
+ */
+function mapToChipStatus(status?: 'pending' | 'approved' | 'returned'): ApprovalChipStatus {
+    switch (status) {
+        case 'approved':
+            return 'approved';
+        case 'returned':
+            return 'rejected';
+        default:
+            return 'pending';
+    }
+}
 
 export interface SubmissionStatusProps {
     submission?: TerminalRequirementSubmissionRecord | null;
@@ -57,20 +65,17 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 {orderedRoles.map((role) => {
                     const approval = submission.approvals[role];
-                    const meta = approval ? STATUS_META[approval.status] : STATUS_META.pending;
+                    const status = mapToChipStatus(approval?.status);
                     const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role];
-                    const chipLabel = `${roleLabel} ${meta.label}`;
-                    const IconComponent = meta.icon;
                     const isHighlighted = highlightRole === role;
                     return (
-                        <Chip
+                        <ApprovalStatusChip
                             key={role}
-                            icon={<IconComponent fontSize="small" />}
-                            label={chipLabel}
-                            color={meta.color}
+                            roleLabel={roleLabel}
+                            status={status}
+                            decidedAt={approval?.decidedAt}
+                            highlightDecided={isHighlighted}
                             size="small"
-                            variant={isHighlighted ? 'filled' : 'outlined'}
-                            sx={isHighlighted ? { fontWeight: 600 } : undefined}
                         />
                     );
                 })}

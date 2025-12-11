@@ -19,7 +19,7 @@ import type {
     TerminalRequirementApproverAssignments, TerminalRequirementSubmissionRecord
 } from '../../types/terminalRequirementSubmission';
 import type { ThesisChapter } from '../../types/thesis';
-import type { PanelCommentReleaseMap } from '../../types/panelComment';
+import type { PanelCommentReleaseMap, PanelCommentStage } from '../../types/panelComment';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
@@ -29,12 +29,14 @@ import {
     getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
 import {
-    listenPanelCommentRelease, type PanelCommentContext
+    listenPanelCommentRelease, listenPanelCommentCompletion, type PanelCommentContext
 } from '../../utils/firebase/firestore/panelComments';
+import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
 import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import {
     THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap,
     describeStageSequenceStep, getPreviousSequenceStep, canonicalizeStageValue,
+    type StageGateOverrides,
 } from '../../utils/thesisStageUtils';
 import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
@@ -84,6 +86,10 @@ export default function TerminalRequirementsPage() {
     const [panelCommentReleaseMap, setPanelCommentReleaseMap] = React.useState<PanelCommentReleaseMap>(
         createDefaultPanelCommentReleaseMap()
     );
+    /** Panel comment approval status - gates Post terminal requirements */
+    const [panelCommentApprovalMap, setPanelCommentApprovalMap] = React.useState<
+        Partial<Record<ThesisStageName, boolean>>
+    >({});
 
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
@@ -393,27 +399,67 @@ export default function TerminalRequirementsPage() {
         };
     }, [panelCommentCtx]);
 
+    /** Listen for panel comment APPROVAL status - gates Post terminal requirements */
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setPanelCommentApprovalMap({});
+            return;
+        }
+
+        const stages: PanelCommentStage[] = ['proposal', 'defense'];
+        const stageToThesisStage: Record<PanelCommentStage, ThesisStageName> = {
+            'proposal': 'pre-proposal',
+            'defense': 'pre-defense',
+        };
+
+        const unsubscribers = stages.map((panelCommentStage) => (
+            listenPanelCommentCompletion(panelCommentCtx, panelCommentStage, {
+                onData: (allApproved) => {
+                    const thesisStage = stageToThesisStage[panelCommentStage];
+                    setPanelCommentApprovalMap((prev) => ({
+                        ...prev,
+                        [thesisStage]: allApproved,
+                    }));
+                },
+                onError: (err) => {
+                    console.error(`Failed to listen for panel comment approval (${panelCommentStage}):`, err);
+                },
+            })
+        ));
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [panelCommentCtx]);
+
     /**
      * Panel comment completion map for sequence locking.
-     * Maps thesis stage slugs to whether panel comments are complete.
-     * Panel comments are tied to pre-proposal (unlocks post-proposal) and pre-defense (unlocks post-defense).
-     * For sequence purposes, we consider panel comments "complete" when they've been released.
+     * Maps thesis stage slugs to whether panel comments are RELEASED.
+     * This unlocks Post-Proposal/Post-Defense chapters when comments are released.
      */
     const panelCommentCompletionMap = React.useMemo((): Partial<Record<ThesisStageName, boolean>> => {
-        // Map stage slugs that have panel comments to their release status
-        // pre-proposal's panel comments (proposal stage) must be released for post-proposal to unlock
-        // pre-defense's panel comments (defense stage) must be released for post-defense to unlock
         return {
-            'pre-proposal': panelCommentReleaseMap.proposal?.sent ?? false,
-            'pre-defense': panelCommentReleaseMap.defense?.sent ?? false,
+            'pre-proposal': isAnyTableReleasedForStage('proposal', panelCommentReleaseMap),
+            'pre-defense': isAnyTableReleasedForStage('defense', panelCommentReleaseMap),
         };
     }, [panelCommentReleaseMap]);
+
+    /**
+     * Stage gate overrides for terminal requirements.
+     * Post-Proposal and Post-Defense terminals require panel comments to be APPROVED.
+     */
+    const stageGateOverrides = React.useMemo<StageGateOverrides>(() => ({
+        terminalRequirements: {
+            'post-proposal': panelCommentApprovalMap['pre-proposal'] ?? false,
+            'post-defense': panelCommentApprovalMap['pre-defense'] ?? false,
+        },
+    }), [panelCommentApprovalMap]);
 
     const stageLockMaps = React.useMemo(() => buildInterleavedStageLockMap({
         chapters: chapterCompletionMap,
         terminalRequirements: terminalRequirementCompletionMap,
         panelComments: panelCommentCompletionMap,
-    }), [chapterCompletionMap, terminalRequirementCompletionMap, panelCommentCompletionMap]);
+    }, stageGateOverrides), [chapterCompletionMap, terminalRequirementCompletionMap, panelCommentCompletionMap, stageGateOverrides]);
 
     const terminalStageLockMap = stageLockMaps.terminalRequirements;
 

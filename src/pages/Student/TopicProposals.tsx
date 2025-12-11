@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
-    DialogContent, DialogContentText, DialogTitle, Skeleton, Stack, Tooltip, Typography
+    DialogContent, DialogContentText, DialogTitle, Skeleton, Stack, Typography
 } from '@mui/material';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import { useSession } from '@toolpad/core';
@@ -12,6 +12,7 @@ import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/pro
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import { TopicProposalEntryCard, TopicProposalFormDialog, type TopicProposalFormValues } from '../../components/TopicProposals';
+import { ApprovalStatusChip, type ApprovalChipStatus } from '../../components/StatusChip';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import {
@@ -672,46 +673,33 @@ export default function StudentTopicProposalsPage() {
                                         const moderatorAudit = entryAudits.find(a => a.stage === 'moderator');
                                         const headAudit = entryAudits.find(a => a.stage === 'head');
 
-                                        const getAuditChipConfig = (stage: string, status: string) => {
-                                            const label = stage === 'moderator' ? 'Moderator' : 'Head';
-                                            const statusLabel = status === 'approved' ? 'Approved'
-                                                : status === 'rejected' ? 'Rejected'
-                                                    : status;
-                                            const color: 'success' | 'error' | 'warning' | 'default' =
-                                                status === 'approved' ? 'success'
-                                                    : status === 'rejected' ? 'error'
-                                                        : 'default';
-                                            return { label: `${label}: ${statusLabel}`, color };
+                                        /**
+                                         * Map audit status to unified ApprovalChipStatus
+                                         */
+                                        const mapAuditToChipStatus = (status: string): ApprovalChipStatus => {
+                                            if (status === 'approved') return 'approved';
+                                            if (status === 'rejected') return 'rejected';
+                                            return 'pending';
                                         };
 
                                         const footer = moderatorAudit || headAudit ? (
                                             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                                {moderatorAudit && (() => {
-                                                    const config = getAuditChipConfig('moderator', moderatorAudit.status);
-                                                    return (
-                                                        <Tooltip title={moderatorAudit.notes || ''} arrow>
-                                                            <Chip
-                                                                label={config.label}
-                                                                color={config.color}
-                                                                size="small"
-                                                                variant="outlined"
-                                                            />
-                                                        </Tooltip>
-                                                    );
-                                                })()}
-                                                {headAudit && (() => {
-                                                    const config = getAuditChipConfig('head', headAudit.status);
-                                                    return (
-                                                        <Tooltip title={headAudit.notes || ''} arrow>
-                                                            <Chip
-                                                                label={config.label}
-                                                                color={config.color}
-                                                                size="small"
-                                                                variant="outlined"
-                                                            />
-                                                        </Tooltip>
-                                                    );
-                                                })()}
+                                                {moderatorAudit && (
+                                                    <ApprovalStatusChip
+                                                        roleLabel="Moderator"
+                                                        status={mapAuditToChipStatus(moderatorAudit.status)}
+                                                        decidedAt={moderatorAudit.reviewedAt}
+                                                        size="small"
+                                                    />
+                                                )}
+                                                {headAudit && (
+                                                    <ApprovalStatusChip
+                                                        roleLabel="Head"
+                                                        status={mapAuditToChipStatus(headAudit.status)}
+                                                        decidedAt={headAudit.reviewedAt}
+                                                        size="small"
+                                                    />
+                                                )}
                                             </Stack>
                                         ) : undefined;
 
