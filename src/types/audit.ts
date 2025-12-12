@@ -103,8 +103,12 @@ export type AuditAction =
     | 'comment_updated'
     | 'comment_deleted'
     | 'panel_comment_added'
+    | 'panel_comment_approved'
     | 'panel_comment_released'
     | 'panel_comments_ready'
+    // Panel review actions
+    | 'panel_review_requested'
+    | 'all_panel_comments_approved'
     // File actions
     | 'file_uploaded'
     | 'file_deleted'

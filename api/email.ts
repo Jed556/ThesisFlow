@@ -115,6 +115,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return errorResponse(res, 'Invalid email address format', 400);
     }
 
+    // Extract runtime origin from request headers (similar to api.ts pattern)
+    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+    const runtimeOrigin = host ? `${protocol}://${host}` : undefined;
+
     // Determine email content based on request type
     let emailSubject: string;
     let emailText: string | undefined;
@@ -129,7 +134,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         try {
-            const content = generateEmailContent(template, data);
+            // Inject runtime origin into template data for asset URL resolution
+            const dataWithOrigin = { ...data, runtimeOrigin };
+            const content = generateEmailContent(template, dataWithOrigin);
             emailSubject = subjectOverride || content.defaultSubject;
             emailText = content.text;
             emailHtml = content.html;

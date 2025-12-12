@@ -15,7 +15,17 @@ export type {
 } from './types.js';
 
 // Base template utilities
-export { brandColors, baseStyles, wrapInBaseTemplate, createPlainTextEmail } from './baseTemplate.js';
+export {
+    brandColors,
+    baseStyles,
+    wrapInBaseTemplate,
+    createPlainTextEmail,
+    thesisFlowLogoSvg,
+    darkenColor,
+    resolveEmailBaseUrl,
+    getEmailPublicAssetUrl,
+    getEmailLogoUrl,
+} from './baseTemplate.js';
 
 // OTP template
 export {

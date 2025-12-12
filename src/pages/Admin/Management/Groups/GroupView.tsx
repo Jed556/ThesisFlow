@@ -3,12 +3,15 @@ import {
     Alert, Autocomplete, Button, CircularProgress, Paper, Skeleton, Stack, TextField, Typography,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useSession } from '@toolpad/core';
+import type { Session } from '../../../../types/session';
 import type { NavigationItem } from '../../../../types/navigation';
 import { AnimatedPage } from '../../../../components/Animate';
 import GroupView from '../../../../components/Group/GroupView';
 import { useSnackbar } from '../../../../contexts/SnackbarContext';
 import { findGroupById, updateGroupById } from '../../../../utils/firebase/firestore/groups';
 import { findUsersByFilter, findUsersByIds } from '../../../../utils/firebase/firestore/user';
+import { notifyPanelAssignedByAdmin } from '../../../../utils/auditNotificationUtils';
 import type { ThesisGroup } from '../../../../types/group';
 import type { UserProfile } from '../../../../types/profile';
 
@@ -64,10 +67,13 @@ interface PanelAssignmentManagerProps {
  */
 function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignmentManagerProps) {
     const { showNotification } = useSnackbar();
+    const session = useSession<Session>();
+    const adminUid = session?.user?.id;
     const [panelOptions, setPanelOptions] = React.useState<UserProfile[]>([]);
     const [selectedPanelUids, setSelectedPanelUids] = React.useState<string[]>([]);
     const [initialPanelUids, setInitialPanelUids] = React.useState<string[]>([]);
     const [currentMembers, setCurrentMembers] = React.useState<ThesisGroup['members'] | null>(null);
+    const [currentGroup, setCurrentGroup] = React.useState<ThesisGroup | null>(null);
     const [loadingOptions, setLoadingOptions] = React.useState(true);
     const [loadingAssignments, setLoadingAssignments] = React.useState(true);
     const [saving, setSaving] = React.useState(false);
@@ -117,6 +123,7 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
                 setSelectedPanelUids([]);
                 setInitialPanelUids([]);
                 setCurrentMembers(null);
+                setCurrentGroup(null);
                 return;
             }
 
@@ -124,6 +131,7 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
             setSelectedPanelUids(panels);
             setInitialPanelUids(panels);
             setCurrentMembers(group.members);
+            setCurrentGroup(group);
             setError(null);
 
             if (panels.length > 0) {
@@ -170,6 +178,10 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
     }, []);
 
     const handleSave = React.useCallback(async () => {
+        if (!adminUid) {
+            showNotification('You must be logged in to update panel assignments', 'error');
+            return;
+        }
         try {
             setSaving(true);
             const nextMembers: ThesisGroup['members'] = {
@@ -179,6 +191,29 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
             await updateGroupById(groupId, {
                 panels: selectedPanelUids,
             });
+
+            // Determine newly added panels (not in initialPanelUids)
+            const newlyAddedPanels = selectedPanelUids.filter(
+                (uid) => !initialPanelUids.includes(uid)
+            );
+
+            // Notify each newly added panel member
+            if (currentGroup && newlyAddedPanels.length > 0) {
+                const panelProfileLookup = new Map(
+                    panelOptions.map((p) => [p.uid, p])
+                );
+                for (const panelId of newlyAddedPanels) {
+                    const panelProfile = panelProfileLookup.get(panelId);
+                    const panelName = panelProfile ? getProfileLabel(panelProfile) : 'Panel Member';
+                    void notifyPanelAssignedByAdmin({
+                        group: currentGroup,
+                        adminId: adminUid,
+                        panelId,
+                        panelName,
+                    });
+                }
+            }
+
             setInitialPanelUids(selectedPanelUids);
             setCurrentMembers(nextMembers);
             showNotification('Panel assignments updated', 'success');
@@ -190,7 +225,10 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
         } finally {
             setSaving(false);
         }
-    }, [groupId, loadAssignments, onAssignmentsUpdated, selectedPanelUids, showNotification]);
+    }, [
+        adminUid, currentGroup, currentMembers, groupId, initialPanelUids,
+        loadAssignments, onAssignmentsUpdated, panelOptions, selectedPanelUids, showNotification
+    ]);
 
     if (!groupId) {
         return <Alert severity="warning">A valid group ID is required to manage panel assignments.</Alert>;

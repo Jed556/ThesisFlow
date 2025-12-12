@@ -393,6 +393,9 @@ export default function AdminPanelCommentsPage() {
             await setPanelCommentTableReleaseState(panelCommentCtx, activeStage, panelUid, true, userUid);
             const panelistName = panelists.find(p => p.uid === panelUid)?.label ?? 'Panel member';
 
+            // Count comments for this panel (if we're currently viewing this panel's entries)
+            const commentCount = activePanelUid === panelUid ? entries.length : undefined;
+
             // Notify students that panel comments have been released (with email)
             if (selectedGroup) {
                 try {
@@ -402,6 +405,7 @@ export default function AdminPanelCommentsPage() {
                         releaserId: userUid,
                         panelistName,
                         stageName: stageLabel,
+                        commentCount,
                         details: { stage: activeStage, panelUid },
                     });
                 } catch (auditError) {
@@ -416,7 +420,10 @@ export default function AdminPanelCommentsPage() {
         } finally {
             setReleaseSaving(false);
         }
-    }, [panelCommentCtx, userUid, activeStage, canRelease, activeStageMeta, panelists, selectedGroup, showNotification]);
+    }, [
+        panelCommentCtx, userUid, activeStage, canRelease, activeStageMeta,
+        panelists, selectedGroup, showNotification, activePanelUid, entries.length
+    ]);
 
     if (session?.loading) {
         return (
