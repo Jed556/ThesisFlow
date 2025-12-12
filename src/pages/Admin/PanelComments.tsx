@@ -28,7 +28,7 @@ import {
 } from '../../utils/panelCommentUtils';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 import { DEFAULT_YEAR } from '../../config/firestore';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import { notifyPanelCommentsReleasedToStudents } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -393,24 +393,16 @@ export default function AdminPanelCommentsPage() {
             await setPanelCommentTableReleaseState(panelCommentCtx, activeStage, panelUid, true, userUid);
             const panelistName = panelists.find(p => p.uid === panelUid)?.label ?? 'Panel member';
 
-            // Create audit notification for panel comment release
+            // Notify students that panel comments have been released (with email)
             if (selectedGroup) {
                 try {
                     const stageLabel = getPanelCommentStageLabel(activeStage);
-                    await auditAndNotify({
+                    void notifyPanelCommentsReleasedToStudents({
                         group: selectedGroup,
-                        userId: userUid,
-                        name: 'Panel Comments Released',
-                        description: `Panel comments for ${stageLabel} stage from ${panelistName} have been released to students.`,
-                        category: 'panel',
-                        action: 'panel_comment_released',
-                        targets: {
-                            groupMembers: true,
-                            leader: true,
-                            excludeUserId: userUid,
-                        },
-                        details: { stage: activeStage, panelUid, panelistName },
-                        sendEmail: true,
+                        releaserId: userUid,
+                        panelistName,
+                        stageName: stageLabel,
+                        details: { stage: activeStage, panelUid },
                     });
                 } catch (auditError) {
                     console.error('Failed to create audit notification:', auditError);

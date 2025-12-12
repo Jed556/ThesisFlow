@@ -4,7 +4,8 @@ import {
     Upload as UploadIcon, Comment as CommentIcon, Assignment as AssignmentIcon,
     Timeline as TimelineIcon, History as HistoryIcon,
     Business as DepartmentIcon, AdminPanelSettings as AdminIcon,
-    Notifications as NotificationsIcon, AccountCircle as AccountIcon
+    Notifications as NotificationsIcon, AccountCircle as AccountIcon,
+    School as CourseIcon, SettingsSuggest as TemplateIcon
 } from '@mui/icons-material';
 import type { AuditCategory } from '../../types/audit';
 import type { AuditScope } from './types';
@@ -16,6 +17,7 @@ export function getScopeIcon(scope: AuditScope): React.ReactElement {
     const icons: Record<AuditScope, React.ReactElement> = {
         personal: <PersonIcon fontSize="small" />,
         group: <GroupIcon fontSize="small" />,
+        course: <CourseIcon fontSize="small" />,
         departmental: <DepartmentIcon fontSize="small" />,
         admin: <AdminIcon fontSize="small" />,
     };
@@ -39,6 +41,7 @@ export function getCategoryIcon(category: AuditCategory): React.ReactElement {
         file: <UploadIcon fontSize="small" />,
         stage: <TimelineIcon fontSize="small" />,
         terminal: <AssignmentIcon fontSize="small" />,
+        template: <TemplateIcon fontSize="small" />,
         notification: <NotificationsIcon fontSize="small" />,
         account: <AccountIcon fontSize="small" />,
         other: <HistoryIcon fontSize="small" />,

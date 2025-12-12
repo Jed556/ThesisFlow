@@ -10,11 +10,11 @@ import { format, formatDistanceToNow, isValid } from 'date-fns';
 import { AnimatedList } from '../Animate';
 import { Avatar, Name } from '../Avatar';
 import type { AnyAuditEntry } from '../../types/audit';
-import type { UserProfile } from '../../types/profile';
+import type { UserProfile, UserRole } from '../../types/profile';
 import type { ThesisGroup } from '../../types/group';
 import { getCategoryIcon } from './icons';
 import { getAuditCategoryLabel, getAuditCategoryColor } from '../../utils/auditUtils';
-import { buildAuditNavigationPath } from '../../utils/auditNotificationUtils';
+import { getAuditNavigationInfo } from '../../utils/auditNotificationUtils';
 
 interface AuditListProps {
     /** Audit entries to display */
@@ -25,6 +25,8 @@ interface AuditListProps {
     userProfiles: Map<string, UserProfile>;
     /** Available groups for name lookup */
     groups: ThesisGroup[];
+    /** Current user's role for access control */
+    userRole?: UserRole;
     /** Whether to show group name in entries */
     showGroupName?: boolean;
     /** Whether to show user avatars */
@@ -93,6 +95,7 @@ export function AuditList({
     loading,
     userProfiles,
     groups,
+    userRole,
     showGroupName = true,
     showAvatars = true,
     itemsPerPage = 20,
@@ -111,12 +114,26 @@ export function AuditList({
     const page = controlledPage ?? internalPage;
 
     /**
+     * Check if the current user has access to the audit's navigation path
+     */
+    const canViewAuditDetails = React.useCallback((audit: AnyAuditEntry): boolean => {
+        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details);
+        if (!navInfo) return false;
+        // If no role restrictions, anyone can access
+        if (navInfo.allowedRoles.length === 0) return true;
+        // If user has no role, deny access
+        if (!userRole) return false;
+        // Check if user's role is in the allowed list
+        return navInfo.allowedRoles.includes(userRole);
+    }, [userRole]);
+
+    /**
      * Handle navigation to the relevant page for an audit entry
      */
     const handleViewDetails = React.useCallback((audit: AnyAuditEntry) => {
-        const path = buildAuditNavigationPath(audit.category, audit.action, audit.details);
-        if (path) {
-            navigate(path);
+        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details);
+        if (navInfo?.path) {
+            navigate(navInfo.path);
         }
     }, [navigate]);
 
@@ -305,8 +322,8 @@ export function AuditList({
                                                     </Tooltip>
                                                 </Stack>
                                             </Stack>
-                                            {/* View Details button - positioned on right */}
-                                            {buildAuditNavigationPath(audit.category, audit.action, audit.details) && (
+                                            {/* View Details button - positioned on right, only shown if user has access */}
+                                            {canViewAuditDetails(audit) && (
                                                 <Button
                                                     size="small"
                                                     variant="text"

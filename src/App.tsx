@@ -12,7 +12,7 @@ import { navigationGroups } from './config/navigationGroups';
 import { Outlet } from 'react-router';
 import { SnackbarProvider, SnackbarContainer, useSnackbar } from './components/Snackbar';
 import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';
-import BackgroundJobNotifications from './components/BackgroundJobNotifications';
+import { useJobNotifications } from './hooks/useJobNotifications';
 import CalendarDeadlineNotifications from './components/CalendarDeadlineNotifications';
 import AuditNotifications from './components/AuditNotifications';
 
@@ -35,6 +35,9 @@ function AppContent() {
     const [sessionData, setSessionData] = React.useState<Session | null>(null);
     const [sessionLoading, setSessionLoading] = React.useState(true);
     const [navigation, setNavigation] = React.useState<Navigation>([]);
+
+    // Integrate background jobs with the unified notification system
+    useJobNotifications();
 
     const setSession = React.useCallback((nextSession: Session | null) => {
         setSessionData(nextSession);
@@ -172,7 +175,7 @@ function AppContent() {
             <CssBaseline />
             <Outlet />
             <SnackbarContainer />
-            <BackgroundJobNotifications />
+            {/* Background job notifications are now integrated into SnackbarContainer via useJobNotifications hook */}
             <CalendarDeadlineNotifications />
             <AuditNotifications />
         </ReactRouterAppProvider>

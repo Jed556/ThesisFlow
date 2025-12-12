@@ -29,7 +29,10 @@ import {
 import { createDefaultPanelCommentReleaseMap, type PanelCommentReleaseMap } from '../../types/panelComment';
 import { PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel } from '../../utils/panelCommentUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import {
+    auditAndNotify, auditPanelCommentCreated, notifyPanelCommentsReadyForRelease
+} from '../../utils/auditNotificationUtils';
+import { findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { formatFileSize } from '../../utils/fileUtils';
 import { FileCard, FileViewer } from '../../components/File';
 import type { FileAttachment } from '../../types/file';
@@ -219,26 +222,18 @@ export default function PanelPanelCommentsPage() {
                     panelUid: userUid,
                 });
 
-                // Create audit notification for new panel comment
+                // Audit only for panel comment creation (no notifications/emails)
                 try {
                     const stageLabel = getPanelCommentStageLabel(activeStage);
-                    await auditAndNotify({
+                    void auditPanelCommentCreated({
                         group: selectedGroup,
-                        userId: userUid,
-                        name: 'Panel Comment Added',
-                        description: `A new panel comment was added for ${stageLabel} stage.`,
-                        category: 'panel',
-                        action: 'panel_comment_added',
-                        targets: {
-                            groupMembers: true,
-                            adviser: true,
-                            excludeUserId: userUid,
-                        },
-                        details: { stage: activeStage, commentPreview: values.comment.slice(0, 100) },
-                        sendEmail: true,
+                        panelId: userUid,
+                        stageName: stageLabel,
+                        commentPreview: values.comment.slice(0, 100),
+                        details: { stage: activeStage },
                     });
                 } catch (auditError) {
-                    console.error('Failed to create audit notification:', auditError);
+                    console.error('Failed to create audit entry:', auditError);
                 }
 
                 showNotification('Comment added.', 'success');
@@ -333,22 +328,20 @@ export default function PanelPanelCommentsPage() {
         try {
             await setPanelCommentTableReadyState(panelCommentCtx, activeStage, userUid, true, userUid);
 
-            // Create audit notification for ready status
+            // Notify admins that panel comments are ready for release (with email)
             try {
                 const stageLabel = getPanelCommentStageLabel(activeStage);
-                await auditAndNotify({
+                // Fetch admin user IDs for notifications
+                const adminUsers = await findUsersByFilter({ role: 'admin' });
+                const adminUserIds = adminUsers.map(u => u.uid);
+
+                void notifyPanelCommentsReadyForRelease({
                     group: selectedGroup,
-                    userId: userUid,
-                    name: 'Panel Comments Ready for Release',
-                    description: `Panel comments for ${stageLabel} stage are ready to be released to students.`,
-                    category: 'panel',
-                    action: 'panel_comments_ready',
-                    targets: {
-                        admins: true,
-                        excludeUserId: userUid,
-                    },
-                    details: { stage: activeStage, panelUid: userUid, commentCount: entries.length },
-                    sendEmail: true,
+                    panelId: userUid,
+                    stageName: stageLabel,
+                    commentCount: entries.length,
+                    adminUserIds,
+                    details: { stage: activeStage },
                 });
             } catch (auditError) {
                 console.error('Failed to create audit notification:', auditError);
@@ -469,13 +462,21 @@ export default function PanelPanelCommentsPage() {
                                     <FileCard
                                         file={{
                                             name: manuscript.fileName,
-                                            size: manuscript.fileSize,
+                                            size: formatFileSize(manuscript.fileSize),
                                             mimeType: manuscript.mimeType,
                                             url: manuscript.url,
+                                            type: manuscript.mimeType,
+                                            uploadDate: manuscript.uploadedAt,
+                                            author: manuscript.uploadedBy ?? '',
                                         } as FileAttachment}
                                         title={manuscript.fileName}
                                         sizeLabel={formatFileSize(manuscript.fileSize)}
-                                        metaLabel={`Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}${manuscript.reviewRequestedAt ? ` · Review requested ${new Date(manuscript.reviewRequestedAt).toLocaleDateString()}` : ''}`}
+                                        metaLabel={
+                                            `Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}` +
+                                            (manuscript.reviewRequestedAt
+                                                ? ` · Review requested ${new Date(manuscript.reviewRequestedAt).toLocaleDateString()}`
+                                                : '')
+                                        }
                                         onClick={() => setFileViewerOpen(true)}
                                         onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
                                         showDownloadButton
@@ -519,7 +520,7 @@ export default function PanelPanelCommentsPage() {
                 onClose={() => setFileViewerOpen(false)}
                 maxWidth="lg"
                 fullWidth
-                PaperProps={{ sx: { height: '80vh' } }}
+                slotProps={{ paper: { sx: { height: '80vh' } } }}
             >
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
                     <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
@@ -546,9 +547,12 @@ export default function PanelPanelCommentsPage() {
                         <FileViewer
                             file={{
                                 name: manuscript.fileName,
-                                size: manuscript.fileSize,
+                                size: formatFileSize(manuscript.fileSize),
                                 mimeType: manuscript.mimeType,
                                 url: manuscript.url,
+                                type: manuscript.mimeType,
+                                uploadDate: manuscript.uploadedAt,
+                                author: manuscript.uploadedBy ?? '',
                             } as FileAttachment}
                             showToolbar={false}
                             height="100%"

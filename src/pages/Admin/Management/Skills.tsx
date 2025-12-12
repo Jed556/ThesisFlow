@@ -36,6 +36,7 @@ import {
 import { getUserDepartments } from '../../../utils/firebase/firestore/user';
 import { DEFAULT_YEAR } from '../../../config/firestore';
 import SkillsConfig from '../../../config/skills.json';
+import { auditSkillTemplateChange } from '../../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -237,6 +238,15 @@ export default function SkillsManagementPage() {
                     isActive: formData.isActive,
                 });
                 showNotification('Skill updated successfully', 'success');
+                // Audit and notify heads
+                if (session?.user?.uid) {
+                    auditSkillTemplateChange({
+                        userId: session.user.uid,
+                        department: selectedDepartment,
+                        action: 'skill_template_updated',
+                        skillName: formData.name.trim(),
+                    }).catch(console.error);
+                }
             } else {
                 // Create new skill
                 const nextOrder = skills.length > 0
@@ -255,6 +265,15 @@ export default function SkillsManagementPage() {
                     session?.user?.uid
                 );
                 showNotification('Skill created successfully', 'success');
+                // Audit and notify heads
+                if (session?.user?.uid) {
+                    auditSkillTemplateChange({
+                        userId: session.user.uid,
+                        department: selectedDepartment,
+                        action: 'skill_template_created',
+                        skillName: formData.name.trim(),
+                    }).catch(console.error);
+                }
             }
             handleCloseDialog();
         } catch (err) {
@@ -283,6 +302,15 @@ export default function SkillsManagementPage() {
         try {
             await deleteSkillTemplate(DEFAULT_YEAR, selectedDepartment, skillToDelete.id);
             showNotification('Skill deleted successfully', 'success');
+            // Audit and notify heads
+            if (session?.user?.uid) {
+                auditSkillTemplateChange({
+                    userId: session.user.uid,
+                    department: selectedDepartment,
+                    action: 'skill_template_deleted',
+                    skillName: skillToDelete.name,
+                }).catch(console.error);
+            }
             handleCloseDeleteDialog();
         } catch (err) {
             console.error('Failed to delete skill:', err);
@@ -308,6 +336,14 @@ export default function SkillsManagementPage() {
                 `Skills reset to default. Created ${count} skill(s) from template.`,
                 'success'
             );
+            // Audit and notify heads
+            if (session?.user?.uid) {
+                auditSkillTemplateChange({
+                    userId: session.user.uid,
+                    department: selectedDepartment,
+                    action: 'skill_template_reset',
+                }).catch(console.error);
+            }
             setResetDialogOpen(false);
         } catch (err) {
             console.error('Failed to reset skills:', err);

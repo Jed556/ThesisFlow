@@ -23,13 +23,13 @@ import {
 } from '../../types/panelComment';
 import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
 import { uploadThesisFile } from '../../utils/firebase/storage/thesis';
-import { THESIS_STAGE_METADATA, type StageGateOverrides } from '../../utils/thesisStageUtils';
+import { THESIS_STAGE_METADATA, getStageLabel, type StageGateOverrides } from '../../utils/thesisStageUtils';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { DEFAULT_YEAR } from '../../config/firestore';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import { auditAndNotify, notifyDraftDeleted } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -401,7 +401,7 @@ export default function StudentThesisOverviewPage() {
             thesisId: string; chapterId: number; stage: ThesisStageName; submissionId: string;
         }
     ) => {
-        if (!group) {
+        if (!group || !userUid) {
             throw new Error('Group context is not available.');
         }
 
@@ -416,7 +416,20 @@ export default function StudentThesisOverviewPage() {
         };
 
         await deleteSubmission(submissionCtx, submissionId);
-    }, [group]);
+
+        // Notify group members about the draft deletion (informational, no email)
+        try {
+            await notifyDraftDeleted({
+                group,
+                userId: userUid,
+                chapterName: `Chapter ${chapterId}`,
+                stageName: getStageLabel(stage),
+                details: { thesisId, chapterId, stage, submissionId },
+            });
+        } catch (notifyError) {
+            console.error('Failed to send draft deletion notification:', notifyError);
+        }
+    }, [group, userUid]);
 
     /**
      * Panel comment completion map based on RELEASE status.

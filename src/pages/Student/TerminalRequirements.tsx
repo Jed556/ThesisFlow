@@ -35,13 +35,15 @@ import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
 import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import {
     THESIS_STAGE_METADATA, buildStageCompletionMap, buildInterleavedStageLockMap,
-    describeStageSequenceStep, getPreviousSequenceStep, canonicalizeStageValue,
+    describeStageSequenceStep, getPreviousSequenceStep, canonicalizeStageValue, getStageLabel,
     type StageGateOverrides,
 } from '../../utils/thesisStageUtils';
 import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { DEFAULT_YEAR } from '../../config/firestore';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import {
+    notifyTerminalSubmittedForChecking, notifyTerminalDraftUploaded
+} from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -547,6 +549,18 @@ export default function TerminalRequirementsPage() {
             }
             showNotification('Requirement uploaded successfully.', 'success');
             await loadRequirementFiles(requirement);
+
+            // Notify group members about the draft file upload
+            const stageName = getStageLabel(requirement.stage);
+            const fileName = files.length === 1 ? files[0].name : `${files.length} files`;
+            void notifyTerminalDraftUploaded({
+                group: groupMeta,
+                userId: userUid,
+                stageName,
+                requirementTitle: requirement.title,
+                fileName,
+                details: { stage: requirement.stage, requirementId: requirement.id },
+            });
         } catch (uploadError) {
             const message = uploadError instanceof Error
                 ? uploadError.message
@@ -668,21 +682,19 @@ export default function TerminalRequirementsPage() {
             }
             showNotification('Submitted for expert review.', 'success');
 
+            // Determine if this is a Pre stage (no panel approval required)
+            const isPreStage = activeStage.startsWith('pre-');
+            const stageName = getStageLabel(activeStage);
+
             // Audit notification for terminal requirement submission
-            void auditAndNotify({
+            // Notifies group members, experts (adviser, editor, statistician), and panels
+            void notifyTerminalSubmittedForChecking({
                 group: groupMeta,
                 userId: userUid,
-                name: 'Terminal Requirements Submitted',
-                description: `Terminal requirements for ${activeStage} have been submitted for review.`,
-                category: 'terminal',
-                action: 'submission_created',
-                targets: {
-                    groupMembers: true,
-                    adviser: true,
-                    excludeUserId: userUid,
-                },
-                details: { stage: activeStage, requirementCount: stageRequirements.length },
-                sendEmail: true,
+                stageName,
+                requirementCount: stageRequirements.length,
+                isPreStage,
+                details: { stage: activeStage },
             });
         } catch (submitError) {
             console.error('Failed to submit terminal requirements:', submitError);

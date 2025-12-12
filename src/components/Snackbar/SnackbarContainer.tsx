@@ -4,7 +4,9 @@ import {
     LinearProgress, Stack, useTheme, alpha
 } from '@mui/material';
 import {
-    Close as CloseIcon, CheckCircle as SuccessIcon, Error as ErrorIcon, Warning as WarningIcon, Info as InfoIcon
+    Close as CloseIcon, CheckCircle as SuccessIcon, Error as ErrorIcon,
+    Warning as WarningIcon, Info as InfoIcon, Cancel as CancelIcon,
+    HourglassEmpty as HourglassIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -81,6 +83,38 @@ function TimerProgress({ duration, createdAt, severity }: TimerProgressProps) {
 }
 
 /**
+ * Job progress bar component - shows job completion percentage at the bottom
+ */
+interface JobProgressProps {
+    progress: number;
+    severity: NotificationSeverity;
+}
+
+function JobProgressBar({ progress, severity }: JobProgressProps) {
+    const theme = useTheme();
+
+    return (
+        <LinearProgress
+            variant="determinate"
+            value={progress}
+            sx={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 3,
+                borderRadius: '0 0 12px 12px',
+                backgroundColor: alpha(theme.palette[severity].main, 0.15),
+                '& .MuiLinearProgress-bar': {
+                    backgroundColor: theme.palette[severity].main,
+                    transition: 'transform 0.1s ease-out',
+                },
+            }}
+        />
+    );
+}
+
+/**
  * Action button component
  */
 interface ActionButtonProps {
@@ -146,13 +180,20 @@ interface NotificationItemProps {
     totalCount: number;
     isExpanded: boolean;
     onClose: (id: string) => void;
+    onCancelJob?: (jobId: string) => void;
 }
 
-function NotificationItem({ notification, index, totalCount, isExpanded, onClose }: NotificationItemProps) {
+function NotificationItem({
+    notification, index, totalCount, isExpanded, onClose, onCancelJob
+}: NotificationItemProps) {
     const theme = useTheme();
     const {
         id, title, message, severity, icon, showDivider, actions, showProgress, duration, createdAt,
+        type, jobId, jobProgress, jobStatus, dismissible = true, showCancel,
     } = notification;
+
+    const isJob = type === 'job';
+    const isActiveJob = isJob && (jobStatus === 'running' || jobStatus === 'pending');
 
     // Animation states
     const [isVisible, setIsVisible] = React.useState(false);
@@ -165,15 +206,23 @@ function NotificationItem({ notification, index, totalCount, isExpanded, onClose
     }, [index]);
 
     const handleClose = React.useCallback(() => {
+        // Don't allow closing active jobs with X button
+        if (isActiveJob && !dismissible) return;
         if (isExiting) return; // Prevent double-close
         setIsExiting(true);
         // Wait for exit animation to complete before removing
         setTimeout(() => onClose(id), 200);
-    }, [id, onClose, isExiting]);
+    }, [id, onClose, isExiting, isActiveJob, dismissible]);
 
-    // Auto-dismiss timer - triggers animated close
+    const handleCancelJob = React.useCallback(() => {
+        if (jobId && onCancelJob) {
+            onCancelJob(jobId);
+        }
+    }, [jobId, onCancelJob]);
+
+    // Auto-dismiss timer - triggers animated close (skip for active jobs)
     React.useEffect(() => {
-        if (duration <= 0) return;
+        if (duration <= 0 || isActiveJob) return;
 
         const remainingTime = duration - (Date.now() - createdAt);
         if (remainingTime <= 0) {
@@ -186,9 +235,16 @@ function NotificationItem({ notification, index, totalCount, isExpanded, onClose
         }, remainingTime);
 
         return () => clearTimeout(timer);
-    }, [duration, createdAt, handleClose]);
+    }, [duration, createdAt, handleClose, isActiveJob]);
 
-    const displayIcon = icon ?? getDefaultIcon(severity);
+    // Get display icon - use hourglass for running jobs
+    const getDisplayIcon = () => {
+        if (icon) return icon;
+        if (isActiveJob) return <HourglassIcon />;
+        return getDefaultIcon(severity);
+    };
+
+    const displayIcon = getDisplayIcon();
     const severityColor = theme.palette[severity].main;
     const isDarkMode = theme.palette.mode === 'dark';
 
@@ -298,7 +354,7 @@ function NotificationItem({ notification, index, totalCount, isExpanded, onClose
                             <Divider sx={{ mb: 1, borderColor: alpha(severityColor, 0.2) }} />
                         )}
 
-                        {/* Message */}
+                        {/* Message with job progress % inline */}
                         <Typography
                             variant="body2"
                             sx={{
@@ -308,16 +364,31 @@ function NotificationItem({ notification, index, totalCount, isExpanded, onClose
                             }}
                         >
                             {message}
+                            {isJob && typeof jobProgress === 'number' && (
+                                <Typography
+                                    component="span"
+                                    variant="body2"
+                                    sx={{
+                                        color: severityColor,
+                                        fontWeight: 600,
+                                        ml: 1,
+                                    }}
+                                >
+                                    {`${jobProgress}%`}
+                                </Typography>
+                            )}
                         </Typography>
 
-                        {/* Action buttons */}
-                        {actions && actions.length > 0 && (
+                        {/* Action buttons or Cancel button for jobs */}
+                        {(actions && actions.length > 0) || showCancel ? (
                             <Stack
                                 direction="row"
                                 spacing={1}
+                                justifyContent={showCancel ? 'flex-end' : 'flex-start'}
                                 sx={{ mt: 1.5 }}
                             >
-                                {actions.map((action, actionIndex) => (
+                                {/* Regular action buttons */}
+                                {actions?.map((action, actionIndex) => (
                                     <ActionButton
                                         key={actionIndex}
                                         action={action}
@@ -325,35 +396,65 @@ function NotificationItem({ notification, index, totalCount, isExpanded, onClose
                                         onClose={handleClose}
                                     />
                                 ))}
+                                {/* Cancel button for active jobs - positioned to the right */}
+                                {showCancel && (
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="error"
+                                        startIcon={<CancelIcon />}
+                                        onClick={handleCancelJob}
+                                        sx={{
+                                            minWidth: 'auto',
+                                            px: 2,
+                                            py: 0.5,
+                                            fontSize: '0.8125rem',
+                                            fontWeight: 500,
+                                            textTransform: 'none',
+                                            borderRadius: 2,
+                                        }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                )}
                             </Stack>
-                        )}
+                        ) : null}
                     </Box>
 
-                    {/* Close button */}
-                    <IconButton
-                        size="small"
-                        onClick={handleClose}
-                        sx={{
-                            color: 'text.secondary',
-                            p: 0.5,
-                            '&:hover': {
-                                backgroundColor: alpha(severityColor, 0.08),
-                                color: severityColor,
-                            },
-                        }}
-                    >
-                        <CloseIcon fontSize="small" />
-                    </IconButton>
+                    {/* Close button - only show if notification is dismissible */}
+                    {dismissible && (
+                        <IconButton
+                            size="small"
+                            onClick={handleClose}
+                            sx={{
+                                color: 'text.secondary',
+                                p: 0.5,
+                                '&:hover': {
+                                    backgroundColor: alpha(severityColor, 0.08),
+                                    color: severityColor,
+                                },
+                            }}
+                        >
+                            <CloseIcon fontSize="small" />
+                        </IconButton>
+                    )}
                 </Stack>
             </Box>
 
-            {/* Timer progress bar */}
-            {showProgress && (
-                <TimerProgress
-                    duration={duration}
-                    createdAt={createdAt}
+            {/* Bottom progress bar - job progress for active jobs, timer for regular notifications */}
+            {isActiveJob && typeof jobProgress === 'number' ? (
+                <JobProgressBar
+                    progress={jobProgress}
                     severity={severity}
                 />
+            ) : (
+                showProgress && !isActiveJob && (
+                    <TimerProgress
+                        duration={duration}
+                        createdAt={createdAt}
+                        severity={severity}
+                    />
+                )
             )}
         </Paper>
     );
@@ -411,7 +512,7 @@ function NotificationBadge({ count, isExpanded }: NotificationBadgeProps) {
  * Main snackbar container component that handles stacking and hover expansion
  */
 export default function SnackbarContainer() {
-    const { notifications, hideNotification } = useSnackbar();
+    const { notifications, hideNotification, onCancelJob } = useSnackbar();
     // Expansion is only triggered by clicking, not hovering
     const [isExpanded, setIsExpanded] = React.useState(false);
 
@@ -491,6 +592,7 @@ export default function SnackbarContainer() {
                             totalCount={notifications.length}
                             isExpanded={isExpanded}
                             onClose={hideNotification}
+                            onCancelJob={onCancelJob}
                         />
                     ))}
 

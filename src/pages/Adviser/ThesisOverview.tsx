@@ -15,7 +15,7 @@ import { createChat } from '../../utils/firebase/firestore/chat';
 import { updateSubmissionDecision } from '../../utils/firebase/firestore/submissions';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
-import { notifySubmissionApproval, notifyRevisionRequested } from '../../utils/auditNotificationUtils';
+import { notifySubmissionApproval, notifyRevisionRequested, notifyNewChatMessage } from '../../utils/auditNotificationUtils';
 import { getStageLabel } from '../../utils/thesisStageUtils';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
 
@@ -239,6 +239,24 @@ export default function AdviserThesisOverviewPage() {
             date: new Date().toISOString(),
             attachments,
         });
+
+        // Send notification for the new chat message
+        try {
+            const group = await findGroupById(thesis.groupId);
+            if (group) {
+                await notifyNewChatMessage({
+                    group,
+                    senderId: adviserUid,
+                    senderRole: 'adviser',
+                    chapterName: `Chapter ${chapterId}`,
+                    stageName: getStageLabel(chapterStage),
+                    hasAttachments: attachments.length > 0,
+                    details: { thesisId: selectedThesisId, chapterId, chapterStage, submissionId },
+                });
+            }
+        } catch (notifyError) {
+            console.error('Failed to send chat notification:', notifyError);
+        }
     }, [adviserUid, selectedThesisId, thesis]);
 
     const handleChapterDecision = React.useCallback(async ({

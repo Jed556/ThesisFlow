@@ -16,8 +16,8 @@ import type { HeadApprovalFormValues } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordHeadDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
-import { findUserById } from '../../utils/firebase/firestore/user';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
+import { notifyHeadApprovedTopic, notifyHeadRejectedTopic } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -71,6 +71,9 @@ export default function HeadTopicProposalsPage() {
     const [groupsLoading, setGroupsLoading] = React.useState(false);
     const [groupsError, setGroupsError] = React.useState<string | null>(null);
     const [groupProposalSets, setGroupProposalSets] = React.useState<Map<string, TopicProposalSetRecord | null>>(new Map());
+
+    // Cache of moderator user IDs by course for notifications
+    const [moderatorUsersByCourse, setModeratorUsersByCourse] = React.useState<Map<string, string[]>>(new Map());
 
     // Separate state for approval and rejection dialogs
     const [approvalDialog, setApprovalDialog] = React.useState<ApprovalDialogState | null>(null);
@@ -170,8 +173,25 @@ export default function HeadTopicProposalsPage() {
     React.useEffect(() => {
         if (assignedGroups.length === 0) {
             setGroupProposalSets(new Map());
+            setModeratorUsersByCourse(new Map());
             return () => { /* no-op */ };
         }
+
+        // Fetch moderator users for all unique courses in assigned groups
+        const uniqueCourses = [...new Set(assignedGroups.map(g => g.course).filter(Boolean))];
+        void (async () => {
+            const courseModeratorMap = new Map<string, string[]>();
+            for (const course of uniqueCourses) {
+                if (!course) continue;
+                try {
+                    const moderators = await findUsersByFilter({ role: 'moderator', course });
+                    courseModeratorMap.set(course, moderators.map(m => m.uid));
+                } catch (error) {
+                    console.error(`Failed to fetch moderators for course ${course}:`, error);
+                }
+            }
+            setModeratorUsersByCourse(courseModeratorMap);
+        })();
 
         const unsubscribes = assignedGroups.map((group) =>
             listenTopicProposalSetsByGroup(group.id, {
@@ -250,29 +270,26 @@ export default function HeadTopicProposalsPage() {
             });
             showNotification('Topic approved successfully', 'success');
 
-            // Audit notification for head approval
+            // Audit notification for head approval - notify group members and moderators
             const group = assignedGroups.find((g) =>
                 groupProposalSets.get(g.id)?.id === approvalDialog.setId
             );
             if (group) {
-                void auditAndNotify({
+                // Get moderator user IDs for this group's course
+                const courseModeratorIds = moderatorUsersByCourse.get(group.course ?? '') ?? [];
+
+                void notifyHeadApprovedTopic({
                     group,
-                    userId: headUid,
-                    name: 'Topic Approved by Head',
-                    // eslint-disable-next-line max-len
-                    description: `Topic "${approvalDialog.proposal.title}" has been approved by the Research Head. Your group can now proceed with the thesis.`,
-                    category: 'proposal',
-                    action: 'proposal_approved',
-                    targets: {
-                        groupMembers: true,
-                        excludeUserId: headUid,
-                    },
+                    headId: headUid,
+                    proposalTitle: approvalDialog.proposal.title,
+                    moderatorUserIds: courseModeratorIds,
                     details: {
-                        proposalTitle: approvalDialog.proposal.title,
-                        decision: 'approved',
-                        reviewerRole: 'head',
+                        proposalId: approvalDialog.proposal.id,
+                        notes: values.notes.trim() || undefined,
+                        agenda: values.agendaPath.length > 0 ? values.agendaPath : undefined,
+                        ESG: values.ESG || undefined,
+                        SDG: values.SDG || undefined,
                     },
-                    sendEmail: true,
                 });
             }
         } catch (error) {
@@ -299,30 +316,23 @@ export default function HeadTopicProposalsPage() {
             });
             showNotification('Topic rejected', 'success');
 
-            // Audit notification for head rejection
+            // Audit notification for head rejection - notify group members and moderators
             const group = assignedGroups.find((g) =>
                 groupProposalSets.get(g.id)?.id === rejectionDialog.setId
             );
             if (group) {
-                void auditAndNotify({
+                // Get moderator user IDs for this group's course
+                const courseModeratorIds = moderatorUsersByCourse.get(group.course ?? '') ?? [];
+
+                void notifyHeadRejectedTopic({
                     group,
-                    userId: headUid,
-                    name: 'Topic Rejected by Head',
-                    // eslint-disable-next-line max-len
-                    description: `Topic "${rejectionDialog.proposal.title}" has been rejected by the Research Head.${rejectionNotes.trim() ? ` Reason: ${rejectionNotes.trim()}` : ''}`,
-                    category: 'proposal',
-                    action: 'proposal_rejected',
-                    targets: {
-                        groupMembers: true,
-                        excludeUserId: headUid,
-                    },
+                    headId: headUid,
+                    proposalTitle: rejectionDialog.proposal.title,
+                    reason: rejectionNotes.trim() || undefined,
+                    moderatorUserIds: courseModeratorIds,
                     details: {
-                        proposalTitle: rejectionDialog.proposal.title,
-                        decision: 'rejected',
-                        notes: rejectionNotes.trim() || undefined,
-                        reviewerRole: 'head',
+                        proposalId: rejectionDialog.proposal.id,
                     },
-                    sendEmail: true,
                 });
             }
         } catch (error) {

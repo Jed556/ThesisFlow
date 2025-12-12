@@ -37,6 +37,7 @@ export type AuditCategory =
     | 'file'
     | 'stage'
     | 'terminal'
+    | 'template'
     | 'account'
     | 'notification'
     | 'other';
@@ -131,6 +132,17 @@ export type AuditAction =
     | 'expert_request_received'
     | 'expert_request_accepted'
     | 'expert_request_rejected'
+    // Template actions (for admin-level audits)
+    | 'skill_template_created'
+    | 'skill_template_updated'
+    | 'skill_template_deleted'
+    | 'skill_template_reset'
+    | 'chapter_template_created'
+    | 'chapter_template_updated'
+    | 'chapter_template_deleted'
+    | 'chapter_template_reset'
+    | 'agenda_template_updated'
+    | 'agenda_template_reset'
     // Other
     | 'custom';
 
@@ -173,6 +185,8 @@ export interface BaseAuditEntry {
     details?: AuditDetails;
     /** Whether this audit should show as a snackbar notification */
     showSnackbar?: boolean;
+    /** Whether the snackbar has already been shown to the user (persisted in Firestore) */
+    snackbarShown?: boolean;
     /** Whether the audit entry has been read (for user audits) */
     read?: boolean;
 }

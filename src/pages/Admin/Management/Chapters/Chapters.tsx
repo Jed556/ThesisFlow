@@ -26,6 +26,7 @@ import {
 } from '../../../../utils/firebase/firestore';
 import { normalizeChapterOrder } from '../../../../utils/chapterUtils';
 import { DEFAULT_YEAR } from '../../../../config/firestore';
+import { auditChapterTemplateChange } from '../../../../utils/auditNotificationUtils';
 
 const emptyFormData: ChapterConfigFormData = {
     department: '',
@@ -287,13 +288,23 @@ export default function AdminChapterManagementPage() {
             showNotification('Chapter template created.', 'success');
             handleCloseManageDialog();
             void loadConfigs();
+
+            // Audit and notify moderators
+            if (session?.user?.uid) {
+                auditChapterTemplateChange({
+                    userId: session.user.uid,
+                    department: trimmedData.department,
+                    course: trimmedData.course,
+                    action: 'chapter_template_updated',
+                }).catch(console.error);
+            }
         } catch (error) {
             console.error('Error saving chapters:', error);
             showNotification('Failed to save chapter template.', 'error');
         } finally {
             setSaving(false);
         }
-    }, [formData, handleCloseManageDialog, loadConfigs, showNotification, validateForm]);
+    }, [formData, handleCloseManageDialog, loadConfigs, session?.user?.uid, showNotification, validateForm]);
 
     const handleViewConfig = React.useCallback((config: ThesisChapterConfig) => {
         const path = encodeChapterPath(config.department, config.course);
