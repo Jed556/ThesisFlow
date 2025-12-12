@@ -101,6 +101,7 @@ export interface UserProfile {
     preferences?: UserPreferences;
     /**
      * User's last active date
+     * Used to detect first-time login (if undefined, user hasn't logged in yet)
      */
     lastActive?: Date;
 }
