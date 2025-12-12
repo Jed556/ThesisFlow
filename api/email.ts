@@ -21,6 +21,28 @@ interface SmtpConfig {
     pass: string;
 }
 
+/**
+ * Gets SMTP configuration from environment variables
+ * @returns SMTP config if all required env vars are set, undefined otherwise
+ */
+function getEnvSmtpConfig(): SmtpConfig | undefined {
+    const host = process.env.SMTP_HOST;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (!host || !user || !pass) {
+        return undefined;
+    }
+
+    return {
+        host,
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        user,
+        pass,
+    };
+}
+
 /** Base email request interface */
 interface BaseEmailRequest {
     to: string;
@@ -78,7 +100,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const requestBody = req.body as EmailRequest;
-    const { to, smtp, useEthereal = true } = requestBody;
+    const { to, smtp: requestSmtp, useEthereal = false } = requestBody;
+
+    // Resolve SMTP config: request body > environment variables
+    const envSmtp = getEnvSmtpConfig();
+    const smtp = requestSmtp || envSmtp;
 
     // Validate required fields
     if (!to) {
@@ -134,7 +160,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Validate custom SMTP if not using Ethereal
     if (!useEthereal) {
         if (!smtp?.host || !smtp?.user || !smtp?.pass) {
-            return errorResponse(res, 'Custom SMTP requires host, user, and pass', 400);
+            return errorResponse(
+                res,
+                'SMTP config required. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars or pass smtp in request body',
+                400
+            );
         }
     }
 
@@ -175,6 +205,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 },
             });
             fromAddress = smtp!.user;
+
+            // Verify SMTP connection before sending
+            try {
+                await transporter.verify();
+            } catch (verifyError) {
+                console.error('SMTP verification failed:', verifyError);
+                const errorMsg = verifyError instanceof Error ? verifyError.message : 'Unknown error';
+                const hint = 'For Gmail, use an App Password from https://myaccount.google.com/apppasswords';
+                return errorResponse(res, `SMTP connection failed: ${errorMsg}. ${hint}`, 400);
+            }
         }
 
         // Send email

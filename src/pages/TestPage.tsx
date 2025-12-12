@@ -140,7 +140,7 @@ export default function TestPage() {
                 };
             }
 
-            const response = await fetch('/api/email/test', {
+            const response = await fetch('/api/email', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
