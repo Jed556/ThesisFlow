@@ -1,12 +1,27 @@
 import * as React from 'react';
-import { Box, Button, Card, CardActions, CardContent, Grid, Typography } from '@mui/material';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { Box, Card, CardActions, CardContent, Grid, Typography, Button } from '@mui/material';
+import {
+    WarningAmber as WarningAmberIcon,
+    People as PeopleIcon,
+    CalendarMonth as CalendarIcon,
+    Event as EventIcon,
+    Groups as GroupsIcon,
+    Description as ThesisIcon,
+    Folder as FileIcon,
+    History as AuditIcon,
+} from '@mui/icons-material';
 import { AnimatedPage } from '../../../components/Animate';
 import type { NavigationItem } from '../../../types/navigation';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { getError } from '../../../../utils/errorUtils';
 import { resolveAdminApiBaseUrl, buildAdminApiHeaders } from '../../../utils/firebase/api';
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
+import {
+    WipeConfirmationDialog,
+    type WipeCategory,
+    type WipeScope,
+} from '../../../components/WipeConfirmationDialog';
+import { getAcademicYear } from '../../../utils/dateUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -17,63 +32,87 @@ export const metadata: NavigationItem = {
     roles: ['admin', 'developer'],
 };
 
-type WipeCategory = 'calendar' | 'event' | 'file' | 'form' | 'group' | 'thesis' | 'user';
-
-interface WipeAction {
-    id: string;
-    label: string;
-    description: string;
-    category: WipeCategory;
-}
-
-const wipeActions: WipeAction[] = [
+/**
+ * Wipe action definitions with icons
+ */
+const wipeActions: (WipeCategory & { icon: React.ReactNode })[] = [
     {
-        id: 'wipe-auth-users',
-        label: 'Wipe Auth + Firestore Users',
-        description: 'Removes every user account from Firebase Auth and clears the users collection.',
+        id: 'wipe-users',
+        label: 'Wipe Users',
+        description: 'Removes every user account from Firebase Auth and clears Firestore user documents at all hierarchy levels.',
         category: 'user',
+        icon: <PeopleIcon />,
     },
     {
         id: 'wipe-calendars',
         label: 'Wipe Calendars',
-        description: 'Deletes every calendar document.',
+        description: 'Deletes every calendar document and associated events at all hierarchy levels.',
         category: 'calendar',
+        icon: <CalendarIcon />,
     },
     {
         id: 'wipe-events',
         label: 'Wipe Events',
-        description: 'Deletes every event entry across all calendars.',
+        description: 'Deletes every event entry across all calendars while preserving calendar documents.',
         category: 'event',
+        icon: <EventIcon />,
     },
     {
         id: 'wipe-groups',
         label: 'Wipe Groups',
-        description: 'Removes all thesis groups.',
+        description: 'Removes all thesis groups with their subcollections: audits, expert requests, panel comments, proposals, and theses.',
         category: 'group',
+        icon: <GroupsIcon />,
     },
     {
         id: 'wipe-theses',
         label: 'Wipe Theses',
-        description: 'Deletes every thesis document.',
+        description: 'Deletes all thesis documents with stages, chapters, submissions, and chat history.',
         category: 'thesis',
-    },
-    {
-        id: 'wipe-form-templates',
-        label: 'Wipe Form Templates',
-        description: 'Deletes every form template.',
-        category: 'form',
+        icon: <ThesisIcon />,
     },
     {
         id: 'wipe-files',
         label: 'Wipe Files',
-        description: 'Clears all file metadata documents.',
+        description: 'Clears all file data from Firestore (submissions, chats) and removes files from Firebase Storage.',
         category: 'file',
+        icon: <FileIcon />,
+    },
+    {
+        id: 'wipe-audits',
+        label: 'Wipe Audits',
+        description: 'Deletes all audit logs under groups and users at all hierarchy levels.',
+        category: 'audit',
+        icon: <AuditIcon />,
     },
 ];
+
+/**
+ * Sample departments and courses for scope filtering
+ * In production, these should be fetched from Firestore
+ */
+const SAMPLE_DEPARTMENTS = [
+    'Computer Science',
+    'Information Technology',
+    'Engineering',
+    'Business',
+];
+
+const SAMPLE_DEPARTMENT_COURSES: Record<string, string[]> = {
+    'Computer Science': ['BSCS', 'BSIT', 'BSIS'],
+    'Information Technology': ['BSIT', 'BSIS'],
+    'Engineering': ['BSCE', 'BSEE', 'BSME'],
+    'Business': ['BSBA', 'BSMA', 'BSA'],
+};
 
 export default function DangerZonePage() {
     const { showNotification } = useSnackbar();
     const { startJob } = useBackgroundJobControls();
+
+    // Dialog state
+    const [dialogOpen, setDialogOpen] = React.useState(false);
+    const [selectedAction, setSelectedAction] = React.useState<WipeCategory | null>(null);
+    const [isWiping, setIsWiping] = React.useState(false);
 
     const hasActiveWipe = useBackgroundJobFlag(
         React.useCallback((job) => {
@@ -86,15 +125,33 @@ export default function DangerZonePage() {
     );
 
     /**
+     * Open confirmation dialog for a wipe action
+     */
+    const handleOpenDialog = React.useCallback((action: WipeCategory) => {
+        setSelectedAction(action);
+        setDialogOpen(true);
+    }, []);
+
+    /**
+     * Close confirmation dialog
+     */
+    const handleCloseDialog = React.useCallback(() => {
+        if (!isWiping) {
+            setDialogOpen(false);
+            setSelectedAction(null);
+        }
+    }, [isWiping]);
+
+    /**
      * Execute a destructive wipe operation via the admin API.
      */
-    const handleWipe = React.useCallback(async (action: WipeAction) => {
-        if (!window.confirm(`This will permanently delete data for "${action.label}". Continue?`)) {
-            return;
-        }
+    const handleConfirmWipe = React.useCallback(async (scope: WipeScope) => {
+        if (!selectedAction) return;
+
+        setIsWiping(true);
 
         startJob(
-            `Executing wipe: ${action.label}`,
+            `Executing wipe: ${selectedAction.label}`,
             async (_, signal) => {
                 const apiUrl = resolveAdminApiBaseUrl();
 
@@ -113,19 +170,34 @@ export default function DangerZonePage() {
                     throw new Error('Wipe cancelled');
                 }
 
+                // Build request body with category and scope
+                const body: Record<string, string> = {
+                    category: selectedAction.category,
+                };
+
+                if (scope.year) {
+                    body.year = scope.year;
+                }
+                if (scope.department) {
+                    body.department = scope.department;
+                }
+                if (scope.course) {
+                    body.course = scope.course;
+                }
+
                 const response = await fetch(`${apiUrl}/wipe`, {
                     method: 'DELETE',
                     headers: {
                         ...headers,
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ category: action.category }),
+                    body: JSON.stringify(body),
                     signal,
                 });
 
                 if (!response.ok) {
                     const errorBody = await response.json().catch(() => null);
-                    const message = errorBody?.error || `Failed to wipe ${action.label}`;
+                    const message = errorBody?.error || `Failed to wipe ${selectedAction.label}`;
                     throw new Error(message);
                 }
 
@@ -134,16 +206,24 @@ export default function DangerZonePage() {
             },
             {
                 jobType: 'danger-wipe',
-                actionId: action.id,
-                category: action.category,
-                actionLabel: action.label,
+                actionId: selectedAction.id,
+                category: selectedAction.category,
+                actionLabel: selectedAction.label,
+                scope: scope,
             },
             (job) => {
                 const actionLabel = (job.metadata?.actionLabel as string | undefined) || 'Operation';
+                const jobScope = job.metadata?.scope as WipeScope | undefined;
+                const scopeDesc = jobScope?.course
+                    ? `${jobScope.department}/${jobScope.course}`
+                    : jobScope?.department
+                        ? jobScope.department
+                        : 'all';
 
                 if (job.status === 'completed') {
                     const result = job.result as Record<string, unknown> | null;
                     const detailParts: string[] = [];
+
                     if (result && typeof result === 'object') {
                         if (typeof result.deleted === 'number') {
                             detailParts.push(`Deleted: ${result.deleted}`);
@@ -154,14 +234,17 @@ export default function DangerZonePage() {
                         if (typeof result.firestoreDeleted === 'number') {
                             detailParts.push(`Firestore: ${result.firestoreDeleted}`);
                         }
-                        if (typeof result.firestoreBatches === 'number') {
-                            detailParts.push(`Firestore batches: ${result.firestoreBatches}`);
-                        }
                         if (typeof result.authDeleted === 'number') {
                             detailParts.push(`Auth: ${result.authDeleted}`);
                         }
+                        if (typeof result.storageDeleted === 'number') {
+                            detailParts.push(`Storage: ${result.storageDeleted}`);
+                        }
                         if (typeof result.authFailed === 'number' && result.authFailed > 0) {
                             detailParts.push(`Auth failures: ${result.authFailed}`);
+                        }
+                        if (typeof result.storageFailed === 'number' && result.storageFailed > 0) {
+                            detailParts.push(`Storage failures: ${result.storageFailed}`);
                         }
                     }
 
@@ -170,8 +253,8 @@ export default function DangerZonePage() {
                             ? result.message
                             : `${actionLabel} completed successfully`;
                     const message = detailParts.length > 0
-                        ? `${baseMessage} (${detailParts.join(', ')})`
-                        : baseMessage;
+                        ? `${baseMessage} [${scopeDesc}] (${detailParts.join(', ')})`
+                        : `${baseMessage} [${scopeDesc}]`;
 
                     showNotification(message, 'success');
                 } else if (job.status === 'failed') {
@@ -181,19 +264,25 @@ export default function DangerZonePage() {
             }
         );
 
+        // Close dialog after starting the job
+        setIsWiping(false);
+        setDialogOpen(false);
+        setSelectedAction(null);
+
         showNotification(
             'Wipe started in the background. You can navigate away and it will continue.',
             'warning',
             5000
         );
-    }, [startJob, showNotification]);
+    }, [selectedAction, startJob, showNotification]);
 
     return (
         <AnimatedPage variant="fade">
-            <Box >
+            <Box>
                 <Box mb={4}>
                     <Typography color="text.secondary">
                         These destructive actions permanently remove data. Use only in development or with extreme caution.
+                        You can filter deletions by department or course to limit the scope.
                     </Typography>
                 </Box>
 
@@ -211,9 +300,14 @@ export default function DangerZonePage() {
                                 }}
                             >
                                 <CardContent>
-                                    <Typography variant="h6" color="warning.main" fontWeight={600} gutterBottom>
-                                        {action.label}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Box sx={{ color: 'warning.main' }}>
+                                            {action.icon}
+                                        </Box>
+                                        <Typography variant="h6" color="warning.main" fontWeight={600}>
+                                            {action.label}
+                                        </Typography>
+                                    </Box>
                                     <Typography variant="body2" color="text.secondary">
                                         {action.description}
                                     </Typography>
@@ -223,7 +317,7 @@ export default function DangerZonePage() {
                                         fullWidth
                                         color="warning"
                                         variant="contained"
-                                        onClick={() => handleWipe(action)}
+                                        onClick={() => handleOpenDialog(action)}
                                         disabled={hasActiveWipe}
                                     >
                                         {hasActiveWipe ? 'Wiping…' : 'Execute Wipe'}
@@ -234,6 +328,18 @@ export default function DangerZonePage() {
                     ))}
                 </Grid>
             </Box>
+
+            {/* Confirmation Dialog */}
+            <WipeConfirmationDialog
+                open={dialogOpen}
+                onClose={handleCloseDialog}
+                action={selectedAction}
+                onConfirm={handleConfirmWipe}
+                isLoading={isWiping}
+                departments={SAMPLE_DEPARTMENTS}
+                departmentCourses={SAMPLE_DEPARTMENT_COURSES}
+                currentYear={getAcademicYear()}
+            />
         </AnimatedPage>
     );
 }
