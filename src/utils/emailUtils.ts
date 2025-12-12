@@ -36,6 +36,8 @@ export interface SendEmailOptions {
     actionText?: string;
     /** Optional action button URL */
     actionUrl?: string;
+    /** Optional header color (hex) - uses recipient's profile color */
+    headerColor?: string;
 }
 
 /**
@@ -141,6 +143,7 @@ export async function sendEmailNotification(options: SendEmailOptions): Promise<
         recipientName,
         actionText,
         actionUrl,
+        headerColor,
     } = options;
 
     try {
@@ -159,6 +162,7 @@ export async function sendEmailNotification(options: SendEmailOptions): Promise<
                     notificationType,
                     actionText: actionText || (actionUrl ? 'View Details' : undefined),
                     actionUrl,
+                    headerColor,
                 },
             }),
         });
@@ -196,6 +200,7 @@ export async function sendEmailNotification(options: SendEmailOptions): Promise<
  * @param actionUrl - Optional action URL
  * @param actionText - Optional action button text
  * @param recipientName - Optional recipient name
+ * @param headerColor - Optional header color (hex)
  * @returns Promise that resolves to true if email was sent successfully
  */
 export async function sendAuditEmailNotification(
@@ -205,7 +210,8 @@ export async function sendAuditEmailNotification(
     action: AuditAction,
     actionUrl?: string,
     actionText?: string,
-    recipientName?: string
+    recipientName?: string,
+    headerColor?: string
 ): Promise<boolean> {
     const result = await sendEmailNotification({
         to: email,
@@ -215,12 +221,14 @@ export async function sendAuditEmailNotification(
         recipientName,
         actionText,
         actionUrl,
+        headerColor,
     });
     return result.success;
 }
 
 /**
  * Send email notifications to multiple users in parallel
+ * Uses each recipient's themeColor for personalized email headers
  * @param profiles - User profiles to send emails to
  * @param title - Notification title
  * @param message - Notification message
@@ -252,7 +260,8 @@ export async function sendBulkAuditEmails(
             action,
             actionUrl,
             actionText,
-            getDisplayName(profile)
+            getDisplayName(profile),
+            profile.themeColor
         )
     );
 

@@ -10,7 +10,7 @@ import { wrapInBaseTemplate, createPlainTextEmail, brandColors } from './baseTem
  * @returns HTML email content
  */
 export function generateForgotPasswordEmailHtml(data: ForgotPasswordTemplateData): string {
-    const { recipientName, resetLink, expiryMinutes = 60, footerText } = data;
+    const { recipientName, resetLink, expiryMinutes = 60, footerText, headerColor } = data;
     const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
 
     const content = `
@@ -24,7 +24,7 @@ export function generateForgotPasswordEmailHtml(data: ForgotPasswordTemplateData
                 <a href="${resetLink}" class="button">Reset Password</a>
             </div>
             <div class="expiry-notice">
-                <p>⏱️ This link will expire in <strong>${expiryMinutes} minutes</strong>.</p>
+                <p>This link will expire in <strong>${expiryMinutes} minutes</strong>.</p>
             </div>
             <p style="margin-top: 24px;">
                 If the button doesn't work, copy and paste this link into your browser:
@@ -50,7 +50,7 @@ export function generateForgotPasswordEmailHtml(data: ForgotPasswordTemplateData
         </div>
     `;
 
-    return wrapInBaseTemplate(content, footerText);
+    return wrapInBaseTemplate(content, footerText, headerColor);
 }
 
 /**
@@ -68,7 +68,7 @@ We received a request to reset the password for your ThesisFlow account.
 To reset your password, visit the following link:
 ${resetLink}
 
-⏱️ This link will expire in ${expiryMinutes} minutes.
+This link will expire in ${expiryMinutes} minutes.
 
 If you didn't request a password reset, you can safely ignore this email.
 Your password will remain unchanged.

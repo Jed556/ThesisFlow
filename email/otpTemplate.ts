@@ -10,7 +10,14 @@ import { wrapInBaseTemplate, createPlainTextEmail, brandColors } from './baseTem
  * @returns HTML email content
  */
 export function generateOtpEmailHtml(data: OtpTemplateData): string {
-    const { recipientName, pin, expiryMinutes = 10, purpose = 'verify your account', footerText } = data;
+    const {
+        recipientName,
+        pin,
+        expiryMinutes = 10,
+        purpose = 'verify your account',
+        footerText,
+        headerColor,
+    } = data;
     const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
 
     const content = `
@@ -24,7 +31,7 @@ export function generateOtpEmailHtml(data: OtpTemplateData): string {
                 <span class="code">${pin}</span>
             </div>
             <div class="expiry-notice">
-                <p>⏱️ This code will expire in <strong>${expiryMinutes} minutes</strong>.</p>
+                <p>This code will expire in <strong>${expiryMinutes} minutes</strong>.</p>
             </div>
             <p class="warning-text">
                 If you didn't request this code, please ignore this email or contact support
@@ -37,7 +44,7 @@ export function generateOtpEmailHtml(data: OtpTemplateData): string {
         </div>
     `;
 
-    return wrapInBaseTemplate(content, footerText);
+    return wrapInBaseTemplate(content, footerText, headerColor);
 }
 
 /**
@@ -46,7 +53,13 @@ export function generateOtpEmailHtml(data: OtpTemplateData): string {
  * @returns Plain text email content
  */
 export function generateOtpEmailText(data: OtpTemplateData): string {
-    const { recipientName, pin, expiryMinutes = 10, purpose = 'verify your account', footerText } = data;
+    const {
+        recipientName,
+        pin,
+        expiryMinutes = 10,
+        purpose = 'verify your account',
+        footerText,
+    } = data;
     const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
 
     const body = `
@@ -54,7 +67,7 @@ You've requested a one-time verification code to ${purpose}.
 
 Your verification code is: ${pin}
 
-⏱️ This code will expire in ${expiryMinutes} minutes.
+This code will expire in ${expiryMinutes} minutes.
 
 If you didn't request this code, please ignore this email or contact support if you have concerns about your account security.
 

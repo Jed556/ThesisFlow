@@ -5,26 +5,22 @@ import type { NotificationTemplateData } from './types.js';
 import { wrapInBaseTemplate, createPlainTextEmail, brandColors } from './baseTemplate.js';
 
 /** Notification type color mapping */
-const notificationColors: Record<string, { bg: string; border: string; icon: string }> = {
+const notificationColors: Record<string, { bg: string; border: string }> = {
     info: {
         bg: '#e3f2fd',
         border: brandColors.info,
-        icon: 'ℹ️',
     },
     success: {
         bg: '#e8f5e9',
         border: brandColors.success,
-        icon: '✅',
     },
     warning: {
         bg: '#fff3e0',
         border: brandColors.warning,
-        icon: '⚠️',
     },
     error: {
         bg: '#ffebee',
         border: brandColors.error,
-        icon: '❌',
     },
 };
 
@@ -60,6 +56,7 @@ export function generateNotificationEmailHtml(data: NotificationTemplateData): s
         actionUrl,
         notificationType = 'info',
         footerText,
+        headerColor,
     } = data;
 
     const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
@@ -84,7 +81,7 @@ export function generateNotificationEmailHtml(data: NotificationTemplateData): s
                 border-radius: 0 8px 8px 0;
             ">
                 <p style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600; color: ${colors.border};">
-                    ${colors.icon} ${title}
+                    ${title}
                 </p>
                 <p style="margin: 0; color: ${brandColors.textPrimary};">
                     ${message}
@@ -93,12 +90,12 @@ export function generateNotificationEmailHtml(data: NotificationTemplateData): s
             ${actionButton}
             <p style="margin-top: 24px; color: ${brandColors.textSecondary}; font-size: 14px;">
                 This notification was sent from ThesisFlow regarding your research activities.
-                If you have questions, please contact your adviser or the system administrator.
+                If you have questions, please contact your moderator or the system administrator.
             </p>
         </div>
     `;
 
-    return wrapInBaseTemplate(content, footerText);
+    return wrapInBaseTemplate(content, footerText, headerColor);
 }
 
 /**
@@ -130,7 +127,7 @@ ${message}
     }
 
     body += '\n\nThis notification was sent from ThesisFlow regarding your research ' +
-        'activities. If you have questions, please contact your adviser or the ' +
+        'activities. If you have questions, please contact your moderator or the ' +
         'system administrator.';
 
     return createPlainTextEmail(greeting, body, footerText);
