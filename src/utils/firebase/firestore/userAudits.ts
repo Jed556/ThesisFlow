@@ -108,6 +108,7 @@ function docToUserAuditEntry(
             : (data.timestamp as string) || new Date().toISOString(),
         details: data.details as AuditDetails | undefined,
         showSnackbar: data.showSnackbar as boolean | undefined,
+        snackbarShown: (data.snackbarShown as boolean) ?? false,
         read: (data.read as boolean) ?? false,
     };
 }
@@ -145,6 +146,7 @@ export async function createUserAuditEntry(
         relatedGroupId: data.relatedGroupId || null,
         details: data.details || null,
         showSnackbar: data.showSnackbar ?? true,
+        snackbarShown: false,
         read: false,
         timestamp: serverTimestamp(),
     };
@@ -184,6 +186,7 @@ export async function createUserAuditEntriesBatch(
             relatedGroupId: data.relatedGroupId || null,
             details: data.details || null,
             showSnackbar: data.showSnackbar ?? true,
+            snackbarShown: false,
             read: false,
             timestamp: serverTimestamp(),
         };
@@ -371,6 +374,43 @@ export async function markUserAuditsAsRead(
         const docPath = buildUserAuditDocumentPath(ctx, auditId);
         const docRef = doc(firebaseFirestore, docPath);
         batch.update(docRef, { read: true });
+    }
+
+    await batch.commit();
+}
+
+/**
+ * Mark a user audit snackbar as shown
+ * This prevents the snackbar from showing again on page reload/login
+ * @param ctx - User audit context
+ * @param auditId - Audit entry ID
+ */
+export async function markUserAuditSnackbarShown(
+    ctx: UserAuditContext,
+    auditId: string
+): Promise<void> {
+    const docPath = buildUserAuditDocumentPath(ctx, auditId);
+    const docRef = doc(firebaseFirestore, docPath);
+    await updateDoc(docRef, { snackbarShown: true });
+}
+
+/**
+ * Mark multiple user audit snackbars as shown
+ * @param ctx - User audit context
+ * @param auditIds - Array of audit entry IDs
+ */
+export async function markUserAuditSnackbarsShown(
+    ctx: UserAuditContext,
+    auditIds: string[]
+): Promise<void> {
+    if (auditIds.length === 0) return;
+
+    const batch = writeBatch(firebaseFirestore);
+
+    for (const auditId of auditIds) {
+        const docPath = buildUserAuditDocumentPath(ctx, auditId);
+        const docRef = doc(firebaseFirestore, docPath);
+        batch.update(docRef, { snackbarShown: true });
     }
 
     await batch.commit();

@@ -16,8 +16,11 @@ import { TopicProposalEntryCard } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
-import { findUserById } from '../../utils/firebase/firestore/user';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
+import {
+    notifyModeratorApprovedTopicForHead,
+    notifyModeratorRejectedTopic,
+} from '../../utils/auditNotificationUtils';
 
 function splitSectionList(value?: string | null): string[] {
     if (!value) {
@@ -83,6 +86,9 @@ export default function ModeratorTopicProposalsPage() {
     const [groupsLoading, setGroupsLoading] = React.useState(false);
     const [groupsError, setGroupsError] = React.useState<string | null>(null);
     const [groupProposalSets, setGroupProposalSets] = React.useState<Map<string, TopicProposalSetRecord | null>>(new Map());
+
+    // Cache of head user IDs by department for notifications
+    const [headUsersByDept, setHeadUsersByDept] = React.useState<Map<string, string[]>>(new Map());
 
     const [decisionDialog, setDecisionDialog] = React.useState<DecisionDialogState | null>(null);
     const [decisionNotes, setDecisionNotes] = React.useState('');
@@ -188,8 +194,25 @@ export default function ModeratorTopicProposalsPage() {
     React.useEffect(() => {
         if (assignedGroups.length === 0) {
             setGroupProposalSets(new Map());
+            setHeadUsersByDept(new Map());
             return () => { /* no-op */ };
         }
+
+        // Fetch head users for all unique departments in assigned groups
+        const uniqueDepartments = [...new Set(assignedGroups.map(g => g.department).filter(Boolean))];
+        void (async () => {
+            const deptHeadMap = new Map<string, string[]>();
+            for (const dept of uniqueDepartments) {
+                if (!dept) continue;
+                try {
+                    const heads = await findUsersByFilter({ role: 'head', department: dept });
+                    deptHeadMap.set(dept, heads.map(h => h.uid));
+                } catch (error) {
+                    console.error(`Failed to fetch heads for department ${dept}:`, error);
+                }
+            }
+            setHeadUsersByDept(deptHeadMap);
+        })();
 
         const unsubscribes = assignedGroups.map((group) =>
             listenTopicProposalSetsByGroup(group.id, {
@@ -263,28 +286,33 @@ export default function ModeratorTopicProposalsPage() {
             );
             if (group) {
                 const isApproved = decisionDialog.decision === 'approved';
-                void auditAndNotify({
-                    group,
-                    userId: moderatorUid,
-                    name: isApproved ? 'Proposal Approved by Moderator' : 'Proposal Rejected by Moderator',
-                    description: isApproved
-                        ? `Topic "${decisionDialog.proposal.title}" has been approved by moderator and sent to head for review.`
-                        // eslint-disable-next-line max-len
-                        : `Topic "${decisionDialog.proposal.title}" has been rejected by moderator.${decisionNotes.trim() ? ` Reason: ${decisionNotes.trim()}` : ''}`,
-                    category: 'proposal',
-                    action: isApproved ? 'proposal_approved' : 'proposal_rejected',
-                    targets: {
-                        groupMembers: true,
-                        excludeUserId: moderatorUid,
-                    },
-                    details: {
+                // Get head user IDs for this group's department
+                const deptHeadIds = headUsersByDept.get(group.department ?? '') ?? [];
+
+                if (isApproved) {
+                    // Notify head that topic requires their decision + notify group members
+                    void notifyModeratorApprovedTopicForHead({
+                        group,
+                        moderatorId: moderatorUid,
                         proposalTitle: decisionDialog.proposal.title,
-                        decision: decisionDialog.decision,
-                        notes: decisionNotes.trim() || undefined,
-                        reviewerRole: 'moderator',
-                    },
-                    sendEmail: true,
-                });
+                        headUserIds: deptHeadIds,
+                        details: {
+                            proposalId: decisionDialog.proposal.id,
+                            notes: decisionNotes.trim() || undefined,
+                        },
+                    });
+                } else {
+                    // Notify group members about rejection
+                    void notifyModeratorRejectedTopic({
+                        group,
+                        moderatorId: moderatorUid,
+                        proposalTitle: decisionDialog.proposal.title,
+                        reason: decisionNotes.trim() || undefined,
+                        details: {
+                            proposalId: decisionDialog.proposal.id,
+                        },
+                    });
+                }
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to record decision';

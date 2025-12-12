@@ -6,10 +6,11 @@ import type { UserRole } from '../../types/profile';
  * Audit scope levels based on user privileges
  * - 'personal': User's personal notifications (user audits only visible to the user)
  * - 'group': Audits for groups the user belongs to
+ * - 'course': Audits for all groups in the user's course (moderator)
  * - 'departmental': Audits for all groups in the user's department (head/moderator)
- * - 'admin': Audits for all groups across all departments (admin only)
+ * - 'admin': Admin-level audits (template changes, system actions) - for admin only
  */
-export type AuditScope = 'personal' | 'group' | 'departmental' | 'admin';
+export type AuditScope = 'personal' | 'group' | 'course' | 'departmental' | 'admin';
 
 /**
  * Audit data source type for filtering
@@ -142,19 +143,27 @@ export interface AuditViewProps {
  * Get available scopes based on user role
  * - 'group': Primary scope - group audit history (preferred default)
  * - 'personal': Always available - user's personal notifications
- * - 'departmental': For heads and moderators - audits for all groups in their department
- * - 'admin': For admins only - audits for all groups (not user-based audits)
+ * - 'course': For moderators - audits for all groups in their course
+ * - 'departmental': For heads - audits for all groups in their department
+ * - 'admin': For admins only - admin actions (template changes, etc.)
  */
 export function getAvailableScopes(role: UserRole | undefined): AuditScope[] {
     // Group scope is preferred, with personal as fallback
     const scopes: AuditScope[] = ['group', 'personal'];
 
-    if (role === 'moderator' || role === 'head') {
+    if (role === 'moderator') {
+        // Moderators can see course-level audits
+        scopes.push('course');
+    }
+
+    if (role === 'head') {
+        // Heads can see departmental audits
         scopes.push('departmental');
     }
 
     if (role === 'admin' || role === 'developer') {
-        scopes.push('departmental', 'admin');
+        // Admins get all scopes including admin-level actions
+        scopes.push('admin');
     }
 
     // Remove duplicates
@@ -168,8 +177,9 @@ export function getScopeLabel(scope: AuditScope): string {
     const labels: Record<AuditScope, string> = {
         personal: 'Personal',
         group: 'Group',
+        course: 'Course',
         departmental: 'Department',
-        admin: 'All Groups',
+        admin: 'Admin',
     };
     return labels[scope];
 }
@@ -181,8 +191,9 @@ export function getScopeDescription(scope: AuditScope): string {
     const descriptions: Record<AuditScope, string> = {
         personal: 'Your personal notifications and alerts',
         group: 'Activity history for your groups',
+        course: 'Activity for all groups in your course',
         departmental: 'Activity for all groups in your department',
-        admin: 'Activity for all groups across all departments',
+        admin: 'Admin actions and template changes',
     };
     return descriptions[scope];
 }
@@ -218,6 +229,49 @@ export const GROUP_AUDIT_CATEGORIES: AuditCategory[] = [
     'group', 'thesis', 'submission', 'chapter', 'panel',
     'proposal', 'member', 'expert', 'comment', 'file', 'stage', 'terminal', 'other'
 ];
+
+/**
+ * Categories relevant for course-level audits (moderator view)
+ */
+export const COURSE_AUDIT_CATEGORIES: AuditCategory[] = [
+    'group', 'thesis', 'submission', 'chapter', 'proposal',
+    'member', 'expert', 'comment', 'file', 'stage', 'terminal', 'other'
+];
+
+/**
+ * Categories relevant for department-level audits (head view)
+ */
+export const DEPARTMENT_AUDIT_CATEGORIES: AuditCategory[] = [
+    'group', 'thesis', 'submission', 'chapter', 'panel',
+    'proposal', 'member', 'expert', 'comment', 'file', 'stage', 'terminal', 'other'
+];
+
+/**
+ * Categories relevant for admin audits (admin actions, template changes)
+ */
+export const ADMIN_AUDIT_CATEGORIES: AuditCategory[] = [
+    'template', 'chapter', 'stage', 'account', 'notification', 'other'
+];
+
+/**
+ * Get relevant categories for a specific scope
+ */
+export function getCategoriesForScope(scope: AuditScope): AuditCategory[] {
+    switch (scope) {
+        case 'personal':
+            return PERSONAL_AUDIT_CATEGORIES;
+        case 'group':
+            return GROUP_AUDIT_CATEGORIES;
+        case 'course':
+            return COURSE_AUDIT_CATEGORIES;
+        case 'departmental':
+            return DEPARTMENT_AUDIT_CATEGORIES;
+        case 'admin':
+            return ADMIN_AUDIT_CATEGORIES;
+        default:
+            return GROUP_AUDIT_CATEGORIES;
+    }
+}
 
 /**
  * Default display configuration

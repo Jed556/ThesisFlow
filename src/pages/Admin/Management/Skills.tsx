@@ -2,8 +2,8 @@ import * as React from 'react';
 import {
     Alert, Autocomplete, Box, Button, Card, CardActions, CardContent, Chip,
     CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-    Divider, FormControlLabel, IconButton, List, ListItem,
-    ListItemText, Skeleton, Stack,
+    Divider, FormControlLabel, IconButton, LinearProgress, List, ListItem,
+    ListItemText, Menu, MenuItem, Skeleton, Stack,
     Switch, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
@@ -11,6 +11,9 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
     Psychology as SkillIcon,
+    FileDownload as ImportIcon,
+    ExpandMore as ExpandMoreIcon,
+    RestartAlt as ResetIcon,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { AnimatedPage } from '../../../components/Animate';
@@ -26,9 +29,14 @@ import {
     updateSkillTemplate,
     deleteSkillTemplate,
     listenSkillTemplates,
+    seedMissingDepartmentSkills,
+    resetDepartmentSkillsToDefault,
+    type SkillsConfigData,
 } from '../../../utils/firebase/firestore/skillTemplates';
 import { getUserDepartments } from '../../../utils/firebase/firestore/user';
 import { DEFAULT_YEAR } from '../../../config/firestore';
+import SkillsConfig from '../../../config/skills.json';
+import { auditSkillTemplateChange } from '../../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -71,6 +79,8 @@ export default function SkillsManagementPage() {
     const [skills, setSkills] = React.useState<SkillTemplateRecord[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [departmentsLoading, setDepartmentsLoading] = React.useState(true);
+    const [initialLoading, setInitialLoading] = React.useState(true);
+    const [isSeeding, setIsSeeding] = React.useState(false);
 
     // Dialog state
     const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -83,40 +93,76 @@ export default function SkillsManagementPage() {
     const [skillToDelete, setSkillToDelete] = React.useState<SkillTemplateRecord | null>(null);
     const [deleting, setDeleting] = React.useState(false);
 
-    // Load departments
-    React.useEffect(() => {
-        if (!canManage) return;
+    // Reset confirmation
+    const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
+    const [resetting, setResetting] = React.useState(false);
 
-        setDepartmentsLoading(true);
-        void (async () => {
-            try {
-                // Get all departments from the system
-                const allDepts = await getUserDepartments();
+    // Template import menu state
+    const [importMenuAnchor, setImportMenuAnchor] = React.useState<null | HTMLElement>(null);
+    const [importingTemplate, setImportingTemplate] = React.useState(false);
 
-                if (userRole === 'admin' || userRole === 'developer') {
-                    // Admin/developer can see all departments
-                    setDepartments(allDepts);
-                    // Default to first department or user's department
-                    if (allDepts.length > 0) {
-                        setSelectedDepartment(userDepartment && allDepts.includes(userDepartment)
-                            ? userDepartment
-                            : allDepts[0]);
-                    }
-                } else if (userRole === 'head' && userDepartment) {
-                    // Head can only manage their department
-                    setDepartments([userDepartment]);
-                    setSelectedDepartment(userDepartment);
-                } else {
-                    setDepartments([]);
-                }
-            } catch (err) {
-                console.error('Failed to load departments:', err);
-                showNotification('Failed to load departments', 'error');
-            } finally {
-                setDepartmentsLoading(false);
+    // Initialize: seed skills for all departments that don't have any
+    const initializeSkills = React.useCallback(async () => {
+        if (!canManage) {
+            setInitialLoading(false);
+            return;
+        }
+
+        try {
+            setDepartmentsLoading(true);
+            // Get all departments from the system
+            const allDepts = await getUserDepartments();
+
+            let availableDepts: string[] = [];
+            if (userRole === 'admin' || userRole === 'developer') {
+                availableDepts = allDepts;
+            } else if (userRole === 'head' && userDepartment) {
+                availableDepts = [userDepartment];
             }
-        })();
-    }, [canManage, userRole, userDepartment, showNotification]);
+
+            setDepartments(availableDepts);
+
+            // Seed missing department skills
+            if (availableDepts.length > 0) {
+                setIsSeeding(true);
+                const result = await seedMissingDepartmentSkills(
+                    DEFAULT_YEAR,
+                    availableDepts,
+                    SkillsConfig as SkillsConfigData,
+                    session?.user?.uid
+                );
+
+                if (result.seeded) {
+                    showNotification(
+                        `Seeded ${result.skillsCreated} skill(s) for ${result.departmentsSeeded.length} department(s)`,
+                        'success'
+                    );
+                }
+                setIsSeeding(false);
+            }
+
+            // Set initial department selection
+            if (availableDepts.length > 0) {
+                setSelectedDepartment(
+                    userDepartment && availableDepts.includes(userDepartment)
+                        ? userDepartment
+                        : availableDepts[0]
+                );
+            }
+        } catch (err) {
+            console.error('Failed to initialize skills:', err);
+            showNotification('Failed to initialize skills', 'error');
+        } finally {
+            setDepartmentsLoading(false);
+            setInitialLoading(false);
+            setIsSeeding(false);
+        }
+    }, [canManage, userRole, userDepartment, session?.user?.uid, showNotification]);
+
+    // Initialize on mount
+    React.useEffect(() => {
+        void initializeSkills();
+    }, [initializeSkills]);
 
     // Listen to skills for selected department
     React.useEffect(() => {
@@ -192,6 +238,15 @@ export default function SkillsManagementPage() {
                     isActive: formData.isActive,
                 });
                 showNotification('Skill updated successfully', 'success');
+                // Audit and notify heads
+                if (session?.user?.uid) {
+                    auditSkillTemplateChange({
+                        userId: session.user.uid,
+                        department: selectedDepartment,
+                        action: 'skill_template_updated',
+                        skillName: formData.name.trim(),
+                    }).catch(console.error);
+                }
             } else {
                 // Create new skill
                 const nextOrder = skills.length > 0
@@ -210,6 +265,15 @@ export default function SkillsManagementPage() {
                     session?.user?.uid
                 );
                 showNotification('Skill created successfully', 'success');
+                // Audit and notify heads
+                if (session?.user?.uid) {
+                    auditSkillTemplateChange({
+                        userId: session.user.uid,
+                        department: selectedDepartment,
+                        action: 'skill_template_created',
+                        skillName: formData.name.trim(),
+                    }).catch(console.error);
+                }
             }
             handleCloseDialog();
         } catch (err) {
@@ -238,12 +302,54 @@ export default function SkillsManagementPage() {
         try {
             await deleteSkillTemplate(DEFAULT_YEAR, selectedDepartment, skillToDelete.id);
             showNotification('Skill deleted successfully', 'success');
+            // Audit and notify heads
+            if (session?.user?.uid) {
+                auditSkillTemplateChange({
+                    userId: session.user.uid,
+                    department: selectedDepartment,
+                    action: 'skill_template_deleted',
+                    skillName: skillToDelete.name,
+                }).catch(console.error);
+            }
             handleCloseDeleteDialog();
         } catch (err) {
             console.error('Failed to delete skill:', err);
             showNotification('Failed to delete skill', 'error');
         } finally {
             setDeleting(false);
+        }
+    };
+
+    // Reset to default handler
+    const handleResetToDefault = async () => {
+        if (!selectedDepartment) return;
+
+        setResetting(true);
+        try {
+            const count = await resetDepartmentSkillsToDefault(
+                DEFAULT_YEAR,
+                selectedDepartment,
+                SkillsConfig as SkillsConfigData,
+                session?.user?.uid
+            );
+            showNotification(
+                `Skills reset to default. Created ${count} skill(s) from template.`,
+                'success'
+            );
+            // Audit and notify heads
+            if (session?.user?.uid) {
+                auditSkillTemplateChange({
+                    userId: session.user.uid,
+                    department: selectedDepartment,
+                    action: 'skill_template_reset',
+                }).catch(console.error);
+            }
+            setResetDialogOpen(false);
+        } catch (err) {
+            console.error('Failed to reset skills:', err);
+            showNotification('Failed to reset skills to default', 'error');
+        } finally {
+            setResetting(false);
         }
     };
 
@@ -260,6 +366,109 @@ export default function SkillsManagementPage() {
         } catch (err) {
             console.error('Failed to toggle skill status:', err);
             showNotification('Failed to update skill status', 'error');
+        }
+    };
+
+    // Get available template sources for import
+    const availableTemplates = React.useMemo(() => {
+        const templates: { label: string; source: 'default' | 'department'; department?: string }[] = [
+            { label: 'Default Skills', source: 'default' },
+        ];
+
+        // Add department-specific templates that match selected department
+        const deptTemplate = SkillsConfig.departmentTemplates.find(
+            (t) => t.department === selectedDepartment
+        );
+        if (deptTemplate) {
+            templates.push({
+                label: `${deptTemplate.department} Template`,
+                source: 'department',
+                department: deptTemplate.department,
+            });
+        }
+
+        return templates;
+    }, [selectedDepartment]);
+
+    // Import skills from template
+    const handleImportTemplate = async (source: 'default' | 'department', department?: string) => {
+        if (!selectedDepartment) {
+            showNotification('Please select a department first', 'warning');
+            return;
+        }
+
+        setImportMenuAnchor(null);
+        setImportingTemplate(true);
+
+        try {
+            // Determine which skills to import
+            let skillsToImport: { name: string; description?: string; category?: string }[] = [];
+
+            if (source === 'default') {
+                skillsToImport = SkillsConfig.defaultSkills;
+            } else if (source === 'department' && department) {
+                const deptTemplate = SkillsConfig.departmentTemplates.find(
+                    (t) => t.department === department
+                );
+                skillsToImport = deptTemplate?.skills ?? [];
+            }
+
+            if (skillsToImport.length === 0) {
+                showNotification('No skills found in the selected template', 'warning');
+                return;
+            }
+
+            // Filter out skills that already exist (by name)
+            const existingNames = new Set(skills.map((s) => s.name.toLowerCase()));
+            const newSkills = skillsToImport.filter(
+                (s) => !existingNames.has(s.name.toLowerCase())
+            );
+
+            if (newSkills.length === 0) {
+                showNotification('All skills from this template already exist', 'info');
+                return;
+            }
+
+            // Get the next order value
+            let nextOrder = skills.length > 0
+                ? Math.max(...skills.map((s) => s.order ?? 0)) + 1
+                : 0;
+
+            // Create skills one by one
+            let successCount = 0;
+            for (const skill of newSkills) {
+                try {
+                    await createSkillTemplate(
+                        DEFAULT_YEAR,
+                        selectedDepartment,
+                        {
+                            name: skill.name,
+                            description: skill.description,
+                            category: skill.category,
+                            order: nextOrder++,
+                            isActive: true,
+                        },
+                        session?.user?.uid
+                    );
+                    successCount++;
+                } catch (err) {
+                    console.error(`Failed to create skill ${skill.name}:`, err);
+                }
+            }
+
+            if (successCount > 0) {
+                showNotification(
+                    `Successfully imported ${successCount} skill(s)`,
+                    'success'
+                );
+            } else {
+                showNotification('Failed to import skills', 'error');
+            }
+        } catch (err) {
+            console.error('Failed to import template:', err);
+            showNotification('Failed to import template', 'error');
+        } finally {
+            setImportingTemplate(false);
         }
     };
 
@@ -299,12 +508,30 @@ export default function SkillsManagementPage() {
         return { grouped, uncategorized };
     }, [skills]);
 
-    if (session?.loading) {
+    if (session?.loading || initialLoading || isSeeding) {
         return (
             <AnimatedPage variant="fade">
-                <Box sx={{ p: 3 }}>
-                    <Skeleton variant="text" width={300} height={40} />
-                    <Skeleton variant="rectangular" height={200} sx={{ mt: 2 }} />
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 10, gap: 2 }}>
+                    {isSeeding ? (
+                        <>
+                            <Typography variant="h6" color="text.secondary">
+                                Seeding skill templates for all departments...
+                            </Typography>
+                            <Box sx={{ width: '100%', maxWidth: 400 }}>
+                                <LinearProgress />
+                            </Box>
+                            <Typography variant="body2" color="text.secondary">
+                                Setting up default skills from department templates
+                            </Typography>
+                        </>
+                    ) : (
+                        <>
+                            <CircularProgress />
+                            <Typography variant="body2" color="text.secondary">
+                                Loading skills management...
+                            </Typography>
+                        </>
+                    )}
                 </Box>
             </AnimatedPage>
         );
@@ -373,6 +600,38 @@ export default function SkillsManagementPage() {
                             >
                                 Add Skill
                             </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={importingTemplate ? <CircularProgress size={16} /> : <ImportIcon />}
+                                endIcon={<ExpandMoreIcon />}
+                                onClick={(e) => setImportMenuAnchor(e.currentTarget)}
+                                disabled={!selectedDepartment || importingTemplate}
+                            >
+                                Load Template
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                color="warning"
+                                startIcon={<ResetIcon />}
+                                onClick={() => setResetDialogOpen(true)}
+                                disabled={!selectedDepartment || resetting}
+                            >
+                                Reset
+                            </Button>
+                            <Menu
+                                anchorEl={importMenuAnchor}
+                                open={Boolean(importMenuAnchor)}
+                                onClose={() => setImportMenuAnchor(null)}
+                            >
+                                {availableTemplates.map((template) => (
+                                    <MenuItem
+                                        key={template.label}
+                                        onClick={() => handleImportTemplate(template.source, template.department)}
+                                    >
+                                        {template.label}
+                                    </MenuItem>
+                                ))}
+                            </Menu>
                         </Stack>
                     </CardContent>
                 </Card>
@@ -397,16 +656,23 @@ export default function SkillsManagementPage() {
                         <CardContent>
                             <Typography variant="body1" color="text.secondary" textAlign="center">
                                 No skills defined for this department yet.
-                                Add skills that advisers should rate themselves on.
+                                Add skills that advisers should rate themselves on, or load from a template.
                             </Typography>
                         </CardContent>
-                        <CardActions sx={{ justifyContent: 'center' }}>
+                        <CardActions sx={{ justifyContent: 'center', gap: 1 }}>
                             <Button
                                 variant="outlined"
                                 startIcon={<AddIcon />}
                                 onClick={handleOpenCreateDialog}
                             >
                                 Add First Skill
+                            </Button>
+                            <Button
+                                variant="contained"
+                                startIcon={<ImportIcon />}
+                                onClick={(e) => setImportMenuAnchor(e.currentTarget)}
+                            >
+                                Load Template
                             </Button>
                         </CardActions>
                     </Card>
@@ -577,6 +843,39 @@ export default function SkillsManagementPage() {
                         disabled={deleting}
                     >
                         {deleting ? 'Deleting...' : 'Delete'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Reset Confirmation Dialog */}
+            <Dialog
+                open={resetDialogOpen}
+                onClose={() => setResetDialogOpen(false)}
+                slots={{ transition: GrowTransition }}
+            >
+                <DialogTitle>Reset Skills to Default?</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        Are you sure you want to reset all skills for{' '}
+                        <strong>{selectedDepartment}</strong> to the default template?
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        This will <strong>delete all existing skills</strong> for this department
+                        and replace them with the default skill template.
+                        Experts who have rated skills will retain their ratings.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setResetDialogOpen(false)} disabled={resetting}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        onClick={handleResetToDefault}
+                        disabled={resetting}
+                    >
+                        {resetting ? 'Resetting...' : 'Reset to Default'}
                     </Button>
                 </DialogActions>
             </Dialog>

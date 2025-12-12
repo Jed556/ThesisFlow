@@ -150,7 +150,7 @@ function CustomButton() {
  */
 function ForgotPasswordLink() {
     return (
-        <Link href="/" variant="body2">
+        <Link href="/forgot-password" variant="body2">
             Forgot password?
         </Link>
     );
@@ -473,6 +473,37 @@ export default function SignIn() {
                                 if (!profile) {
                                     showNotification('User profile not found. Contact an administrator.', 'error', 0);
                                     return { error: 'User profile not found' };
+                                }
+
+                                // Check if user must change password on first login (no lastActive = never logged in)
+                                if (!profile.lastActive) {
+                                    const userSession: Session = {
+                                        user: {
+                                            uid: profile.uid || result.user.uid,
+                                            name: formatDisplayName(profile),
+                                            email: profile.email,
+                                            image: profile.avatar || '',
+                                            role: profile.role,
+                                            department: profile.department,
+                                            course: profile.course,
+                                        },
+                                    };
+                                    authentication?.setSession?.(userSession);
+                                    // Redirect to change password page with first login context
+                                    navigate('/change-password', {
+                                        replace: true,
+                                        state: {
+                                            isFirstLogin: true,
+                                            temporaryPassword: passwordValue ||
+                                                (formData?.get('password') as string),
+                                        },
+                                    });
+                                    showNotification(
+                                        'Please set a new password for your account.',
+                                        'info',
+                                        5000
+                                    );
+                                    return {};
                                 }
 
                                 const userSession: Session = {

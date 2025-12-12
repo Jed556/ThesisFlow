@@ -6,4 +6,6 @@ export type {
     NotificationSeverity,
     NotificationAction,
     NotificationOptions,
+    JobNotificationOptions,
+    JobStatus,
 } from '../../contexts/SnackbarContext';

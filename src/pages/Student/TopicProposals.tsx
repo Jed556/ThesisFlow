@@ -20,12 +20,15 @@ import {
     submitProposalSetBySetId, updateDraftEntriesBySetId,
 } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
-import { findUsersByIds } from '../../utils/firebase/firestore/user';
+import { findUsersByIds, findUsersByFilter } from '../../utils/firebase/firestore/user';
 import {
     areAllProposalsRejected, canEditProposalSet, getProposalSetMeta, pickActiveProposalSet
 } from '../../utils/topicProposalUtils';
 import { MAX_TOPIC_PROPOSALS } from '../../config/proposals';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import {
+    notifyTopicProposalSubmitted,
+    notifyTopicUsedAsThesis,
+} from '../../utils/auditNotificationUtils';
 
 
 export const metadata: NavigationItem = {
@@ -121,6 +124,10 @@ export default function StudentTopicProposalsPage() {
     const [groupReloadToken, setGroupReloadToken] = React.useState(0);
     const [memberProfiles, setMemberProfiles] = React.useState<Map<string, UserProfile>>(new Map());
 
+    // Cache for moderator and head user IDs for notifications
+    const [moderatorUserIds, setModeratorUserIds] = React.useState<string[]>([]);
+    const [headUserIds, setHeadUserIds] = React.useState<string[]>([]);
+
     const [proposalSets, setProposalSets] = React.useState<TopicProposalSetRecord[]>([]);
     const [proposalError, setProposalError] = React.useState<string | null>(null);
     const [proposalLoading, setProposalLoading] = React.useState(false);
@@ -187,6 +194,8 @@ export default function StudentTopicProposalsPage() {
     React.useEffect(() => {
         if (!group?.id) {
             setMemberProfiles(new Map());
+            setModeratorUserIds([]);
+            setHeadUserIds([]);
             return;
         }
 
@@ -210,6 +219,24 @@ export default function StudentTopicProposalsPage() {
                 setMemberProfiles(profileMap);
             } catch (error) {
                 console.error('Failed to load group member profiles:', error);
+            }
+        })();
+
+        // Fetch moderator and head users for notifications
+        void (async () => {
+            try {
+                // Fetch moderators for the group's course
+                if (group.course) {
+                    const moderators = await findUsersByFilter({ role: 'moderator', course: group.course });
+                    setModeratorUserIds(moderators.map(m => m.uid));
+                }
+                // Fetch heads for the group's department
+                if (group.department) {
+                    const heads = await findUsersByFilter({ role: 'head', department: group.department });
+                    setHeadUserIds(heads.map(h => h.uid));
+                }
+            } catch (error) {
+                console.error('Failed to load moderator/head users:', error);
             }
         })();
     }, [group]);
@@ -404,22 +431,14 @@ export default function StudentTopicProposalsPage() {
             await submitProposalSetBySetId(activeSet.id, userUid);
             showNotification('Topic proposals submitted for review', 'success');
 
-            // Audit notification for topic proposal submission
+            // Audit notification for topic proposal submission - notify group members and moderators
             if (group) {
-                void auditAndNotify({
+                void notifyTopicProposalSubmitted({
                     group,
-                    userId: userUid,
-                    name: 'Topic Proposals Submitted',
-                    description: `Topic proposals (Batch ${activeSet.batch ?? 1}) have been submitted for review.`,
-                    category: 'proposal',
-                    action: 'proposal_submitted',
-                    targets: {
-                        groupMembers: true,
-                        moderators: true,
-                        excludeUserId: userUid,
-                    },
-                    details: { setId: activeSet.id, setNumber: activeSet.batch ?? 1 },
-                    sendEmail: true,
+                    submitterId: userUid,
+                    batchNumber: activeSet.batch ?? 1,
+                    moderatorUserIds,
+                    details: { setId: activeSet.id },
                 });
             }
         } catch (error) {
@@ -459,6 +478,20 @@ export default function StudentTopicProposalsPage() {
                 requestedBy: userUid,
             });
             showNotification('Thesis created from your selected topic. Chapters are now unlocked.', 'success');
+
+            // Notify head, moderator, and group members about topic being used as thesis
+            void notifyTopicUsedAsThesis({
+                group,
+                userId: userUid,
+                topicTitle: useTopicDialog.title,
+                headUserIds,
+                moderatorUserIds,
+                details: {
+                    proposalSetId: activeSet.id,
+                    entryId: useTopicDialog.id,
+                },
+            });
+
             setGroupReloadToken((token) => token + 1);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to mark topic as thesis';

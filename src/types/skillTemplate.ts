@@ -18,6 +18,8 @@ export interface SkillTemplate {
     name: string;
     /** Optional description or elaboration of the skill */
     description?: string;
+    /** Keywords for TF-IDF matching with thesis titles */
+    keywords?: string[];
     /** Category/grouping for the skill (e.g., "Technical", "Research Methods") */
     category?: string;
     /** Display order for sorting skills in the UI */
@@ -46,8 +48,12 @@ export interface ExpertSkillRating {
     skillId: string;
     /** Display name of the skill (denormalized for display) */
     name: string;
-    /** Self-assessed rating (0-5 scale: 0=Not Applicable, 1-5=Beginner to Expert) */
+    /** Self-assessed rating (1-10 scale: 1=Novice to 10=Expert) */
     rating: number;
+    /** Optional description of the skill (denormalized from template) */
+    description?: string;
+    /** Keywords for TF-IDF matching (denormalized from template) */
+    keywords?: string[];
     /** Optional note or elaboration from the expert */
     note?: string;
     /** ISO timestamp when the rating was last updated */
@@ -55,22 +61,27 @@ export interface ExpertSkillRating {
 }
 
 /**
- * Rating scale labels for UI display
+ * Rating scale labels for UI display (1-10 scale matching Google Forms style)
  */
 export const SKILL_RATING_LABELS: Record<number, string> = {
-    0: 'Not Applicable',
-    1: 'Beginner',
-    2: 'Basic',
-    3: 'Intermediate',
-    4: 'Advanced',
-    5: 'Expert',
+    0: 'Not Rated',
+    1: 'Novice / Very Low Skill',
+    2: 'Beginner',
+    3: 'Slightly Below Average',
+    4: 'Fair / Developing',
+    5: 'Average',
+    6: 'Slightly Above Average',
+    7: 'Proficient',
+    8: 'Very Skilled',
+    9: 'Advanced / Highly Skilled',
+    10: 'Expert / Exceptional',
 };
 
 /**
  * Minimum and maximum skill rating values
  */
-export const MIN_SKILL_RATING = 0;
-export const MAX_SKILL_RATING = 5;
+export const MIN_SKILL_RATING = 1;
+export const MAX_SKILL_RATING = 10;
 
 /**
  * Checks if an expert has rated all required skills for their department

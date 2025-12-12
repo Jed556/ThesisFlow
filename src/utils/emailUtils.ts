@@ -7,6 +7,7 @@
 
 import type { AuditAction } from '../types/audit';
 import type { UserProfile, UserName } from '../types/profile';
+import { isDevelopmentEnvironment } from './devUtils';
 
 // ============================================================================
 // Types
@@ -123,6 +124,15 @@ export function getEmailSeverityFromAction(action: AuditAction): EmailNotificati
  * @returns Promise that resolves to send result
  */
 export async function sendEmailNotification(options: SendEmailOptions): Promise<SendEmailResult> {
+    // Skip email sending in development mode
+    // if (isDevelopmentEnvironment()) {
+    //     console.info('[Email] Skipping email in dev mode:', options.title, '→', options.to);
+    //     return {
+    //         success: true,
+    //         messageId: 'dev-mode-skipped',
+    //     };
+    // }
+
     const {
         to,
         title,

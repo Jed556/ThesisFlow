@@ -9,7 +9,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import type { AuditCategory } from '../../types/audit';
 import type { ThesisGroup } from '../../types/group';
 import type { AuditScope, AuditFilterConfig } from './types';
-import { getScopeLabel, DEFAULT_FILTER_CONFIG } from './types';
+import { getScopeLabel, DEFAULT_FILTER_CONFIG, getCategoriesForScope } from './types';
 import { getScopeIcon } from './icons';
 import { getAuditCategoryLabel } from '../../utils/auditUtils';
 
@@ -108,9 +108,17 @@ export function AuditFilters({
         allowedCategories,
     } = mergedConfig;
 
-    // Show department filter for departmental/admin scope
+    // Show department filter for course/departmental scope (and admin with group selection)
     const shouldShowDepartmentFilter =
-        showDepartmentFilter && (scope === 'departmental' || scope === 'admin');
+        showDepartmentFilter && (scope === 'course' || scope === 'departmental');
+
+    // Show group selector only for group scope or when admin wants to drill down
+    const shouldShowGroupSelector =
+        showGroupSelector && (scope === 'group' || scope === 'course' || scope === 'departmental');
+
+    // Get scope-specific categories and intersect with allowed categories from config
+    const scopeCategories = getCategoriesForScope(scope);
+    const filteredCategories = allowedCategories.filter(cat => scopeCategories.includes(cat));
 
     return (
         <Stack spacing={2}>
@@ -186,7 +194,7 @@ export function AuditFilters({
                         )}
 
                     {/* Group Selector */}
-                    {showGroupSelector && (
+                    {shouldShowGroupSelector && (
                         <FormControl size="small" sx={{ minWidth: 200 }}>
                             <InputLabel id="group-select-label">Group</InputLabel>
                             <Select
@@ -197,7 +205,7 @@ export function AuditFilters({
                                 disabled={groupsLoading}
                             >
                                 <MenuItem value="">
-                                    {scope === 'admin' || scope === 'departmental'
+                                    {scope === 'course' || scope === 'departmental'
                                         ? 'All Groups'
                                         : 'Select a Group'}
                                 </MenuItem>
@@ -213,7 +221,7 @@ export function AuditFilters({
                                     groups.map((group) => (
                                         <MenuItem key={group.id} value={group.id}>
                                             {group.name}
-                                            {(scope === 'admin' || scope === 'departmental') &&
+                                            {(scope === 'course' || scope === 'departmental') &&
                                                 !selectedDepartment && (
                                                     <Typography
                                                         variant="caption"
@@ -253,7 +261,7 @@ export function AuditFilters({
                                     }}
                                 >
                                     <MenuItem value="">All Categories</MenuItem>
-                                    {allowedCategories.map((cat) => (
+                                    {filteredCategories.map((cat) => (
                                         <MenuItem key={cat} value={cat}>
                                             {getAuditCategoryLabel(cat)}
                                         </MenuItem>

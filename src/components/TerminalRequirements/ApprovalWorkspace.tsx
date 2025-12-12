@@ -27,7 +27,9 @@ import type { TerminalRequirementConfigEntry } from '../../types/terminalRequire
 import type { TerminalRequirement } from '../../types/terminalRequirement';
 import { listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import { DEFAULT_YEAR } from '../../config/firestore';
-import { auditAndNotify } from '../../utils/auditNotificationUtils';
+import {
+    notifyTerminalApproval, notifyTerminalReturned, type TerminalApprovalRole
+} from '../../utils/auditNotificationUtils';
 
 interface AssignmentOption {
     thesisId: string;
@@ -506,7 +508,7 @@ export function TerminalRequirementApprovalWorkspace({
         }
         setDecisionLoading(true);
         try {
-            await findAndRecordTerminalRequirementDecision({
+            const updatedRecord = await findAndRecordTerminalRequirementDecision({
                 thesisId: thesis.id,
                 stage: resolvedStage,
                 role,
@@ -517,22 +519,24 @@ export function TerminalRequirementApprovalWorkspace({
 
             // Audit notification for terminal requirement approval
             if (groupMeta) {
-                const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role] || role;
                 const stageName = getStageLabel(resolvedStage);
-                void auditAndNotify({
+
+                // Check if this is the final approval (all approvers approved)
+                const isFinalApproval = updatedRecord.status === 'approved';
+
+                // Determine next approver role (if not final)
+                const nextApproverRole = isFinalApproval
+                    ? null
+                    : updatedRecord.currentRole as TerminalApprovalRole | null;
+
+                void notifyTerminalApproval({
                     group: groupMeta,
-                    userId: userUid,
-                    name: `${stageName}: Terminal Requirements Approved by ${roleLabel}`,
-                    description: `${stageName} terminal requirements have been approved by ${roleLabel}.`,
-                    category: 'terminal',
-                    action: 'terminal_approved',
-                    targets: {
-                        groupMembers: true,
-                        adviser: true,
-                        excludeUserId: userUid,
-                    },
-                    details: { stage: resolvedStage, stageName, approverRole: role },
-                    sendEmail: true,
+                    approverId: userUid,
+                    approverRole: role as TerminalApprovalRole,
+                    stageName,
+                    isFinalApproval,
+                    nextApproverRole,
+                    details: { stage: resolvedStage },
                 });
             }
         } catch (error) {
@@ -566,22 +570,14 @@ export function TerminalRequirementApprovalWorkspace({
 
             // Audit notification for terminal requirement return
             if (groupMeta) {
-                const roleLabel = TERMINAL_REQUIREMENT_ROLE_LABELS[role] || role;
                 const stageName = getStageLabel(resolvedStage);
-                void auditAndNotify({
+                void notifyTerminalReturned({
                     group: groupMeta,
-                    userId: userUid,
-                    name: `${stageName}: Terminal Requirements Returned`,
-                    description: `${stageName} terminal requirements have been returned by ${roleLabel}.${returnNote.trim() ? ` Note: ${returnNote.trim()}` : ''}`,
-                    category: 'terminal',
-                    action: 'terminal_rejected',
-                    targets: {
-                        groupMembers: true,
-                        leader: true,
-                        excludeUserId: userUid,
-                    },
-                    details: { stage: resolvedStage, stageName, approverRole: role, note: returnNote.trim() || undefined },
-                    sendEmail: true,
+                    returnerId: userUid,
+                    returnerRole: role as TerminalApprovalRole,
+                    stageName,
+                    note: returnNote.trim() || undefined,
+                    details: { stage: resolvedStage },
                 });
             }
 

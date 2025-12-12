@@ -280,6 +280,12 @@ export function AuditView({
             case 'personal':
             case 'group':
                 return userGroups;
+            case 'course':
+                // Moderators see groups from their assigned course(s)
+                if (selectedCourse) {
+                    return allGroups.filter((g) => g.course === selectedCourse);
+                }
+                return userGroups;
             case 'departmental':
                 return departmentGroups;
             case 'admin':
@@ -411,7 +417,7 @@ export function AuditView({
             };
         }
 
-        if (selectedScope === 'departmental' || selectedScope === 'admin') {
+        if (selectedScope === 'course' || selectedScope === 'departmental') {
             if (selectedGroup) {
                 setLoading(true);
                 setError(null);
@@ -736,6 +742,7 @@ export function AuditView({
                             loading={loading}
                             userProfiles={userProfiles}
                             groups={allGroupsForLookup}
+                            userRole={userRole}
                             showGroupName={showGroupNameInList}
                             showAvatars={mergedDisplayConfig.showAvatars}
                             itemsPerPage={mergedDisplayConfig.itemsPerPage}
@@ -767,6 +774,7 @@ export function AuditView({
                             loading={loading}
                             userProfiles={userProfiles}
                             groups={allGroupsForLookup}
+                            userRole={userRole}
                             showGroupName={showGroupNameInList}
                             showAvatars={mergedDisplayConfig.showAvatars}
                             itemsPerPage={mergedDisplayConfig.itemsPerPage}

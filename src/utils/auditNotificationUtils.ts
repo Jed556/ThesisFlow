@@ -247,53 +247,96 @@ export function getNotificationSeverity(action: AuditAction): NotificationSeveri
 }
 
 /**
+ * Navigation path information with role requirements
+ */
+export interface AuditNavigationInfo {
+    /** The navigation path */
+    path: string;
+    /** Roles that have access to this path (empty means all roles) */
+    allowedRoles: string[];
+}
+
+/**
+ * Build navigation path for an audit entry based on its category and details.
+ * Returns both the path and the roles that have access to it.
+ * Used to create "View Details" action buttons in notifications.
+ */
+export function getAuditNavigationInfo(
+    category: AuditCategory,
+    _action: AuditAction,
+    _details?: AuditDetails
+): AuditNavigationInfo | null {
+    // Map category/action to navigation paths with their required roles
+    switch (category) {
+        case 'group':
+            // Group page is accessible to students
+            return { path: '/group', allowedRoles: ['student'] };
+
+        case 'submission':
+            // Thesis workspace - different roles have different paths
+            // Students use student-thesis-workspace, experts have their own overview pages
+            return {
+                path: '/student-thesis-workspace',
+                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'moderator'],
+            };
+
+        case 'proposal':
+            // Topic proposals - students, moderators, and heads can view
+            return {
+                path: '/proposals',
+                allowedRoles: ['student', 'moderator', 'head'],
+            };
+
+        case 'terminal':
+            // Terminal requirements
+            return {
+                path: '/terminal-requirements',
+                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'panel'],
+            };
+
+        case 'panel':
+            // Panel comments/feedback
+            return {
+                path: '/panel-feedback',
+                allowedRoles: ['student', 'panel'],
+            };
+
+        case 'expert':
+            // Expert requests - accessible based on expert type
+            return {
+                path: '/expert-requests',
+                allowedRoles: ['student', 'adviser', 'editor', 'statistician'],
+            };
+
+        case 'comment':
+            // Comments are typically in thesis workspace
+            return {
+                path: '/student-thesis-workspace',
+                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'moderator'],
+            };
+
+        case 'notification':
+            // Audits page is accessible to everyone
+            return { path: '/audits', allowedRoles: [] };
+
+        default:
+            // Default to audits page which is accessible to everyone
+            return { path: '/audits', allowedRoles: [] };
+    }
+}
+
+/**
  * Build navigation path for an audit entry based on its category and details
  * Used to create "View Details" action buttons in notifications
+ * @deprecated Use getAuditNavigationInfo instead for role-aware navigation
  */
 export function buildAuditNavigationPath(
     category: AuditCategory,
     action: AuditAction,
     details?: AuditDetails
 ): string | null {
-    // Map category/action to navigation paths
-    switch (category) {
-        case 'group':
-            if (action.includes('approved') || action.includes('rejected')) {
-                return '/group';
-            }
-            return '/group';
-
-        case 'submission':
-            // Navigate to thesis workspace
-            return '/student-thesis-workspace';
-
-        case 'proposal':
-            // Navigate to topic proposals
-            return '/proposals';
-
-        case 'terminal':
-            // Navigate to terminal requirements
-            return '/terminal-requirements';
-
-        case 'panel':
-            // Navigate to panel comments
-            return '/panel-feedback';
-
-        case 'expert':
-            // Navigate to expert requests
-            if (details?.requestType === 'adviser') {
-                return '/expert-requests';
-            }
-            return '/expert-requests';
-
-        case 'notification':
-            // Navigate to audits/notifications page
-            return '/audits';
-
-        default:
-            // Default to audits page
-            return '/audits';
-    }
+    const info = getAuditNavigationInfo(category, action, details);
+    return info?.path ?? null;
 }
 
 // ============================================================================
@@ -938,6 +981,115 @@ export async function notifyStageChange(options: {
 }
 
 /**
+ * Audit only for panel comment creation.
+ * Creates an audit entry but does not send notifications or emails.
+ */
+export async function auditPanelCommentCreated(options: {
+    group: ThesisGroup;
+    panelId: string;
+    stageName: string;
+    commentPreview?: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, panelId, stageName, commentPreview, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: panelId,
+        name: 'Panel Comment Added',
+        description: `A panel comment was added for ${stageName} stage.`,
+        category: 'panel',
+        action: 'panel_comment_added',
+        targets: {
+            // No notification targets - audit only
+            excludeUserId: panelId,
+        },
+        details: {
+            ...details,
+            stageName,
+            commentPreview,
+        },
+        // No email, no snackbar - just audit
+        sendEmail: false,
+    });
+}
+
+/**
+ * Notify admins when panel marks their comment sheet as ready for release.
+ * Includes email notification to admins.
+ */
+export async function notifyPanelCommentsReadyForRelease(options: {
+    group: ThesisGroup;
+    panelId: string;
+    stageName: string;
+    commentCount: number;
+    adminUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, panelId, stageName, commentCount, adminUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: panelId,
+        name: 'Panel Comments Ready for Release',
+        description: `Panel comments (${commentCount}) for ${stageName} stage are ready to be released to students.`,
+        category: 'panel',
+        action: 'panel_comments_ready',
+        targets: {
+            admins: true,
+            userIds: adminUserIds,
+            excludeUserId: panelId,
+        },
+        adminUserIds,
+        details: {
+            ...details,
+            stageName,
+            commentCount,
+            panelId,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Comments',
+    });
+}
+
+/**
+ * Notify students when panel comments are released by admin.
+ * Sends email to students (group members).
+ */
+export async function notifyPanelCommentsReleasedToStudents(options: {
+    group: ThesisGroup;
+    releaserId: string;
+    panelistName: string;
+    stageName: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, releaserId, panelistName, stageName, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: releaserId,
+        name: 'Panel Comments Released',
+        description: `Panel comments for ${stageName} stage from ${panelistName} have been released. ` +
+            'Please review and address the feedback.',
+        category: 'panel',
+        action: 'panel_comment_released',
+        targets: {
+            groupMembers: true,
+            leader: true,
+            excludeUserId: releaserId,
+        },
+        details: {
+            ...details,
+            stageName,
+            panelistName,
+        },
+        sendEmail: true,
+        emailActionText: 'View Comments',
+    });
+}
+
+/**
+ * @deprecated Use notifyPanelCommentsReleasedToStudents instead
  * Notify about panel comment release
  */
 export async function notifyPanelCommentsReleased(options: {
@@ -966,4 +1118,901 @@ export async function notifyPanelCommentsReleased(options: {
         },
         sendEmail: true,
     });
+}
+
+// ============================================================================
+// Chat / Comment Notification Functions
+// ============================================================================
+
+/**
+ * Notify group members about a new chat message in the thesis workspace.
+ * Notifies all relevant stakeholders based on the commenter's role.
+ */
+export async function notifyNewChatMessage(options: {
+    group: ThesisGroup;
+    senderId: string;
+    senderRole: 'student' | 'adviser' | 'editor' | 'statistician' | 'moderator';
+    chapterName: string;
+    stageName?: string;
+    hasAttachments?: boolean;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, senderId, senderRole, chapterName, stageName, hasAttachments, details } = options;
+
+    const roleLabel = senderRole.charAt(0).toUpperCase() + senderRole.slice(1);
+    const chapterDisplay = stageName ? `${stageName}: ${chapterName}` : chapterName;
+    const attachmentNote = hasAttachments ? ' (with attachments)' : '';
+
+    // Determine notification targets based on sender role
+    const targets: NotificationTargets = {
+        groupMembers: true,
+        excludeUserId: senderId,
+    };
+
+    // If sender is an expert, also notify other relevant experts
+    if (senderRole !== 'student') {
+        targets.adviser = senderRole !== 'adviser';
+        targets.editor = senderRole !== 'editor';
+        targets.statistician = senderRole !== 'statistician';
+    } else {
+        // Student sent the message - notify all assigned experts
+        targets.adviser = true;
+        targets.editor = true;
+        targets.statistician = true;
+    }
+
+    return auditAndNotify({
+        group,
+        userId: senderId,
+        name: 'New Feedback Message',
+        description: `${roleLabel} posted a new message on "${chapterDisplay}"${attachmentNote}.`,
+        category: 'comment',
+        action: 'comment_added',
+        targets,
+        details: {
+            ...details,
+            chapterName,
+            stageName,
+            senderRole,
+            hasAttachments,
+        },
+        sendEmail: true,
+    });
+}
+
+// ============================================================================
+// Draft Management Notification Functions
+// ============================================================================
+
+/**
+ * Notify about draft submission deletion.
+ * Notifies group members about the deletion (mostly informational).
+ */
+export async function notifyDraftDeleted(options: {
+    group: ThesisGroup;
+    userId: string;
+    chapterName: string;
+    stageName?: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, userId, chapterName, stageName, details } = options;
+
+    const chapterDisplay = stageName ? `${stageName}: ${chapterName}` : chapterName;
+
+    return auditAndNotify({
+        group,
+        userId,
+        name: 'Draft Submission Deleted',
+        description: `Draft for "${chapterDisplay}" was deleted.`,
+        category: 'submission',
+        action: 'submission_deleted',
+        targets: {
+            groupMembers: true,
+            excludeUserId: userId,
+        },
+        details: {
+            ...details,
+            chapterName,
+            stageName,
+        },
+        // Don't send email for draft deletion - it's a minor action
+        sendEmail: false,
+    });
+}
+
+// ============================================================================
+// Topic Proposal Notification Functions
+// ============================================================================
+
+/**
+ * Notify head that a topic proposal requires their decision after moderator approval.
+ * Also notifies group members about the moderator approval.
+ */
+export async function notifyModeratorApprovedTopicForHead(options: {
+    group: ThesisGroup;
+    moderatorId: string;
+    proposalTitle: string;
+    headUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, moderatorId, proposalTitle, headUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: moderatorId,
+        name: 'Topic Awaiting Head Decision',
+        description: `Topic "${proposalTitle}" has been approved by the moderator and now requires head decision.`,
+        category: 'proposal',
+        action: 'proposal_approved',
+        targets: {
+            groupMembers: true,
+            userIds: headUserIds,
+            excludeUserId: moderatorId,
+        },
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'moderator',
+            nextReviewerRole: 'head',
+            awaitingHeadDecision: true,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Proposal',
+    });
+}
+
+/**
+ * Notify moderator and head when a topic proposal is submitted for review.
+ * Also notifies group members.
+ */
+export async function notifyTopicProposalSubmitted(options: {
+    group: ThesisGroup;
+    submitterId: string;
+    batchNumber: number;
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, submitterId, batchNumber, moderatorUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: submitterId,
+        name: 'Topic Proposals Submitted',
+        description: `Topic proposals (Batch ${batchNumber}) have been submitted for moderator review.`,
+        category: 'proposal',
+        action: 'proposal_submitted',
+        targets: {
+            groupMembers: true,
+            moderators: true,
+            excludeUserId: submitterId,
+        },
+        moderatorUserIds,
+        details: {
+            ...details,
+            batchNumber,
+            awaitingModeratorReview: true,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Proposals',
+    });
+}
+
+/**
+ * Notify head and moderator when a topic is used as the thesis topic.
+ * Also notifies group members.
+ */
+export async function notifyTopicUsedAsThesis(options: {
+    group: ThesisGroup;
+    userId: string;
+    topicTitle: string;
+    headUserIds: string[];
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, userId, topicTitle, headUserIds, moderatorUserIds, details } = options;
+
+    // Combine head and moderator IDs, removing duplicates
+    const allReviewerIds = [...new Set([...headUserIds, ...moderatorUserIds])];
+
+    return auditAndNotify({
+        group,
+        userId,
+        name: 'Thesis Topic Selected',
+        description: `Topic "${topicTitle}" has been selected as the thesis topic for group "${group.name}".`,
+        category: 'thesis',
+        action: 'thesis_created',
+        targets: {
+            groupMembers: true,
+            adviser: true,
+            editor: true,
+            userIds: allReviewerIds,
+            excludeUserId: userId,
+        },
+        details: {
+            ...details,
+            topicTitle,
+            thesisCreatedFrom: 'topic_proposal',
+        },
+        sendEmail: true,
+        emailActionText: 'View Thesis',
+    });
+}
+
+/**
+ * Notify when head approves a topic proposal.
+ * Notifies group members, moderators, and relevant experts.
+ */
+export async function notifyHeadApprovedTopic(options: {
+    group: ThesisGroup;
+    headId: string;
+    proposalTitle: string;
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, headId, proposalTitle, moderatorUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: headId,
+        name: 'Topic Approved by Head',
+        description: `Topic "${proposalTitle}" has been approved by the Research Head. ` +
+            'The group can now proceed with the thesis.',
+        category: 'proposal',
+        action: 'proposal_approved',
+        targets: {
+            groupMembers: true,
+            adviser: true,
+            editor: true,
+            moderators: true,
+            excludeUserId: headId,
+        },
+        moderatorUserIds,
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'head',
+            approvedForThesis: true,
+        },
+        sendEmail: true,
+        emailActionText: 'View Topic',
+    });
+}
+
+/**
+ * Notify when head rejects a topic proposal.
+ * Notifies group members and moderators.
+ */
+export async function notifyHeadRejectedTopic(options: {
+    group: ThesisGroup;
+    headId: string;
+    proposalTitle: string;
+    reason?: string;
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, headId, proposalTitle, reason, moderatorUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: headId,
+        name: 'Topic Rejected by Head',
+        description: `Topic "${proposalTitle}" has been rejected by the Research Head.` +
+            `${reason ? ` Reason: ${reason}` : ''}`,
+        category: 'proposal',
+        action: 'proposal_rejected',
+        targets: {
+            groupMembers: true,
+            moderators: true,
+            excludeUserId: headId,
+        },
+        moderatorUserIds,
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'head',
+            reason,
+        },
+        sendEmail: true,
+        emailActionText: 'View Feedback',
+    });
+}
+
+// ============================================================================
+// Terminal Requirement Notification Functions
+// ============================================================================
+
+/**
+ * Terminal requirement approval role type
+ */
+export type TerminalApprovalRole = 'panel' | 'adviser' | 'editor' | 'statistician';
+
+/**
+ * Notify when a terminal requirement draft file is uploaded.
+ * Notifies group members about the file upload (minor notification, no email).
+ */
+export async function notifyTerminalDraftUploaded(options: {
+    group: ThesisGroup;
+    userId: string;
+    stageName: string;
+    requirementTitle: string;
+    fileName?: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, userId, stageName, requirementTitle, fileName, details } = options;
+
+    const fileNote = fileName ? ` (${fileName})` : '';
+
+    return auditAndNotify({
+        group,
+        userId,
+        name: 'Terminal Requirement File Uploaded',
+        description: `A file${fileNote} was uploaded for "${requirementTitle}" in ${stageName}.`,
+        category: 'terminal',
+        action: 'file_uploaded',
+        targets: {
+            groupMembers: true,
+            excludeUserId: userId,
+        },
+        details: {
+            ...details,
+            stageName,
+            requirementTitle,
+            fileName,
+        },
+        // Don't send email for draft uploads - it's a minor action
+        sendEmail: false,
+    });
+}
+
+/**
+ * Notify when terminal requirements are submitted for checking.
+ * Notifies group members, experts (adviser, editor, statistician), and panels.
+ */
+export async function notifyTerminalSubmittedForChecking(options: {
+    group: ThesisGroup;
+    userId: string;
+    stageName: string;
+    requirementCount: number;
+    isPreStage: boolean;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, userId, stageName, requirementCount, isPreStage, details } = options;
+
+    // Build targets based on stage type
+    const targets: NotificationTargets = {
+        groupMembers: true,
+        adviser: true,
+        editor: true,
+        statistician: true,
+        excludeUserId: userId,
+    };
+
+    // Panel approval is only required for "Post" stages, not "Pre" stages
+    if (!isPreStage) {
+        targets.panels = true;
+    }
+
+    return auditAndNotify({
+        group,
+        userId,
+        name: 'Terminal Requirements Submitted',
+        description: `${requirementCount} terminal requirement${requirementCount > 1 ? 's' : ''} for ${stageName} ` +
+            `${requirementCount > 1 ? 'have' : 'has'} been submitted for review.`,
+        category: 'terminal',
+        action: 'terminal_submitted',
+        targets,
+        details: {
+            ...details,
+            stageName,
+            requirementCount,
+            isPreStage,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Requirements',
+    });
+}
+
+/**
+ * Notify when a terminal requirement stage is approved by an expert/panel.
+ * Handles both individual approval and full approval notifications.
+ */
+export async function notifyTerminalApproval(options: {
+    group: ThesisGroup;
+    approverId: string;
+    approverRole: TerminalApprovalRole;
+    stageName: string;
+    isFinalApproval: boolean;
+    nextApproverRole?: TerminalApprovalRole | null;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const {
+        group, approverId, approverRole, stageName,
+        isFinalApproval, nextApproverRole, details
+    } = options;
+
+    const roleLabel = approverRole.charAt(0).toUpperCase() + approverRole.slice(1);
+
+    // Build notification targets
+    const targets: NotificationTargets = {
+        groupMembers: true,
+        excludeUserId: approverId,
+    };
+
+    if (isFinalApproval) {
+        // Final approval - notify all stakeholders
+        targets.adviser = true;
+        targets.editor = true;
+        targets.statistician = true;
+        targets.panels = true;
+
+        return auditAndNotify({
+            group,
+            userId: approverId,
+            name: `${stageName}: Terminal Requirements Fully Approved`,
+            description: `All terminal requirements for ${stageName} have been fully approved. ` +
+                'The group can now proceed to the next stage.',
+            category: 'terminal',
+            action: 'terminal_approved',
+            targets,
+            details: {
+                ...details,
+                stageName,
+                approverRole,
+                isFinalApproval: true,
+                completedAt: new Date().toISOString(),
+            },
+            sendEmail: true,
+            emailActionText: 'View Requirements',
+        });
+    }
+
+    // Individual approval - notify next approver if applicable
+    if (nextApproverRole) {
+        const nextRoleLabel = nextApproverRole.charAt(0).toUpperCase() + nextApproverRole.slice(1);
+
+        // Add next approver to targets
+        switch (nextApproverRole) {
+            case 'adviser':
+                targets.adviser = true;
+                break;
+            case 'editor':
+                targets.editor = true;
+                break;
+            case 'statistician':
+                targets.statistician = true;
+                break;
+            case 'panel':
+                targets.panels = true;
+                break;
+        }
+
+        return auditAndNotify({
+            group,
+            userId: approverId,
+            name: `${stageName}: Approved by ${roleLabel}`,
+            description: `${stageName} terminal requirements have been approved by ${roleLabel}. ` +
+                `Awaiting ${nextRoleLabel} review.`,
+            category: 'terminal',
+            action: 'terminal_approved',
+            targets,
+            details: {
+                ...details,
+                stageName,
+                approverRole,
+                nextApproverRole,
+                isFinalApproval: false,
+            },
+            sendEmail: true,
+            emailActionText: 'Review Requirements',
+        });
+    }
+
+    // Simple approval notification (no next approver specified)
+    return auditAndNotify({
+        group,
+        userId: approverId,
+        name: `${stageName}: Approved by ${roleLabel}`,
+        description: `${stageName} terminal requirements have been approved by ${roleLabel}.`,
+        category: 'terminal',
+        action: 'terminal_approved',
+        targets: {
+            groupMembers: true,
+            adviser: true,
+            excludeUserId: approverId,
+        },
+        details: {
+            ...details,
+            stageName,
+            approverRole,
+        },
+        sendEmail: true,
+    });
+}
+
+/**
+ * Notify when terminal requirements are returned by an expert/panel.
+ * Notifies group members and the leader specifically.
+ */
+export async function notifyTerminalReturned(options: {
+    group: ThesisGroup;
+    returnerId: string;
+    returnerRole: TerminalApprovalRole;
+    stageName: string;
+    note?: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, returnerId, returnerRole, stageName, note, details } = options;
+
+    const roleLabel = returnerRole.charAt(0).toUpperCase() + returnerRole.slice(1);
+
+    return auditAndNotify({
+        group,
+        userId: returnerId,
+        name: `${stageName}: Returned by ${roleLabel}`,
+        description: `${stageName} terminal requirements have been returned by ${roleLabel}.` +
+            `${note ? ` Note: ${note}` : ' Please review and resubmit.'}`,
+        category: 'terminal',
+        action: 'terminal_rejected',
+        targets: {
+            groupMembers: true,
+            leader: true,
+            excludeUserId: returnerId,
+        },
+        details: {
+            ...details,
+            stageName,
+            returnerRole,
+            note,
+        },
+        sendEmail: true,
+        emailActionText: 'View Feedback',
+    });
+}
+
+/**
+ * Notify when moderator rejects a topic proposal.
+ * Notifies group members.
+ */
+export async function notifyModeratorRejectedTopic(options: {
+    group: ThesisGroup;
+    moderatorId: string;
+    proposalTitle: string;
+    reason?: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, moderatorId, proposalTitle, reason, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: moderatorId,
+        name: 'Topic Rejected by Moderator',
+        description: `Topic "${proposalTitle}" has been rejected by the moderator.` +
+            `${reason ? ` Reason: ${reason}` : ''}`,
+        category: 'proposal',
+        action: 'proposal_rejected',
+        targets: {
+            groupMembers: true,
+            excludeUserId: moderatorId,
+        },
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'moderator',
+            reason,
+        },
+        sendEmail: true,
+        emailActionText: 'View Feedback',
+    });
+}
+// ============================================================================
+// Admin Template Audit Functions
+// ============================================================================
+
+import { findUsersByFilter } from './firebase/firestore/user';
+
+/**
+ * Result of admin template audit operations
+ */
+export interface AdminTemplateAuditResult {
+    /** Number of users notified */
+    notifiedCount: number;
+    /** Number of emails sent successfully */
+    emailsSentCount: number;
+    /** IDs of created user audit entries */
+    auditIds: string[];
+}
+
+/**
+ * Send audit notifications for skill template changes
+ * Notifies heads in the department with email
+ * @param options - Skill template audit options
+ */
+export async function auditSkillTemplateChange(options: {
+    userId: string;
+    department: string;
+    action: 'skill_template_created' | 'skill_template_updated' | 'skill_template_deleted' | 'skill_template_reset';
+    skillName?: string;
+    details?: AuditDetails;
+}): Promise<AdminTemplateAuditResult> {
+    const { userId, department, action, skillName, details } = options;
+    const year = getAcademicYear();
+
+    // Find heads in the department
+    const heads = await findUsersByFilter({ role: 'head', department });
+    const targetUserIds = heads.map((h) => h.uid).filter((uid) => uid !== userId);
+
+    if (targetUserIds.length === 0) {
+        return { notifiedCount: 0, emailsSentCount: 0, auditIds: [] };
+    }
+
+    // Build name and description based on action
+    let name: string;
+    let description: string;
+    switch (action) {
+        case 'skill_template_created':
+            name = `Skill Template Created: ${skillName || 'Unknown'}`;
+            description = `A new skill template "${skillName || 'Unknown'}" was added for ${department}.`;
+            break;
+        case 'skill_template_updated':
+            name = `Skill Template Updated: ${skillName || 'Unknown'}`;
+            description = `Skill template "${skillName || 'Unknown'}" was updated for ${department}.`;
+            break;
+        case 'skill_template_deleted':
+            name = `Skill Template Deleted: ${skillName || 'Unknown'}`;
+            description = `Skill template "${skillName || 'Unknown'}" was removed from ${department}.`;
+            break;
+        case 'skill_template_reset':
+            name = 'Skills Templates Reset';
+            description = `All skill templates were reset to defaults for ${department}.`;
+            break;
+    }
+
+    // Create user audit entries for each head
+    const entries: { ctx: UserAuditContext; data: UserAuditEntryFormData }[] = targetUserIds.map((targetUserId) => ({
+        ctx: {
+            year,
+            targetUserId,
+            level: 'department' as UserAuditLevel,
+            department,
+        },
+        data: {
+            name,
+            description,
+            userId,
+            targetUserId,
+            category: 'template' as AuditCategory,
+            action,
+            showSnackbar: true,
+            details: {
+                ...details,
+                templateType: 'skill',
+                department,
+                skillName,
+            },
+        },
+    }));
+
+    const auditIds = await createUserAuditEntriesBatch(entries);
+
+    // Send email notifications
+    let emailsSentCount = 0;
+    if (targetUserIds.length > 0) {
+        const profiles = await findUsersByIds(targetUserIds);
+        emailsSentCount = await sendBulkAuditEmails(
+            profiles,
+            name,
+            description,
+            action,
+            '/admin/skills-management',
+            'View Skills'
+        );
+    }
+
+    return {
+        notifiedCount: targetUserIds.length,
+        emailsSentCount,
+        auditIds,
+    };
+}
+
+/**
+ * Send audit notifications for agenda template changes
+ * Notifies heads in the department (or all heads for institutional agenda) with email
+ * @param options - Agenda template audit options
+ */
+export async function auditAgendaTemplateChange(options: {
+    userId: string;
+    agendaType: 'institutional' | 'departmental';
+    department?: string;
+    action: 'agenda_template_updated' | 'agenda_template_reset';
+    details?: AuditDetails;
+}): Promise<AdminTemplateAuditResult> {
+    const { userId, agendaType, department, action, details } = options;
+    const year = getAcademicYear();
+
+    // Find heads - either all heads (institutional) or department heads (departmental)
+    let heads: UserProfile[];
+    if (agendaType === 'institutional') {
+        heads = await findUsersByFilter({ role: 'head' });
+    } else {
+        if (!department) {
+            return { notifiedCount: 0, emailsSentCount: 0, auditIds: [] };
+        }
+        heads = await findUsersByFilter({ role: 'head', department });
+    }
+
+    const targetUserIds = heads.map((h) => h.uid).filter((uid) => uid !== userId);
+
+    if (targetUserIds.length === 0) {
+        return { notifiedCount: 0, emailsSentCount: 0, auditIds: [] };
+    }
+
+    // Build name and description based on action
+    let name: string;
+    let description: string;
+    const agendaLabel = agendaType === 'institutional' ? 'Institutional Agenda' : `${department} Agenda`;
+
+    switch (action) {
+        case 'agenda_template_updated':
+            name = `${agendaLabel} Updated`;
+            description = `The ${agendaLabel.toLowerCase()} template has been updated.`;
+            break;
+        case 'agenda_template_reset':
+            name = `${agendaLabel} Reset`;
+            description = `The ${agendaLabel.toLowerCase()} template has been reset to defaults.`;
+            break;
+    }
+
+    // Create user audit entries for each head
+    const entries: { ctx: UserAuditContext; data: UserAuditEntryFormData }[] = targetUserIds.map((targetUserId) => {
+        // For institutional, use year-level; for departmental, use department-level
+        const ctx: UserAuditContext = agendaType === 'institutional'
+            ? { year, targetUserId, level: 'year' as UserAuditLevel }
+            : { year, targetUserId, level: 'department' as UserAuditLevel, department };
+
+        return {
+            ctx,
+            data: {
+                name,
+                description,
+                userId,
+                targetUserId,
+                category: 'template' as AuditCategory,
+                action,
+                showSnackbar: true,
+                details: {
+                    ...details,
+                    templateType: 'agenda',
+                    agendaType,
+                    department,
+                },
+            },
+        };
+    });
+
+    const auditIds = await createUserAuditEntriesBatch(entries);
+
+    // Send email notifications
+    let emailsSentCount = 0;
+    if (targetUserIds.length > 0) {
+        const profiles = await findUsersByIds(targetUserIds);
+        emailsSentCount = await sendBulkAuditEmails(
+            profiles,
+            name,
+            description,
+            action,
+            '/admin/agenda-management',
+            'View Agenda'
+        );
+    }
+
+    return {
+        notifiedCount: targetUserIds.length,
+        emailsSentCount,
+        auditIds,
+    };
+}
+
+/**
+ * Send audit notifications for chapter template changes
+ * Notifies moderators in the course with email
+ * @param options - Chapter template audit options
+ */
+export async function auditChapterTemplateChange(options: {
+    userId: string;
+    department: string;
+    course: string;
+    action: 'chapter_template_created' | 'chapter_template_updated' | 'chapter_template_deleted' | 'chapter_template_reset';
+    stageName?: string;
+    chapterName?: string;
+    details?: AuditDetails;
+}): Promise<AdminTemplateAuditResult> {
+    const { userId, department, course, action, stageName, chapterName, details } = options;
+    const year = getAcademicYear();
+
+    // Find moderators in the course
+    const moderators = await findUsersByFilter({ role: 'moderator', course });
+    const targetUserIds = moderators.map((m) => m.uid).filter((uid) => uid !== userId);
+
+    if (targetUserIds.length === 0) {
+        return { notifiedCount: 0, emailsSentCount: 0, auditIds: [] };
+    }
+
+    // Build name and description based on action
+    let name: string;
+    let description: string;
+    const stageLabel = stageName ? `${stageName} stage` : 'templates';
+    const chapterLabel = chapterName ? `"${chapterName}"` : '';
+    const stageInfo = stageName ? ` (${stageName})` : '';
+
+    switch (action) {
+        case 'chapter_template_created':
+            name = `Chapter Template Created${chapterLabel ? `: ${chapterLabel}` : ''}`;
+            description = `A new chapter template${chapterLabel ? ` ${chapterLabel}` : ''} ` +
+                `was added for ${course}${stageInfo}.`;
+            break;
+        case 'chapter_template_updated':
+            name = `Chapter Templates Updated for ${course}`;
+            description = `Chapter templates for ${course} (${stageLabel}) have been updated.`;
+            break;
+        case 'chapter_template_deleted':
+            name = `Chapter Template Deleted${chapterLabel ? `: ${chapterLabel}` : ''}`;
+            description = `A chapter template${chapterLabel ? ` ${chapterLabel}` : ''} ` +
+                `was removed from ${course}${stageInfo}.`;
+            break;
+        case 'chapter_template_reset':
+            name = `Chapter Templates Reset for ${course}`;
+            description = `All chapter templates for ${course} have been reset to defaults.`;
+            break;
+    }
+
+    // Create user audit entries for each moderator
+    const entries: { ctx: UserAuditContext; data: UserAuditEntryFormData }[] = targetUserIds.map((targetUserId) => ({
+        ctx: {
+            year,
+            targetUserId,
+            level: 'course' as UserAuditLevel,
+            department,
+            course,
+        },
+        data: {
+            name,
+            description,
+            userId,
+            targetUserId,
+            category: 'template' as AuditCategory,
+            action,
+            showSnackbar: true,
+            details: {
+                ...details,
+                templateType: 'chapter',
+                department,
+                course,
+                stageName,
+                chapterName,
+            },
+        },
+    }));
+
+    const auditIds = await createUserAuditEntriesBatch(entries);
+
+    // Send email notifications
+    let emailsSentCount = 0;
+    if (targetUserIds.length > 0) {
+        const profiles = await findUsersByIds(targetUserIds);
+        emailsSentCount = await sendBulkAuditEmails(
+            profiles,
+            name,
+            description,
+            action,
+            '/admin/chapter-management',
+            'View Chapters'
+        );
+    }
+
+    return {
+        notifiedCount: targetUserIds.length,
+        emailsSentCount,
+        auditIds,
+    };
 }

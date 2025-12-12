@@ -20,6 +20,8 @@ import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
+import { notifyNewChatMessage } from '../../utils/auditNotificationUtils';
+import { getStageLabel } from '../../utils/thesisStageUtils';
 
 function splitSectionList(value?: string | null): string[] {
     if (!value) {
@@ -334,7 +336,25 @@ export default function ModeratorThesisOverviewPage() {
             date: new Date().toISOString(),
             attachments,
         });
-    }, [moderatorUid, selectedThesisId, thesis]);
+
+        // Send notification for the new chat message
+        try {
+            const group = groups.find((g) => g.id === thesis.groupId);
+            if (group) {
+                await notifyNewChatMessage({
+                    group,
+                    senderId: moderatorUid,
+                    senderRole: 'moderator',
+                    chapterName: `Chapter ${chapterId}`,
+                    stageName: getStageLabel(chapterStage),
+                    hasAttachments: attachments.length > 0,
+                    details: { thesisId: selectedThesisId, chapterId, chapterStage, submissionId },
+                });
+            }
+        } catch (notifyError) {
+            console.error('Failed to send chat notification:', notifyError);
+        }
+    }, [moderatorUid, selectedThesisId, thesis, groups]);
 
     const isLoading = profileLoading || groupsLoading || thesisLoading;
     const noCourses = !profileLoading && courses.length === 0;

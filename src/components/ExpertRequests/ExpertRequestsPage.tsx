@@ -1,23 +1,28 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardActions, CardContent,
-    Paper, Skeleton, Stack, TextField, Typography,
+    Alert, Box, Button, Card, CardActions, CardContent, Chip,
+    Divider, LinearProgress, Paper, Skeleton, Stack, TextField, Typography
 } from '@mui/material';
+import { Edit as EditIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@toolpad/core';
 import type { ExpertRequest, ExpertRequestRole } from '../../types/expertRequest';
 import type { ThesisGroup } from '../../types/group';
 import type { Session } from '../../types/session';
 import type { UserProfile, UserRole } from '../../types/profile';
+import type { ExpertSkillRating, SkillTemplateRecord } from '../../types/skillTemplate';
 import { DEFAULT_MAX_EXPERT_SLOTS } from '../../types/slotRequest';
+import { DEFAULT_YEAR } from '../../config/firestore';
 import { AnimatedPage } from '../Animate';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { findGroupById, listenGroupsByExpertRole } from '../../utils/firebase/firestore/groups';
 import { listenExpertRequestsByExpert } from '../../utils/firebase/firestore/expertRequests';
 import { findUsersByIds, onUserProfile, updateUserProfile } from '../../utils/firebase/firestore/user';
+import { listenSkillTemplates } from '../../utils/firebase/firestore/skillTemplates';
 import ExpertRequestCard from './ExpertRequestCard';
 import { SlotRequestButton } from './SlotRequestDialog';
+import { SkillRatingDialog } from '../SkillRating/SkillRatingDialog';
 
 interface ExpertRequestViewModel {
     request: ExpertRequest;
@@ -165,6 +170,12 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
     const [assignments, setAssignments] = React.useState<ThesisGroup[]>([]);
     const [assignmentsLoading, setAssignmentsLoading] = React.useState(false);
 
+    // Skill rating state
+    const [departmentSkills, setDepartmentSkills] = React.useState<SkillTemplateRecord[]>([]);
+    const [skillsLoading, setSkillsLoading] = React.useState(false);
+    const [skillRatings, setSkillRatings] = React.useState<ExpertSkillRating[]>([]);
+    const [skillDialogOpen, setSkillDialogOpen] = React.useState(false);
+
     // Count only groups with 'active' status as taken slots
     const activeAssignments = React.useMemo(
         () => assignments.filter((group) => group.status === 'active'),
@@ -265,6 +276,42 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
             unsubscribe();
         };
     }, [expertUid, role]);
+
+    // Load department skill templates
+    React.useEffect(() => {
+        const department = expertProfile?.department;
+        if (!department) {
+            setDepartmentSkills([]);
+            setSkillsLoading(false);
+            return () => { /* no-op */ };
+        }
+
+        setSkillsLoading(true);
+        const unsubscribe = listenSkillTemplates(DEFAULT_YEAR, department, {
+            onData: (skills: SkillTemplateRecord[]) => {
+                setDepartmentSkills(skills.filter((skill) => skill.isActive));
+                setSkillsLoading(false);
+            },
+            onError: (listenerError: Error) => {
+                console.error('Failed to load department skills:', listenerError);
+                setDepartmentSkills([]);
+                setSkillsLoading(false);
+            },
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [expertProfile?.department]);
+
+    // Sync skill ratings from user profile
+    React.useEffect(() => {
+        if (expertProfile?.skillRatings) {
+            setSkillRatings(expertProfile.skillRatings);
+        } else {
+            setSkillRatings([]);
+        }
+    }, [expertProfile?.skillRatings]);
 
     const pendingCount = React.useMemo(
         () => requests.filter((record) => record.status === 'pending').length,
@@ -374,7 +421,13 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
         setEditingCapacity(false);
     }, [expertProfile, minimumCapacity]);
 
+    // Save skill ratings from dialog
+    const handleSaveSkillRatings = React.useCallback(async (newRatings: ExpertSkillRating[]) => {
+        if (!expertUid) return;
 
+        await updateUserProfile(expertUid, { skillRatings: newRatings });
+        showNotification('Your skill ratings have been saved.', 'success');
+    }, [expertUid, showNotification]);
 
     const handleOpenGroupView = React.useCallback((requestToOpen: ExpertRequest) => {
         const basePath = role === 'adviser'
@@ -419,114 +472,196 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
 
     return (
         <AnimatedPage variant="slideUp">
-            <Stack spacing={2} sx={{ mb: 3 }}>
+            <Box>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                    Review and respond to thesis groups requesting you as their {roleLabel.toLowerCase()}.
+                </Typography>
+            </Box>
+            {error && (
+                <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+                    {error}
+                </Alert>
+            )}
+
+            {/* Two-column layout */}
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', lg: '1fr 360px' },
+                    gap: 3,
+                    alignItems: 'start',
+                }}
+            >
+                {/* Left column: Service requests */}
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
-                        Review and respond to thesis groups requesting you as their {roleLabel.toLowerCase()}.
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                        Requests
                     </Typography>
+                    {loading ? (
+                        <Paper sx={{ p: 3 }}>
+                            <Skeleton variant="text" width={200} height={32} sx={{ mb: 1 }} />
+                            <Skeleton variant="rectangular" height={140} />
+                        </Paper>
+                    ) : viewModels.length === 0 ? (
+                        <Paper sx={{ p: 3 }}>
+                            <Typography variant="body1" color="text.secondary">
+                                No service requests yet. Groups with an approved topic can send you a request from your profile page.
+                            </Typography>
+                        </Paper>
+                    ) : (
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+                                gap: 2,
+                            }}
+                        >
+                            {viewModels.map(({ request, group, requester, usersByUid }) => {
+                                if (!group) {
+                                    return (
+                                        <Card key={request.id} variant="outlined">
+                                            <CardContent>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Group details are unavailable. Please ask the students to resend their request.
+                                                </Typography>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                }
+
+                                return (
+                                    <ExpertRequestCard
+                                        key={request.id}
+                                        request={request}
+                                        group={group}
+                                        requester={requester}
+                                        usersByUid={usersByUid}
+                                        onOpenGroup={handleOpenGroupView}
+                                    />
+                                );
+                            })}
+                        </Box>
+                    )}
                 </Box>
-                {error && (
-                    <Alert severity="error" onClose={() => setError(null)}>
-                        {error}
-                    </Alert>
-                )}
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                    <Card sx={{ flex: 1 }}>
+
+                {/* Right column: Stats and Skills */}
+                <Stack spacing={2}>
+                    {/* Stats summary card */}
+                    <Card>
                         <CardContent>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Pending
+                            <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                                Overview
                             </Typography>
-                            <Typography variant="h5">{pendingCount}</Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            <Stack spacing={1.5}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Pending
+                                    </Typography>
+                                    <Chip
+                                        label={pendingCount}
+                                        size="small"
+                                        color={pendingCount > 0 ? 'warning' : 'default'}
+                                        variant="filled"
+                                    />
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Approved
+                                    </Typography>
+                                    <Chip
+                                        label={approvedCount}
+                                        size="small"
+                                        color={approvedCount > 0 ? 'success' : 'default'}
+                                        variant="filled"
+                                    />
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Rejected
+                                    </Typography>
+                                    <Chip
+                                        label={rejectedCount}
+                                        size="small"
+                                        color={rejectedCount > 0 ? 'error' : 'default'}
+                                        variant="filled"
+                                    />
+                                </Box>
+                            </Stack>
                         </CardContent>
                     </Card>
-                    <Card sx={{ flex: 1 }}>
-                        <CardContent>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Approved
-                            </Typography>
-                            <Typography variant="h5">{approvedCount}</Typography>
-                        </CardContent>
-                    </Card>
-                    <Card sx={{ flex: 1 }}>
-                        <CardContent>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Rejected
-                            </Typography>
-                            <Typography variant="h5">{rejectedCount}</Typography>
-                        </CardContent>
-                    </Card>
-                    <Card sx={{ flex: 1, minWidth: 0 }}>
+
+                    {/* Slots management card */}
+                    <Card>
                         <CardContent>
                             {editingCapacity ? (
                                 <>
-                                    <Typography variant="subtitle2" color="text.secondary">
-                                        Update accepted groups
+                                    <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                                        Update Accepted Groups
                                     </Typography>
-                                    <Stack
-                                        direction={{ xs: 'column', sm: 'row' }}
-                                        spacing={2}
-                                        alignItems={{ xs: 'stretch', sm: 'flex-end' }}
-                                        sx={{ width: '100%', mt: 2 }}
-                                    >
-                                        <TextField
-                                            label="Slots"
-                                            type="number"
-                                            slotProps={{
-                                                htmlInput: {
-                                                    min: minimumCapacity,
-                                                    max: maxSlots,
-                                                    step: 1
-                                                }
-                                            }}
-                                            value={capacityInput}
-                                            onChange={handleCapacityInputChange}
-                                            sx={{ flex: 1, minWidth: 150 }}
-                                            error={Boolean(capacityError)}
-                                            helperText={capacityError ?? capacityHelperHint}
-                                            disabled={!expertProfile}
-                                        />
-                                    </Stack>
+                                    <TextField
+                                        label="Slots"
+                                        type="number"
+                                        fullWidth
+                                        slotProps={{
+                                            htmlInput: {
+                                                min: minimumCapacity,
+                                                max: maxSlots,
+                                                step: 1
+                                            }
+                                        }}
+                                        value={capacityInput}
+                                        onChange={handleCapacityInputChange}
+                                        error={Boolean(capacityError)}
+                                        helperText={capacityError ?? capacityHelperHint}
+                                        disabled={!expertProfile}
+                                        sx={{ mt: 1 }}
+                                    />
                                 </>
                             ) : (
                                 <>
-                                    <Typography variant="subtitle2" color="text.secondary">
-                                        Accepted groups
+                                    <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                                        Accepted Groups
                                     </Typography>
-                                    <Stack spacing={0.5}>
-                                        <Typography variant="h5">
-                                            {assignmentsLoading ? '…' : slotsSummary}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {normalizedCapacity === 0
-                                                ? 'Not accepting requests'
-                                                : openSlots > 0
-                                                    ? `${openSlots} slot${openSlots === 1 ? '' : 's'} open`
-                                                    : 'No open slots'}
-                                        </Typography>
-                                    </Stack>
+                                    <Typography variant="h4" sx={{ mb: 0.5 }}>
+                                        {assignmentsLoading ? '…' : slotsSummary}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {normalizedCapacity === 0
+                                            ? 'Not accepting requests'
+                                            : openSlots > 0
+                                                ? `${openSlots} slot${openSlots === 1 ? '' : 's'} open`
+                                                : 'No open slots'}
+                                    </Typography>
                                 </>
                             )}
                         </CardContent>
-                        <CardActions sx={{ justifyContent: 'flex-end' }}>
+                        <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
                             {editingCapacity ? (
-                                <Stack direction="row" spacing={1}>
-                                    <Button onClick={handleCancelEditing} disabled={capacitySaving}>
+                                <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
+                                    <Button
+                                        onClick={handleCancelEditing}
+                                        disabled={capacitySaving}
+                                        sx={{ flex: 1 }}
+                                    >
                                         Cancel
                                     </Button>
                                     <Button
                                         variant="contained"
                                         onClick={handleSaveCapacity}
                                         disabled={!canSaveCapacity}
+                                        sx={{ flex: 1 }}
                                     >
-                                        {capacitySaving ? 'Saving…' : 'Save slots'}
+                                        {capacitySaving ? 'Saving…' : 'Save'}
                                     </Button>
                                 </Stack>
                             ) : (
-                                <Stack direction="row" spacing={1}>
+                                <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
                                     <Button
                                         variant="outlined"
                                         onClick={handleStartEditing}
                                         disabled={!expertProfile}
+                                        sx={{ flex: 1 }}
                                     >
                                         Edit slots
                                     </Button>
@@ -537,61 +672,124 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                             profile={expertProfile}
                                             currentMaxSlots={maxSlots}
                                             size="small"
+                                            fullWidth
                                         />
                                     )}
                                 </Stack>
                             )}
                         </CardActions>
                     </Card>
-                </Stack>
-            </Stack>
 
-            {loading ? (
-                <Paper sx={{ p: 3 }}>
-                    <Skeleton variant="text" width={200} height={32} sx={{ mb: 1 }} />
-                    <Skeleton variant="rectangular" height={140} />
-                </Paper>
-            ) : viewModels.length === 0 ? (
-                <Paper sx={{ p: 3 }}>
-                    <Typography variant="body1" color="text.secondary">
-                        No service requests yet. Groups with an approved topic can send you a request from your profile page.
-                    </Typography>
-                </Paper>
-            ) : (
-                <Box
-                    sx={{
-                        display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-                        gap: 2,
-                    }}
-                >
-                    {viewModels.map(({ request, group, requester, usersByUid }) => {
-                        if (!group) {
-                            return (
-                                <Card key={request.id} variant="outlined">
-                                    <CardContent>
-                                        <Typography variant="body2" color="text.secondary">
-                                            Group details are unavailable. Please ask the students to resend their request.
+                    {/* Skill ratings card */}
+                    <Card>
+                        <CardContent>
+                            <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                sx={{ mb: 2 }}
+                            >
+                                <Typography variant="subtitle1" fontWeight="medium">
+                                    Your Skills
+                                </Typography>
+                                {departmentSkills.length > 0 && (
+                                    <Chip
+                                        label={`${skillRatings.filter((r) => r.rating > 0).length}/${departmentSkills.length}`}
+                                        size="small"
+                                        color={
+                                            skillRatings.filter((r) => r.rating > 0).length === departmentSkills.length
+                                                ? 'success'
+                                                : 'warning'
+                                        }
+                                        variant="outlined"
+                                    />
+                                )}
+                            </Stack>
+                            {skillsLoading ? (
+                                <Stack spacing={1}>
+                                    <Skeleton variant="text" width="100%" height={24} />
+                                    <Skeleton variant="text" width="80%" height={24} />
+                                    <Skeleton variant="text" width="90%" height={24} />
+                                </Stack>
+                            ) : departmentSkills.length === 0 ? (
+                                <Typography variant="body2" color="text.secondary">
+                                    No skill templates defined for your department yet.
+                                </Typography>
+                            ) : (
+                                <Stack spacing={1}>
+                                    {/* Show skill overview with ratings */}
+                                    {departmentSkills.slice(0, 5).map((skill) => {
+                                        const userRating = skillRatings.find((r) => r.skillId === skill.id);
+                                        const rating = userRating?.rating ?? 0;
+                                        return (
+                                            <Box key={skill.id}>
+                                                <Stack
+                                                    direction="row"
+                                                    justifyContent="space-between"
+                                                    alignItems="center"
+                                                    sx={{ mb: 0.5 }}
+                                                >
+                                                    <Typography
+                                                        variant="body2"
+                                                        noWrap
+                                                        sx={{ flex: 1, mr: 1 }}
+                                                    >
+                                                        {skill.name}
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="body2"
+                                                        fontWeight="medium"
+                                                        color={rating > 0 ? 'text.primary' : 'text.disabled'}
+                                                    >
+                                                        {rating > 0 ? `${rating}/10` : '—'}
+                                                    </Typography>
+                                                </Stack>
+                                                <LinearProgress
+                                                    variant="determinate"
+                                                    value={rating * 10}
+                                                    sx={{
+                                                        height: 4,
+                                                        borderRadius: 2,
+                                                        bgcolor: 'action.hover',
+                                                    }}
+                                                />
+                                            </Box>
+                                        );
+                                    })}
+                                    {departmentSkills.length > 5 && (
+                                        <Typography variant="caption" color="text.secondary">
+                                            +{departmentSkills.length - 5} more skills
                                         </Typography>
-                                    </CardContent>
-                                </Card>
-                            );
-                        }
+                                    )}
+                                </Stack>
+                            )}
+                        </CardContent>
+                        {departmentSkills.length > 0 && (
+                            <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<EditIcon />}
+                                    onClick={() => setSkillDialogOpen(true)}
+                                    fullWidth
+                                >
+                                    Edit Skills
+                                </Button>
+                            </CardActions>
+                        )}
+                    </Card>
+                </Stack>
+            </Box>
 
-                        return (
-                            <ExpertRequestCard
-                                key={request.id}
-                                request={request}
-                                group={group}
-                                requester={requester}
-                                usersByUid={usersByUid}
-                                onOpenGroup={handleOpenGroupView}
-                            />
-                        );
-                    })}
-                </Box>
-            )}
-
+            {/* Skill Rating Dialog */}
+            <SkillRatingDialog
+                open={skillDialogOpen}
+                onClose={() => setSkillDialogOpen(false)}
+                department={expertProfile?.department ?? ''}
+                skills={departmentSkills}
+                ratings={skillRatings}
+                onSave={handleSaveSkillRatings}
+                loading={skillsLoading}
+            />
         </AnimatedPage>
     );
 }

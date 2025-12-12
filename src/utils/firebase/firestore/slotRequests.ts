@@ -15,6 +15,7 @@ import { normalizeTimestamp } from '../../dateUtils';
 import { DEFAULT_YEAR } from '../../../config/firestore';
 import { buildSlotRequestsCollectionPath, buildSlotRequestDocPath } from './paths';
 import { findUserById, updateUserProfile } from './user';
+import { validateExpertSkillRatings } from './skillTemplates';
 import type { SlotRequest, SlotRequestRecord, SlotRequestStatus } from '../../../types/slotRequest';
 import type { UserRole } from '../../../types/profile';
 
@@ -85,6 +86,7 @@ function docToSlotRequest(docSnap: SlotRequestSnapshot): SlotRequestRecord | nul
 
 /**
  * Create a new slot request
+ * Validates that experts have rated their skills when increasing from 0 slots
  */
 export async function createSlotRequest(
     payload: CreateSlotRequestPayload,
@@ -104,6 +106,27 @@ export async function createSlotRequest(
     const existingPending = await getPendingSlotRequestByExpert(expertUid, year);
     if (existingPending) {
         throw new Error('You already have a pending slot request. Please wait for admin response.');
+    }
+
+    // When increasing from 0 slots, require skill ratings
+    if (currentSlots === 0 && department) {
+        const user = await findUserById(expertUid);
+        const skillValidation = await validateExpertSkillRatings(
+            year,
+            department,
+            user?.skillRatings
+        );
+
+        if (!skillValidation.isComplete && skillValidation.totalSkills > 0) {
+            const unratedNames = skillValidation.unratedSkillNames.slice(0, 3).join(', ');
+            const moreCount = skillValidation.unratedSkillNames.length - 3;
+            const moreText = moreCount > 0 ? ` and ${moreCount} more` : '';
+            throw new Error(
+                `You must rate all your skills before requesting slots. ` +
+                `Missing ratings for: ${unratedNames}${moreText}. ` +
+                `Please complete your skill ratings in your profile settings.`
+            );
+        }
     }
 
     const collPath = buildSlotRequestsCollectionPath(year);

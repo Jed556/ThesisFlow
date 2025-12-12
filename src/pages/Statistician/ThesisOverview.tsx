@@ -19,7 +19,7 @@ import { getDisplayName } from '../../utils/userUtils';
 import { THESIS_STAGE_METADATA, getStageLabel } from '../../utils/thesisStageUtils';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
-import { notifySubmissionApproval, notifyRevisionRequested } from '../../utils/auditNotificationUtils';
+import { notifySubmissionApproval, notifyRevisionRequested, notifyNewChatMessage } from '../../utils/auditNotificationUtils';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
@@ -280,6 +280,24 @@ export default function StatisticianThesisOverviewPage() {
             date: new Date().toISOString(),
             attachments,
         });
+
+        // Send notification for the new chat message
+        try {
+            const group = await findGroupById(thesis.groupId);
+            if (group) {
+                await notifyNewChatMessage({
+                    group,
+                    senderId: statisticianUid,
+                    senderRole: 'statistician',
+                    chapterName: `Chapter ${chapterId}`,
+                    stageName: getStageLabel(chapterStage),
+                    hasAttachments: attachments.length > 0,
+                    details: { thesisId: selectedThesisId, chapterId, chapterStage, submissionId },
+                });
+            }
+        } catch (notifyError) {
+            console.error('Failed to send chat notification:', notifyError);
+        }
     }, [statisticianUid, selectedThesisId, thesis]);
 
     const handleChapterDecision = React.useCallback(async (

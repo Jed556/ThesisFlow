@@ -440,6 +440,22 @@ service cloud.firestore {
                 }
 
                 // ================================
+                // ADVISER SKILLS (SKILL TEMPLATES)
+                // Path: year/{year}/departments/{department}/adviserSkills/{skillId}
+                // Stores department-specific skill templates for adviser/expert ratings
+                // ================================
+
+                match /adviserSkills/{skillId} {
+                    // All authenticated users can read skill templates
+                    // (needed by experts to view/rate skills and by students to see adviser expertise)
+                    allow read: if isAuthenticated();
+                    // Only admins, developers, and heads can manage skill templates
+                    allow create: if isAdminOrDeveloper() || isHead();
+                    allow update: if isAdminOrDeveloper() || isHead();
+                    allow delete: if isAdminOrDeveloper() || isHead();
+                }
+
+                // ================================
                 // COURSES
                 // ================================
 
@@ -495,14 +511,9 @@ service cloud.firestore {
 
                         match /calendar/{calendarDoc} {
                             // Personal calendar - owner and admins can read
+                            // Events are stored directly as documents in calendar collection (not in subcollection)
                             allow read: if isAuthenticated() && (isOwner(userId) || isAdminOrDeveloper());
                             allow write: if isOwner(userId) || isAdminOrDeveloper();
-
-                            // Events subcollection
-                            match /events/{eventId} {
-                                allow read: if isAuthenticated() && (isOwner(userId) || isAdminOrDeveloper());
-                                allow write: if isOwner(userId) || isAdminOrDeveloper();
-                            }
                         }
                     }
 
@@ -619,19 +630,15 @@ service cloud.firestore {
                         // ================================
                         // GROUP-LEVEL CALENDAR
                         // Path: year/{year}/departments/{department}/courses/{course}/groups/{groupId}/calendar/metadata
+                        // Events are stored directly in calendar collection as calendar/{eventId}
                         // ================================
 
                         match /calendar/{calendarDoc} {
                             // Group calendar - group members and staff can read
                             allow read: if isAuthenticated() && hasGroupAccess();
-                            // Group leader, adviser, and admins can manage
-                            allow write: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader();
-
-                            // Events subcollection
-                            match /events/{eventId} {
-                                allow read: if isAuthenticated() && hasGroupAccess();
-                                allow write: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader() || isGroupMember();
-                            }
+                            // Group leader, adviser, admins, and group members can manage events
+                            // Events are stored directly in calendar collection (not subcollection)
+                            allow write: if isAdminOrDeveloper() || isHead() || isGroupAdviser() || isGroupLeader() || isGroupMember();
                         }
 
                         // ================================

@@ -42,12 +42,11 @@ export default function EventCard({
                 opacity: loading ? 1 : (isPast && event.status !== 'completed' ? 0.7 : 1),
                 backgroundColor: loading ? 'background.paper' : (isToday ? 'action.hover' : 'background.paper'),
                 transition: (theme) =>
-                    theme.transitions.create(['transform', 'box-shadow'], {
+                    theme.transitions.create(['box-shadow'], {
                         duration: theme.transitions.duration.short,
                         easing: theme.transitions.easing.easeInOut,
                     }),
                 '&:hover': {
-                    transform: 'translateX(4px)',
                     boxShadow: (theme) => theme.shadows[6],
                 },
             }}

@@ -3,6 +3,9 @@
  * 
  * Listens to user audit entries and displays snackbar notifications for new entries.
  * This hook should be used at the app level to provide real-time notifications.
+ * 
+ * Uses snackbarShown field in Firestore to persist which notifications have been shown,
+ * preventing duplicate notifications on page reload or re-login.
  */
 
 import * as React from 'react';
@@ -12,6 +15,7 @@ import { useSnackbar } from '../contexts/SnackbarContext';
 import {
     listenAllUserAuditEntries,
     markUserAuditAsRead,
+    markUserAuditSnackbarsShown,
     buildUserAuditContextFromProfile
 } from '../utils/auditUtils';
 
@@ -71,9 +75,8 @@ export function useAuditNotifications(
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<Error | null>(null);
 
-    // Track shown notifications to avoid duplicates
-    const shownNotificationsRef = React.useRef<Set<string>>(new Set());
-    const previousNotificationsRef = React.useRef<UserAuditEntry[]>([]);
+    // Track notifications currently being shown to avoid duplicates within the same session
+    const pendingShowRef = React.useRef<Set<string>>(new Set());
 
     // Build context from user profile
     const userContext = React.useMemo<UserAuditContext | null>(() => {
@@ -83,7 +86,7 @@ export function useAuditNotifications(
 
     // Listen to notifications
     React.useEffect(() => {
-        if (!userProfile?.uid) {
+        if (!userProfile?.uid || !userContext) {
             setNotifications([]);
             setLoading(false);
             return () => { /* no-op */ };
@@ -95,27 +98,28 @@ export function useAuditNotifications(
         const unsubscribe = listenAllUserAuditEntries(
             userProfile.uid,
             {
-                onData: (audits) => {
+                onData: async (audits) => {
                     setNotifications(audits);
                     setLoading(false);
 
-                    // Find new notifications that haven't been shown
-                    const previousIds = new Set(
-                        previousNotificationsRef.current.map((n) => n.id)
-                    );
-                    const newAudits = audits.filter(
+                    // Find notifications that should show snackbar but haven't been shown yet
+                    // Uses snackbarShown field from Firestore to persist across reloads/logins
+                    const toShowSnackbar = audits.filter(
                         (a) =>
-                            !previousIds.has(a.id) &&
-                            !shownNotificationsRef.current.has(a.id) &&
                             a.showSnackbar &&
-                            !a.read
+                            !a.snackbarShown &&
+                            !pendingShowRef.current.has(a.id)
                     );
 
                     // Show snackbar notifications for new entries
-                    if (showSnackbars && newAudits.length > 0) {
-                        const toShow = newAudits.slice(0, maxNotifications);
+                    if (showSnackbars && toShowSnackbar.length > 0) {
+                        const toShow = toShowSnackbar.slice(0, maxNotifications);
+                        const shownIds: string[] = [];
+
                         toShow.forEach((audit) => {
-                            shownNotificationsRef.current.add(audit.id);
+                            // Mark as pending to avoid showing twice in same session
+                            pendingShowRef.current.add(audit.id);
+                            shownIds.push(audit.id);
                             showNotification(
                                 audit.description || audit.name,
                                 getSnackbarSeverity(audit),
@@ -124,23 +128,35 @@ export function useAuditNotifications(
                         });
 
                         // If there are more notifications, show a summary
-                        if (newAudits.length > maxNotifications) {
-                            const remaining = newAudits.length - maxNotifications;
+                        if (toShowSnackbar.length > maxNotifications) {
+                            const remaining = toShowSnackbar.length - maxNotifications;
                             showNotification(
                                 `And ${remaining} more notification${remaining > 1 ? 's' : ''}`,
                                 'info',
                                 snackbarDuration
                             );
+                            // Mark all remaining as shown too
+                            toShowSnackbar.slice(maxNotifications).forEach((a) => {
+                                pendingShowRef.current.add(a.id);
+                                shownIds.push(a.id);
+                            });
+                        }
+
+                        // Persist snackbar shown status to Firestore
+                        // This prevents showing the same notifications on reload/login
+                        if (shownIds.length > 0 && userContext) {
+                            try {
+                                await markUserAuditSnackbarsShown(userContext, shownIds);
+                            } catch (err) {
+                                console.error('Failed to mark snackbars as shown:', err);
+                            }
                         }
                     }
 
-                    // Call callback
-                    if (onNewNotifications && newAudits.length > 0) {
-                        onNewNotifications(newAudits);
+                    // Call callback for new unshown notifications
+                    if (onNewNotifications && toShowSnackbar.length > 0) {
+                        onNewNotifications(toShowSnackbar);
                     }
-
-                    // Update previous notifications reference
-                    previousNotificationsRef.current = audits;
                 },
                 onError: (err) => {
                     console.error('Failed to load notifications:', err);

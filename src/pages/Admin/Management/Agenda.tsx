@@ -1,18 +1,21 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardContent, Chip, Collapse, Dialog, DialogActions,
-    DialogContent, DialogTitle, Divider, IconButton, LinearProgress, List, ListItem,
-    ListItemText, Skeleton, Stack, TextField, Tooltip, Typography
+    DialogContent, DialogTitle, Divider, IconButton, LinearProgress, List,
+    Skeleton, Stack, TextField, Tooltip, Typography
 } from '@mui/material';
 import {
     Add as AddIcon, Article as ArticleIcon, Business as BusinessIcon, Delete as DeleteIcon,
     Download as DownloadIcon, Edit as EditIcon, ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon, School as SchoolIcon, Upload as UploadIcon
 } from '@mui/icons-material';
+import { useSession } from '@toolpad/core';
 import { AnimatedPage } from '../../../components/Animate';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { getUserDepartments } from '../../../utils/firebase/firestore/user';
+import { auditAgendaTemplateChange } from '../../../utils/auditNotificationUtils';
 import type { NavigationItem } from '../../../types/navigation';
+import type { Session } from '../../../types/session';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -104,7 +107,7 @@ interface RecursiveAgendaItemProps {
 }
 
 /**
- * Renders a single agenda item with recursive sub-agendas
+ * Renders a single agenda item with recursive sub-agendas using outlined card style
  */
 function RecursiveAgendaItem({
     agenda,
@@ -133,17 +136,51 @@ function RecursiveAgendaItem({
     };
 
     return (
-        <React.Fragment>
-            <ListItem
-                sx={{
-                    bgcolor: depth === 0 ? 'action.hover' : 'transparent',
-                    borderRadius: 1,
-                    mb: 0.5,
-                    pl: depth * 3,
-                    borderLeft: depth > 0 ? '2px solid' : 'none',
-                    borderColor: 'divider',
-                }}
-                secondaryAction={
+        <Card
+            variant="outlined"
+            sx={{
+                borderRadius: 2,
+                mb: depth === 0 ? 1 : 0.5,
+            }}
+        >
+            <CardContent sx={{ pb: hasSubAgendas && expanded ? '16px !important' : '12px !important', pt: 1.5, px: 2 }}>
+                <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
+                        {hasSubAgendas && (
+                            <IconButton size="small" onClick={onToggle}>
+                                {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                        )}
+                        {!hasSubAgendas && <Box sx={{ width: 32 }} />}
+                        {depth === 0 && (
+                            <Chip
+                                label={path[path.length - 1] + 1}
+                                size="small"
+                                color={chipColor}
+                            />
+                        )}
+                        <Box sx={{ flex: 1 }}>
+                            <Typography
+                                variant={depth === 0 ? 'subtitle1' : 'body2'}
+                                fontWeight={depth === 0 ? 600 : 400}
+                                sx={{
+                                    textTransform: depth === 0 ? 'uppercase' : 'none',
+                                    letterSpacing: depth === 0 ? 0.5 : 'inherit',
+                                }}
+                            >
+                                {agenda.title}
+                            </Typography>
+                            {hasSubAgendas && (
+                                <Typography variant="caption" color="text.secondary">
+                                    {agenda.subAgenda.length} {agenda.subAgenda.length === 1 ? 'sub-agendum' : 'sub-agenda'}
+                                </Typography>
+                            )}
+                        </Box>
+                    </Stack>
                     <Stack direction="row" spacing={0.5}>
                         <Tooltip title="Add Sub-Agenda">
                             <IconButton size="small" onClick={() => onAdd(path)}>
@@ -161,56 +198,31 @@ function RecursiveAgendaItem({
                             </IconButton>
                         </Tooltip>
                     </Stack>
-                }
-            >
+                </Box>
+
                 {hasSubAgendas && (
-                    <IconButton size="small" onClick={onToggle} sx={{ mr: 1 }}>
-                        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
-                )}
-                {!hasSubAgendas && <Box sx={{ width: 40 }} />}
-                <ListItemText
-                    primary={
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            {depth === 0 && (
-                                <Chip
-                                    label={path[path.length - 1] + 1}
-                                    size="small"
-                                    color={chipColor}
+                    <Collapse in={expanded}>
+                        <Divider sx={{ my: 1 }} />
+                        <Stack spacing={0.5}>
+                            {agenda.subAgenda.map((subAgenda, subIndex) => (
+                                <RecursiveAgendaItem
+                                    key={subIndex}
+                                    agenda={subAgenda}
+                                    path={[...path, subIndex]}
+                                    depth={depth + 1}
+                                    expanded={subExpanded.has(subIndex)}
+                                    onToggle={() => toggleSubItem(subIndex)}
+                                    onAdd={onAdd}
+                                    onEdit={onEdit}
+                                    onDelete={onDelete}
+                                    chipColor={chipColor}
                                 />
-                            )}
-                            <Typography
-                                variant={depth === 0 ? 'subtitle1' : 'body2'}
-                                fontWeight={depth === 0 ? 500 : 400}
-                            >
-                                {agenda.title}
-                            </Typography>
+                            ))}
                         </Stack>
-                    }
-                    secondary={hasSubAgendas ? `${agenda.subAgenda.length} sub-agenda(s)` : undefined}
-                />
-            </ListItem>
-            {hasSubAgendas && (
-                <Collapse in={expanded}>
-                    <List disablePadding>
-                        {agenda.subAgenda.map((subAgenda, subIndex) => (
-                            <RecursiveAgendaItem
-                                key={subIndex}
-                                agenda={subAgenda}
-                                path={[...path, subIndex]}
-                                depth={depth + 1}
-                                expanded={subExpanded.has(subIndex)}
-                                onToggle={() => toggleSubItem(subIndex)}
-                                onAdd={onAdd}
-                                onEdit={onEdit}
-                                onDelete={onDelete}
-                                chipColor={chipColor}
-                            />
-                        ))}
-                    </List>
-                </Collapse>
-            )}
-        </React.Fragment>
+                    </Collapse>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 
@@ -222,6 +234,7 @@ function RecursiveAgendaItem({
  * Admin page for managing research agendas with recursive nesting.
  */
 export default function AgendasManagementPage() {
+    const session = useSession<Session>();
     const { showNotification } = useSnackbar();
 
     const [agendas, setAgendas] = React.useState<AgendasData | null>(null);
@@ -520,6 +533,7 @@ export default function AgendasManagementPage() {
         };
 
         const newAgendas = { ...agendas };
+        let agendaDepartment: string | undefined;
 
         if (editingAgenda.type === 'institutional') {
             if (editingAgenda.agenda) {
@@ -538,6 +552,7 @@ export default function AgendasManagementPage() {
                 );
             }
         } else if (editingAgenda.departmentIndex !== undefined) {
+            agendaDepartment = newAgendas.departmentalAgendas[editingAgenda.departmentIndex]?.department;
             if (editingAgenda.agenda) {
                 // Edit existing
                 newAgendas.departmentalAgendas[editingAgenda.departmentIndex].agenda =
@@ -564,6 +579,16 @@ export default function AgendasManagementPage() {
             editingAgenda.agenda ? 'Agenda updated' : 'Agenda added',
             'success'
         );
+
+        // Audit and notify heads
+        if (session?.user?.uid) {
+            auditAgendaTemplateChange({
+                userId: session.user.uid,
+                agendaType: editingAgenda.type === 'institutional' ? 'institutional' : 'departmental',
+                department: agendaDepartment,
+                action: 'agenda_template_updated',
+            }).catch(console.error);
+        }
     };
 
     const handleDeleteAgenda = (
@@ -577,6 +602,7 @@ export default function AgendasManagementPage() {
             onConfirm: () => {
                 if (!agendas) return;
                 const newAgendas = { ...agendas };
+                let agendaDepartment: string | undefined;
 
                 if (type === 'institutional') {
                     newAgendas.institutionalAgenda.agenda = deleteAgendaAtPath(
@@ -584,6 +610,7 @@ export default function AgendasManagementPage() {
                         path
                     );
                 } else if (departmentIndex !== undefined) {
+                    agendaDepartment = newAgendas.departmentalAgendas[departmentIndex]?.department;
                     newAgendas.departmentalAgendas[departmentIndex].agenda =
                         deleteAgendaAtPath(
                             newAgendas.departmentalAgendas[departmentIndex].agenda,
@@ -593,6 +620,16 @@ export default function AgendasManagementPage() {
 
                 setAgendas(newAgendas);
                 showNotification('Agenda deleted', 'success');
+
+                // Audit and notify heads
+                if (session?.user?.uid) {
+                    auditAgendaTemplateChange({
+                        userId: session.user.uid,
+                        agendaType: type === 'institutional' ? 'institutional' : 'departmental',
+                        department: agendaDepartment,
+                        action: 'agenda_template_updated',
+                    }).catch(console.error);
+                }
             },
         });
         setDeleteDialogOpen(true);
@@ -696,7 +733,10 @@ export default function AgendasManagementPage() {
                                         {agendas.institutionalAgenda.title}
                                     </Typography>
                                     <Chip
-                                        label={`${countSubAgendas(agendas.institutionalAgenda.agenda)} items`}
+                                        label={(() => {
+                                            const count = countSubAgendas(agendas.institutionalAgenda.agenda);
+                                            return `${count} ${count === 1 ? 'item' : 'items'}`;
+                                        })()}
                                         size="small"
                                         variant="outlined"
                                         color="primary"
@@ -727,16 +767,16 @@ export default function AgendasManagementPage() {
                                         chipColor="primary"
                                     />
                                 ))}
-                                {agendas.institutionalAgenda.agenda.length === 0 && (
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        sx={{ fontStyle: 'italic', py: 1 }}
-                                    >
-                                        No agendas added yet
-                                    </Typography>
-                                )}
                             </List>
+                            {agendas.institutionalAgenda.agenda.length === 0 && (
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{ fontStyle: 'italic', py: 1 }}
+                                >
+                                    No agendas added yet
+                                </Typography>
+                            )}
                         </Stack>
                     </CardContent>
                 </Card>
@@ -797,7 +837,10 @@ export default function AgendasManagementPage() {
                                                             {dept.department}
                                                         </Typography>
                                                         <Chip
-                                                            label={`${countSubAgendas(dept.agenda)} items`}
+                                                            label={(() => {
+                                                                const count = countSubAgendas(dept.agenda);
+                                                                return `${count} ${count === 1 ? 'item' : 'items'}`;
+                                                            })()}
                                                             size="small"
                                                             variant="outlined"
                                                         />
@@ -837,16 +880,16 @@ export default function AgendasManagementPage() {
                                                                 />
                                                             );
                                                         })}
-                                                        {dept.agenda.length === 0 && (
-                                                            <Typography
-                                                                variant="body2"
-                                                                color="text.secondary"
-                                                                sx={{ fontStyle: 'italic', py: 1 }}
-                                                            >
-                                                                No agendas added yet
-                                                            </Typography>
-                                                        )}
                                                     </List>
+                                                    {dept.agenda.length === 0 && (
+                                                        <Typography
+                                                            variant="body2"
+                                                            color="text.secondary"
+                                                            sx={{ fontStyle: 'italic', py: 1 }}
+                                                        >
+                                                            No agendas added yet
+                                                        </Typography>
+                                                    )}
                                                 </Collapse>
                                             </CardContent>
                                         </Card>
