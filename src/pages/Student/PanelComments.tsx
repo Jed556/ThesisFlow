@@ -1,12 +1,11 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton,
-    Paper, Skeleton, Stack, Tab, Tabs, Tooltip, Typography,
+    Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle,
+    IconButton, Paper, Skeleton, Stack, Tab, Tabs, Tooltip, Typography,
 } from '@mui/material';
 import {
     CommentBank as CommentBankIcon, CloudUpload as CloudUploadIcon,
-    RateReview as RequestReviewIcon, Delete as DeleteIcon,
-    Close as CloseIcon, Download as DownloadIcon,
+    RateReview as RequestReviewIcon, Close as CloseIcon, Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
@@ -23,10 +22,8 @@ import { PanelCommentTable } from '../../components/PanelComments';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../components/Snackbar';
 import {
-    listenPanelCommentEntries, listenPanelCommentRelease,
-    updatePanelCommentStudentFields, listenPanelManuscript,
-    uploadPanelManuscript, requestManuscriptReview, deletePanelManuscript,
-    type PanelCommentContext,
+    listenPanelCommentEntries, listenPanelCommentRelease, updatePanelCommentStudentFields, listenPanelManuscript,
+    uploadPanelManuscript, requestManuscriptReview, deletePanelManuscript, type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
@@ -466,7 +463,8 @@ export default function StudentPanelCommentsPage() {
                 const auditCtx = buildAuditContextFromGroup(group);
                 await createAuditEntry(auditCtx, {
                     name: 'Manuscript Deleted',
-                    description: `Manuscript "${manuscript.fileName}" deleted for ${getPanelCommentStageLabel(activeStage)} panel review`,
+                    description:
+                        `Manuscript "${manuscript.fileName}" deleted for ${getPanelCommentStageLabel(activeStage)} panel review`,
                     userId: userUid,
                     category: 'thesis',
                     action: 'file_deleted',
@@ -651,9 +649,12 @@ export default function StudentPanelCommentsPage() {
                                     <FileCard
                                         file={{
                                             name: manuscript.fileName,
-                                            size: manuscript.fileSize,
+                                            size: formatFileSize(manuscript.fileSize),
+                                            type: manuscript.mimeType,
                                             mimeType: manuscript.mimeType,
                                             url: manuscript.url,
+                                            uploadDate: manuscript.uploadedAt,
+                                            author: manuscript.uploadedBy,
                                         } as FileAttachment}
                                         title={manuscript.fileName}
                                         sizeLabel={formatFileSize(manuscript.fileSize)}
@@ -691,6 +692,7 @@ export default function StudentPanelCommentsPage() {
                                     <input
                                         ref={fileInputRef}
                                         type="file"
+                                        // eslint-disable-next-line max-len
                                         accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                         style={{ display: 'none' }}
                                         onChange={handleFileSelect}
@@ -780,7 +782,7 @@ export default function StudentPanelCommentsPage() {
                 onClose={() => setFileViewerOpen(false)}
                 maxWidth="lg"
                 fullWidth
-                PaperProps={{ sx: { height: '80vh' } }}
+                slotProps={{ paper: { sx: { height: '80vh' } } }}
             >
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
                     <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
@@ -807,9 +809,12 @@ export default function StudentPanelCommentsPage() {
                         <FileViewer
                             file={{
                                 name: manuscript.fileName,
-                                size: manuscript.fileSize,
+                                size: formatFileSize(manuscript.fileSize),
+                                type: manuscript.mimeType,
                                 mimeType: manuscript.mimeType,
                                 url: manuscript.url,
+                                uploadDate: manuscript.uploadedAt,
+                                author: manuscript.uploadedBy,
                             } as FileAttachment}
                             showToolbar={false}
                             height="100%"

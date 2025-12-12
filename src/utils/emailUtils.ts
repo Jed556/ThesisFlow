@@ -7,7 +7,6 @@
 
 import type { AuditAction } from '../types/audit';
 import type { UserProfile, UserName } from '../types/profile';
-import { isDevelopmentEnvironment } from './devUtils';
 
 // ============================================================================
 // Types
