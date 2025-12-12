@@ -1095,8 +1095,12 @@ export function getAuditActionLabel(action: AuditAction): string {
         comment_updated: 'Updated',
         comment_deleted: 'Deleted',
         panel_comment_added: 'Added',
+        panel_comment_approved: 'Approved',
         panel_comment_released: 'Released',
         panel_comments_ready: 'Ready for Sending',
+        // Panel review actions
+        panel_review_requested: 'Review Requested',
+        all_panel_comments_approved: 'All Comments Approved',
         // File actions
         file_uploaded: 'Uploaded',
         file_deleted: 'Deleted',

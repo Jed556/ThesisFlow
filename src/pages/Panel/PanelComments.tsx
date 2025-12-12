@@ -30,7 +30,8 @@ import { createDefaultPanelCommentReleaseMap, type PanelCommentReleaseMap } from
 import { PANEL_COMMENT_STAGE_METADATA, getPanelCommentStageLabel } from '../../utils/panelCommentUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
 import {
-    auditAndNotify, auditPanelCommentCreated, notifyPanelCommentsReadyForRelease
+    auditAndNotify, auditPanelCommentCreated, notifyPanelCommentsReadyForRelease,
+    notifyPanelCommentApproved, notifyAllPanelCommentsApproved
 } from '../../utils/auditNotificationUtils';
 import { findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { formatFileSize } from '../../utils/fileUtils';
@@ -51,6 +52,7 @@ type EditorMode = 'create' | 'edit';
 export default function PanelPanelCommentsPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid ?? null;
+    const userName = session?.user?.name ?? 'Panel member';
     const { showNotification } = useSnackbar();
 
     const [groups, setGroups] = React.useState<ThesisGroup[]>([]);
@@ -281,27 +283,70 @@ export default function PanelPanelCommentsPage() {
         try {
             await updatePanelCommentApprovalStatus(panelCommentCtx, entry.id, status, userUid);
 
-            // Create audit notification for approval status change
-            try {
-                const stageLabel = getPanelCommentStageLabel(activeStage);
-                const actionLabel = status === 'approved' ? 'approved' : 'marked for revision';
-                await auditAndNotify({
-                    group: selectedGroup,
-                    userId: userUid,
-                    name: status === 'approved' ? 'Panel Comment Approved' : 'Panel Comment Revision Requested',
-                    description: `A panel comment for ${stageLabel} stage was ${actionLabel}.`,
-                    category: 'panel',
-                    action: status === 'approved' ? 'submission_approved' : 'submission_revision_requested',
-                    targets: {
-                        groupMembers: true,
-                        panels: true,
-                        excludeUserId: userUid,
-                    },
-                    details: { stage: activeStage, entryId: entry.id, newStatus: status },
-                    sendEmail: true,
-                });
-            } catch (auditError) {
-                console.error('Failed to create audit notification:', auditError);
+            const stageLabel = getPanelCommentStageLabel(activeStage);
+
+            if (status === 'approved') {
+                // Find the comment number (1-based index)
+                const commentNumber = entries.findIndex(e => e.id === entry.id) + 1;
+                // Truncate comment preview
+                const commentPreview = entry.comment?.length > 50
+                    ? `${entry.comment.substring(0, 50)}...`
+                    : entry.comment;
+
+                // Notify student that comment was approved (with toast)
+                try {
+                    await notifyPanelCommentApproved({
+                        group: selectedGroup,
+                        panelId: userUid,
+                        stageName: stageLabel,
+                        commentNumber,
+                        commentPreview,
+                        details: { stage: activeStage, entryId: entry.id },
+                    });
+                } catch (auditError) {
+                    console.error('Failed to create audit notification:', auditError);
+                }
+
+                // Check if all comments are now approved
+                const updatedEntries = entries.map(e =>
+                    e.id === entry.id ? { ...e, approvalStatus: 'approved' as PanelCommentApprovalStatus } : e
+                );
+                const allApproved = updatedEntries.every(e => e.approvalStatus === 'approved');
+
+                if (allApproved && entries.length > 0) {
+                    try {
+                        await notifyAllPanelCommentsApproved({
+                            group: selectedGroup,
+                            panelId: userUid,
+                            panelName: userName,
+                            stageName: stageLabel,
+                            totalComments: entries.length,
+                            details: { stage: activeStage },
+                        });
+                    } catch (auditError) {
+                        console.error('Failed to send all comments approved notification:', auditError);
+                    }
+                }
+            } else {
+                // Revision requested - create audit
+                try {
+                    await auditAndNotify({
+                        group: selectedGroup,
+                        userId: userUid,
+                        name: 'Panel Comment Revision Requested',
+                        description: `A panel comment for ${stageLabel} stage needs revision.`,
+                        category: 'panel',
+                        action: 'submission_revision_requested',
+                        targets: {
+                            groupMembers: true,
+                            excludeUserId: userUid,
+                        },
+                        details: { stage: activeStage, entryId: entry.id, newStatus: status },
+                        sendEmail: true,
+                    });
+                } catch (auditError) {
+                    console.error('Failed to create audit notification:', auditError);
+                }
             }
 
             showNotification(
@@ -312,7 +357,10 @@ export default function PanelPanelCommentsPage() {
             console.error('Failed to update approval status:', error);
             showNotification('Unable to update approval status. Please try again.', 'error');
         }
-    }, [panelCommentCtx, userUid, isTableReleased, selectedGroup, activeStage, manuscript, showNotification]);
+    }, [
+        panelCommentCtx, userUid, userName, isTableReleased, selectedGroup,
+        activeStage, manuscript, entries, showNotification
+    ]);
 
     /** Mark comments as ready for admin to release to students */
     const handleMarkAsReady = React.useCallback(async () => {
@@ -338,6 +386,7 @@ export default function PanelPanelCommentsPage() {
                 void notifyPanelCommentsReadyForRelease({
                     group: selectedGroup,
                     panelId: userUid,
+                    panelName: userName,
                     stageName: stageLabel,
                     commentCount: entries.length,
                     adminUserIds,
@@ -423,8 +472,10 @@ export default function PanelPanelCommentsPage() {
                         ) : (
                             <Stack spacing={2}>
                                 <Alert severity="info">
-                                    Students will provide their page references and status separately. Focus on the concrete comments here.
-                                    {' '}Each panelist works on a dedicated sheet, so you will only see entries that belong to you.
+                                    Students will provide their page references and status separately.
+                                    Focus on the concrete comments here.
+                                    {' '}Each panelist works on a dedicated sheet, so you will only see entries
+                                    that belong to you.
                                 </Alert>
                                 {entries.length > 0 && (
                                     <Box>
@@ -456,7 +507,8 @@ export default function PanelPanelCommentsPage() {
                                     </Typography>
                                     {!manuscript.reviewRequested && (
                                         <Alert severity="info" sx={{ py: 0.5 }}>
-                                            Waiting for student to request review. You can view the file but cannot approve/request revisions yet.
+                                            Waiting for student to request review. You can view the file but
+                                            cannot approve/request revisions yet.
                                         </Alert>
                                     )}
                                     <FileCard

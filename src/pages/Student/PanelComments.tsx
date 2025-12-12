@@ -39,11 +39,8 @@ import { DEFAULT_YEAR } from '../../config/firestore';
 import { formatFileSize } from '../../utils/fileUtils';
 import { FileCard, FileViewer } from '../../components/File';
 import type { FileAttachment } from '../../types/file';
-import {
-    buildAuditContextFromGroup, createAuditEntry, createUserAuditEntry,
-    buildUserAuditContextFromProfile
-} from '../../utils/auditUtils';
-import { findUsersByIds as findUserProfilesByIds } from '../../utils/firebase/firestore/user';
+import { buildAuditContextFromGroup, createAuditEntry } from '../../utils/auditUtils';
+import { notifyPanelReviewRequested } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -491,7 +488,7 @@ export default function StudentPanelCommentsPage() {
 
     /**
      * Handle requesting panel review for the uploaded manuscript.
-     * This notifies all panels and creates audit entries.
+     * This notifies all panels via email and creates audit entries.
      */
     const handleRequestReview = React.useCallback(async () => {
         if (!panelCommentCtx || !userUid || !manuscript || !group) {
@@ -508,41 +505,31 @@ export default function StudentPanelCommentsPage() {
         try {
             await requestManuscriptReview(panelCommentCtx, activeStage, userUid);
 
-            // Create group audit entry
+            const stageLabel = getPanelCommentStageLabel(activeStage);
+
+            // Create group audit entry for tracking
             const auditCtx = buildAuditContextFromGroup(group);
             await createAuditEntry(auditCtx, {
                 name: 'Panel Review Requested',
-                description: `Panel review requested for ${getPanelCommentStageLabel(activeStage)} manuscript`,
+                description: `Panel review requested for ${stageLabel} manuscript`,
                 userId: userUid,
-                category: 'thesis',
-                action: 'review_requested',
+                category: 'panel',
+                action: 'panel_review_requested',
                 details: {
                     fileName: manuscript.fileName,
                     stage: activeStage,
+                    course: group.course,
                 },
             });
 
-            // Send notifications to all panel members
-            const panelUids = group.members?.panels ?? [];
-            if (panelUids.length > 0) {
-                const panelProfiles = await findUserProfilesByIds(panelUids);
-                for (const panelProfile of panelProfiles) {
-                    const userAuditCtx = buildUserAuditContextFromProfile(panelProfile);
-                    await createUserAuditEntry(userAuditCtx, {
-                        name: 'Panel Review Requested',
-                        description: `${group.name || 'A group'} has uploaded a manuscript for ${getPanelCommentStageLabel(activeStage)} panel review`,
-                        actorUserId: userUid,
-                        category: 'thesis',
-                        action: 'review_requested',
-                        details: {
-                            groupId: group.id,
-                            groupName: group.name,
-                            fileName: manuscript.fileName,
-                            stage: activeStage,
-                        },
-                    });
-                }
-            }
+            // Notify all panel members with email
+            void notifyPanelReviewRequested({
+                group,
+                studentId: userUid,
+                stageName: stageLabel,
+                fileName: manuscript.fileName,
+                details: { stage: activeStage },
+            });
 
             showNotification('Review requested. All panel members have been notified.', 'success');
         } catch (error) {

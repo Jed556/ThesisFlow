@@ -1016,23 +1016,29 @@ export async function auditPanelCommentCreated(options: {
 
 /**
  * Notify admins when panel marks their comment sheet as ready for release.
- * Includes email notification to admins.
+ * Includes email notification to admins. Shows department, course, and group info.
  */
 export async function notifyPanelCommentsReadyForRelease(options: {
     group: ThesisGroup;
     panelId: string;
+    panelName?: string;
     stageName: string;
     commentCount: number;
     adminUserIds: string[];
     details?: AuditDetails;
 }): Promise<AuditAndNotifyResult> {
-    const { group, panelId, stageName, commentCount, adminUserIds, details } = options;
+    const { group, panelId, panelName, stageName, commentCount, adminUserIds, details } = options;
+
+    const department = group.department || 'Unknown Department';
+    const course = group.course || 'Unknown Course';
+    const panelDisplay = panelName || 'A panel member';
 
     return auditAndNotify({
         group,
         userId: panelId,
         name: 'Panel Comments Ready for Release',
-        description: `Panel comments (${commentCount}) for ${stageName} stage are ready to be released to students.`,
+        description: `${panelDisplay}'s comments (${commentCount}) for ${stageName} stage ` +
+            `are ready to be released. Group: ${group.name} | ${department} - ${course}.`,
         category: 'panel',
         action: 'panel_comments_ready',
         targets: {
@@ -1046,6 +1052,9 @@ export async function notifyPanelCommentsReadyForRelease(options: {
             stageName,
             commentCount,
             panelId,
+            panelName,
+            department,
+            course,
         },
         sendEmail: true,
         emailActionText: 'Review Comments',
@@ -1054,22 +1063,27 @@ export async function notifyPanelCommentsReadyForRelease(options: {
 
 /**
  * Notify students when panel comments are released by admin.
- * Sends email to students (group members).
+ * Sends email to students (group members). Includes comment count.
  */
 export async function notifyPanelCommentsReleasedToStudents(options: {
     group: ThesisGroup;
     releaserId: string;
     panelistName: string;
     stageName: string;
+    commentCount?: number;
     details?: AuditDetails;
 }): Promise<AuditAndNotifyResult> {
-    const { group, releaserId, panelistName, stageName, details } = options;
+    const { group, releaserId, panelistName, stageName, commentCount, details } = options;
+
+    const countInfo = commentCount
+        ? ` (${commentCount} comment${commentCount > 1 ? 's' : ''})`
+        : '';
 
     return auditAndNotify({
         group,
         userId: releaserId,
         name: 'Panel Comments Released',
-        description: `Panel comments for ${stageName} stage from ${panelistName} have been released. ` +
+        description: `Panel comments${countInfo} for ${stageName} stage from ${panelistName} have been released. ` +
             'Please review and address the feedback.',
         category: 'panel',
         action: 'panel_comment_released',
@@ -1082,6 +1096,7 @@ export async function notifyPanelCommentsReleasedToStudents(options: {
             ...details,
             stageName,
             panelistName,
+            commentCount,
         },
         sendEmail: true,
         emailActionText: 'View Comments',
@@ -2015,4 +2030,187 @@ export async function auditChapterTemplateChange(options: {
         emailsSentCount,
         auditIds,
     };
+}
+// ============================================================================
+// Panel Assignment Notification Functions
+// ============================================================================
+
+/**
+ * Notify panel members and group students when admin assigns a panel to a group.
+ * Sends email to the assigned panel member and notifies students.
+ */
+export async function notifyPanelAssignedByAdmin(options: {
+    group: ThesisGroup;
+    adminId: string;
+    panelId: string;
+    panelName: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, adminId, panelId, panelName, details } = options;
+
+    // Notify the panel member they've been assigned
+    const panelResult = await auditAndNotify({
+        group,
+        userId: adminId,
+        name: 'You Have Been Assigned as Panel',
+        description: `You have been assigned as a panel member to group "${group.name}" ` +
+            `(${group.course || 'Course not specified'}).`,
+        category: 'expert',
+        action: 'panel_assigned',
+        targets: {
+            userIds: [panelId],
+        },
+        details: {
+            ...details,
+            panelId,
+            panelName,
+            course: group.course,
+        },
+        sendEmail: true,
+        emailActionText: 'View Assignment',
+    });
+
+    // Notify group members that a panel has been assigned
+    await auditAndNotify({
+        group,
+        userId: adminId,
+        name: 'Panel Member Assigned',
+        description: `${panelName} has been assigned as a panel member to your group.`,
+        category: 'expert',
+        action: 'panel_assigned',
+        targets: {
+            groupMembers: true,
+            leader: true,
+            excludeUserId: adminId,
+        },
+        details: {
+            ...details,
+            panelId,
+            panelName,
+        },
+        sendEmail: true,
+        emailActionText: 'View Group',
+    });
+
+    return panelResult;
+}
+
+/**
+ * Notify panels when students request manuscript review.
+ * Sends email and notification to all panel members.
+ */
+export async function notifyPanelReviewRequested(options: {
+    group: ThesisGroup;
+    studentId: string;
+    stageName: string;
+    fileName?: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, studentId, stageName, fileName, details } = options;
+
+    const panelUids = group.members?.panels ?? [];
+
+    return auditAndNotify({
+        group,
+        userId: studentId,
+        name: 'Panel Review Requested',
+        description: `A manuscript for ${stageName} stage is ready for your review. ` +
+            `Group: ${group.name} (${group.course || 'Course not specified'}).`,
+        category: 'panel',
+        action: 'panel_review_requested',
+        targets: {
+            userIds: panelUids,
+            excludeUserId: studentId,
+        },
+        details: {
+            ...details,
+            stageName,
+            fileName,
+            course: group.course,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Manuscript',
+    });
+}
+
+/**
+ * Notify student when a panel approves their comment.
+ * Creates audit entry and sends notification toast.
+ */
+export async function notifyPanelCommentApproved(options: {
+    group: ThesisGroup;
+    panelId: string;
+    stageName: string;
+    commentNumber?: number;
+    commentPreview?: string;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, panelId, stageName, commentNumber, commentPreview, details } = options;
+
+    // Truncate comment preview to 50 chars
+    const truncatedPreview = commentPreview && commentPreview.length > 50
+        ? `${commentPreview.substring(0, 50)}...`
+        : commentPreview;
+
+    const commentInfo = commentNumber
+        ? `Comment #${commentNumber}${truncatedPreview ? `: "${truncatedPreview}"` : ''}`
+        : 'A comment';
+
+    return auditAndNotify({
+        group,
+        userId: panelId,
+        name: 'Panel Comment Approved',
+        description: `${commentInfo} for ${stageName} stage has been approved.`,
+        category: 'panel',
+        action: 'panel_comment_approved',
+        targets: {
+            groupMembers: true,
+            leader: true,
+            excludeUserId: panelId,
+        },
+        details: {
+            ...details,
+            stageName,
+            commentNumber,
+            commentPreview: truncatedPreview,
+        },
+        sendEmail: false, // Email already sent by existing logic
+    });
+}
+
+/**
+ * Notify student when all comments from a panel are approved.
+ */
+export async function notifyAllPanelCommentsApproved(options: {
+    group: ThesisGroup;
+    panelId: string;
+    panelName: string;
+    stageName: string;
+    totalComments: number;
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, panelId, panelName, stageName, totalComments, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: panelId,
+        name: 'All Panel Comments Approved',
+        description: `All ${totalComments} comment${totalComments > 1 ? 's' : ''} from ${panelName} ` +
+            `for ${stageName} stage have been approved!`,
+        category: 'panel',
+        action: 'all_panel_comments_approved',
+        targets: {
+            groupMembers: true,
+            leader: true,
+            excludeUserId: panelId,
+        },
+        details: {
+            ...details,
+            stageName,
+            panelName,
+            totalComments,
+        },
+        sendEmail: true,
+        emailActionText: 'View Comments',
+    });
 }

@@ -261,7 +261,7 @@ export async function sendBulkAuditEmails(
             actionUrl,
             actionText,
             getDisplayName(profile),
-            profile.themeColor
+            profile.preferences?.themeColor
         )
     );
 
