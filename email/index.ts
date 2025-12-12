@@ -22,6 +22,9 @@ export {
     createPlainTextEmail,
     thesisFlowLogoSvg,
     darkenColor,
+    resolveEmailBaseUrl,
+    getEmailPublicAssetUrl,
+    getEmailLogoUrl,
 } from './baseTemplate.js';
 
 // OTP template

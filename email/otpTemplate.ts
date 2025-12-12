@@ -17,6 +17,7 @@ export function generateOtpEmailHtml(data: OtpTemplateData): string {
         purpose = 'verify your account',
         footerText,
         headerColor,
+        runtimeOrigin,
     } = data;
     const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
 
@@ -44,7 +45,7 @@ export function generateOtpEmailHtml(data: OtpTemplateData): string {
         </div>
     `;
 
-    return wrapInBaseTemplate(content, footerText, headerColor);
+    return wrapInBaseTemplate(content, footerText, headerColor, runtimeOrigin);
 }
 
 /**

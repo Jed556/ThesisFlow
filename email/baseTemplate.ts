@@ -36,6 +36,58 @@ export const thesisFlowLogoSvg = `
 /* eslint-enable max-len */
 
 /**
+ * Resolve the base URL for email assets at runtime.
+ * Similar to resolveAdminApiBaseUrl from api.ts but for server-side email templates.
+ * @param runtimeOrigin - Runtime origin from request headers (e.g., 'https://thesisflow.com')
+ * @returns Base URL without trailing slash
+ */
+export function resolveEmailBaseUrl(runtimeOrigin?: string): string {
+    const origin = runtimeOrigin || '';
+    return origin.replace(/\/+$/, '');
+}
+
+/**
+ * Resolve the public asset URL for email templates.
+ * Assets are hosted at {origin}/public/{assetPath}
+ * @param assetPath - Path to the asset (e.g., 'logo.png', 'icons/check.svg')
+ * @param runtimeOrigin - Runtime origin from request headers
+ * @returns Full URL to the public asset
+ */
+export function getEmailPublicAssetUrl(assetPath: string, runtimeOrigin?: string): string {
+    const base = resolveEmailBaseUrl(runtimeOrigin);
+    if (!base) return '';
+    const cleanPath = assetPath.replace(/^\/+/, '');
+    return `${base}/${cleanPath}`;
+}
+
+/**
+ * Resolve the logo URL for email templates.
+ * @param runtimeOrigin - Runtime origin from request headers
+ * @returns Full URL to the logo image at {origin}/public/logo.png
+ */
+export function getEmailLogoUrl(runtimeOrigin?: string): string {
+    return getEmailPublicAssetUrl('logo.png', runtimeOrigin);
+}
+
+/**
+ * Render logo markup for email header
+ * @param runtimeOrigin - Runtime origin from request headers
+ */
+function renderLogoImg(runtimeOrigin?: string): string {
+    const logoUrl = getEmailLogoUrl(runtimeOrigin);
+    if (!logoUrl) return '';
+    return [
+        '<img',
+        ` src="${logoUrl}"`,
+        ' alt="ThesisFlow"',
+        ' width="64"',
+        ' height="64"',
+        ' style="display: block; margin: 0 auto 8px auto;"',
+        ' />',
+    ].join('');
+}
+
+/**
  * Darkens a hex color by a percentage
  * @param hex - Hex color string (with or without #)
  * @param percent - Percentage to darken (0-100)
@@ -177,17 +229,20 @@ export const baseStyles = `
  * @param content - HTML content to wrap
  * @param footerText - Optional custom footer text
  * @param headerColor - Optional custom header color (hex), defaults to brand primary
+ * @param runtimeOrigin - Runtime origin from request for asset URL resolution
  * @returns Complete HTML email
  */
 export function wrapInBaseTemplate(
     content: string,
     footerText?: string,
-    headerColor?: string
+    headerColor?: string,
+    runtimeOrigin?: string
 ): string {
     const year = new Date().getFullYear();
     const footer = footerText || `© ${year} ThesisFlow. All rights reserved.`;
     const primaryColor = headerColor || brandColors.primary;
     const darkColor = darkenColor(primaryColor, 15);
+    const logoHtml = renderLogoImg(runtimeOrigin);
 
     return `
 <!DOCTYPE html>
@@ -205,7 +260,7 @@ export function wrapInBaseTemplate(
     <div class="container">
         <div class="card">
             <div class="header" style="background: linear-gradient(135deg, ${primaryColor} 0%, ${darkColor} 100%);">
-                <div class="logo">${thesisFlowLogoSvg}</div>
+                <div class="logo">${logoHtml}</div>
                 <h1>ThesisFlow</h1>
             </div>
             ${content}

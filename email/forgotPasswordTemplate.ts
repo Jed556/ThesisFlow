@@ -10,7 +10,7 @@ import { wrapInBaseTemplate, createPlainTextEmail, brandColors } from './baseTem
  * @returns HTML email content
  */
 export function generateForgotPasswordEmailHtml(data: ForgotPasswordTemplateData): string {
-    const { recipientName, resetLink, expiryMinutes = 60, footerText, headerColor } = data;
+    const { recipientName, resetLink, expiryMinutes = 60, footerText, headerColor, runtimeOrigin } = data;
     const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
 
     const content = `
@@ -50,7 +50,7 @@ export function generateForgotPasswordEmailHtml(data: ForgotPasswordTemplateData
         </div>
     `;
 
-    return wrapInBaseTemplate(content, footerText, headerColor);
+    return wrapInBaseTemplate(content, footerText, headerColor, runtimeOrigin);
 }
 
 /**

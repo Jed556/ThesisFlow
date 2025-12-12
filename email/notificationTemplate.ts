@@ -57,6 +57,7 @@ export function generateNotificationEmailHtml(data: NotificationTemplateData): s
         notificationType = 'info',
         footerText,
         headerColor,
+        runtimeOrigin,
     } = data;
 
     const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
@@ -95,7 +96,7 @@ export function generateNotificationEmailHtml(data: NotificationTemplateData): s
         </div>
     `;
 
-    return wrapInBaseTemplate(content, footerText, headerColor);
+    return wrapInBaseTemplate(content, footerText, headerColor, runtimeOrigin);
 }
 
 /**

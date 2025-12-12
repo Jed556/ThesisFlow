@@ -13,6 +13,8 @@ export interface BaseTemplateData {
     footerText?: string;
     /** Custom header color (hex color code) - uses recipient's profile color */
     headerColor?: string;
+    /** Runtime origin for asset URL resolution (extracted from request) */
+    runtimeOrigin?: string;
 }
 
 /** OTP (One-Time Pin) email template data */
