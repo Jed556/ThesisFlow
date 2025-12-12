@@ -75,6 +75,16 @@ interface CalendarProps {
      * @default false
      */
     loading?: boolean;
+    /**
+     * Size of each calendar day cell in pixels
+     * @default 46
+     */
+    cellSize?: number;
+    /**
+     * Padding around each calendar day cell (CSS value)
+     * @default '0.2rem'
+     */
+    cellPadding?: string;
 }
 
 /**
@@ -103,7 +113,9 @@ export default function Calendar({
     dialogTitle = 'Select Date',
     selectMode = 'all',
     allowDeselect = true,
-    loading = false
+    loading = false,
+    cellSize = 46,
+    cellPadding = '0.2rem'
 }: CalendarProps) {
     // Map events by date string for quick lookup
     const eventDays = React.useMemo(() => {
@@ -283,8 +295,14 @@ export default function Calendar({
     // No pixel-measurement required; range segments will be rendered using
     // grid column spans so they align perfectly with header columns.
 
-    const calendarGridBoxSize = 46;
-    const calendarGridPadding = '0.2rem';
+    const calendarGridBoxSize = cellSize;
+    const calendarGridPadding = cellPadding;
+    // Scale font size based on cell size (base: 46px = 0.875rem body2)
+    const scaledFontSize = `${(cellSize / 46) * 0.875}rem`;
+    // Scale header font size (slightly smaller than day numbers)
+    const scaledHeaderFontSize = `${(cellSize / 46) * 0.75}rem`;
+    // Scale dot size based on cell size (base: 46px = 10px dot)
+    const scaledDotSize = Math.round((cellSize / 46) * 10);
 
     // Determine if toggle should be shown
     const showToggle = selectMode === 'all';
@@ -333,11 +351,20 @@ export default function Calendar({
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center' }}>
                     {/* Day header */}
                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-                        <Box key={d} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48, p: 0 }}>
+                        <Box
+                            key={d}
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: calendarGridBoxSize,
+                                p: 0
+                            }}
+                        >
                             {loading ? (
-                                <Skeleton variant="text" width={20} height={20} sx={{ mx: 'auto' }} />
+                                <Skeleton variant="text" width={scaledDotSize * 2} height={scaledDotSize * 2} sx={{ mx: 'auto' }} />
                             ) : (
-                                <Typography variant="caption" sx={{ lineHeight: 1 }}>{d}</Typography>
+                                <Typography sx={{ lineHeight: 1, fontSize: scaledHeaderFontSize }}>{d}</Typography>
                             )}
                         </Box>
                     ))}
@@ -369,7 +396,7 @@ export default function Calendar({
                             return (
                                 <React.Fragment key={wi}>
                                     {(() => {
-                                        const segs: Array<{ start: number; end: number }> = [];
+                                        const segs: { start: number; end: number }[] = [];
                                         let inSeg = false;
                                         let segStart = 0;
                                         week.forEach((d, idx) => {
@@ -454,7 +481,7 @@ export default function Calendar({
                                                     }}
                                                     // Show filled/contained when selected in single mode or when this day is a range endpoint.
                                                     variant={isActive ? 'contained' : 'text'}
-                                                    sx={(theme) => ({
+                                                    sx={{
                                                         minWidth: calendarGridButtonSize,
                                                         width: calendarGridButtonSize,
                                                         height: calendarGridButtonSize,
@@ -462,10 +489,10 @@ export default function Calendar({
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
                                                         // Fill the button for single-selected day or range endpoints; interior in-range days remain unfilled.
-                                                        bgcolor: isActive ? theme.palette.primary.main : undefined,
+                                                        bgcolor: isActive ? 'primary.main' : undefined,
                                                         color: isActive ?
-                                                            theme.palette.primary.contrastText : (inMonth ?
-                                                                undefined : theme.palette.text.disabled),
+                                                            'primary.contrastText' : (inMonth ?
+                                                                'text.primary' : 'action.disabled'),
                                                         borderRadius: '50%',
                                                         p: 0,
                                                         boxSizing: 'border-box',
@@ -473,22 +500,32 @@ export default function Calendar({
                                                         border: isToday ? '1px solid grey' : undefined,
                                                         '&:hover': {
                                                             bgcolor: isSelectedSingle ?
-                                                                theme.palette.primary.dark : undefined
+                                                                'primary.dark' : undefined
                                                         }
-                                                    })}
+                                                    }}
                                                 >
-                                                    <Typography variant='body2' sx={{ lineHeight: 1 }}>
+                                                    <Typography
+                                                        variant='body2'
+                                                        sx={{ lineHeight: 1, fontSize: scaledFontSize }}
+                                                    >
                                                         {day.getDate()}
                                                     </Typography>
                                                 </Button>
 
                                                 {/* Event badge inside the button container (absolute so it doesn't affect layout) */}
                                                 {todaysEvents.length > 0 && (
-                                                    <Box sx={{ position: 'absolute', right: 2, top: 10, zIndex: 2 }}>
+                                                    <Box sx={{
+                                                        position: 'absolute',
+                                                        right: Math.round(scaledDotSize / 2),
+                                                        top: Math.round(scaledDotSize / 2),
+                                                        zIndex: 2
+                                                    }}>
                                                         <Box sx={(theme) => ({
-                                                            width: 10, height: 10, borderRadius: '50%',
-                                                            backgroundColor: todaysEvents[0].color || theme.palette.primary.main,
-                                                            boxShadow: `0 0 0 3px ${alpha(theme.palette.background.default, 0.06)}`
+                                                            width: scaledDotSize,
+                                                            height: scaledDotSize,
+                                                            borderRadius: '50%',
+                                                            backgroundColor: todaysEvents[0].color || 'primary.main',
+                                                            boxShadow: `0 0 0 1px ${alpha(theme.palette.background.default, 0.06)}`
                                                         })} />
                                                     </Box>
                                                 )}

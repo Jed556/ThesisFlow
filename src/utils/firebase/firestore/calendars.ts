@@ -218,6 +218,76 @@ export async function createPersonalCalendarForUser(
 }
 
 /**
+ * Load or seed a personal calendar for a user
+ * If the personal calendar exists, returns it; otherwise creates it
+ * @param uid - User's Firebase UID
+ * @param userRole - User's role (determines path level)
+ * @param context - Path context with year/department/course
+ * @returns Result with the calendar and whether it was newly seeded
+ */
+export async function loadOrSeedPersonalCalendar(
+    uid: string,
+    userRole: UserRole,
+    context: { year?: string; department?: string; course?: string }
+): Promise<LoadOrSeedCalendarResult> {
+    const year = context.year || DEFAULT_YEAR;
+
+    // Build the path context based on role (same logic as createPersonalCalendarForUser)
+    let pathContext: CalendarPathContext;
+    if (userRole === 'admin' || userRole === 'developer') {
+        pathContext = { year, userId: uid };
+    } else if (['head', 'statistician', 'editor', 'adviser', 'panel', 'moderator'].includes(userRole)) {
+        if (!context.department) {
+            // If department is missing, create at year level
+            pathContext = { year, userId: uid };
+        } else {
+            pathContext = { year, department: context.department, userId: uid };
+        }
+    } else if (context.department && context.course) {
+        // Student or other course-level roles
+        pathContext = { year, department: context.department, course: context.course, userId: uid };
+    } else if (context.department) {
+        pathContext = { year, department: context.department, userId: uid };
+    } else {
+        pathContext = { year, userId: uid };
+
+    }
+
+    // Check if personal calendar exists
+    const existing = await getHierarchicalCalendar('personal', pathContext);
+    if (existing) {
+        return { calendar: existing, seeded: false };
+    }
+
+    // Create new personal calendar
+    const calendar: Calendar = {
+        id: CALENDAR_METADATA_DOC,
+        name: 'Personal',
+        description: 'Your personal calendar',
+        level: 'personal',
+        color: DEFAULT_COLORS.personal,
+        pathContext,
+        ownerUid: uid,
+        createdBy: uid,
+        createdAt: new Date().toISOString(),
+        lastModified: new Date().toISOString(),
+        permissions: [
+            {
+                uid,
+                canView: true,
+                canEdit: true,
+                canDelete: false,
+            },
+        ],
+        isVisible: true,
+        isDefault: true,
+    };
+
+    await setHierarchicalCalendar(calendar);
+    return { calendar, seeded: true };
+}
+
+/**
  * Create a group calendar when a new group is created
  * @param groupContext - Path context including year/department/course/groupId
  * @param groupName - Display name for the group

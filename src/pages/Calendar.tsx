@@ -1,37 +1,35 @@
 import * as React from 'react';
 import {
-    Box, Card, CardContent, Typography, Button, IconButton, FormControl, InputLabel, Select,
-    MenuItem, TextField, Stack, Tooltip, Divider, Autocomplete, Dialog, DialogTitle,
-    DialogContent, DialogActions, Menu, Checkbox, FormControlLabel
+    Box, Card, CardContent, Typography, Button, IconButton, TextField, Divider,
+    Menu, MenuItem, Checkbox, FormControlLabel, Autocomplete
 } from '@mui/material';
 import {
-    CalendarToday, ViewList, Add, Upload, Download, AddCircle, ExpandMore
+    CalendarToday, ViewList, Add, Upload, Download, ExpandMore, AddCircle
 } from '@mui/icons-material';
-import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { Avatar, Name } from '../components/Avatar';
-import { EventCard, Calendar } from '../components/Calendar';
+import {
+    EventCard, EventsRail, Calendar, EventDialog, DeleteEventDialog, NewCalendarDialog
+} from '../components/Calendar';
 import { AnimatedPage, AnimatedList } from '../components/Animate';
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
 import type {
-    ScheduleEvent, EventStatus, EventLocation, Calendar as CalendarType,
-    CalendarPermission,
+    ScheduleEvent, EventStatus, EventLocation, Calendar as CalendarType, CalendarPermission
 } from '../types/schedule';
 import type { UserProfile } from '../types/profile';
 import { format, isWithinInterval } from 'date-fns';
 import { DEFAULT_YEAR } from '../config/firestore';
 import {
-    getUserCalendarsHierarchical, setHierarchicalCalendar, seedAllCalendars,
+    getUserCalendarsHierarchical, setHierarchicalCalendar, seedAllCalendars, loadOrSeedPersonalCalendar
 } from '../utils/firebase/firestore/calendars';
 import {
     setCalendarEvent, deleteCalendarEvent, getEventsFromCalendars,
 } from '../utils/firebase/firestore/calendarEvents';
 import { findAllUsers } from '../utils/firebase/firestore/user';
-import { getAllGroups } from '../utils/firebase/firestore/groups';
+import { getAllGroups, getGroupsByMember } from '../utils/firebase/firestore/groups';
 
 export const metadata: NavigationItem = {
     index: 2,
@@ -53,6 +51,26 @@ const DEFAULT_CALENDAR_COLORS = [
 // Default fallback color for events
 const defaultEventColor = '#bdbdbd';
 
+
+/**
+ * Generate a unique key for a calendar based on its level and pathContext
+ * This is needed because all calendars have id='metadata' in Firestore
+ */
+function getCalendarKey(cal: CalendarType): string {
+    const parts = [cal.level, cal.pathContext.year];
+    if (cal.pathContext.department) parts.push(cal.pathContext.department);
+    if (cal.pathContext.course) parts.push(cal.pathContext.course);
+    if (cal.pathContext.groupId) parts.push(cal.pathContext.groupId);
+    if (cal.pathContext.userId) parts.push(cal.pathContext.userId);
+    return parts.join('|');
+}
+
+/**
+ * Find a calendar by its unique key
+ */
+function findCalendarByKey(calendars: CalendarType[], key: string): CalendarType | undefined {
+    return calendars.find(cal => getCalendarKey(cal) === key);
+}
 
 /**
  * Find the calendar that an event belongs to based on its pathContext
@@ -174,6 +192,7 @@ export default function CalendarPage() {
     const [events, setEvents] = React.useState<(ScheduleEvent & { id: string })[]>([]);
     const [calendars, setCalendars] = React.useState<CalendarType[]>([]);
     const [selectedCalendarIds, setSelectedCalendarIds] = React.useState<string[]>([]);
+    const [userGroupIds, setUserGroupIds] = React.useState<string[]>([]); // User's group memberships
     const [loading, setLoading] = React.useState(true);
 
     // Dialog states
@@ -288,18 +307,30 @@ export default function CalendarPage() {
                     // Store all users for calendar sharing
                     setAllUsers(allUsers);
 
+                    // Get admin's own group memberships for writable calendars
+                    const uid = session.user.uid;
+                    const adminGroupIds = allGroups
+                        .filter(g =>
+                            g.members?.leader === uid ||
+                            g.members?.members?.includes(uid)
+                        )
+                        .map(g => g.id);
+
+                    // Store admin's group IDs for writableCalendars useMemo
+                    setUserGroupIds(adminGroupIds);
+
                     // Load ALL calendars for admin/developer (pass allUsers and allGroups)
                     const userCalendars = await getUserCalendarsHierarchical(
                         session.user.uid,
                         session.user.role,
                         userContext,
-                        session.user.groups || [],
+                        adminGroupIds,
                         allUsers.map(u => ({ department: u.department, course: u.course })),
                         allGroups.map(g => ({ id: g.id, department: g.department, course: g.course }))
                     );
 
                     setCalendars(userCalendars);
-                    setSelectedCalendarIds(userCalendars.map((cal: CalendarType) => cal.id));
+                    setSelectedCalendarIds(userCalendars.map((cal: CalendarType) => getCalendarKey(cal)));
 
                     // Load events from all calendars
                     const fetchedEvents = await getEventsFromCalendars(userCalendars);
@@ -317,16 +348,39 @@ export default function CalendarPage() {
                     console.error('Error seeding calendars:', error);
                 }
             } else {
-                // Regular user: load calendars based on their hierarchy
+                // Regular user: seed personal calendar and load calendars based on their hierarchy
+                try {
+                    // Seed personal calendar for user if it doesn't exist
+                    await loadOrSeedPersonalCalendar(
+                        session.user.uid,
+                        session.user.role,
+                        userContext
+                    );
+                } catch (error) {
+                    console.error('Error seeding personal calendar:', error);
+                }
+
+                // Fetch user's groups from Firestore (session.user.groups is not populated)
+                let fetchedGroupIds: string[] = [];
+                try {
+                    const userGroups = await getGroupsByMember(session.user.uid);
+                    fetchedGroupIds = userGroups.map(g => g.id);
+                } catch (error) {
+                    console.error('Error fetching user groups:', error);
+                }
+
+                // Store group IDs for writableCalendars useMemo
+                setUserGroupIds(fetchedGroupIds);
+
                 const userCalendars = await getUserCalendarsHierarchical(
                     session.user.uid,
                     session.user.role,
                     userContext,
-                    session.user.groups || []
+                    fetchedGroupIds
                 );
 
                 setCalendars(userCalendars);
-                setSelectedCalendarIds(userCalendars.map((cal: CalendarType) => cal.id));
+                setSelectedCalendarIds(userCalendars.map((cal: CalendarType) => getCalendarKey(cal)));
 
                 // Load events from user's calendars
                 const fetchedEvents = await getEventsFromCalendars(userCalendars);
@@ -357,7 +411,9 @@ export default function CalendarPage() {
         return events.filter(event => {
             // Filter by selected calendars - find the calendar matching event's pathContext
             const eventCalendar = findEventCalendar(event, calendars);
-            const matchesCalendar = eventCalendar ? selectedCalendarIds.includes(eventCalendar.id) : false;
+            const matchesCalendar = eventCalendar
+                ? selectedCalendarIds.includes(getCalendarKey(eventCalendar))
+                : false;
 
             const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 event.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -395,6 +451,49 @@ export default function CalendarPage() {
         }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
     }, [searchTerm, selectedCalendarIds, filterStatuses, events, selectedRange, selectedDate, calendars]);
 
+    // Get calendars user can add events to based on role permissions
+    // - Personal: User can modify their own
+    // - Group: Group members can add events  
+    // - Department: Only heads and moderators can modify
+    // - Global (Institutional): Only admins can modify
+    const writableCalendars = React.useMemo(() => {
+        const role = session?.user?.role;
+        const uid = session?.user?.uid;
+
+        if (role === 'admin' || role === 'developer') {
+            return calendars; // Can add to any calendar
+        }
+
+        return calendars.filter(cal => {
+            // Personal calendar: only owner can modify
+            if (cal.level === 'personal') {
+                return cal.ownerUid === uid;
+            }
+
+            // Group calendar: only group members can add events
+            if (cal.level === 'group') {
+                return cal.groupId && userGroupIds.includes(cal.groupId);
+            }
+
+            // Department calendar: only heads and moderators can modify
+            if (cal.level === 'department') {
+                return role === 'head' || role === 'moderator';
+            }
+
+            // Course calendar: heads, moderators can modify
+            if (cal.level === 'course') {
+                return role === 'head' || role === 'moderator';
+            }
+
+            // Global (institutional): only admins can modify (already handled above)
+            if (cal.level === 'global') {
+                return false;
+            }
+
+            return false;
+        });
+    }, [calendars, session?.user?.role, session?.user?.uid, userGroupIds]);
+
     const handleOpenDialog = (event?: ScheduleEvent & { id: string }) => {
         if (event) {
             setEditingEvent(event);
@@ -409,7 +508,7 @@ export default function CalendarPage() {
             );
             setFormData({
                 ...event,
-                selectedCalendarId: matchingCalendar?.id || '',
+                selectedCalendarId: matchingCalendar ? getCalendarKey(matchingCalendar) : '',
             });
         } else {
             setEditingEvent(null);
@@ -417,13 +516,14 @@ export default function CalendarPage() {
             const startDate = selectedRange?.start || selectedDate || new Date();
             const endDate = selectedRange?.end || selectedDate || new Date();
 
-            // Get default calendar (first personal calendar or first available)
-            const defaultCalendar = calendars.find(cal => cal.level === 'personal') || calendars[0];
+            // Get default calendar from writable calendars (prefer personal, then first writable)
+            const defaultCalendar = writableCalendars.find(cal => cal.level === 'personal')
+                || writableCalendars[0];
 
             setFormData({
                 title: '',
                 description: '',
-                selectedCalendarId: defaultCalendar?.id || '',
+                selectedCalendarId: defaultCalendar ? getCalendarKey(defaultCalendar) : '',
                 status: 'scheduled',
                 startDate: startDate instanceof Date && !isNaN(startDate.getTime())
                     ? format(startDate, "yyyy-MM-dd'T'HH:mm")
@@ -431,7 +531,7 @@ export default function CalendarPage() {
                 endDate: endDate instanceof Date && !isNaN(endDate.getTime())
                     ? format(endDate, "yyyy-MM-dd'T'HH:mm")
                     : '',
-                color: defaultEventColor,
+                color: defaultCalendar?.color || defaultEventColor,
                 tags: [],
                 location: {
                     type: 'physical',
@@ -442,6 +542,10 @@ export default function CalendarPage() {
                 },
                 createdBy: session?.user?.uid || ''
             });
+            // Sync color picker with calendar color
+            if (defaultCalendar?.color) {
+                setColorPickerValue(defaultCalendar.color);
+            }
         }
         setOpenDialog(true);
     };
@@ -449,15 +553,17 @@ export default function CalendarPage() {
     const handleCloseDialog = () => {
         setOpenDialog(false);
         setEditingEvent(null);
-        const defaultCalendar = calendars.find(cal => cal.level === 'personal') || calendars[0];
+        // Get default calendar from writable calendars (prefer personal, then first writable)
+        const defaultCalendar = writableCalendars.find(cal => cal.level === 'personal')
+            || writableCalendars[0];
         setFormData({
             title: '',
             description: '',
-            selectedCalendarId: defaultCalendar?.id || '',
+            selectedCalendarId: defaultCalendar ? getCalendarKey(defaultCalendar) : '',
             status: 'scheduled',
             startDate: '',
             endDate: '',
-            color: defaultEventColor,
+            color: defaultCalendar?.color || defaultEventColor,
             tags: [],
             location: {
                 type: 'physical',
@@ -482,7 +588,7 @@ export default function CalendarPage() {
             }
 
             // Find the selected calendar to get its level and pathContext
-            const selectedCalendar = calendars.find(cal => cal.id === formData.selectedCalendarId);
+            const selectedCalendar = findCalendarByKey(calendars, formData.selectedCalendarId);
             if (!selectedCalendar) {
                 showNotification('Selected calendar not found', 'error');
                 return;
@@ -633,7 +739,7 @@ export default function CalendarPage() {
         if (selectedCalendarIds.length === calendars.length) {
             setSelectedCalendarIds([]);
         } else {
-            setSelectedCalendarIds(calendars.map(cal => cal.id));
+            setSelectedCalendarIds(calendars.map(cal => getCalendarKey(cal)));
         }
     };
 
@@ -718,22 +824,6 @@ export default function CalendarPage() {
         }
     };
 
-    // Get calendars user can add events to
-    const writableCalendars = React.useMemo(() => {
-        const role = session?.user?.role;
-        const uid = session?.user?.uid;
-
-        if (role === 'admin' || role === 'developer') {
-            return calendars; // Can add to any calendar
-        }
-
-        return calendars.filter(cal => {
-            if (cal.level === 'personal' && cal.ownerUid === uid) return true;
-            if (cal.level === 'group') return true; // Students/editors can add to group calendars
-            return false;
-        });
-    }, [calendars, session?.user?.role, session?.user?.uid]);
-
     return (
         <AnimatedPage variant="fade" duration="standard">
             <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -795,11 +885,15 @@ export default function CalendarPage() {
                                     </MenuItem>
                                     <Divider />
                                     {calendars.map(calendar => (
-                                        <MenuItem key={calendar.id} onClick={() => handleToggleCalendar(calendar.id)} dense>
+                                        <MenuItem
+                                            key={getCalendarKey(calendar)}
+                                            onClick={() => handleToggleCalendar(getCalendarKey(calendar))}
+                                            dense
+                                        >
                                             <FormControlLabel
                                                 control={
                                                     <Checkbox
-                                                        checked={selectedCalendarIds.includes(calendar.id)}
+                                                        checked={selectedCalendarIds.includes(getCalendarKey(calendar))}
                                                         sx={{
                                                             color: calendar.color,
                                                             '&.Mui-checked': {
@@ -846,74 +940,63 @@ export default function CalendarPage() {
                             </Box>
 
                             {/* Calendar view content */}
-                            <Box>
+                            <Box sx={{ height: 'calc(100vh - 220px)', minHeight: 500 }}>
                                 {tabValue === 0 ? (
-                                    <Card>
-                                        <CardContent>
-                                            <Box
-                                                sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                                <Typography variant="h6">Calendar View</Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
-                                                <Calendar
-                                                    events={events}
-                                                    selected={selectedDate}
-                                                    onSelect={(d) => {
-                                                        setSelectedDate(d);
-                                                        setSelectedRange(null);
-                                                    }}
-                                                    onEventClick={(ev) => setSelectedDate(new Date(ev.startDate))}
-                                                    onRangeSelect={handleRangeSelect}
-                                                />
-                                                <Box sx={{ width: { xs: '100%', md: '67%' } }}>
-                                                    <Typography variant="subtitle1" gutterBottom>
-                                                        {selectedRange
-                                                            // eslint-disable-next-line max-len
-                                                            ? `Events from ${format(selectedRange.start, 'MMM d')} to ${format(selectedRange.end, 'MMM d')}`
-                                                            : `Events on ${selectedDate ? selectedDate.toLocaleDateString() : '—'}`
-                                                        }
-                                                    </Typography>
-                                                    {loading ? (
-                                                        <Typography variant="body2" color="text.secondary">
-                                                            Loading events...
-                                                        </Typography>
-                                                    ) : selectedDate || selectedRange ? (
-                                                        filteredEvents.length > 0 ? (
-                                                            <AnimatedList variant="slideUp" staggerDelay={40}>
-                                                                {filteredEvents.map(ev => {
-                                                                    const canEdit = canModifyEvent(
-                                                                        ev,
-                                                                        session?.user?.uid ?? undefined,
-                                                                        session?.user?.role,
-                                                                    );
-                                                                    const eventCalendar = findEventCalendar(ev, calendars);
-                                                                    return (
-                                                                        <EventCard
-                                                                            key={ev.id}
-                                                                            event={ev}
-                                                                            calendar={eventCalendar}
-                                                                            onEdit={canEdit ? () =>
-                                                                                handleOpenDialog(ev) : undefined}
-                                                                            onDelete={canEdit ? () =>
-                                                                                handleDeleteClick(ev) : undefined}
-                                                                        />
-                                                                    );
-                                                                })}
-                                                            </AnimatedList>
-                                                        ) : (
-                                                            <Typography variant="body2" color="text.secondary">
-                                                                No events for this selection.
-                                                            </Typography>
-                                                        )
-                                                    ) : (
-                                                        <Typography variant="body2" color="text.secondary">
-                                                            Select a date or range to see events.
-                                                        </Typography>
-                                                    )}
-                                                </Box>
-                                            </Box>
-                                        </CardContent>
-                                    </Card>
+                                    <Box
+                                        sx={{
+                                            display: 'flex',
+                                            flexDirection: { xs: 'column', md: 'row' },
+                                            gap: 3,
+                                            height: '100%',
+                                        }}
+                                    >
+                                        {/* Calendar Column */}
+                                        <Box
+                                            sx={{
+                                                flexShrink: 0,
+                                                width: { xs: '100%', md: 'auto' },
+                                                height: { xs: 'auto', md: '100%' },
+                                            }}
+                                        >
+                                            <Calendar
+                                                cellSize={60}
+                                                cellPadding="0.3rem"
+                                                events={events}
+                                                selected={selectedDate}
+                                                onSelect={(d) => {
+                                                    setSelectedDate(d);
+                                                    setSelectedRange(null);
+                                                }}
+                                                onEventClick={(ev) => setSelectedDate(new Date(ev.startDate))}
+                                                onRangeSelect={handleRangeSelect}
+                                            />
+                                        </Box>
+
+                                        {/* Events Rail Column */}
+                                        <Box
+                                            sx={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                                height: { xs: 400, md: '100%' },
+                                            }}
+                                        >
+                                            <EventsRail
+                                                events={filteredEvents}
+                                                calendars={calendars}
+                                                selectedDate={selectedDate}
+                                                selectedRange={selectedRange}
+                                                loading={loading}
+                                                findEventCalendar={findEventCalendar}
+                                                onEdit={handleOpenDialog}
+                                                onDelete={handleDeleteClick}
+                                                canModifyEvent={(event) => canModifyEvent(
+                                                    event,
+                                                    session?.user?.uid ?? undefined,
+                                                    session?.user?.role,
+                                                )}
+                                            />
+                                        </Box>
+                                    </Box>
                                 ) : (
                                     <Box>
                                         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -959,324 +1042,35 @@ export default function CalendarPage() {
                         </Box>
 
                         {/* Event Dialog */}
-                        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                            <DialogTitle>
-                                {editingEvent ? 'Edit Event' : 'Create Event'}
-                            </DialogTitle>
-                            <DialogContent>
-                                <Stack spacing={2} sx={{ mt: 1 }}>
-                                    <TextField
-                                        label="Title"
-                                        value={formData.title}
-                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                        required
-                                        fullWidth
-                                    />
-                                    <TextField
-                                        label="Description"
-                                        value={formData.description}
-                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                        multiline
-                                        rows={3}
-                                        fullWidth
-                                    />
-                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                                        <FormControl fullWidth required>
-                                            <InputLabel>Calendar</InputLabel>
-                                            <Select
-                                                value={formData.selectedCalendarId}
-                                                label="Calendar"
-                                                onChange={(e) => setFormData({ ...formData, selectedCalendarId: e.target.value })}
-                                            >
-                                                {writableCalendars.map(cal => (
-                                                    <MenuItem key={cal.id} value={cal.id}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                            <Box
-                                                                sx={{
-                                                                    width: 12,
-                                                                    height: 12,
-                                                                    borderRadius: '50%',
-                                                                    backgroundColor: cal.color
-                                                                }}
-                                                            />
-                                                            {cal.name}
-                                                        </Box>
-                                                    </MenuItem>
-                                                ))}
-                                            </Select>
-                                        </FormControl>
-                                        {(session?.user?.role === 'admin' || session?.user?.role === 'developer') && (
-                                            <Tooltip title="Create New Calendar">
-                                                <IconButton
-                                                    onClick={() => setOpenNewCalendarDialog(true)}
-                                                    sx={{ mt: 1 }}
-                                                    color="primary"
-                                                >
-                                                    <AddCircle />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                    </Box>
-                                    <Box sx={{ display: 'flex', gap: 2 }}>
-                                        <FormControl fullWidth>
-                                            <InputLabel>Status</InputLabel>
-                                            <Select
-                                                value={formData.status}
-                                                label="Status"
-                                                onChange={(e) => setFormData({ ...formData, status: e.target.value as EventStatus })}
-                                            >
-                                                <MenuItem value="scheduled">Scheduled</MenuItem>
-                                                <MenuItem value="confirmed">Confirmed</MenuItem>
-                                                <MenuItem value="cancelled">Cancelled</MenuItem>
-                                                <MenuItem value="completed">Completed</MenuItem>
-                                                <MenuItem value="rescheduled">Rescheduled</MenuItem>
-                                            </Select>
-                                        </FormControl>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Tooltip title="Event Color">
-                                                <Box
-                                                    sx={{
-                                                        width: 56,
-                                                        height: 56,
-                                                        border: '2px solid',
-                                                        borderColor: 'divider',
-                                                        backgroundColor: formData.color || defaultEventColor,
-                                                        borderRadius: 1,
-                                                        flexShrink: 0
-                                                    }}
-                                                />
-                                            </Tooltip>
-                                            <input
-                                                type="color"
-                                                value={colorPickerValue}
-                                                onChange={(e) => handleColorChange(e.target.value)}
-                                                style={{
-                                                    width: '56px',
-                                                    height: '56px',
-                                                    border: '2px solid',
-                                                    borderColor: '#e0e0e0',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer'
-                                                }}
-                                            />
-                                        </Box>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', gap: 2 }}>
-                                        <TextField
-                                            label="Start Date"
-                                            type="date"
-                                            value={formData.startDate ? formData.startDate.split('T')[0] : ''}
-                                            onChange={(e) => {
-                                                const time = formData.startDate?.split('T')[1] || '09:00';
-                                                setFormData({ ...formData, startDate: `${e.target.value}T${time}` });
-                                            }}
-                                            required
-                                            fullWidth
-                                            slotProps={{
-                                                inputLabel: { shrink: true },
-                                                input: {
-                                                    endAdornment: (
-                                                        <IconButton
-                                                            edge="end"
-                                                            onClick={() => setOpenCalendarDialog(true)}
-                                                            size="small"
-                                                        >
-                                                            <CalendarToday fontSize="small" />
-                                                        </IconButton>
-                                                    )
-                                                }
-                                            }}
-                                        />
-                                        <TextField
-                                            label="End Date"
-                                            type="date"
-                                            value={formData.endDate ? formData.endDate.split('T')[0] : ''}
-                                            onChange={(e) => {
-                                                const time = formData.endDate?.split('T')[1] || '10:00';
-                                                setFormData({ ...formData, endDate: `${e.target.value}T${time}` });
-                                            }}
-                                            fullWidth
-                                            slotProps={{
-                                                inputLabel: { shrink: true },
-                                                input: {
-                                                    endAdornment: (
-                                                        <IconButton
-                                                            edge="end"
-                                                            onClick={() => setOpenCalendarDialog(true)}
-                                                            size="small"
-                                                        >
-                                                            <CalendarToday fontSize="small" />
-                                                        </IconButton>
-                                                    )
-                                                }
-                                            }}
-                                        />
-                                    </Box>
-                                    <Box sx={{ display: 'flex', gap: 2 }}>
-                                        <MobileTimePicker
-                                            label="Start Time"
-                                            value={formData.startDate ? new Date(formData.startDate) : null}
-                                            onChange={(newValue) => {
-                                                if (newValue) {
-                                                    const date = formData.startDate?.split('T')[0] || format(new Date(), 'yyyy-MM-dd');
-                                                    const time = format(newValue, 'HH:mm');
-                                                    setFormData({ ...formData, startDate: `${date}T${time}` });
-                                                }
-                                            }}
-                                            openTo="hours"
-                                            views={['hours', 'minutes']}
-                                            slotProps={{
-                                                textField: {
-                                                    fullWidth: true,
-                                                    required: true
-                                                }
-                                            }}
-                                        />
-                                        <MobileTimePicker
-                                            label="End Time"
-                                            value={formData.endDate ? new Date(formData.endDate) : null}
-                                            onChange={(newValue) => {
-                                                if (newValue) {
-                                                    const date = formData.endDate?.split('T')[0] || format(new Date(), 'yyyy-MM-dd');
-                                                    const time = format(newValue, 'HH:mm');
-                                                    setFormData({ ...formData, endDate: `${date}T${time}` });
-                                                }
-                                            }}
-                                            openTo="hours"
-                                            views={['hours', 'minutes']}
-                                            slotProps={{
-                                                textField: {
-                                                    fullWidth: true
-                                                }
-                                            }}
-                                        />
-                                    </Box>
-                                    <Autocomplete
-                                        multiple
-                                        freeSolo
-                                        options={allTags}
-                                        value={formData.tags || []}
-                                        onChange={(_, v) => setFormData({ ...formData, tags: v })}
-                                        renderInput={(params) =>
-                                            <TextField {...params} label="Tags" placeholder="Add or select tags..." />}
-                                    />
-                                    <Box>
-                                        <Typography variant="subtitle2" gutterBottom>Location</Typography>
-                                        <Stack spacing={2}>
-                                            <FormControl fullWidth>
-                                                <InputLabel>Type</InputLabel>
-                                                <Select
-                                                    value={formData.location?.type || 'physical'}
-                                                    label="Type"
-                                                    onChange={(e) => setFormData({
-                                                        ...formData,
-                                                        location: {
-                                                            type: e.target.value as 'physical' | 'virtual' | 'hybrid',
-                                                            address: formData.location?.address,
-                                                            room: formData.location?.room,
-                                                            url: formData.location?.url,
-                                                            platform: formData.location?.platform
-                                                        }
-                                                    })}
-                                                >
-                                                    <MenuItem value="physical">Physical</MenuItem>
-                                                    <MenuItem value="virtual">Virtual</MenuItem>
-                                                    <MenuItem value="hybrid">Hybrid</MenuItem>
-                                                </Select>
-                                            </FormControl>
-                                            {(formData.location?.type === 'physical' || formData.location?.type === 'hybrid') && (
-                                                <>
-                                                    <TextField
-                                                        label="Address"
-                                                        value={formData.location?.address || ''}
-                                                        onChange={(e) => setFormData({
-                                                            ...formData,
-                                                            location: {
-                                                                ...formData.location,
-                                                                type: formData.location?.type || 'physical',
-                                                                address: e.target.value
-                                                            }
-                                                        })}
-                                                        required
-                                                        fullWidth
-                                                    />
-                                                    <TextField
-                                                        label="Room"
-                                                        value={formData.location?.room || ''}
-                                                        onChange={(e) => setFormData({
-                                                            ...formData,
-                                                            location: {
-                                                                ...formData.location,
-                                                                type: formData.location?.type || 'physical',
-                                                                room: e.target.value
-                                                            }
-                                                        })}
-                                                        required
-                                                        fullWidth
-                                                    />
-                                                </>
-                                            )}
-                                            {(formData.location?.type === 'virtual' || formData.location?.type === 'hybrid') && (
-                                                <>
-                                                    <TextField
-                                                        label="URL"
-                                                        value={formData.location?.url || ''}
-                                                        onChange={(e) => setFormData({
-                                                            ...formData,
-                                                            location: {
-                                                                ...formData.location,
-                                                                type: formData.location?.type || 'virtual',
-                                                                url: e.target.value
-                                                            }
-                                                        })}
-                                                        placeholder="https://meet.google.com/..."
-                                                        required
-                                                        fullWidth
-                                                    />
-                                                    <TextField
-                                                        label="Platform"
-                                                        value={formData.location?.platform || ''}
-                                                        onChange={(e) => setFormData({
-                                                            ...formData,
-                                                            location: {
-                                                                ...formData.location,
-                                                                type: formData.location?.type || 'virtual',
-                                                                platform: e.target.value
-                                                            }
-                                                        })}
-                                                        placeholder="Zoom, Teams, Google Meet, etc."
-                                                        required
-                                                        fullWidth
-                                                    />
-                                                </>
-                                            )}
-                                        </Stack>
-                                    </Box>
-                                </Stack>
-                            </DialogContent>
-                            <DialogActions>
-                                <Button onClick={handleCloseDialog}>Cancel</Button>
-                                <Button onClick={handleSaveEvent} variant="contained">
-                                    {editingEvent ? 'Update' : 'Create'}
-                                </Button>
-                            </DialogActions>
-                        </Dialog>
+                        <EventDialog
+                            open={openDialog}
+                            onClose={handleCloseDialog}
+                            onSave={handleSaveEvent}
+                            editingEvent={editingEvent}
+                            formData={formData}
+                            setFormData={setFormData}
+                            writableCalendars={writableCalendars}
+                            getCalendarKey={getCalendarKey}
+                            allTags={allTags}
+                            defaultEventColor={defaultEventColor}
+                            colorPickerValue={colorPickerValue}
+                            onColorChange={handleColorChange}
+                            onOpenCalendarDialog={() => setOpenCalendarDialog(true)}
+                            canCreateCalendar={
+                                session?.user?.role === 'admin' ||
+                                session?.user?.role === 'developer'
+                            }
+                            onOpenNewCalendarDialog={() => setOpenNewCalendarDialog(true)}
+                            findCalendarByKey={(key) => findCalendarByKey(calendars, key)}
+                        />
 
                         {/* Delete Confirmation Dialog */}
-                        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-                            <DialogTitle>Delete Event</DialogTitle>
-                            <DialogContent>
-                                <Typography>
-                                    Are you sure you want to delete "{eventToDelete?.title}"? This action cannot be undone.
-                                </Typography>
-                            </DialogContent>
-                            <DialogActions>
-                                <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-                                <Button onClick={handleConfirmDelete} color="error" variant="contained">
-                                    Delete
-                                </Button>
-                            </DialogActions>
-                        </Dialog>
+                        <DeleteEventDialog
+                            open={deleteConfirmOpen}
+                            onClose={() => setDeleteConfirmOpen(false)}
+                            onConfirm={handleConfirmDelete}
+                            event={eventToDelete}
+                        />
 
                         {/* Calendar Date Range Dialog */}
                         <Calendar
@@ -1290,122 +1084,25 @@ export default function CalendarPage() {
                         />
 
                         {/* New Calendar Dialog */}
-                        <Dialog open={openNewCalendarDialog} onClose={() => setOpenNewCalendarDialog(false)} maxWidth="sm" fullWidth>
-                            <DialogTitle>Create New Calendar</DialogTitle>
-                            <DialogContent>
-                                <Stack spacing={3} sx={{ mt: 1 }}>
-                                    <TextField
-                                        label="Calendar Name"
-                                        value={newCalendarName}
-                                        onChange={(e) => setNewCalendarName(e.target.value)}
-                                        required
-                                        fullWidth
-                                        autoFocus
-                                    />
-                                    <TextField
-                                        label="Description"
-                                        value={newCalendarDescription}
-                                        onChange={(e) => setNewCalendarDescription(e.target.value)}
-                                        multiline
-                                        rows={2}
-                                        fullWidth
-                                    />
-                                    <Box>
-                                        <Typography variant="body2" gutterBottom>Color</Typography>
-                                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                                            <Box
-                                                sx={{
-                                                    width: 56,
-                                                    height: 56,
-                                                    border: '2px solid',
-                                                    borderColor: 'divider',
-                                                    backgroundColor: newCalendarColor,
-                                                    borderRadius: 1,
-                                                    flexShrink: 0
-                                                }}
-                                            />
-                                            <input
-                                                type="color"
-                                                value={newCalendarColor}
-                                                onChange={(e) => setNewCalendarColor(e.target.value)}
-                                                style={{
-                                                    width: '56px',
-                                                    height: '56px',
-                                                    border: '2px solid #e0e0e0',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer'
-                                                }}
-                                            />
-                                        </Box>
-                                    </Box>
-                                    {(session?.user?.role === 'admin' || session?.user?.role === 'developer') && (
-                                        <Autocomplete<UserProfile, true, false, true>
-                                            multiple
-                                            freeSolo
-                                            options={allUsers}
-                                            value={newCalendarPermissions}
-                                            onChange={(_, value) => setNewCalendarPermissions(value)}
-                                            getOptionLabel={(option) => {
-                                                if (typeof option === 'string') return option;
-                                                return option.email || '';
-                                            }}
-                                            renderOption={(props, option) => {
-                                                if (typeof option === 'string') {
-                                                    return <li {...props}>{option}</li>;
-                                                }
-                                                const fullName = [
-                                                    option.name.prefix, option.name.first, option.name.middle,
-                                                    option.name.last, option.name.suffix
-                                                ].filter(Boolean).join(' ');
-                                                return (
-                                                    <li {...props}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-                                                            <Avatar
-                                                                uid={option.uid}
-                                                                initials={[Name.FIRST, Name.LAST]}
-                                                                size="small"
-                                                                editable={false}
-                                                            />
-                                                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                                    {fullName || option.email}
-                                                                </Typography>
-                                                                <Typography variant="caption" color="text.secondary"
-                                                                    sx={{ display: 'block' }}>
-                                                                    {option.email}
-                                                                </Typography>
-                                                            </Box>
-                                                        </Box>
-                                                    </li>
-                                                );
-                                            }}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Add People (Emails)"
-                                                    placeholder="Search by name or email..."
-                                                    helperText="Grant view/edit access to selected users"
-                                                />
-                                            )}
-                                        />
-                                    )}
-                                </Stack>
-                            </DialogContent>
-                            <DialogActions>
-                                <Button onClick={() => {
-                                    setOpenNewCalendarDialog(false);
-                                    setNewCalendarName('');
-                                    setNewCalendarDescription('');
-                                    setNewCalendarColor(DEFAULT_CALENDAR_COLORS[0]);
-                                    setNewCalendarPermissions([]);
-                                }}>
-                                    Cancel
-                                </Button>
-                                <Button onClick={handleCreateNewCalendar} variant="contained">
-                                    Create
-                                </Button>
-                            </DialogActions>
-                        </Dialog>
+                        <NewCalendarDialog
+                            open={openNewCalendarDialog}
+                            onClose={() => setOpenNewCalendarDialog(false)}
+                            onCreate={handleCreateNewCalendar}
+                            name={newCalendarName}
+                            setName={setNewCalendarName}
+                            description={newCalendarDescription}
+                            setDescription={setNewCalendarDescription}
+                            color={newCalendarColor}
+                            setColor={setNewCalendarColor}
+                            defaultColor={DEFAULT_CALENDAR_COLORS[0]}
+                            canManagePermissions={
+                                session?.user?.role === 'admin' ||
+                                session?.user?.role === 'developer'
+                            }
+                            allUsers={allUsers}
+                            permissions={newCalendarPermissions}
+                            setPermissions={setNewCalendarPermissions}
+                        />
                     </Box>
                 </Box>
             </LocalizationProvider>
