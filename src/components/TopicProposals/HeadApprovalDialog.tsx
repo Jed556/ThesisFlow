@@ -149,6 +149,10 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
     const handleAgendaChange = (depth: number) => (event: SelectChangeEvent<string>) => {
         const newValue = event.target.value;
         setValues((prev) => {
+            // If clearing a sub-agenda (empty string), truncate path to exclude this depth
+            if (!newValue && depth > 0) {
+                return { ...prev, agendaPath: prev.agendaPath.slice(0, depth) };
+            }
             // Truncate path to current depth and set new value
             const newPath = [...prev.agendaPath.slice(0, depth), newValue];
             return { ...prev, agendaPath: newPath };
@@ -216,7 +220,10 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
 
             const currentValue = values.agendaPath[depth] ?? '';
             const isDisabled = loading || (depth > 0 && !values.agendaPath[depth - 1]);
-            const labelPrefix = depth === 0 ? 'Agenda' : `Sub-Agenda Level ${depth}`;
+            const isOptional = depth > 0;
+            const labelPrefix = depth === 0
+                ? 'Agenda'
+                : `Sub-Agenda Level ${depth} (Optional)`;
 
             selectors.push(
                 <FormControl
@@ -232,6 +239,11 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
                         onChange={handleAgendaChange(depth)}
                         label={labelPrefix}
                     >
+                        {isOptional && (
+                            <MenuItem value="">
+                                <em>None</em>
+                            </MenuItem>
+                        )}
                         {agendasAtDepth.map((agenda, index) => (
                             <MenuItem key={index} value={agenda.title}>
                                 {agenda.title}

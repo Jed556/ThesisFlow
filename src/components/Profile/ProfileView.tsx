@@ -247,12 +247,12 @@ export default function ProfileView({
                                                                     {skill.name}
                                                                 </Typography>
                                                                 <Typography variant="caption" color="text.secondary">
-                                                                    {ratingLabel}/5
+                                                                    {ratingLabel}/10
                                                                 </Typography>
                                                             </Stack>
                                                             <LinearProgress
                                                                 variant="determinate"
-                                                                value={(ratingValue / 5) * 100}
+                                                                value={(ratingValue / 10) * 100}
                                                                 sx={{ height: 6, borderRadius: 999 }}
                                                             />
                                                         </Stack>

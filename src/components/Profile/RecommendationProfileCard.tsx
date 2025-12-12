@@ -14,6 +14,7 @@ export interface RecommendationProfileCardProps {
 
 /**
  * Compact expert card tailored for the recommendations grid.
+ * Shows top 3 matched skills based on thesis title similarity.
  */
 export default function RecommendationProfileCard({
     card, roleLabel, onSelect,
@@ -52,8 +53,22 @@ export default function RecommendationProfileCard({
         onSelect(card.profile);
     }, [card.profile, onSelect]);
 
-    const hasSkills = (card.profile.skillRatings?.length ?? 0) > 0;
-    const skillNames = card.profile.skillRatings?.map((s) => s.name) ?? [];
+    // Get only the best matching skill (highest similarity)
+    const topMatchedSkills = React.useMemo(() => {
+        const matched = card.matchedSkills ?? [];
+        if (matched.length === 0) return [];
+        // Only show the best matching skill (first one since they're sorted by similarity)
+        const best = matched[0];
+        // Only show if there's actual similarity, otherwise don't show any
+        if (best.similarity > 0) {
+            return [best.name];
+        }
+        // If no similarity (no thesis title), show the highest-rated skill instead
+        const byRating = [...matched].sort((a, b) => b.rating - a.rating);
+        return byRating.length > 0 ? [byRating[0].name] : [];
+    }, [card.matchedSkills]);
+
+    const hasSkills = topMatchedSkills.length > 0;
 
     return (
         <Box sx={{ position: 'relative', opacity: disabled ? 0.65 : 1, filter: disabled ? 'grayscale(0.25)' : 'none' }}>
@@ -75,7 +90,7 @@ export default function RecommendationProfileCard({
                 showEmail={true}
                 showRole={showRoleLabel}
                 showDepartment={false}
-                skills={skillNames}
+                skills={topMatchedSkills}
                 stats={stats}
                 cornerText={card.rank}
                 showDivider

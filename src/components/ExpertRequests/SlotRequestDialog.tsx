@@ -1,12 +1,9 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Dialog, DialogActions, DialogContent,
-    DialogTitle, Skeleton, Stack, TextField, Typography,
+    Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Skeleton, Stack, TextField, Typography
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    Send as SendIcon,
-    Warning as WarningIcon,
+    Add as AddIcon, Send as SendIcon, Warning as WarningIcon
 } from '@mui/icons-material';
 import { GrowTransition } from '../Animate';
 import { DEFAULT_MAX_EXPERT_SLOTS, type SlotRequestRecord } from '../../types/slotRequest';
@@ -357,6 +354,8 @@ export interface SlotRequestButtonProps {
     variant?: 'text' | 'outlined' | 'contained';
     /** Button size */
     size?: 'small' | 'medium' | 'large';
+    /** Whether the button should take the full width */
+    fullWidth?: boolean;
     /** Callback after successful submission */
     onSubmitSuccess?: () => void;
     /** Callback to navigate to skill rating page */
@@ -374,6 +373,7 @@ export function SlotRequestButton({
     currentMaxSlots,
     variant = 'outlined',
     size = 'small',
+    fullWidth = false,
     onSubmitSuccess,
     onNavigateToSkillRating,
 }: SlotRequestButtonProps) {
@@ -384,8 +384,10 @@ export function SlotRequestButton({
             <Button
                 variant={variant}
                 size={size}
+                fullWidth={fullWidth}
                 startIcon={<AddIcon />}
                 onClick={() => setDialogOpen(true)}
+                sx={fullWidth ? { flex: 1 } : undefined}
             >
                 Request More
             </Button>

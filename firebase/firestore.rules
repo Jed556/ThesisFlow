@@ -440,6 +440,22 @@ service cloud.firestore {
                 }
 
                 // ================================
+                // ADVISER SKILLS (SKILL TEMPLATES)
+                // Path: year/{year}/departments/{department}/adviserSkills/{skillId}
+                // Stores department-specific skill templates for adviser/expert ratings
+                // ================================
+
+                match /adviserSkills/{skillId} {
+                    // All authenticated users can read skill templates
+                    // (needed by experts to view/rate skills and by students to see adviser expertise)
+                    allow read: if isAuthenticated();
+                    // Only admins, developers, and heads can manage skill templates
+                    allow create: if isAdminOrDeveloper() || isHead();
+                    allow update: if isAdminOrDeveloper() || isHead();
+                    allow delete: if isAdminOrDeveloper() || isHead();
+                }
+
+                // ================================
                 // COURSES
                 // ================================
 

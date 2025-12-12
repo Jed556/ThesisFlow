@@ -1,9 +1,13 @@
 import * as React from 'react';
 import {
     Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, MenuItem, Chip, Stack, Avatar, IconButton, CircularProgress
+    TextField, MenuItem, Chip, Stack, Avatar, IconButton, CircularProgress,
+    Accordion, AccordionSummary, AccordionDetails, Rating, Divider, Skeleton,
 } from '@mui/material';
-import { People, Delete, PhotoCamera, Close } from '@mui/icons-material';
+import {
+    People, Delete, PhotoCamera, Close, ExpandMore as ExpandMoreIcon,
+    Psychology as SkillIcon,
+} from '@mui/icons-material';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
 import { GridActionsCellItem } from '@mui/x-data-grid';
 import { AnimatedPage, GrowTransition } from '../../../components/Animate';
@@ -13,15 +17,22 @@ import { useSnackbar } from '../../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../../types/navigation';
 import type { UserProfile, UserRole } from '../../../types/profile';
 import type { Session } from '../../../types/session';
+import type { ExpertSkillRating, SkillTemplateRecord } from '../../../types/skillTemplate';
+import { SKILL_RATING_LABELS } from '../../../types/skillTemplate';
 import {
     findAllUsers, findUserById, findUserByEmail, setUserProfile, updateUserProfile,
     deleteUserProfile, createPersonalCalendarForUser,
 } from '../../../utils/firebase/firestore';
+import { getActiveSkillTemplates } from '../../../utils/firebase/firestore/skillTemplates';
+import { DEFAULT_YEAR } from '../../../config/firestore';
 import { getAcademicYear } from '../../../utils/dateUtils';
 import { adminCreateUserAccount, adminDeleteUserAccount, adminUpdateUserAccount } from '../../../utils/firebase/auth/admin';
 import { importUsersFromCsv, exportUsersToCsv } from '../../../utils/csv/user';
 import { validateAvatarFile, createAvatarPreview, uploadAvatar } from '../../../utils/avatarUtils';
 import { useBackgroundJobControls, useBackgroundJobFlag } from '../../../hooks/useBackgroundJobs';
+
+/** Roles that can have skill ratings */
+const EXPERT_ROLES: UserRole[] = ['adviser', 'editor', 'statistician'];
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
@@ -96,6 +107,12 @@ export default function AdminUsersPage() {
     const [avatarPreview, setAvatarPreview] = React.useState<string>('');
     const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
 
+    // Skills state for experts
+    const [departmentSkills, setDepartmentSkills] = React.useState<SkillTemplateRecord[]>([]);
+    const [skillRatings, setSkillRatings] = React.useState<ExpertSkillRating[]>([]);
+    const [skillsLoading, setSkillsLoading] = React.useState(false);
+    const [skillsExpanded, setSkillsExpanded] = React.useState(false);
+
     // Track if component is mounted to prevent reloads after navigation
     const isMountedRef = React.useRef(true);
     React.useEffect(() => {
@@ -167,6 +184,10 @@ export default function AdminUsersPage() {
         setFormErrors({});
         setAvatarFile(null);
         setAvatarPreview('');
+        // Reset skills state
+        setDepartmentSkills([]);
+        setSkillRatings([]);
+        setSkillsExpanded(false);
     };
 
     async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -217,6 +238,66 @@ export default function AdminUsersPage() {
         setAvatarPreview('');
         setFormData({ ...formData, avatar: '' });
     };
+
+    // Load department skills when dialog opens for expert roles
+    React.useEffect(() => {
+        const isExpertRole = EXPERT_ROLES.includes(formData.role);
+        const hasDepartment = !!formData.department?.trim();
+
+        if (dialogOpen && isExpertRole && hasDepartment) {
+            setSkillsLoading(true);
+            getActiveSkillTemplates(DEFAULT_YEAR, formData.department!.trim())
+                .then((skills) => {
+                    setDepartmentSkills(skills);
+                    // Initialize ratings from existing user data or empty
+                    if (editMode && selectedUser?.skillRatings) {
+                        setSkillRatings(selectedUser.skillRatings);
+                    } else if (formData.skillRatings) {
+                        setSkillRatings(formData.skillRatings);
+                    } else {
+                        setSkillRatings([]);
+                    }
+                })
+                .catch((err) => {
+                    console.error('Failed to load department skills:', err);
+                    setDepartmentSkills([]);
+                })
+                .finally(() => setSkillsLoading(false));
+        } else {
+            setDepartmentSkills([]);
+            setSkillRatings([]);
+        }
+    }, [dialogOpen, formData.role, formData.department, editMode, selectedUser?.skillRatings]);
+
+    /**
+     * Update a skill rating for the current user
+     */
+    function handleSkillRatingChange(skillId: string, skillName: string, rating: number) {
+        setSkillRatings((prev) => {
+            const existing = prev.find((r) => r.skillId === skillId);
+            if (existing) {
+                return prev.map((r) =>
+                    r.skillId === skillId
+                        ? { ...r, rating, updatedAt: new Date().toISOString() }
+                        : r
+                );
+            }
+            return [
+                ...prev,
+                {
+                    skillId,
+                    name: skillName,
+                    rating,
+                    updatedAt: new Date().toISOString(),
+                },
+            ];
+        });
+    }
+
+    /**
+     * Check if user is an expert role that needs skill ratings
+     */
+    const isExpertRole = EXPERT_ROLES.includes(formData.role);
 
     function validateForm(): boolean {
         const errors: Partial<Record<keyof UserProfile | 'name.first' | 'name.last', string>> = {};
@@ -294,10 +375,13 @@ export default function AdminUsersPage() {
                 }
 
                 // STEP 2: Create Firestore entry
+                // Note: lastActive is undefined for new users, triggering first-login password change
                 const newUser: UserProfile = {
                     ...formData,
                     role: userRole,
                     avatar: formData.avatar, // Keep existing avatar URL if any
+                    // Include skill ratings for expert roles
+                    skillRatings: EXPERT_ROLES.includes(userRole) ? skillRatings : undefined,
                 };
 
                 // Build context for hierarchical path
@@ -368,6 +452,8 @@ export default function AdminUsersPage() {
                 const updatedUser: UserProfile = {
                     ...formData,
                     avatar: avatarUrl,
+                    // Include skill ratings for expert roles
+                    skillRatings: EXPERT_ROLES.includes(role) ? skillRatings : undefined,
                 };
 
                 // Update Firebase Auth if email or role changed
@@ -582,7 +668,7 @@ export default function AdminUsersPage() {
                             continue;
                         }
 
-                        // Store the UID in the profile
+                        // Store the UID in the profile (lastActive is undefined = first login)
                         const profileWithUid: UserProfile = {
                             ...profileNoPassword,
                             uid: authResult.uid ?? user.uid,
@@ -1082,6 +1168,100 @@ export default function AdminUsersPage() {
                                 fullWidth
                                 placeholder="+1 (555) 123-4567"
                             />
+
+                            {/* Skills Section - Only for expert roles */}
+                            {isExpertRole && formData.department && (
+                                <Accordion
+                                    expanded={skillsExpanded}
+                                    onChange={(_, expanded) => setSkillsExpanded(expanded)}
+                                    sx={{ mt: 2 }}
+                                >
+                                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <SkillIcon color="primary" fontSize="small" />
+                                            <Typography>
+                                                Skill Ratings
+                                                {skillRatings.length > 0 && (
+                                                    <Chip
+                                                        label={`${skillRatings.length}/${departmentSkills.length}`}
+                                                        size="small"
+                                                        color={skillRatings.length === departmentSkills.length ? 'success' : 'warning'}
+                                                        sx={{ ml: 1 }}
+                                                    />
+                                                )}
+                                            </Typography>
+                                        </Stack>
+                                    </AccordionSummary>
+                                    <AccordionDetails>
+                                        {skillsLoading ? (
+                                            <Stack spacing={2}>
+                                                {[1, 2, 3].map((i) => (
+                                                    <Skeleton key={i} variant="rectangular" height={40} />
+                                                ))}
+                                            </Stack>
+                                        ) : departmentSkills.length === 0 ? (
+                                            <Typography variant="body2" color="text.secondary">
+                                                No skills defined for this department. Skills can be configured in the
+                                                Skills Management page.
+                                            </Typography>
+                                        ) : (
+                                            <Stack spacing={2}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Rate expertise level for each skill. Experts must rate all skills
+                                                    before requesting thesis slots.
+                                                </Typography>
+                                                <Divider />
+                                                {departmentSkills.map((skill) => {
+                                                    const currentRating = skillRatings.find(
+                                                        (r) => r.skillId === skill.id
+                                                    );
+                                                    return (
+                                                        <Box key={skill.id}>
+                                                            <Stack
+                                                                direction="row"
+                                                                justifyContent="space-between"
+                                                                alignItems="center"
+                                                                spacing={2}
+                                                            >
+                                                                <Box sx={{ flex: 1 }}>
+                                                                    <Typography variant="body2" fontWeight="medium">
+                                                                        {skill.name}
+                                                                    </Typography>
+                                                                    {skill.description && (
+                                                                        <Typography
+                                                                            variant="caption"
+                                                                            color="text.secondary"
+                                                                        >
+                                                                            {skill.description}
+                                                                        </Typography>
+                                                                    )}
+                                                                </Box>
+                                                                <Stack alignItems="center" spacing={0.5}>
+                                                                    <Rating
+                                                                        value={currentRating?.rating ?? 0}
+                                                                        onChange={(_, value) =>
+                                                                            handleSkillRatingChange(
+                                                                                skill.id,
+                                                                                skill.name,
+                                                                                value ?? 0
+                                                                            )
+                                                                        }
+                                                                        max={5}
+                                                                        size="small"
+                                                                    />
+                                                                    <Typography variant="caption" color="text.secondary">
+                                                                        {SKILL_RATING_LABELS[currentRating?.rating ?? 0]}
+                                                                    </Typography>
+                                                                </Stack>
+                                                            </Stack>
+                                                        </Box>
+                                                    );
+                                                })}
+                                            </Stack>
+                                        )}
+                                    </AccordionDetails>
+                                </Accordion>
+                            )}
                         </Stack>
                     </DialogContent>
                     <DialogActions>

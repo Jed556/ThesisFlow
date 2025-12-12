@@ -2,6 +2,7 @@ import type { UserProfile } from '../types/profile';
 import { normalizeDateInput } from './dateUtils';
 import { isCompletedGroupStatus } from './expertProfileUtils';
 import type { ThesisGroup } from '../types/group';
+import { devLog } from './devUtils';
 
 type ThesisExpertRole = 'adviser' | 'editor' | 'statistician';
 
@@ -9,6 +10,15 @@ export interface ThesisRoleStats {
     adviserCount: number;
     editorCount: number;
     statisticianCount: number;
+}
+
+/**
+ * Represents a matched skill with its similarity score
+ */
+export interface MatchedSkill {
+    name: string;
+    rating: number;
+    similarity: number;
 }
 
 export interface ExpertCardData {
@@ -19,6 +29,8 @@ export interface ExpertCardData {
     activeCount: number;
     openSlots: number;
     rank: number;
+    /** Top matched skills sorted by similarity */
+    matchedSkills: MatchedSkill[];
 }
 
 /**
@@ -79,16 +91,91 @@ export function aggregateThesisStats(
 }
 
 /**
+ * Builds a combined text for a skill from its name, description, and keywords.
+ * Used for TF-IDF matching against thesis titles.
+ */
+function buildSkillText(skill: { name: string; description?: string; keywords?: string[] }): string {
+    const parts: string[] = [skill.name];
+    if (skill.description) {
+        parts.push(skill.description);
+    }
+    if (skill.keywords && skill.keywords.length > 0) {
+        parts.push(skill.keywords.join(' '));
+    }
+    return parts.join(' ');
+}
+
+/**
+ * Computes similarity between thesis title and an expert's skills using TF-IDF.
+ * Uses skill name, description, and keywords for comprehensive matching.
+ * Returns matched skills sorted by similarity score.
+ */
+function computeSkillMatches(
+    thesisTitle: string | undefined | null,
+    profile: UserProfile
+): MatchedSkill[] {
+    const skills = profile.skillRatings ?? [];
+    if (!thesisTitle || skills.length === 0) {
+        // Return all skills with zero similarity if no thesis title
+        return skills.map((s) => ({
+            name: s.name,
+            rating: s.rating,
+            similarity: 0,
+        }));
+    }
+
+    // Tokenize thesis title
+    const titleTokens = tokenize(thesisTitle);
+    if (titleTokens.length === 0) {
+        return skills.map((s) => ({
+            name: s.name,
+            rating: s.rating,
+            similarity: 0,
+        }));
+    }
+
+    // Build skill text combining name, description, and keywords
+    const skillTexts = skills.map((s) => buildSkillText(s));
+    const skillTokensList = skillTexts.map((text) => tokenize(text));
+    const allDocuments = [titleTokens, ...skillTokensList];
+
+    // Compute IDF across all documents
+    const idf = computeInverseDocumentFrequency(allDocuments);
+
+    // Build TF-IDF vector for thesis title
+    const titleTf = computeTermFrequency(titleTokens);
+    const titleVector = buildTfidfVector(titleTf, idf);
+
+    // Calculate similarity for each skill
+    const matched = skills.map((skill, index) => {
+        const skillTf = computeTermFrequency(skillTokensList[index]);
+        const skillVector = buildTfidfVector(skillTf, idf);
+        const similarity = cosineSimilarity(titleVector, skillVector);
+        return {
+            name: skill.name,
+            rating: skill.rating,
+            similarity,
+        };
+    });
+
+    // Sort by similarity descending
+    matched.sort((a, b) => b.similarity - a.similarity);
+    return matched;
+}
+
+/**
  * Computes expert recommendation cards sorted by compatibility, capacity, and expertise.
  * @param profiles List of user profiles to evaluate as experts
  * @param role Role to consider ('adviser', 'editor', or 'statistician')
  * @param statsMap Precomputed thesis role statistics for users
+ * @param thesisTitle Optional thesis title for skill matching
  * @return List of ExpertCardData sorted by rank
  */
 export function computeExpertCards(
     profiles: UserProfile[],
     role: 'adviser' | 'editor' | 'statistician',
     statsMap: Map<string, ThesisRoleStats>,
+    thesisTitle?: string | null,
 ): ExpertCardData[] {
     const scored = profiles.map((profile) => {
         const stats = statsMap.get(profile.uid) ?? { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
@@ -99,8 +186,47 @@ export function computeExpertCards(
                 ? stats.editorCount
                 : stats.statisticianCount;
         const openSlots = capacity > 0 ? Math.max(capacity - active, 0) : 0;
-        const compatibility = computeCompatibility(profile, stats, role);
-        const score = compatibility + openSlots * 5 + (profile.skillRatings?.length ?? 0) * 2;
+
+        // Compute matched skills using TF-IDF (uses name + description + keywords)
+        const matchedSkills = computeSkillMatches(thesisTitle, profile);
+
+        // Calculate skill match score: weighted average of (similarity * rating/10) for top 3 skills
+        const topSkills = matchedSkills.slice(0, 3);
+        const skillMatchScore = topSkills.length > 0
+            ? topSkills.reduce((sum, s) => sum + s.similarity * (s.rating / 10), 0) / topSkills.length
+            : 0;
+
+        // Compute compatibility using skill match score
+        const compatibility = computeCompatibilityWithSkills(
+            profile, stats, role, skillMatchScore
+        );
+
+        const score = compatibility + openSlots * 5 + skillMatchScore * 50;
+
+        // Log computation results for debugging
+        devLog('[recommendUtils] Expert scoring:', JSON.stringify({
+            expert: `${profile.name.first} ${profile.name.last}`,
+            uid: profile.uid,
+            thesisTitle: thesisTitle ?? '(none)',
+            scoring: {
+                skillMatchScore: Math.round(skillMatchScore * 100) / 100,
+                compatibility: compatibility,
+                finalScore: score,
+            },
+            skills: {
+                totalSkills: matchedSkills.length,
+                topMatches: matchedSkills.slice(0, 3).map(s => ({
+                    name: s.name,
+                    rating: s.rating,
+                    similarity: Math.round(s.similarity * 100) / 100,
+                })),
+            },
+            capacity: {
+                slots: capacity,
+                active,
+                openSlots,
+            },
+        }, null, 2));
 
         return {
             profile,
@@ -109,6 +235,7 @@ export function computeExpertCards(
             capacity,
             activeCount: active,
             openSlots,
+            matchedSkills,
             score,
         };
     });
@@ -122,6 +249,7 @@ export function computeExpertCards(
         capacity: entry.capacity,
         activeCount: entry.activeCount,
         openSlots: entry.openSlots,
+        matchedSkills: entry.matchedSkills,
         rank: index + 1,
     }));
 }
@@ -176,6 +304,23 @@ function computeCompatibility(
     const total = baseScore + availabilityScore + skillsScore + recencyScore - penalty;
     return Math.max(0, Math.min(100, Math.round(total)));
 }
+
+/**
+ * Calculates expert compatibility based purely on skill match score.
+ * Uses TF-IDF skill match score for thesis-expert matching.
+ * The score is based on how well the expert's skills match the thesis title.
+ * @param skillMatchScore - TF-IDF based match score (0-1)
+ */
+function computeCompatibilityWithSkills(
+    _profile: UserProfile,
+    _stats: ThesisRoleStats,
+    _role: 'adviser' | 'editor' | 'statistician',
+    skillMatchScore: number
+): number {
+    // Scale skill match score (0-1) to 0-100%
+    return Math.max(0, Math.min(100, Math.round(skillMatchScore * 100)));
+}
+
 // -----
 const DEFAULT_STOPWORDS = new Set([
     'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'have', 'in',

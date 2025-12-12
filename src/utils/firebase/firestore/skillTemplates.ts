@@ -298,3 +298,171 @@ export function listenSkillTemplatesForDepartment(
 ): Unsubscribe {
     return listenSkillTemplates(DEFAULT_YEAR, department, options);
 }
+
+// ============================================================================
+// Seeding Functions
+// ============================================================================
+
+export interface SkillsConfigData {
+    ratingScale: {
+        min: number;
+        max: number;
+        labels: Record<string, string>;
+    };
+    defaultSkills: Array<{
+        name: string;
+        description?: string;
+        category?: string;
+        keywords?: string[];
+    }>;
+    departmentTemplates: Array<{
+        department: string;
+        skills: Array<{
+            name: string;
+            description?: string;
+            category?: string;
+            keywords?: string[];
+        }>;
+    }>;
+}
+
+export interface SeedSkillsResult {
+    seeded: boolean;
+    departmentsSeeded: string[];
+    skillsCreated: number;
+}
+
+/**
+ * Check if a department has any skills
+ */
+export async function departmentHasSkills(
+    year: string,
+    department: string
+): Promise<boolean> {
+    const skills = await getSkillTemplates(year, department);
+    return skills.length > 0;
+}
+
+/**
+ * Seed skills for a single department from template data
+ * @param year - Academic year
+ * @param department - Department name
+ * @param skills - Array of skills to seed (includes keywords for TF-IDF matching)
+ * @param creatorUid - UID of the admin creating the skills
+ * @returns Number of skills created
+ */
+export async function seedDepartmentSkills(
+    year: string,
+    department: string,
+    skills: Array<{ name: string; description?: string; category?: string; keywords?: string[] }>,
+    creatorUid?: string
+): Promise<number> {
+    let created = 0;
+    for (let i = 0; i < skills.length; i++) {
+        const skill = skills[i];
+        await createSkillTemplate(
+            year,
+            department,
+            {
+                name: skill.name,
+                description: skill.description,
+                category: skill.category,
+                keywords: skill.keywords,
+                order: i,
+                isActive: true,
+            },
+            creatorUid
+        );
+        created++;
+    }
+    return created;
+}
+
+/**
+ * Seed skills for all departments that don't have skills yet
+ * Uses department-specific templates if available, otherwise uses default skills
+ * @param year - Academic year
+ * @param departments - List of departments to seed
+ * @param config - Skills configuration data from skills.json
+ * @param creatorUid - UID of the admin creating the skills
+ * @returns Result with counts of seeded departments and skills
+ */
+export async function seedMissingDepartmentSkills(
+    year: string,
+    departments: string[],
+    config: SkillsConfigData,
+    creatorUid?: string
+): Promise<SeedSkillsResult> {
+    const result: SeedSkillsResult = {
+        seeded: false,
+        departmentsSeeded: [],
+        skillsCreated: 0,
+    };
+
+    for (const department of departments) {
+        const hasSkills = await departmentHasSkills(year, department);
+        if (hasSkills) continue;
+
+        // Find department-specific template or use defaults
+        const deptTemplate = config.departmentTemplates.find(
+            (t) => t.department.toLowerCase() === department.toLowerCase()
+        );
+        const skillsToSeed = deptTemplate?.skills ?? config.defaultSkills;
+
+        if (skillsToSeed.length === 0) continue;
+
+        const count = await seedDepartmentSkills(year, department, skillsToSeed, creatorUid);
+        if (count > 0) {
+            result.seeded = true;
+            result.departmentsSeeded.push(department);
+            result.skillsCreated += count;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Delete all skills for a department
+ * @param year - Academic year
+ * @param department - Department name
+ * @returns Number of skills deleted
+ */
+export async function deleteAllDepartmentSkills(
+    year: string,
+    department: string
+): Promise<number> {
+    const skills = await getSkillTemplates(year, department);
+    for (const skill of skills) {
+        await deleteSkillTemplate(year, department, skill.id);
+    }
+    return skills.length;
+}
+
+/**
+ * Reset a department's skills to template defaults
+ * @param year - Academic year
+ * @param department - Department name
+ * @param config - Skills configuration data
+ * @param creatorUid - UID of the admin
+ * @returns Number of skills created
+ */
+export async function resetDepartmentSkillsToDefault(
+    year: string,
+    department: string,
+    config: SkillsConfigData,
+    creatorUid?: string
+): Promise<number> {
+    // Delete existing skills
+    await deleteAllDepartmentSkills(year, department);
+
+    // Find department-specific template or use defaults
+    const deptTemplate = config.departmentTemplates.find(
+        (t) => t.department.toLowerCase() === department.toLowerCase()
+    );
+    const skillsToSeed = deptTemplate?.skills ?? config.defaultSkills;
+
+    if (skillsToSeed.length === 0) return 0;
+
+    return seedDepartmentSkills(year, department, skillsToSeed, creatorUid);
+}

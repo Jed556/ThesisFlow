@@ -15,7 +15,7 @@ import UnauthorizedNotice from '../../../layouts/UnauthorizedNotice';
 import type { NavigationItem } from '../../../types/navigation';
 import { listenUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { findGroupById, getGroupsByLeader, getGroupsByMember, listenAllGroups } from '../../../utils/firebase/firestore/groups';
-import { findThesisByGroupId } from '../../../utils/firebase/firestore/thesis';
+import { findThesisByGroupId, type ThesisWithGroupContext } from '../../../utils/firebase/firestore/thesis';
 import { aggregateThesisStats, computeExpertCards, type ExpertCardData } from '../../../utils/recommendUtils';
 import type { UserProfile } from '../../../types/profile';
 import type { Session } from '../../../types/session';
@@ -50,6 +50,7 @@ export default function AdviserEditorRecommendationsPage() {
     const [groupError, setGroupError] = React.useState<string | null>(null);
     const [allGroups, setAllGroups] = React.useState<ThesisGroup[]>([]);
     const [hasThesisDocument, setHasThesisDocument] = React.useState(false);
+    const [thesisData, setThesisData] = React.useState<ThesisWithGroupContext | null>(null);
 
     // Track whether we've completed initial group resolution (prevents flicker on re-renders)
     const [groupResolved, setGroupResolved] = React.useState(false);
@@ -65,6 +66,7 @@ export default function AdviserEditorRecommendationsPage() {
     React.useEffect(() => {
         if (!studentGroupId) {
             setHasThesisDocument(false);
+            setThesisData(null);
             return;
         }
 
@@ -75,12 +77,14 @@ export default function AdviserEditorRecommendationsPage() {
                 if (!cancelled) {
                     devLog('[Recommendations] Thesis found:', thesis);
                     setHasThesisDocument(Boolean(thesis));
+                    setThesisData(thesis);
                 }
             })
             .catch((err) => {
                 if (!cancelled) {
                     devError('Failed to check thesis document:', err);
                     setHasThesisDocument(false);
+                    setThesisData(null);
                 }
             });
 
@@ -295,19 +299,22 @@ export default function AdviserEditorRecommendationsPage() {
         [allGroups]
     );
 
+    // Get thesis title for skill matching
+    const thesisTitle = thesisData?.title ?? null;
+
     // Advisers are now already filtered by department at query level
     // No additional client-side filtering needed
     const adviserCards = React.useMemo(
-        () => computeExpertCards(adviserProfiles, 'adviser', thesisStats),
-        [adviserProfiles, thesisStats]
+        () => computeExpertCards(adviserProfiles, 'adviser', thesisStats, thesisTitle),
+        [adviserProfiles, thesisStats, thesisTitle]
     );
     const editorCards = React.useMemo(
-        () => computeExpertCards(editorProfiles, 'editor', thesisStats),
-        [editorProfiles, thesisStats]
+        () => computeExpertCards(editorProfiles, 'editor', thesisStats, thesisTitle),
+        [editorProfiles, thesisStats, thesisTitle]
     );
     const statisticianCards = React.useMemo(
-        () => computeExpertCards(statisticianProfiles, 'statistician', thesisStats),
-        [statisticianProfiles, thesisStats]
+        () => computeExpertCards(statisticianProfiles, 'statistician', thesisStats, thesisTitle),
+        [statisticianProfiles, thesisStats, thesisTitle]
     );
 
     const hasGroupRecord = Boolean(studentGroupId || studentGroup);
