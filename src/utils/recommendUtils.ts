@@ -1,5 +1,4 @@
 import type { UserProfile } from '../types/profile';
-import { normalizeDateInput } from './dateUtils';
 import { isCompletedGroupStatus } from './expertProfileUtils';
 import type { ThesisGroup } from '../types/group';
 import { devLog } from './devUtils';
@@ -203,30 +202,35 @@ export function computeExpertCards(
 
         const score = compatibility + openSlots * 5 + skillMatchScore * 50;
 
-        // Log computation results for debugging
-        devLog('[recommendUtils] Expert scoring:', JSON.stringify({
+        // Log computation results for debugging (includes ALL skills with weighted contributions)
+        devLog('[recommendUtils] Expert scoring:', {
             expert: `${profile.name.first} ${profile.name.last}`,
             uid: profile.uid,
             thesisTitle: thesisTitle ?? '(none)',
             scoring: {
-                skillMatchScore: Math.round(skillMatchScore * 100) / 100,
-                compatibility: compatibility,
+                tfidfScore: skillMatchScore,
+                skillMatchContribution: skillMatchScore * 50,
+                openSlotsContribution: openSlots * 5,
+                rawCompatibility: compatibility,
                 finalScore: score,
             },
-            skills: {
-                totalSkills: matchedSkills.length,
-                topMatches: matchedSkills.slice(0, 3).map(s => ({
-                    name: s.name,
-                    rating: s.rating,
-                    similarity: Math.round(s.similarity * 100) / 100,
-                })),
-            },
+            topSkillsBreakdown: topSkills.map(s => ({
+                name: s.name,
+                rating: s.rating,
+                similarity: s.similarity,
+                weighted: s.similarity * (s.rating / 10),
+            })),
+            allSkills: matchedSkills.map(s => ({
+                name: s.name,
+                rating: s.rating,
+                similarity: s.similarity,
+            })),
             capacity: {
                 slots: capacity,
                 active,
                 openSlots,
             },
-        }, null, 2));
+        });
 
         return {
             profile,
@@ -242,10 +246,20 @@ export function computeExpertCards(
 
     scored.sort((a, b) => b.score - a.score);
 
+    // Normalize using finalScore (not raw compatibility) so availability is factored in
+    // The best expert gets 100%, others are proportional to their finalScore
+    const maxScore = scored.length > 0
+        ? Math.max(...scored.map((s) => s.score))
+        : 1;
+    const normalizeScore = (raw: number): number => {
+        if (maxScore === 0) return 0;
+        return Math.round((raw / maxScore) * 100);
+    };
+
     return scored.map((entry, index) => ({
         profile: entry.profile,
         stats: entry.stats,
-        compatibility: entry.compatibility,
+        compatibility: normalizeScore(entry.score),
         capacity: entry.capacity,
         activeCount: entry.activeCount,
         openSlots: entry.openSlots,
@@ -256,37 +270,41 @@ export function computeExpertCards(
 
 /**
  * Reusable compatibility evaluator for expert detail views.
+ * Uses TF-IDF based skill matching when thesis title is provided.
+ * @param profile Expert's user profile
+ * @param stats Thesis role statistics for the expert
+ * @param role Expert role being evaluated
+ * @param thesisTitle Optional thesis title for skill matching
+ * @returns Compatibility score (0-100)
  */
 export function evaluateExpertCompatibility(
     profile: UserProfile,
     stats: ThesisRoleStats,
-    role: 'adviser' | 'editor' | 'statistician'
+    role: 'adviser' | 'editor' | 'statistician',
+    thesisTitle?: string | null
 ): number {
-    return computeCompatibility(profile, stats, role);
+    // Compute matched skills using TF-IDF
+    const matchedSkills = computeSkillMatches(thesisTitle, profile);
+
+    // Calculate skill match score: weighted average of (similarity * rating/10) for top 3 skills
+    const topSkills = matchedSkills.slice(0, 3);
+    const skillMatchScore = topSkills.length > 0
+        ? topSkills.reduce((sum, s) => sum + s.similarity * (s.rating / 10), 0) / topSkills.length
+        : 0;
+
+    // Return skill-based compatibility (scaled 0-100)
+    return computeCompatibilityWithSkills(profile, stats, role, skillMatchScore);
 }
 
 /**
- * Generates a recency score that weights experts who were active recently.
+ * Computes the full finalScore for an expert (same formula used in computeExpertCards).
+ * finalScore = compatibility + openSlots * 5 + skillMatchScore * 50
  */
-function computeRecencyScore(date: Date | null): number {
-    if (!date) return 0;
-    const diffMs = Date.now() - date.getTime();
-    if (Number.isNaN(diffMs) || diffMs < 0) {
-        return 20;
-    }
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    if (diffDays <= 1) return 20;
-    if (diffDays >= 30) return 0;
-    return Math.round((30 - diffDays) * (20 / 30));
-}
-
-/**
- * Calculates expert compatibility using availability, skills coverage, and activity recency.
- */
-function computeCompatibility(
+function computeFinalScore(
     profile: UserProfile,
     stats: ThesisRoleStats,
-    role: 'adviser' | 'editor' | 'statistician'
+    role: 'adviser' | 'editor' | 'statistician',
+    thesisTitle?: string | null
 ): number {
     const capacity = profile.slots ?? 0;
     const active = role === 'adviser'
@@ -295,14 +313,57 @@ function computeCompatibility(
             ? stats.editorCount
             : stats.statisticianCount;
     const openSlots = capacity > 0 ? Math.max(capacity - active, 0) : 0;
-    const availabilityRatio = capacity > 0 ? openSlots / capacity : 0;
-    const availabilityScore = Math.round(availabilityRatio * 40);
-    const skillsScore = Math.min((profile.skillRatings?.length ?? 0) * 5, 20);
-    const recencyScore = computeRecencyScore(normalizeDateInput(profile.lastActive));
-    const penalty = Math.min(active * 3, 15);
-    const baseScore = 40;
-    const total = baseScore + availabilityScore + skillsScore + recencyScore - penalty;
-    return Math.max(0, Math.min(100, Math.round(total)));
+
+    // Compute matched skills using TF-IDF
+    const matchedSkills = computeSkillMatches(thesisTitle, profile);
+
+    // Calculate skill match score: weighted average of (similarity * rating/10) for top 3 skills
+    const topSkills = matchedSkills.slice(0, 3);
+    const skillMatchScore = topSkills.length > 0
+        ? topSkills.reduce((sum, s) => sum + s.similarity * (s.rating / 10), 0) / topSkills.length
+        : 0;
+
+    // Compute raw compatibility
+    const compatibility = computeCompatibilityWithSkills(profile, stats, role, skillMatchScore);
+
+    // Return finalScore using the same formula as computeExpertCards
+    return compatibility + openSlots * 5 + skillMatchScore * 50;
+}
+
+/**
+ * Computes normalized compatibility for a single expert relative to all experts.
+ * This ensures the ProfileView shows the same compatibility % as the Recommendations list.
+ * Uses finalScore (which includes availability) for normalization.
+ * @param targetProfile The expert being viewed
+ * @param allProfiles All experts of the same role (for normalization)
+ * @param role Expert role being evaluated
+ * @param statsMap Precomputed thesis role statistics
+ * @param thesisTitle Optional thesis title for skill matching
+ * @returns Normalized compatibility score (0-100) where best match = 100%
+ */
+export function evaluateNormalizedCompatibility(
+    targetProfile: UserProfile,
+    allProfiles: UserProfile[],
+    role: 'adviser' | 'editor' | 'statistician',
+    statsMap: Map<string, ThesisRoleStats>,
+    thesisTitle?: string | null
+): number {
+    // Compute finalScore for all experts (includes skill match + availability)
+    const allScores = allProfiles.map((profile) => {
+        const stats = statsMap.get(profile.uid) ?? { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
+        return computeFinalScore(profile, stats, role, thesisTitle);
+    });
+
+    // Find the maximum score for normalization
+    const maxScore = Math.max(...allScores, 1);
+
+    // Compute target expert's finalScore
+    const targetStats = statsMap.get(targetProfile.uid) ?? { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
+    const targetScore = computeFinalScore(targetProfile, targetStats, role, thesisTitle);
+
+    // Normalize: best match = 100%
+    if (maxScore === 0) return 0;
+    return Math.round((targetScore / maxScore) * 100);
 }
 
 /**

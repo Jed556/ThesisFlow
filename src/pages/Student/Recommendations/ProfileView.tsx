@@ -8,13 +8,21 @@ import { useSession } from '@toolpad/core';
 import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage';
 import ProfileView from '../../../components/Profile/ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
-import { onUserProfile, findUsersByIds } from '../../../utils/firebase/firestore/user';
-import { listenGroupsByLeader, listenGroupsByExpertRole } from '../../../utils/firebase/firestore/groups';
+import {
+    onUserProfile, findUsersByIds, listenUsersByFilter
+} from '../../../utils/firebase/firestore/user';
+import {
+    listenGroupsByLeader, listenGroupsByExpertRole, getGroupsByLeader,
+    getGroupsByMember, listenAllGroups
+} from '../../../utils/firebase/firestore/groups';
+import { findThesisByGroupId } from '../../../utils/firebase/firestore/thesis';
 import {
     createExpertRequestByGroup, listenExpertRequestsByGroup,
 } from '../../../utils/firebase/firestore/expertRequests';
 import { filterActiveGroups, deriveExpertThesisHistory } from '../../../utils/expertProfileUtils';
-import { evaluateExpertCompatibility, type ThesisRoleStats } from '../../../utils/recommendUtils';
+import {
+    evaluateNormalizedCompatibility, aggregateThesisStats
+} from '../../../utils/recommendUtils';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import type { NavigationItem } from '../../../types/navigation';
 import type { UserProfile, HistoricalThesisEntry, UserRole } from '../../../types/profile';
@@ -55,6 +63,63 @@ export default function ExpertProfileViewPage() {
     const [requestMessage, setRequestMessage] = React.useState('');
     const [requestSubmitting, setRequestSubmitting] = React.useState(false);
     const [groupRequests, setGroupRequests] = React.useState<Map<string, ExpertRequest[]>>(new Map());
+    const [viewerThesisTitle, setViewerThesisTitle] = React.useState<string | null>(null);
+    // For normalized compatibility calculation
+    const [allExpertsOfRole, setAllExpertsOfRole] = React.useState<UserProfile[]>([]);
+    const [allGroups, setAllGroups] = React.useState<ThesisGroup[]>([]);
+
+    // Fetch viewer's thesis title for compatibility calculation
+    React.useEffect(() => {
+        if (!viewerUid) {
+            setViewerThesisTitle(null);
+            return () => { /* no-op */ };
+        }
+
+        let cancelled = false;
+        void (async () => {
+            try {
+                const [leaderGroups, memberGroups] = await Promise.all([
+                    getGroupsByLeader(viewerUid),
+                    getGroupsByMember(viewerUid),
+                ]);
+                if (cancelled) return;
+
+                const combined = [...leaderGroups, ...memberGroups];
+                if (combined.length === 0) return;
+
+                combined.sort((a, b) => (
+                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                ));
+                const primaryGroup = combined.find((g) => g.status !== 'archived') ?? combined[0];
+
+                const thesis = await findThesisByGroupId(primaryGroup.id);
+                if (!cancelled && thesis?.title) {
+                    setViewerThesisTitle(thesis.title);
+                }
+            } catch (err) {
+                console.error('Failed to load viewer thesis title:', err);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [viewerUid]);
+
+    // Load all groups for thesis stats (used for normalized compatibility)
+    React.useEffect(() => {
+        const unsubscribe = listenAllGroups({
+            onData: (groupsData) => setAllGroups(groupsData),
+            onError: (err) => console.error('Failed to load all groups:', err),
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Compute thesis stats from all groups
+    const thesisStats = React.useMemo(
+        () => aggregateThesisStats(allGroups),
+        [allGroups]
+    );
 
     React.useEffect(() => {
         if (!uid) {
@@ -87,6 +152,23 @@ export default function ExpertProfileViewPage() {
     const expertRole = React.useMemo<ExpertRole | null>(() => (
         isExpertRole(profile?.role) ? profile.role : null
     ), [profile?.role]);
+
+    // Load all experts of the same role for normalized compatibility calculation
+    React.useEffect(() => {
+        if (!expertRole) {
+            setAllExpertsOfRole([]);
+            return () => { /* no-op */ };
+        }
+
+        const unsubscribe = listenUsersByFilter(
+            { role: expertRole },
+            {
+                onData: (profiles) => setAllExpertsOfRole(profiles),
+                onError: (err) => console.error('Failed to load all experts of role:', err),
+            }
+        );
+        return () => unsubscribe();
+    }, [expertRole]);
 
     React.useEffect(() => {
         if (!uid || !expertRole) {
@@ -187,28 +269,21 @@ export default function ExpertProfileViewPage() {
         return deriveExpertThesisHistory(groups, new Map(), profile.uid, expertRole);
     }, [groups, expertRole, profile]);
 
-    const roleStats = React.useMemo<ThesisRoleStats>(() => {
-        if (!expertRole) {
-            return { adviserCount: 0, editorCount: 0, statisticianCount: 0 };
-        }
-        const total = groups.length;
-        if (expertRole === 'adviser') {
-            return { adviserCount: total, editorCount: 0, statisticianCount: 0 };
-        }
-        if (expertRole === 'editor') {
-            return { adviserCount: 0, editorCount: total, statisticianCount: 0 };
-        }
-        return { adviserCount: 0, editorCount: 0, statisticianCount: total };
-    }, [groups.length, expertRole]);
-
     const capacity = profile?.slots ?? 0;
     const openSlots = capacity > 0 ? Math.max(capacity - activeAssignments.length, 0) : 0;
     const normalizedCapacity = Math.max(capacity, activeAssignments.length);
     const openSlotsDisplay = normalizedCapacity > 0
         ? `${openSlots}/${normalizedCapacity}`
         : `${openSlots}/0`;
-    const compatibility = profile && expertRole
-        ? evaluateExpertCompatibility(profile, roleStats, expertRole)
+    // Use normalized compatibility (relative to all experts of same role)
+    const compatibility = profile && expertRole && allExpertsOfRole.length > 0
+        ? evaluateNormalizedCompatibility(
+            profile,
+            allExpertsOfRole,
+            expertRole,
+            thesisStats,
+            viewerThesisTitle
+        )
         : null;
 
     const sortedGroups = React.useMemo(() => {
