@@ -68,7 +68,7 @@ interface PanelAssignmentManagerProps {
 function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignmentManagerProps) {
     const { showNotification } = useSnackbar();
     const session = useSession<Session>();
-    const adminUid = session?.user?.id;
+    const adminUid = session?.user?.uid;
     const [panelOptions, setPanelOptions] = React.useState<UserProfile[]>([]);
     const [selectedPanelUids, setSelectedPanelUids] = React.useState<string[]>([]);
     const [initialPanelUids, setInitialPanelUids] = React.useState<string[]>([]);
