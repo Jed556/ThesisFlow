@@ -1,5 +1,4 @@
 import type { UserProfile } from '../types/profile';
-import { normalizeDateInput } from './dateUtils';
 import { isCompletedGroupStatus } from './expertProfileUtils';
 import type { ThesisGroup } from '../types/group';
 import { devLog } from './devUtils';
@@ -242,10 +241,20 @@ export function computeExpertCards(
 
     scored.sort((a, b) => b.score - a.score);
 
+    // Normalize compatibility scores relative to the highest score
+    // So the best match is 100% and others are proportional
+    const maxCompatibility = scored.length > 0
+        ? Math.max(...scored.map((s) => s.compatibility))
+        : 1;
+    const normalizeCompatibility = (raw: number): number => {
+        if (maxCompatibility === 0) return 0;
+        return Math.round((raw / maxCompatibility) * 100);
+    };
+
     return scored.map((entry, index) => ({
         profile: entry.profile,
         stats: entry.stats,
-        compatibility: entry.compatibility,
+        compatibility: normalizeCompatibility(entry.compatibility),
         capacity: entry.capacity,
         activeCount: entry.activeCount,
         openSlots: entry.openSlots,
@@ -256,53 +265,30 @@ export function computeExpertCards(
 
 /**
  * Reusable compatibility evaluator for expert detail views.
+ * Uses TF-IDF based skill matching when thesis title is provided.
+ * @param profile Expert's user profile
+ * @param stats Thesis role statistics for the expert
+ * @param role Expert role being evaluated
+ * @param thesisTitle Optional thesis title for skill matching
+ * @returns Compatibility score (0-100)
  */
 export function evaluateExpertCompatibility(
     profile: UserProfile,
     stats: ThesisRoleStats,
-    role: 'adviser' | 'editor' | 'statistician'
+    role: 'adviser' | 'editor' | 'statistician',
+    thesisTitle?: string | null
 ): number {
-    return computeCompatibility(profile, stats, role);
-}
+    // Compute matched skills using TF-IDF
+    const matchedSkills = computeSkillMatches(thesisTitle, profile);
 
-/**
- * Generates a recency score that weights experts who were active recently.
- */
-function computeRecencyScore(date: Date | null): number {
-    if (!date) return 0;
-    const diffMs = Date.now() - date.getTime();
-    if (Number.isNaN(diffMs) || diffMs < 0) {
-        return 20;
-    }
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    if (diffDays <= 1) return 20;
-    if (diffDays >= 30) return 0;
-    return Math.round((30 - diffDays) * (20 / 30));
-}
+    // Calculate skill match score: weighted average of (similarity * rating/10) for top 3 skills
+    const topSkills = matchedSkills.slice(0, 3);
+    const skillMatchScore = topSkills.length > 0
+        ? topSkills.reduce((sum, s) => sum + s.similarity * (s.rating / 10), 0) / topSkills.length
+        : 0;
 
-/**
- * Calculates expert compatibility using availability, skills coverage, and activity recency.
- */
-function computeCompatibility(
-    profile: UserProfile,
-    stats: ThesisRoleStats,
-    role: 'adviser' | 'editor' | 'statistician'
-): number {
-    const capacity = profile.slots ?? 0;
-    const active = role === 'adviser'
-        ? stats.adviserCount
-        : role === 'editor'
-            ? stats.editorCount
-            : stats.statisticianCount;
-    const openSlots = capacity > 0 ? Math.max(capacity - active, 0) : 0;
-    const availabilityRatio = capacity > 0 ? openSlots / capacity : 0;
-    const availabilityScore = Math.round(availabilityRatio * 40);
-    const skillsScore = Math.min((profile.skillRatings?.length ?? 0) * 5, 20);
-    const recencyScore = computeRecencyScore(normalizeDateInput(profile.lastActive));
-    const penalty = Math.min(active * 3, 15);
-    const baseScore = 40;
-    const total = baseScore + availabilityScore + skillsScore + recencyScore - penalty;
-    return Math.max(0, Math.min(100, Math.round(total)));
+    // Return skill-based compatibility (scaled 0-100)
+    return computeCompatibilityWithSkills(profile, stats, role, skillMatchScore);
 }
 
 /**

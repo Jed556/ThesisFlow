@@ -9,7 +9,10 @@ import AnimatedPage from '../../../components/Animate/AnimatedPage/AnimatedPage'
 import ProfileView from '../../../components/Profile/ProfileView';
 import GroupCard, { GroupCardSkeleton } from '../../../components/Group/GroupCard';
 import { onUserProfile, findUsersByIds } from '../../../utils/firebase/firestore/user';
-import { listenGroupsByLeader, listenGroupsByExpertRole } from '../../../utils/firebase/firestore/groups';
+import {
+    listenGroupsByLeader, listenGroupsByExpertRole, getGroupsByLeader, getGroupsByMember
+} from '../../../utils/firebase/firestore/groups';
+import { findThesisByGroupId } from '../../../utils/firebase/firestore/thesis';
 import {
     createExpertRequestByGroup, listenExpertRequestsByGroup,
 } from '../../../utils/firebase/firestore/expertRequests';
@@ -55,6 +58,45 @@ export default function ExpertProfileViewPage() {
     const [requestMessage, setRequestMessage] = React.useState('');
     const [requestSubmitting, setRequestSubmitting] = React.useState(false);
     const [groupRequests, setGroupRequests] = React.useState<Map<string, ExpertRequest[]>>(new Map());
+    const [viewerThesisTitle, setViewerThesisTitle] = React.useState<string | null>(null);
+
+    // Fetch viewer's thesis title for compatibility calculation
+    React.useEffect(() => {
+        if (!viewerUid) {
+            setViewerThesisTitle(null);
+            return () => { /* no-op */ };
+        }
+
+        let cancelled = false;
+        void (async () => {
+            try {
+                const [leaderGroups, memberGroups] = await Promise.all([
+                    getGroupsByLeader(viewerUid),
+                    getGroupsByMember(viewerUid),
+                ]);
+                if (cancelled) return;
+
+                const combined = [...leaderGroups, ...memberGroups];
+                if (combined.length === 0) return;
+
+                combined.sort((a, b) => (
+                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                ));
+                const primaryGroup = combined.find((g) => g.status !== 'archived') ?? combined[0];
+
+                const thesis = await findThesisByGroupId(primaryGroup.id);
+                if (!cancelled && thesis?.title) {
+                    setViewerThesisTitle(thesis.title);
+                }
+            } catch (err) {
+                console.error('Failed to load viewer thesis title:', err);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [viewerUid]);
 
     React.useEffect(() => {
         if (!uid) {
@@ -208,7 +250,7 @@ export default function ExpertProfileViewPage() {
         ? `${openSlots}/${normalizedCapacity}`
         : `${openSlots}/0`;
     const compatibility = profile && expertRole
-        ? evaluateExpertCompatibility(profile, roleStats, expertRole)
+        ? evaluateExpertCompatibility(profile, roleStats, expertRole, viewerThesisTitle)
         : null;
 
     const sortedGroups = React.useMemo(() => {

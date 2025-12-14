@@ -144,7 +144,7 @@ export default function ProfileView({
         }
         return skillRatings.map((entry) => ({
             ...entry,
-            rating: Math.max(0, Math.min(typeof entry.rating === 'number' ? entry.rating : 0, 5)),
+            rating: Math.max(0, Math.min(typeof entry.rating === 'number' ? entry.rating : 0, 10)),
         }));
     }, [skillRatings]);
 
