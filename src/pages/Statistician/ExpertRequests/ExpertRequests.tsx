@@ -4,10 +4,10 @@ import type { NavigationItem } from '../../../types/navigation';
 import ExpertRequestsPage from '../../../components/ExpertRequests/ExpertRequestsPage';
 
 export const metadata: NavigationItem = {
-    group: 'statistician',
+    group: 'experts',
     index: 0,
     title: 'Service Requests',
-    segment: 'statistician/requests',
+    segment: 'statistician-requests',
     icon: <AssignmentIndIcon />,
     roles: ['statistician'],
 };

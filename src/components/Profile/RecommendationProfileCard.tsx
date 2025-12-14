@@ -38,7 +38,8 @@ export default function RecommendationProfileCard({
             },
         ];
 
-        if (roleLabel !== 'Editor') {
+        // Only show compatibility for advisers (not editors/statisticians)
+        if (roleLabel === 'Adviser') {
             baseStats.push({
                 label: 'Compatibility',
                 value: `${card.compatibility}%`,
