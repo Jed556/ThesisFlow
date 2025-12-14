@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, Card, CardActions, CardContent, Chip,
-    Divider, LinearProgress, Paper, Skeleton, Stack, TextField, Typography
+    Divider, LinearProgress, Paper, Skeleton, Stack, TextField, Tooltip, Typography
 } from '@mui/material';
 import { Edit as EditIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -438,6 +438,26 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
         navigate(`${basePath}/${requestToOpen.groupId}`, { state: { expertRequest: requestToOpen } });
     }, [navigate, role]);
 
+    // Check if adviser has all skills properly rated (rating > 0)
+    // Advisers must rate their skills before they can edit slots
+    const allSkillsRated = React.useMemo(() => {
+        // Only advisers need to rate skills before editing slots
+        if (role !== 'adviser') return true;
+        // If no department skills exist, allow editing
+        if (departmentSkills.length === 0) return true;
+        // Check if all department skills have a rating > 0
+        return departmentSkills.every((skill) => {
+            const userRating = skillRatings.find((r) => r.skillId === skill.id);
+            return userRating && userRating.rating > 0;
+        });
+    }, [role, departmentSkills, skillRatings]);
+
+    const editSlotsDisabledReason = !expertProfile
+        ? 'Loading profile...'
+        : !allSkillsRated
+            ? 'Rate all your skills first before editing slots'
+            : undefined;
+
 
     if (!viewerRole && session?.loading) {
         return (
@@ -657,14 +677,21 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                 </Stack>
                             ) : (
                                 <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
-                                    <Button
-                                        variant="outlined"
-                                        onClick={handleStartEditing}
-                                        disabled={!expertProfile}
-                                        sx={{ flex: 1 }}
+                                    <Tooltip
+                                        title={editSlotsDisabledReason ?? ''}
+                                        disableHoverListener={!editSlotsDisabledReason}
                                     >
-                                        Edit slots
-                                    </Button>
+                                        <span style={{ flex: 1 }}>
+                                            <Button
+                                                variant="outlined"
+                                                onClick={handleStartEditing}
+                                                disabled={!expertProfile || !allSkillsRated}
+                                                sx={{ width: '100%' }}
+                                            >
+                                                Edit slots
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
                                     {expertUid && (
                                         <SlotRequestButton
                                             expertUid={expertUid}
@@ -680,103 +707,108 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                         </CardActions>
                     </Card>
 
-                    {/* Skill ratings card */}
-                    <Card>
-                        <CardContent>
-                            <Stack
-                                direction="row"
-                                justifyContent="space-between"
-                                alignItems="center"
-                                sx={{ mb: 2 }}
-                            >
-                                <Typography variant="subtitle1" fontWeight="medium">
-                                    Your Skills
-                                </Typography>
-                                {departmentSkills.length > 0 && (
-                                    <Chip
-                                        label={`${skillRatings.filter((r) => r.rating > 0).length}/${departmentSkills.length}`}
-                                        size="small"
-                                        color={
-                                            skillRatings.filter((r) => r.rating > 0).length === departmentSkills.length
-                                                ? 'success'
-                                                : 'warning'
-                                        }
-                                        variant="outlined"
-                                    />
-                                )}
-                            </Stack>
-                            {skillsLoading ? (
-                                <Stack spacing={1}>
-                                    <Skeleton variant="text" width="100%" height={24} />
-                                    <Skeleton variant="text" width="80%" height={24} />
-                                    <Skeleton variant="text" width="90%" height={24} />
-                                </Stack>
-                            ) : departmentSkills.length === 0 ? (
-                                <Typography variant="body2" color="text.secondary">
-                                    No skill templates defined for your department yet.
-                                </Typography>
-                            ) : (
-                                <Stack spacing={1}>
-                                    {/* Show skill overview with ratings */}
-                                    {departmentSkills.slice(0, 5).map((skill) => {
-                                        const userRating = skillRatings.find((r) => r.skillId === skill.id);
-                                        const rating = userRating?.rating ?? 0;
-                                        return (
-                                            <Box key={skill.id}>
-                                                <Stack
-                                                    direction="row"
-                                                    justifyContent="space-between"
-                                                    alignItems="center"
-                                                    sx={{ mb: 0.5 }}
-                                                >
-                                                    <Typography
-                                                        variant="body2"
-                                                        noWrap
-                                                        sx={{ flex: 1, mr: 1 }}
-                                                    >
-                                                        {skill.name}
-                                                    </Typography>
-                                                    <Typography
-                                                        variant="body2"
-                                                        fontWeight="medium"
-                                                        color={rating > 0 ? 'text.primary' : 'text.disabled'}
-                                                    >
-                                                        {rating > 0 ? `${rating}/10` : '—'}
-                                                    </Typography>
-                                                </Stack>
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={rating * 10}
-                                                    sx={{
-                                                        height: 4,
-                                                        borderRadius: 2,
-                                                        bgcolor: 'action.hover',
-                                                    }}
-                                                />
-                                            </Box>
-                                        );
-                                    })}
-                                    {departmentSkills.length > 5 && (
-                                        <Typography variant="caption" color="text.secondary">
-                                            +{departmentSkills.length - 5} more skills
-                                        </Typography>
+                    {/* Skill ratings card - only for advisers */}
+                    {role === 'adviser' && (
+                        <Card>
+                            <CardContent>
+                                <Stack
+                                    direction="row"
+                                    justifyContent="space-between"
+                                    alignItems="center"
+                                    sx={{ mb: 2 }}
+                                >
+                                    <Typography variant="subtitle1" fontWeight="medium">
+                                        Your Skills
+                                    </Typography>
+                                    {departmentSkills.length > 0 && (
+                                        <Chip
+                                            label={`${skillRatings.filter((r) => r.rating > 0).length}/${departmentSkills.length}`}
+                                            size="small"
+                                            color={
+                                                skillRatings.filter((r) => r.rating > 0).length === departmentSkills.length
+                                                    ? 'success'
+                                                    : 'warning'
+                                            }
+                                            variant="outlined"
+                                        />
                                     )}
                                 </Stack>
+                                {skillsLoading ? (
+                                    <Stack spacing={1}>
+                                        <Skeleton variant="text" width="100%" height={24} />
+                                        <Skeleton variant="text" width="80%" height={24} />
+                                        <Skeleton variant="text" width="90%" height={24} />
+                                    </Stack>
+                                ) : departmentSkills.length === 0 ? (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No skill templates defined for your department yet.
+                                    </Typography>
+                                ) : (
+                                    <Stack spacing={1}>
+                                        {/* Show skill overview with ratings */}
+                                        {departmentSkills.slice(0, 5).map((skill) => {
+                                            const userRating = skillRatings.find((r) => r.skillId === skill.id);
+                                            // Show 0 if rating is <= 0 (initial rating is -1)
+                                            const rawRating = userRating?.rating ?? -1;
+                                            const displayRating = rawRating <= 0 ? 0 : rawRating;
+                                            const hasValidRating = rawRating > 0;
+                                            return (
+                                                <Box key={skill.id}>
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="center"
+                                                        sx={{ mb: 0.5 }}
+                                                    >
+                                                        <Typography
+                                                            variant="body2"
+                                                            noWrap
+                                                            sx={{ flex: 1, mr: 1 }}
+                                                        >
+                                                            {skill.name}
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="body2"
+                                                            fontWeight="medium"
+                                                            color={hasValidRating ? 'text.primary' : 'text.disabled'}
+                                                        >
+                                                            {hasValidRating ? `${displayRating}/10` : `${displayRating}/10`}
+                                                        </Typography>
+                                                    </Stack>
+                                                    <LinearProgress
+                                                        variant="determinate"
+                                                        value={displayRating * 10}
+                                                        sx={{
+                                                            height: 4,
+                                                            borderRadius: 2,
+                                                            bgcolor: 'action.hover',
+                                                        }}
+                                                    />
+                                                </Box>
+                                            );
+                                        })}
+                                        {departmentSkills.length > 5 && (
+                                            <Typography variant="caption" color="text.secondary">
+                                                +{departmentSkills.length - 5} more skills
+                                            </Typography>
+                                        )}
+                                    </Stack>
+                                )}
+                            </CardContent>
+                            {departmentSkills.length > 0 && (
+                                <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<EditIcon />}
+                                        onClick={() => setSkillDialogOpen(true)}
+                                        fullWidth
+                                    >
+                                        Edit Skills
+                                    </Button>
+                                </CardActions>
                             )}
-                        </CardContent>
-                        {departmentSkills.length > 0 && (
-                            <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<EditIcon />}
-                                    onClick={() => setSkillDialogOpen(true)}
-                                    fullWidth
-                                >
-                                    Edit Skills
-                                </Button>
-                            </CardActions>
-                        )}
-                    </Card>
+                        </Card>
+                    )}
                 </Stack>
             </Box>
 
