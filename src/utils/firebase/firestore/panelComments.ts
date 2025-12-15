@@ -639,6 +639,7 @@ function generateManuscriptStoragePath(
 
 /**
  * Upload a manuscript file for panel review.
+ * If a manuscript already exists, the old file is deleted from storage first.
  * @param ctx - Panel comment context
  * @param stage - The panel comment stage
  * @param file - The file to upload
@@ -653,6 +654,18 @@ export async function uploadPanelManuscript(
 ): Promise<PanelCommentManuscript> {
     if (!ctx.groupId) {
         throw new Error('Group ID is required to upload manuscript.');
+    }
+
+    // Delete existing manuscript from storage if it exists (to avoid orphaned files)
+    const existingManuscript = await getPanelManuscript(ctx, stage);
+    if (existingManuscript?.storagePath) {
+        try {
+            const oldStorageRef = ref(firebaseStorage, existingManuscript.storagePath);
+            await deleteObject(oldStorageRef);
+        } catch (storageError) {
+            // Log but don't fail - file may already be deleted or not exist
+            console.warn('Failed to delete old manuscript from storage:', storageError);
+        }
     }
 
     const storagePath = generateManuscriptStoragePath(ctx, stage, file.name, userUid);
