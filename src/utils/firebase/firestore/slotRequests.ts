@@ -140,12 +140,18 @@ export async function createSlotRequest(
         expertRole,
         currentSlots,
         requestedSlots,
-        reason: reason || undefined,
         status: 'pending',
         createdAt: now,
         updatedAt: now,
-        department,
     };
+
+    // Only include optional fields if they have values (Firestore doesn't accept undefined)
+    if (reason) {
+        requestData.reason = reason;
+    }
+    if (department) {
+        requestData.department = department;
+    }
 
     await setDoc(docRef, {
         ...requestData,

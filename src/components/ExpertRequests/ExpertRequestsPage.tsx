@@ -692,7 +692,7 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                             </Button>
                                         </span>
                                     </Tooltip>
-                                    {expertUid && (
+                                    {/* {expertUid && (
                                         <SlotRequestButton
                                             expertUid={expertUid}
                                             expertRole={role}
@@ -701,7 +701,7 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                             size="small"
                                             fullWidth
                                         />
-                                    )}
+                                    )} */}
                                 </Stack>
                             )}
                         </CardActions>

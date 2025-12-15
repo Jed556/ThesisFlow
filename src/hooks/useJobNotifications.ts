@@ -165,7 +165,7 @@ function getJobMessage(job: BackgroundJob): string {
         case 'pending':
             return 'Waiting to start...';
         case 'running':
-            return `Processing... ${job.progress}%`;
+            return 'Processing...';
         case 'completed':
             return 'Completed successfully';
         case 'failed':

@@ -309,21 +309,21 @@ export interface SkillsConfigData {
         max: number;
         labels: Record<string, string>;
     };
-    defaultSkills: Array<{
+    defaultSkills: {
         name: string;
         description?: string;
         category?: string;
         keywords?: string[];
-    }>;
-    departmentTemplates: Array<{
+    }[];
+    departmentTemplates: {
         department: string;
-        skills: Array<{
+        skills: {
             name: string;
             description?: string;
             category?: string;
             keywords?: string[];
-        }>;
-    }>;
+        }[];
+    }[];
 }
 
 export interface SeedSkillsResult {
@@ -354,7 +354,7 @@ export async function departmentHasSkills(
 export async function seedDepartmentSkills(
     year: string,
     department: string,
-    skills: Array<{ name: string; description?: string; category?: string; keywords?: string[] }>,
+    skills: { name: string; description?: string; category?: string; keywords?: string[] }[],
     creatorUid?: string
 ): Promise<number> {
     let created = 0;
