@@ -17,7 +17,6 @@ import { AnimatedPage, GrowTransition } from '../../../components/Animate';
 import ProfileView from '../../../components/Profile/ProfileView';
 import { SkillRatingForm } from '../../../components/SkillRating';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
-import type { NavigationItem } from '../../../types/navigation';
 import type { Session } from '../../../types/session';
 import type { UserProfile, UserRole } from '../../../types/profile';
 import type { ThesisGroup } from '../../../types/group';
@@ -38,14 +37,14 @@ import { formatProfileLabel } from '../../../utils/userUtils';
 // Metadata
 // ============================================================================
 
-export const metadata: NavigationItem = {
-    group: 'management',
-    index: 1,
-    title: 'Experts',
-    segment: 'experts',
-    icon: <SchoolIcon />,
-    roles: ['admin', 'developer'],
-};
+// export const metadata: NavigationItem = {
+//     group: 'management',
+//     index: 1,
+//     title: 'Experts',
+//     segment: 'experts',
+//     icon: <SchoolIcon />,
+//     roles: ['admin', 'developer'],
+// };
 
 // ============================================================================
 // Types

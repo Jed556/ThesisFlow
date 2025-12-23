@@ -138,8 +138,12 @@ export function useJobNotifications() {
                 }
             });
 
-            // Update previous jobs reference
-            previousJobsRef.current = [...jobs];
+            // Update previous jobs reference with deep copies to avoid reference issues
+            // (jobs array contains references to mutable objects that get updated in place)
+            previousJobsRef.current = jobs.map(j => ({
+                ...j,
+                metadata: j.metadata ? { ...j.metadata } : undefined,
+            }));
         });
 
         return () => {
@@ -161,7 +165,7 @@ function getJobMessage(job: BackgroundJob): string {
         case 'pending':
             return 'Waiting to start...';
         case 'running':
-            return `Processing... ${job.progress}%`;
+            return 'Processing...';
         case 'completed':
             return 'Completed successfully';
         case 'failed':

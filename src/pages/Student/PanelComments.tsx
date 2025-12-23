@@ -85,6 +85,8 @@ export default function StudentPanelCommentsPage() {
     const [requestingReview, setRequestingReview] = React.useState(false);
     const [fileViewerOpen, setFileViewerOpen] = React.useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    /** All entries for the active stage (across all panelists) to check for revision_required */
+    const [allStageEntries, setAllStageEntries] = React.useState<PanelCommentEntry[]>([]);
 
     /** Build panel comment context from group */
     const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
@@ -228,6 +230,30 @@ export default function StudentPanelCommentsPage() {
         });
         return () => unsubscribe();
     }, [panelCommentCtx, activeStage]);
+
+    // Listen to ALL entries for the active stage (across all panelists) to detect revision_required
+    React.useEffect(() => {
+        if (!panelCommentCtx) {
+            setAllStageEntries([]);
+            return;
+        }
+        const unsubscribe = listenPanelCommentEntries(panelCommentCtx, activeStage, {
+            onData: (next) => setAllStageEntries(next),
+            onError: (error) => {
+                console.error('All entries listener error:', error);
+                setAllStageEntries([]);
+            },
+        });
+        return () => unsubscribe();
+    }, [panelCommentCtx, activeStage]);
+
+    /**
+     * Check if any panel comment entry has revision_required status.
+     * When true, students should be able to re-upload their manuscript.
+     */
+    const hasRevisionRequired = React.useMemo(() => {
+        return allStageEntries.some((entry) => entry.approvalStatus === 'revision_required');
+    }, [allStageEntries]);
 
     React.useEffect(() => {
         let isMounted = true;
@@ -661,25 +687,64 @@ export default function StudentPanelCommentsPage() {
                                         metaLabel={`Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}`}
                                         onClick={() => setFileViewerOpen(true)}
                                         onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
-                                        onDelete={!manuscript.reviewRequested ? handleDeleteManuscript : undefined}
+                                        onDelete={
+                                            (!manuscript.reviewRequested || hasRevisionRequired)
+                                                ? handleDeleteManuscript
+                                                : undefined
+                                        }
                                         showDownloadButton
-                                        showDeleteButton={!manuscript.reviewRequested}
+                                        showDeleteButton={!manuscript.reviewRequested || hasRevisionRequired}
                                         disabled={uploadingManuscript}
                                     />
 
+                                    {/* Show revision required alert */}
+                                    {hasRevisionRequired && manuscript.reviewRequested && (
+                                        <Alert severity="warning">
+                                            The panel has requested revisions. You may upload a new
+                                            manuscript and request another review.
+                                        </Alert>
+                                    )}
+
                                     <Stack direction="row" spacing={2} alignItems="center">
+                                        {/* Allow re-uploading when revision is required */}
+                                        {hasRevisionRequired && manuscript.reviewRequested && (
+                                            <>
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    // eslint-disable-next-line max-len
+                                                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                                    style={{ display: 'none' }}
+                                                    onChange={handleFileSelect}
+                                                />
+                                                <Button
+                                                    variant="outlined"
+                                                    startIcon={
+                                                        uploadingManuscript
+                                                            ? <CircularProgress size={16} />
+                                                            : <CloudUploadIcon />
+                                                    }
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={uploadingManuscript}
+                                                >
+                                                    {uploadingManuscript ? 'Uploading...' : 'Upload Revised Manuscript'}
+                                                </Button>
+                                            </>
+                                        )}
                                         <Button
                                             variant="contained"
                                             color="primary"
                                             startIcon={requestingReview ? <CircularProgress size={16} /> : <RequestReviewIcon />}
                                             onClick={handleRequestReview}
-                                            disabled={requestingReview || manuscript.reviewRequested}
+                                            disabled={requestingReview || (manuscript.reviewRequested && !hasRevisionRequired)}
                                         >
-                                            {manuscript.reviewRequested
+                                            {manuscript.reviewRequested && !hasRevisionRequired
                                                 ? 'Review Requested'
-                                                : 'Request Panel Review'}
+                                                : hasRevisionRequired
+                                                    ? 'Request Re-Review'
+                                                    : 'Request Panel Review'}
                                         </Button>
-                                        {manuscript.reviewRequested && (
+                                        {manuscript.reviewRequested && !hasRevisionRequired && (
                                             <Typography variant="body2" color="success.main">
                                                 ✓ Review requested on{' '}
                                                 {new Date(manuscript.reviewRequestedAt || '').toLocaleDateString()}
