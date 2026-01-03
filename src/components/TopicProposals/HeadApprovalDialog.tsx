@@ -123,10 +123,6 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
         }
     }, [open, proposal]);
 
-    const handleNotesChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setValues((prev) => ({ ...prev, notes: event.target.value }));
-    };
-
     const handleAgendaTypeChange = (event: SelectChangeEvent<AgendaType>) => {
         setValues((prev) => ({
             ...prev,
@@ -196,6 +192,9 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
         }
         if (!values.SDG) {
             validationErrors.SDG = 'SDG is required';
+        }
+        if (!values.notes.trim()) {
+            validationErrors.notes = 'Approval notes are required';
         }
 
         if (Object.keys(validationErrors).length > 0) {
@@ -401,14 +400,18 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
 
                     {/* Notes */}
                     <TextField
-                        label="Optional Notes"
+                        label="Approval Notes"
                         fullWidth
                         multiline
                         minRows={3}
                         value={values.notes}
-                        onChange={handleNotesChange}
-                        placeholder="Share feedback with the student group"
+                        onChange={(e) => setValues((prev) => ({ ...prev, notes: e.target.value.slice(0, 500) }))}
+                        placeholder="Provide feedback and guidance to the student group"
                         disabled={loading}
+                        required
+                        error={Boolean(errors.notes)}
+                        helperText={errors.notes || `${values.notes.length}/500`}
+                        slotProps={{ htmlInput: { maxLength: 500 } }}
                     />
                 </Stack>
             </DialogContent>

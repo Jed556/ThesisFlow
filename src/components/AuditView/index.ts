@@ -1,6 +1,7 @@
 export { AuditView, default } from './AuditView';
 export { AuditFilters } from './AuditFilters';
 export { AuditList } from './AuditList';
+export { RecentAudits } from './RecentAudits';
 export { getCategoryIcon, getScopeIcon } from './icons';
 export {
     type AuditScope,

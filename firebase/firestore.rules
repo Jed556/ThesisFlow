@@ -853,19 +853,6 @@ service cloud.firestore {
             allow delete: if isAdminOrDeveloper() || isHead();
         }
 
-        // Group Notifications - group-specific notification documents
-        // Document ID is the groupId, contains notifications array for that group
-        match /groupNotifications/{groupId} {
-            // Allow read if user is authenticated (group membership check would require reading group doc)
-            // For now, allow any authenticated user to read - frontend filters by group membership
-            allow read: if isAuthenticated();
-            // Allow create/update if authenticated (system creates these for groups)
-            allow create: if isAuthenticated();
-            allow update: if isAuthenticated();
-            // Only admin/developer can delete
-            allow delete: if isAdminOrDeveloper();
-        }
-
         // Notifications - user-specific notifications
         match /notifications/{notificationId} {
             allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdminOrDeveloper());
@@ -896,9 +883,11 @@ service cloud.firestore {
             allow delete: if isAdminOrDeveloper();
         }
 
-        // System settings
-        match /settings/{settingId} {
+        // Global collection - system-wide configuration
+        match /global/{docId} {
+            // All authenticated users can read global settings (needed for UI behavior)
             allow read: if isAuthenticated();
+            // Only admins/developers can modify global settings
             allow write: if isAdminOrDeveloper();
         }
 

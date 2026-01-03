@@ -101,13 +101,26 @@ export default function GroupManageDialog({
                     {activeStep === 0 && (
                         <Stack spacing={2.5}>
                             <TextField
-                                label="Group Name"
+                                label={isAdmin ? 'Group Name' : 'Group ID'}
                                 value={localFormDetails.name}
                                 onChange={(event) => setLocalFormDetails(prev => ({ ...prev, name: event.target.value }))}
                                 error={!!formErrors.name}
-                                helperText={formErrors.name}
+                                helperText={
+                                    formErrors.name ||
+                                    (!isAdmin ? 'Auto-generated based on your course' : undefined)
+                                }
                                 required
                                 fullWidth
+                                slotProps={{
+                                    input: {
+                                        readOnly: !isAdmin,
+                                    },
+                                }}
+                                sx={!isAdmin ? {
+                                    '& .MuiInputBase-input': {
+                                        cursor: 'default',
+                                    },
+                                } : undefined}
                             />
 
                             <TextField

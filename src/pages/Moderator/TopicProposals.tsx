@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
-    DialogContent, DialogTitle, Skeleton, Stack, TextField, Tooltip, Typography
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
+    Skeleton, Stack, Tooltip, Typography
 } from '@mui/material';
 import type { ButtonProps } from '@mui/material';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
@@ -12,7 +12,7 @@ import type { ThesisGroup } from '../../types/group';
 import type { TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
-import { TopicProposalEntryCard } from '../../components/TopicProposals';
+import { TopicProposalEntryCard, TopicProposalDecisionDialog } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
@@ -91,7 +91,6 @@ export default function ModeratorTopicProposalsPage() {
     const [headUsersByDept, setHeadUsersByDept] = React.useState<Map<string, string[]>>(new Map());
 
     const [decisionDialog, setDecisionDialog] = React.useState<DecisionDialogState | null>(null);
-    const [decisionNotes, setDecisionNotes] = React.useState('');
     const [decisionLoading, setDecisionLoading] = React.useState(false);
 
     React.useEffect(() => {
@@ -262,10 +261,9 @@ export default function ModeratorTopicProposalsPage() {
 
     const handleOpenDecision = (setId: string, proposal: TopicProposalEntry, decision: 'approved' | 'rejected') => {
         setDecisionDialog({ setId, proposal, decision });
-        setDecisionNotes('');
     };
 
-    const handleConfirmDecision = async () => {
+    const handleConfirmDecision = async (notes: string) => {
         if (!decisionDialog || !moderatorUid) {
             return;
         }
@@ -276,7 +274,7 @@ export default function ModeratorTopicProposalsPage() {
                 proposalId: decisionDialog.proposal.id,
                 reviewerUid: moderatorUid,
                 decision: decisionDialog.decision,
-                notes: decisionNotes.trim() || undefined,
+                notes: notes
             });
             showNotification('Decision recorded', 'success');
 
@@ -298,7 +296,7 @@ export default function ModeratorTopicProposalsPage() {
                         headUserIds: deptHeadIds,
                         details: {
                             proposalId: decisionDialog.proposal.id,
-                            notes: decisionNotes.trim() || undefined,
+                            notes: notes || undefined,
                         },
                     });
                 } else {
@@ -307,7 +305,7 @@ export default function ModeratorTopicProposalsPage() {
                         group,
                         moderatorId: moderatorUid,
                         proposalTitle: decisionDialog.proposal.title,
-                        reason: decisionNotes.trim() || undefined,
+                        reason: notes,
                         details: {
                             proposalId: decisionDialog.proposal.id,
                         },
@@ -502,35 +500,15 @@ export default function ModeratorTopicProposalsPage() {
                 })}
             </Stack>
 
-            <Dialog open={Boolean(decisionDialog)} onClose={() => setDecisionDialog(null)} fullWidth maxWidth="sm">
-                <DialogTitle>
-                    {decisionDialog?.decision === 'approved' ? 'Approve topic proposal' : 'Reject topic proposal'}
-                </DialogTitle>
-                <DialogContent>
-                    <TextField
-                        label="Optional notes"
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        value={decisionNotes}
-                        onChange={(event) => setDecisionNotes(event.target.value)}
-                        placeholder="Add guidance or justification for the student group"
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDecisionDialog(null)} color="inherit" disabled={decisionLoading}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleConfirmDecision}
-                        variant="contained"
-                        color={decisionDialog?.decision === 'approved' ? 'success' : 'error'}
-                        disabled={decisionLoading}
-                    >
-                        Confirm
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <TopicProposalDecisionDialog
+                open={Boolean(decisionDialog)}
+                decision={decisionDialog?.decision ?? 'approved'}
+                role="moderator"
+                proposalTitle={decisionDialog?.proposal.title}
+                loading={decisionLoading}
+                onClose={() => setDecisionDialog(null)}
+                onConfirm={handleConfirmDecision}
+            />
         </AnimatedPage>
     );
 }

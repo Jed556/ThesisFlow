@@ -10,6 +10,8 @@ export interface NavigationItem {
     children?: string[]; // Segment identifiers of nested items
     path?: string; // Optional path for direct navigation
     roles?: string[]; // Roles that can access this item
+    action?: React.ReactNode; // Action element (e.g., badge) shown on the right side of the item
+    showBadge?: boolean; // Whether to show notification badge from DrawerNotificationContext (default: false)
 }
 
 // Represents a group of related navigation items

@@ -1,20 +1,42 @@
-import { Box, Fade, LinearProgress, Stack } from '@mui/material';
+import { Box, Chip, Fade, LinearProgress, Stack } from '@mui/material';
 import { useSession } from '@toolpad/core';
 import { Outlet, Navigate, useLocation, useMatches } from 'react-router';
 import { DashboardLayout, ThemeSwitcher } from '@toolpad/core/DashboardLayout';
 import { PageContainer } from '@toolpad/core/PageContainer';
 import AccountMenu from '../components/AccountMenu';
 import UnauthorizedNotice from './UnauthorizedNotice';
-import { hasRoleAccess } from '../utils/roleUtils';
+import { getRoleColor, hasRoleAccess } from '../utils/roleUtils';
 import type { Session } from '../types/session';
 import type { NavigationItem } from '../types/navigation';
+
+function formatRoleLabel(role: string): string {
+    if (!role) return '';
+    return role.charAt(0).toUpperCase() + role.slice(1);
+}
 
 /**
  * CustomActions for the dashboard toolbar
  */
 function CustomActions() {
+    const session = useSession<Session>();
+    const role = session?.user?.role;
+
     return (
-        <Stack direction="row" alignItems="center">
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+
+            {role ? (
+                <Chip
+                    label={formatRoleLabel(role)}
+                    size="small"
+                    variant='outlined'
+                    sx={{
+                        flexShrink: 0,
+                        borderColor: getRoleColor(role),
+                        color: getRoleColor(role),
+                    }}
+                />
+            ) : null}
+
             <ThemeSwitcher />
         </Stack>
     );

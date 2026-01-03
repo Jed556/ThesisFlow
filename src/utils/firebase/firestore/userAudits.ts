@@ -427,6 +427,39 @@ export async function markAllUserAuditsAsRead(ctx: UserAuditContext): Promise<vo
     await markUserAuditsAsRead(ctx, entries.map((e) => e.id));
 }
 
+/**
+ * Mark user audit entries as read by navigation segment.
+ * Uses the navigation mapping to determine which audits belong to a specific segment.
+ * @param ctx - User audit context
+ * @param segment - Navigation segment (e.g., 'group', 'thesis', 'audits')
+ * @returns Number of entries marked as read
+ */
+export async function markUserAuditsBySegmentAsRead(
+    ctx: UserAuditContext,
+    segment: string
+): Promise<number> {
+    // Import dynamically to avoid circular dependencies
+    const { getSegmentForAuditEntry } = await import('../../navigationMappingUtils');
+
+    const entries = await getUserAuditEntries(ctx, { read: false });
+    if (entries.length === 0) return 0;
+
+    // Filter entries that belong to this segment
+    const segmentEntries = entries.filter(entry => {
+        const entrySegment = getSegmentForAuditEntry(
+            entry.category,
+            entry.action,
+            entry.details
+        );
+        return entrySegment === segment;
+    });
+
+    if (segmentEntries.length === 0) return 0;
+
+    await markUserAuditsAsRead(ctx, segmentEntries.map((e) => e.id));
+    return segmentEntries.length;
+}
+
 // ============================================================================
 // Delete Operations
 // ============================================================================

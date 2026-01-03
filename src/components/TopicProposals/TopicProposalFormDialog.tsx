@@ -52,14 +52,6 @@ export default function TopicProposalFormDialog(props: TopicProposalFormDialogPr
         setErrors({});
     }, [initialValues, open]);
 
-    const handleFieldChange = (field: keyof TopicProposalFormValues) => (
-        event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-    ) => {
-        const nextValue = event.target.value;
-        setValues((prev) => ({ ...prev, [field]: nextValue }));
-        setErrors((prev) => ({ ...prev, [field]: '' }));
-    };
-
     const handleSubmit = async () => {
         const validationErrors: Record<string, string> = {};
         if (!values.title.trim()) {
@@ -92,40 +84,60 @@ export default function TopicProposalFormDialog(props: TopicProposalFormDialogPr
                     <TextField
                         label="Title"
                         value={values.title}
-                        onChange={handleFieldChange('title')}
+                        onChange={(e) => {
+                            const value = e.target.value.slice(0, 200);
+                            setValues((prev) => ({ ...prev, title: value }));
+                            setErrors((prev) => ({ ...prev, title: '' }));
+                        }}
                         error={Boolean(errors.title)}
-                        helperText={errors.title}
+                        helperText={errors.title || `${values.title.length}/200`}
                         disabled={loading}
                         fullWidth
+                        slotProps={{ htmlInput: { maxLength: 200 } }}
                     />
                     <TextField
                         label="Brief Description"
                         value={values.description}
-                        onChange={handleFieldChange('description')}
+                        onChange={(e) => {
+                            const value = e.target.value.slice(0, 1000);
+                            setValues((prev) => ({ ...prev, description: value }));
+                            setErrors((prev) => ({ ...prev, description: '' }));
+                        }}
                         error={Boolean(errors.description)}
-                        helperText={errors.description}
+                        helperText={errors.description || `${values.description.length}/1000`}
                         disabled={loading}
                         fullWidth
                         multiline
                         minRows={3}
+                        slotProps={{ htmlInput: { maxLength: 1000 } }}
                     />
                     <TextField
                         label="Problem Statement"
                         value={values.problemStatement ?? ''}
-                        onChange={handleFieldChange('problemStatement')}
+                        onChange={(e) => {
+                            const value = e.target.value.slice(0, 1500);
+                            setValues((prev) => ({ ...prev, problemStatement: value }));
+                        }}
                         disabled={loading}
                         fullWidth
                         multiline
                         minRows={2}
+                        helperText={`${(values.problemStatement ?? '').length}/1500`}
+                        slotProps={{ htmlInput: { maxLength: 1500 } }}
                     />
                     <TextField
                         label="Expected Outcome"
                         value={values.expectedOutcome ?? ''}
-                        onChange={handleFieldChange('expectedOutcome')}
+                        onChange={(e) => {
+                            const value = e.target.value.slice(0, 1500);
+                            setValues((prev) => ({ ...prev, expectedOutcome: value }));
+                        }}
                         disabled={loading}
                         fullWidth
                         multiline
                         minRows={2}
+                        helperText={`${(values.expectedOutcome ?? '').length}/1500`}
+                        slotProps={{ htmlInput: { maxLength: 1500 } }}
                     />
                     <TextField
                         label="Keywords (comma separated)"

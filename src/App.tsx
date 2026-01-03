@@ -12,13 +12,19 @@ import { navigationGroups } from './config/navigationGroups';
 import { Outlet } from 'react-router';
 import { SnackbarProvider, SnackbarContainer, useSnackbar } from './components/Snackbar';
 import { ThemeProvider as CustomThemeProvider, useTheme as useCustomTheme } from './contexts/ThemeContext';
+import {
+    DrawerNotificationProvider, useDrawerNotifications
+} from './contexts/DrawerNotificationContext';
 import { useJobNotifications } from './hooks/useJobNotifications';
+import { useNavigationBadges, type NavigationBadge } from './hooks/useNavigationBadges';
 import CalendarDeadlineNotifications from './components/CalendarDeadlineNotifications';
 import AuditNotifications from './components/AuditNotifications';
+import DrawerNotificationsBridge from './components/DrawerNotificationsBridge';
 
 import type { Navigation } from '@toolpad/core/AppProvider';
 import type { Session, ExtendedAuthentication } from './types/session';
 import type { User } from 'firebase/auth';
+import type { UserProfile } from './types/profile';
 
 import { CssBaseline } from '@mui/material';
 import BrandingLogo from './components/BrandingLogo';
@@ -32,9 +38,30 @@ const BRANDING = {
 function AppContent() {
     const { theme: customTheme, updateThemeFromSeedColor, resetTheme } = useCustomTheme();
     const { showNotification } = useSnackbar();
+    const { notifications: drawerNotifications } = useDrawerNotifications();
     const [sessionData, setSessionData] = React.useState<Session | null>(null);
     const [sessionLoading, setSessionLoading] = React.useState(true);
-    const [navigation, setNavigation] = React.useState<Navigation>([]);
+    const [baseNavigation, setBaseNavigation] = React.useState<Navigation>([]);
+    const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
+
+    // Integrate background jobs with the unified notification system
+    useJobNotifications();
+
+    // Convert drawer notifications to badge format for useNavigationBadges
+    const badges = React.useMemo(() => {
+        const badgeMap = new Map<string, NavigationBadge>();
+        drawerNotifications.forEach((notification, segment) => {
+            badgeMap.set(segment, {
+                count: notification.count,
+                color: notification.color,
+                max: notification.max,
+            });
+        });
+        return badgeMap;
+    }, [drawerNotifications]);
+
+    // Enhance navigation with badges
+    const navigation = useNavigationBadges(baseNavigation, { badges });
 
     // Integrate background jobs with the unified notification system
     useJobNotifications();
@@ -66,18 +93,18 @@ function AppContent() {
             const userRole = sessionData?.user?.role;
 
             if (!userRole) {
-                setNavigation([]);
+                setBaseNavigation([]);
                 return;
             }
 
             try {
                 const nav = await buildNavigation(navigationGroups, userRole);
                 if (!active) return;
-                setNavigation(nav);
+                setBaseNavigation(nav);
             } catch (error) {
                 console.error('Failed to build navigation:', error);
                 if (!active) return;
-                setNavigation([]);
+                setBaseNavigation([]);
             }
         }
 
@@ -113,6 +140,7 @@ function AppContent() {
                         await authSignOut();
                         resetTheme();
                         setSession(null);
+                        setUserProfile(null);
                         return;
                     }
 
@@ -123,6 +151,9 @@ function AppContent() {
                         // Reset to default if no theme preference
                         resetTheme();
                     }
+
+                    // Store user profile for drawer notification bridge
+                    setUserProfile(profile || null);
 
                     setSession({
                         user: {
@@ -141,11 +172,13 @@ function AppContent() {
                     await authSignOut();
                     resetTheme();
                     setSession(null);
+                    setUserProfile(null);
                 }
             } else {
                 // Reset to default theme on logout
                 resetTheme();
                 setSession(null);
+                setUserProfile(null);
             }
         });
 
@@ -178,6 +211,7 @@ function AppContent() {
             {/* Background job notifications are now integrated into SnackbarContainer via useJobNotifications hook */}
             <CalendarDeadlineNotifications />
             <AuditNotifications />
+            <DrawerNotificationsBridge userProfile={userProfile} />
         </ReactRouterAppProvider>
     );
 }
@@ -187,7 +221,9 @@ export default function App() {
         <LocalizationProvider dateAdapter={AdapterDateFns}>
             <CustomThemeProvider>
                 <SnackbarProvider>
-                    <AppContent />
+                    <DrawerNotificationProvider>
+                        <AppContent />
+                    </DrawerNotificationProvider>
                 </SnackbarProvider>
             </CustomThemeProvider>
         </LocalizationProvider>

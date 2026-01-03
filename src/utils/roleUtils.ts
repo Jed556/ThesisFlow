@@ -11,6 +11,9 @@ import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { findUserById } from './firebase/firestore/user';
 import { GROUPS_SUBCOLLECTION } from '../config/firestore';
 
+// Re-export role color utilities for convenience
+export { getRoleColor, ROLE_COLORS } from '../config/colors';
+
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
  * Prioritizes Auth token claims over Firestore data for better performance and security

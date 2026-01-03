@@ -14,9 +14,10 @@ import { listenPendingSlotRequests, approveSlotRequest, rejectSlotRequest } from
 import { findUserById } from '../../../utils/firebase/firestore/user';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { firebaseAuth } from '../../../utils/firebase/firebaseConfig';
+import { getRoleColor } from '../../../utils/roleUtils';
 
 export const metadata: NavigationItem = {
-    group: 'admin-management',
+    group: 'management',
     index: 6,
     title: 'Expert Slots',
     segment: 'slot-increase',
@@ -256,18 +257,7 @@ function SlotRequestCard({ request, onApprove, onReject, isBusy }: SlotRequestCa
         }
     };
 
-    const getRoleColor = (role: string): 'primary' | 'secondary' | 'success' | 'warning' => {
-        switch (role) {
-            case 'adviser':
-                return 'primary';
-            case 'editor':
-                return 'secondary';
-            case 'statistician':
-                return 'success';
-            default:
-                return 'warning';
-        }
-    };
+
 
     return (
         <Card sx={{ mb: 2 }}>
@@ -297,8 +287,8 @@ function SlotRequestCard({ request, onApprove, onReject, isBusy }: SlotRequestCa
                         )}
                         <Chip
                             label={getRoleLabel(request.expertRole)}
-                            color={getRoleColor(request.expertRole)}
                             size="small"
+                            sx={{ borderColor: getRoleColor(request.expertRole), color: getRoleColor(request.expertRole) }}
                         />
                     </Stack>
                     <Chip label="PENDING" color="warning" size="small" />

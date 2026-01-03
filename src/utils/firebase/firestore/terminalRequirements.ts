@@ -230,14 +230,14 @@ function normalizeApprovals(
                     decidedBy: previous.decidedBy,
                 } : {}),
             };
-        } else {
+        } else
             // Single approver - use simple status tracking
             if (previous && previous.status === 'approved') {
                 acc[role] = { ...previous, role };
             } else {
                 acc[role] = { role, status: 'pending' };
             }
-        }
+
         return acc;
     }, {});
 }

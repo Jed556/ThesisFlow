@@ -4,17 +4,20 @@ import {
     TextField, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions,
     IconButton, Skeleton, Tabs, Tab, Grid, InputAdornment,
     Accordion, AccordionSummary, AccordionDetails, Divider, Alert,
-    LinearProgress, CircularProgress,
+    CircularProgress, Badge,
 } from '@mui/material';
 import {
-    People as PeopleIcon, Refresh as RefreshIcon, Search as SearchIcon,
-    School as SchoolIcon, ExpandMore as ExpandMoreIcon, Edit as EditIcon,
+    Refresh as RefreshIcon, Search as SearchIcon,
+    School as SchoolIcon, ExpandMore as ExpandMoreIcon,
     Person as PersonIcon, Groups as GroupsIcon, Close as CloseIcon,
-    Save as SaveIcon, Tune as TuneIcon,
+    Save as SaveIcon, Tune as TuneIcon, EditNote as EditNoteIcon,
+    StarRate as StarRateIcon, PersonSearch as PersonSearchIcon,
+    InfoOutlined as InfoOutlinedIcon,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import { AnimatedPage, GrowTransition } from '../../../components/Animate';
 import ProfileView from '../../../components/Profile/ProfileView';
+import { ExpertRecommendationCard } from '../../../components/Profile';
 import { SkillRatingForm } from '../../../components/SkillRating';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import type { Session } from '../../../types/session';
@@ -24,27 +27,30 @@ import type { ExpertSkillRating, SkillTemplateRecord } from '../../../types/skil
 import type { SlotRequestRecord } from '../../../types/slotRequest';
 import { DEFAULT_MAX_EXPERT_SLOTS } from '../../../types/slotRequest';
 import {
-    findUsersByFilter, updateUserProfile, getUserDepartments, getUserCoursesByDepartment,
+    updateUserProfile, getUserDepartments, getUserCoursesByDepartment,
+    listenUsersByFilter,
 } from '../../../utils/firebase/firestore/user';
 import { getActiveSkillTemplates } from '../../../utils/firebase/firestore/skillTemplates';
 import { listenSlotRequests, approveSlotRequest, rejectSlotRequest } from '../../../utils/firebase/firestore/slotRequests';
-import { listenGroupsByExpertRole } from '../../../utils/firebase/firestore/groups';
+import { listenGroupsByExpertRole, listenAllGroups } from '../../../utils/firebase/firestore/groups';
 import { DEFAULT_YEAR } from '../../../config/firestore';
 import { getInitialsFromFullName } from '../../../utils/avatarUtils';
 import { formatProfileLabel } from '../../../utils/userUtils';
+import { aggregateThesisStats, computeExpertCards, type ExpertCardData } from '../../../utils/recommendUtils';
+import type { NavigationItem } from '../../../types/navigation';
 
 // ============================================================================
 // Metadata
 // ============================================================================
 
-// export const metadata: NavigationItem = {
-//     group: 'management',
-//     index: 1,
-//     title: 'Experts',
-//     segment: 'experts',
-//     icon: <SchoolIcon />,
-//     roles: ['admin', 'developer'],
-// };
+export const metadata: NavigationItem = {
+    group: 'management',
+    index: 1,
+    title: 'Experts',
+    segment: 'expert-management',
+    icon: <SchoolIcon />,
+    roles: ['admin', 'developer'],
+};
 
 // ============================================================================
 // Types
@@ -55,176 +61,12 @@ const EXPERT_ROLES: UserRole[] = ['adviser', 'editor', 'statistician'];
 
 type ExpertRole = 'adviser' | 'editor' | 'statistician';
 
-interface ExpertWithGroups extends UserProfile {
-    assignedGroups?: ThesisGroup[];
-}
-
-// ============================================================================
-// Expert Card Component
-// ============================================================================
-
-interface ExpertCardProps {
-    expert: ExpertWithGroups;
-    onEdit: (expert: UserProfile) => void;
-    onViewProfile: (expert: UserProfile) => void;
-}
-
-function ExpertCard({ expert, onEdit, onViewProfile }: ExpertCardProps) {
-    const slots = expert.slots ?? 0;
-    const maxSlots = expert.maxSlots ?? DEFAULT_MAX_EXPERT_SLOTS;
-    const assignedCount = expert.assignedGroups?.length ?? 0;
-    const availableSlots = Math.max(0, slots - assignedCount);
-    const slotsUtilization = slots > 0 ? (assignedCount / slots) * 100 : 0;
-    const skillCount = expert.skillRatings?.filter((r) => r.rating > 0).length ?? 0;
-
-    const fullName = formatProfileLabel(expert);
-
-    return (
-        <Card
-            variant="outlined"
-            sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                transition: 'all 0.2s ease-in-out',
-                '&:hover': {
-                    borderColor: 'primary.main',
-                    boxShadow: 2,
-                },
-            }}
-        >
-            <CardContent sx={{ flexGrow: 1 }}>
-                <Stack spacing={2}>
-                    {/* Header with avatar and name */}
-                    <Stack direction="row" spacing={2} alignItems="flex-start">
-                        <Avatar
-                            src={expert.avatar}
-                            sx={{ width: 56, height: 56, bgcolor: 'primary.main' }}
-                        >
-                            {getInitialsFromFullName(fullName)}
-                        </Avatar>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography
-                                variant="subtitle1"
-                                fontWeight="bold"
-                                noWrap
-                                title={fullName}
-                            >
-                                {fullName}
-                            </Typography>
-                            <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
-                                <Chip
-                                    label={expert.role}
-                                    size="small"
-                                    color="primary"
-                                    sx={{ textTransform: 'capitalize' }}
-                                />
-                                {expert.department && (
-                                    <Chip
-                                        label={expert.department}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{ maxWidth: 120 }}
-                                    />
-                                )}
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary" noWrap>
-                                {expert.email}
-                            </Typography>
-                        </Box>
-                    </Stack>
-
-                    {/* Slots info */}
-                    <Box>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Typography variant="body2" color="text.secondary">
-                                Slots Utilization
-                            </Typography>
-                            <Typography variant="body2" fontWeight="medium">
-                                {assignedCount}/{slots} used
-                            </Typography>
-                        </Stack>
-                        <LinearProgress
-                            variant="determinate"
-                            value={Math.min(slotsUtilization, 100)}
-                            sx={{
-                                mt: 0.5,
-                                height: 8,
-                                borderRadius: 4,
-                                bgcolor: 'grey.200',
-                                '& .MuiLinearProgress-bar': {
-                                    borderRadius: 4,
-                                    bgcolor: slotsUtilization >= 100 ? 'error.main' : 'success.main',
-                                },
-                            }}
-                        />
-                        <Stack direction="row" justifyContent="space-between" mt={0.5}>
-                            <Typography variant="caption" color="text.secondary">
-                                {availableSlots} available
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                Max: {maxSlots}
-                            </Typography>
-                        </Stack>
-                    </Box>
-
-                    {/* Skills summary */}
-                    <Box>
-                        <Typography variant="body2" color="text.secondary">
-                            Skills Rated: {skillCount}
-                        </Typography>
-                    </Box>
-
-                    {/* Assigned groups preview */}
-                    {(expert.assignedGroups?.length ?? 0) > 0 && (
-                        <Box>
-                            <Typography variant="body2" color="text.secondary" gutterBottom>
-                                Assigned Groups:
-                            </Typography>
-                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                                {expert.assignedGroups?.slice(0, 3).map((g) => (
-                                    <Chip
-                                        key={g.id}
-                                        label={g.name?.slice(0, 20) ?? g.id}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{ maxWidth: 100 }}
-                                    />
-                                ))}
-                                {(expert.assignedGroups?.length ?? 0) > 3 && (
-                                    <Chip
-                                        label={`+${(expert.assignedGroups?.length ?? 0) - 3} more`}
-                                        size="small"
-                                        color="default"
-                                    />
-                                )}
-                            </Stack>
-                        </Box>
-                    )}
-                </Stack>
-            </CardContent>
-
-            {/* Actions */}
-            <Box sx={{ p: 1.5, pt: 0, display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                <Button
-                    size="small"
-                    startIcon={<PersonIcon />}
-                    onClick={() => onViewProfile(expert)}
-                >
-                    View Profile
-                </Button>
-                <Button
-                    size="small"
-                    variant="contained"
-                    startIcon={<EditIcon />}
-                    onClick={() => onEdit(expert)}
-                >
-                    Edit Settings
-                </Button>
-            </Box>
-        </Card>
-    );
-}
+/** Tab indices for the main tabs */
+const TAB_ADVISERS = 0;
+const TAB_EDITORS = 1;
+const TAB_STATISTICIANS = 2;
+const TAB_STUDENTS = 3;
+const TAB_SLOT_REQUESTS = 4;
 
 // ============================================================================
 // Slot Request Card
@@ -538,36 +380,138 @@ function EditExpertDialog({ open, expert, onClose, onSave }: EditExpertDialogPro
 }
 
 // ============================================================================
-// Profile View Dialog
+// Profile View Dialog (Enhanced for Admin with Edit Capability)
 // ============================================================================
 
 interface ProfileViewDialogProps {
     open: boolean;
-    expert: UserProfile | null;
+    profile: UserProfile | null;
     groups?: ThesisGroup[];
     onClose: () => void;
+    onEditSlots?: (profile: UserProfile) => void;
+    isExpert?: boolean;
 }
 
-function ProfileViewDialog({ open, expert, groups, onClose }: ProfileViewDialogProps) {
-    if (!expert) return null;
+function ProfileViewDialog({
+    open, profile, groups, onClose, onEditSlots, isExpert = false,
+}: ProfileViewDialogProps) {
+    if (!profile) return null;
+
+    const primaryAction = isExpert && onEditSlots ? {
+        label: 'Edit Slots',
+        onClick: () => onEditSlots(profile),
+        icon: <TuneIcon />,
+    } : undefined;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
             <DialogContent sx={{ p: 0 }}>
                 <ProfileView
-                    profile={expert}
+                    profile={profile}
                     currentGroups={groups}
-                    skillRatings={expert.skillRatings}
+                    skillRatings={profile.skillRatings}
                     sectionVisibility={{
-                        expertise: true,
+                        expertise: isExpert,
                         currentTheses: true,
                         timeline: false,
                     }}
                     floatingBackButton
                     backAction={{ label: 'Close', onClick: onClose }}
+                    primaryAction={primaryAction}
                 />
             </DialogContent>
         </Dialog>
+    );
+}
+
+// ============================================================================
+// Student Card Component
+// ============================================================================
+
+interface StudentCardProps {
+    student: UserProfile;
+    onViewProfile: (student: UserProfile) => void;
+}
+
+function StudentCard({ student, onViewProfile }: StudentCardProps) {
+    const fullName = formatProfileLabel(student);
+
+    return (
+        <Card
+            variant="outlined"
+            sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'all 0.2s ease-in-out',
+                cursor: 'pointer',
+                '&:hover': {
+                    borderColor: 'primary.main',
+                    boxShadow: 2,
+                },
+            }}
+            onClick={() => onViewProfile(student)}
+        >
+            <CardContent sx={{ flexGrow: 1 }}>
+                <Stack spacing={2}>
+                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                        <Avatar
+                            src={student.avatar}
+                            sx={{ width: 56, height: 56, bgcolor: 'secondary.main' }}
+                        >
+                            {getInitialsFromFullName(fullName)}
+                        </Avatar>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography
+                                variant="subtitle1"
+                                fontWeight="bold"
+                                noWrap
+                                title={fullName}
+                            >
+                                {fullName}
+                            </Typography>
+                            <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                                <Chip
+                                    label="Student"
+                                    size="small"
+                                    color="secondary"
+                                />
+                                {student.department && (
+                                    <Chip
+                                        label={student.department}
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{ maxWidth: 120 }}
+                                    />
+                                )}
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                                {student.email}
+                            </Typography>
+                        </Box>
+                    </Stack>
+
+                    {student.course && (
+                        <Typography variant="body2" color="text.secondary">
+                            Course: {student.course}
+                        </Typography>
+                    )}
+                </Stack>
+            </CardContent>
+
+            <Box sx={{ p: 1.5, pt: 0, display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                <Button
+                    size="small"
+                    startIcon={<PersonIcon />}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onViewProfile(student);
+                    }}
+                >
+                    View Profile
+                </Button>
+            </Box>
+        </Card>
     );
 }
 
@@ -577,7 +521,7 @@ function ProfileViewDialog({ open, expert, groups, onClose }: ProfileViewDialogP
 
 /**
  * Admin page for managing expert (adviser/editor/statistician) settings,
- * including slots, skill ratings, and handling slot requests.
+ * viewing students, handling slot requests, and reviewing profiles.
  */
 export default function ExpertsPage() {
     const session = useSession<Session>();
@@ -585,16 +529,23 @@ export default function ExpertsPage() {
     const adminUid = session?.user?.uid ?? '';
 
     // State
-    const [experts, setExperts] = React.useState<ExpertWithGroups[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [refreshing, setRefreshing] = React.useState(false);
 
-    // Filters
-    const [selectedTab, setSelectedTab] = React.useState<number>(0);
+    // Real-time expert profiles (separated by role)
+    const [adviserProfiles, setAdviserProfiles] = React.useState<UserProfile[]>([]);
+    const [editorProfiles, setEditorProfiles] = React.useState<UserProfile[]>([]);
+    const [statisticianProfiles, setStatisticianProfiles] = React.useState<UserProfile[]>([]);
+    const [studentProfiles, setStudentProfiles] = React.useState<UserProfile[]>([]);
+
+    // All groups for computing workload stats
+    const [allGroups, setAllGroups] = React.useState<ThesisGroup[]>([]);
+
+    // Tab and filter state
+    const [selectedTab, setSelectedTab] = React.useState<number>(TAB_ADVISERS);
     const [searchQuery, setSearchQuery] = React.useState('');
     const [selectedDepartment, setSelectedDepartment] = React.useState('');
     const [selectedCourse, setSelectedCourse] = React.useState('');
-    const [selectedRole, setSelectedRole] = React.useState<ExpertRole | ''>('');
 
     // Dropdown options
     const [departments, setDepartments] = React.useState<string[]>([]);
@@ -602,7 +553,8 @@ export default function ExpertsPage() {
 
     // Dialog state
     const [editingExpert, setEditingExpert] = React.useState<UserProfile | null>(null);
-    const [viewingExpert, setViewingExpert] = React.useState<UserProfile | null>(null);
+    const [viewingProfile, setViewingProfile] = React.useState<UserProfile | null>(null);
+    const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
 
     // Slot requests
     const [slotRequests, setSlotRequests] = React.useState<SlotRequestRecord[]>([]);
@@ -634,38 +586,157 @@ export default function ExpertsPage() {
     }, [selectedDepartment]);
 
     // =========================================================================
-    // Load experts
+    // Load experts with real-time listeners (similar to Recommendations)
     // =========================================================================
 
-    const loadExperts = React.useCallback(async () => {
-        try {
-            const allExperts: UserProfile[] = [];
-            for (const role of EXPERT_ROLES) {
-                const roleExperts = await findUsersByFilter({ role });
-                allExperts.push(...roleExperts);
+    React.useEffect(() => {
+        let active = true;
+        const loaded = { advisers: false, editors: false, statisticians: false, students: false };
+
+        const tryResolveLoading = () => {
+            if (!active) return;
+            if (loaded.advisers && loaded.editors && loaded.statisticians && loaded.students) {
+                setLoading(false);
+                setRefreshing(false);
             }
-            setExperts(allExperts);
-        } catch (error) {
-            console.error('Failed to load experts:', error);
-            showNotification('Failed to load experts', 'error');
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }, [showNotification]);
+        };
 
-    React.useEffect(() => {
-        loadExperts();
-    }, [loadExperts]);
+        setLoading(true);
+
+        // Failsafe timeout - resolve loading after 10 seconds regardless of listener status
+        const timeoutId = setTimeout(() => {
+            if (active) {
+                console.warn('User loading timeout - forcing load completion');
+                setLoading(false);
+                setRefreshing(false);
+            }
+        }, 10000);
+
+        const unsubscribeAdvisers = listenUsersByFilter(
+            { role: 'adviser' },
+            {
+                onData: (profiles) => {
+                    if (!active) return;
+                    setAdviserProfiles(profiles);
+                    loaded.advisers = true;
+                    tryResolveLoading();
+                },
+                onError: (err) => {
+                    if (!active) return;
+                    console.error('Failed to load advisers:', err);
+                    loaded.advisers = true;
+                    tryResolveLoading();
+                },
+            }
+        );
+
+        const unsubscribeEditors = listenUsersByFilter(
+            { role: 'editor' },
+            {
+                onData: (profiles) => {
+                    if (!active) return;
+                    setEditorProfiles(profiles);
+                    loaded.editors = true;
+                    tryResolveLoading();
+                },
+                onError: (err) => {
+                    if (!active) return;
+                    console.error('Failed to load editors:', err);
+                    loaded.editors = true;
+                    tryResolveLoading();
+                },
+            }
+        );
+
+        const unsubscribeStatisticians = listenUsersByFilter(
+            { role: 'statistician' },
+            {
+                onData: (profiles) => {
+                    if (!active) return;
+                    setStatisticianProfiles(profiles);
+                    loaded.statisticians = true;
+                    tryResolveLoading();
+                },
+                onError: (err) => {
+                    if (!active) return;
+                    console.error('Failed to load statisticians:', err);
+                    loaded.statisticians = true;
+                    tryResolveLoading();
+                },
+            }
+        );
+
+        const unsubscribeStudents = listenUsersByFilter(
+            { role: 'student' },
+            {
+                onData: (profiles) => {
+                    if (!active) return;
+                    setStudentProfiles(profiles);
+                    loaded.students = true;
+                    tryResolveLoading();
+                },
+                onError: (err) => {
+                    if (!active) return;
+                    console.error('Failed to load students:', err);
+                    loaded.students = true;
+                    tryResolveLoading();
+                },
+            }
+        );
+
+        return () => {
+            active = false;
+            unsubscribeAdvisers();
+            unsubscribeEditors();
+            unsubscribeStatisticians();
+            unsubscribeStudents();
+            clearTimeout(timeoutId);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // =========================================================================
-    // Load groups for utilization (listen to all expert roles)
+    // Load all groups for workload statistics
     // =========================================================================
 
     React.useEffect(() => {
+        const unsubscribe = listenAllGroups({
+            onData: setAllGroups,
+            onError: (err) => console.error('Failed to load groups:', err),
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    // Compute thesis stats from all groups
+    const thesisStats = React.useMemo(
+        () => aggregateThesisStats(allGroups),
+        [allGroups]
+    );
+
+    // Compute expert cards for each role
+    const adviserCards = React.useMemo(
+        () => computeExpertCards(adviserProfiles, 'adviser', thesisStats, null),
+        [adviserProfiles, thesisStats]
+    );
+    const editorCards = React.useMemo(
+        () => computeExpertCards(editorProfiles, 'editor', thesisStats, null),
+        [editorProfiles, thesisStats]
+    );
+    const statisticianCards = React.useMemo(
+        () => computeExpertCards(statisticianProfiles, 'statistician', thesisStats, null),
+        [statisticianProfiles, thesisStats]
+    );
+
+    // =========================================================================
+    // Load groups per expert for utilization display
+    // =========================================================================
+
+    React.useEffect(() => {
+        const allExperts = [...adviserProfiles, ...editorProfiles, ...statisticianProfiles];
         const unsubscribes: (() => void)[] = [];
 
-        for (const expert of experts) {
+        for (const expert of allExperts) {
             if (!EXPERT_ROLES.includes(expert.role)) continue;
 
             const unsubscribe = listenGroupsByExpertRole(
@@ -688,61 +759,66 @@ export default function ExpertsPage() {
         return () => {
             unsubscribes.forEach((unsub) => unsub());
         };
-    }, [experts]);
-
-    // Merge groups into experts
-    const expertsWithGroups = React.useMemo<ExpertWithGroups[]>(() => {
-        return experts.map((expert) => ({
-            ...expert,
-            assignedGroups: groupsByExpert.get(expert.uid) ?? [],
-        }));
-    }, [experts, groupsByExpert]);
+    }, [adviserProfiles, editorProfiles, statisticianProfiles]);
 
     // =========================================================================
     // Load slot requests
     // =========================================================================
 
     React.useEffect(() => {
+        // Listen to all slot requests (not filtered by status)
+        // We filter in the UI instead to avoid missing index issues
         const unsubscribe = listenSlotRequests(
             {
                 onData: setSlotRequests,
-                onError: (err: Error) => console.error('Slot requests listener error:', err),
+                onError: (err: Error) => {
+                    console.error('Slot requests listener error:', err);
+                    // Don't block on slot request errors
+                },
             },
-            { status: selectedTab === 1 ? 'pending' : undefined },
+            {}, // No status filter - we'll filter client-side
             DEFAULT_YEAR
         );
 
         return () => unsubscribe();
-    }, [selectedTab]);
+    }, []); // No dependency on selectedTab
 
     // =========================================================================
-    // Filter experts
+    // Apply filters to each list
     // =========================================================================
 
-    const filteredExperts = React.useMemo(() => {
-        return expertsWithGroups.filter((expert) => {
-            // Role filter
-            if (selectedRole && expert.role !== selectedRole) return false;
-
-            // Department filter
-            if (selectedDepartment && expert.department !== selectedDepartment) return false;
-
-            // Course filter
-            if (selectedCourse && expert.course !== selectedCourse) return false;
-
-            // Search query
+    const applyFilters = React.useCallback((profiles: UserProfile[]) => {
+        return profiles.filter((profile) => {
+            if (selectedDepartment && profile.department !== selectedDepartment) return false;
+            if (selectedCourse && profile.course !== selectedCourse) return false;
             if (searchQuery) {
                 const query = searchQuery.toLowerCase();
-                const fullName = formatProfileLabel(expert).toLowerCase();
-                const email = (expert.email ?? '').toLowerCase();
+                const fullName = formatProfileLabel(profile).toLowerCase();
+                const email = (profile.email ?? '').toLowerCase();
                 if (!fullName.includes(query) && !email.includes(query)) {
                     return false;
                 }
             }
-
             return true;
         });
-    }, [expertsWithGroups, selectedRole, selectedDepartment, selectedCourse, searchQuery]);
+    }, [selectedDepartment, selectedCourse, searchQuery]);
+
+    const filteredAdviserCards = React.useMemo(
+        () => adviserCards.filter((c) => applyFilters([c.profile]).length > 0),
+        [adviserCards, applyFilters]
+    );
+    const filteredEditorCards = React.useMemo(
+        () => editorCards.filter((c) => applyFilters([c.profile]).length > 0),
+        [editorCards, applyFilters]
+    );
+    const filteredStatisticianCards = React.useMemo(
+        () => statisticianCards.filter((c) => applyFilters([c.profile]).length > 0),
+        [statisticianCards, applyFilters]
+    );
+    const filteredStudents = React.useMemo(
+        () => applyFilters(studentProfiles),
+        [studentProfiles, applyFilters]
+    );
 
     // =========================================================================
     // Build expert profile map for slot requests
@@ -750,25 +826,39 @@ export default function ExpertsPage() {
 
     const expertProfileMap = React.useMemo(() => {
         const map = new Map<string, UserProfile>();
-        experts.forEach((e) => map.set(e.uid, e));
+        [...adviserProfiles, ...editorProfiles, ...statisticianProfiles].forEach((e) => {
+            map.set(e.uid, e);
+        });
         return map;
-    }, [experts]);
+    }, [adviserProfiles, editorProfiles, statisticianProfiles]);
 
     // =========================================================================
     // Handlers
     // =========================================================================
 
-    function handleRefresh() {
+    const handleRefresh = React.useCallback(() => {
         setRefreshing(true);
-        loadExperts();
-    }
+        // The real-time listeners will automatically update, but we set refreshing state
+        setTimeout(() => setRefreshing(false), 1000);
+    }, []);
+
+    const handleTabChange = React.useCallback((_event: React.SyntheticEvent, newValue: number) => {
+        setSelectedTab(newValue);
+    }, []);
+
+    const handleOpenProfile = React.useCallback((profile: UserProfile) => {
+        setViewingProfile(profile);
+    }, []);
+
+    const handleEditExpert = React.useCallback((expert: UserProfile) => {
+        setViewingProfile(null);
+        setEditingExpert(expert);
+    }, []);
 
     async function handleSaveExpert(expert: UserProfile, updates: Partial<UserProfile>) {
         try {
             await updateUserProfile(expert.uid, updates);
             showNotification('Expert settings saved successfully', 'success');
-            // Refresh
-            loadExperts();
         } catch (error) {
             console.error('Failed to save expert:', error);
             showNotification('Failed to save expert settings', 'error');
@@ -808,6 +898,18 @@ export default function ExpertsPage() {
         }
     }
 
+    // Render expert card with click handler for profile view
+    const renderExpertCard = React.useCallback((card: ExpertCardData, roleLabel: 'Adviser' | 'Editor' | 'Statistician') => {
+        return (
+            <ExpertRecommendationCard
+                card={card}
+                roleLabel={roleLabel}
+                onSelect={handleOpenProfile}
+                showRoleLabel
+            />
+        );
+    }, [handleOpenProfile]);
+
     // =========================================================================
     // Render
     // =========================================================================
@@ -815,13 +917,19 @@ export default function ExpertsPage() {
     if (loading) {
         return (
             <AnimatedPage variant="fade">
-                <Box sx={{ p: 3 }}>
-                    <Skeleton variant="text" width={200} height={40} />
-                    <Skeleton variant="rectangular" height={60} sx={{ my: 2, borderRadius: 1 }} />
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <Skeleton variant="text" width={220} height={42} />
+                    <Skeleton variant="rectangular" height={48} sx={{ borderRadius: 1 }} />
                     <Grid container spacing={2}>
-                        {[1, 2, 3, 4, 5, 6].map((i) => (
-                            <Grid key={i} size={{ xs: 12, sm: 6, md: 4 }}>
-                                <Skeleton variant="rectangular" height={280} sx={{ borderRadius: 2 }} />
+                        {Array.from({ length: 6 }).map((_, idx) => (
+                            <Grid key={idx} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                <Card variant="outlined" sx={{ height: '100%' }}>
+                                    <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <Skeleton variant="circular" width={48} height={48} />
+                                        <Skeleton variant="text" width="70%" />
+                                        <Skeleton variant="rectangular" width="100%" height={80} />
+                                    </CardContent>
+                                </Card>
                             </Grid>
                         ))}
                     </Grid>
@@ -831,158 +939,203 @@ export default function ExpertsPage() {
     }
 
     const pendingRequestCount = slotRequests.filter((r) => r.status === 'pending').length;
+    const isViewingExpert = Boolean(viewingProfile && EXPERT_ROLES.includes(viewingProfile.role));
 
     return (
         <AnimatedPage variant="fade">
             <GrowTransition>
-                <Box sx={{ p: 3 }}>
-                    {/* Header */}
-                    <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        mb={3}
-                    >
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <SchoolIcon color="primary" fontSize="large" />
-                            <Typography variant="h5" fontWeight="bold">
-                                Expert Management
-                            </Typography>
-                        </Stack>
-                        <Button
-                            startIcon={refreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
-                            onClick={handleRefresh}
-                            disabled={refreshing}
+                <Box>
+                    {/* Tabs - similar to Recommendations page */}
+                    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2, position: 'relative' }}>
+                        <Tabs
+                            value={selectedTab}
+                            onChange={handleTabChange}
+                            aria-label="user management tabs"
+                            variant="scrollable"
+                            scrollButtons="auto"
                         >
-                            Refresh
-                        </Button>
-                    </Stack>
-
-                    {/* Tabs */}
-                    <Tabs
-                        value={selectedTab}
-                        onChange={(_, v) => setSelectedTab(v)}
-                        sx={{ mb: 2 }}
-                    >
-                        <Tab
-                            label="All Experts"
-                            icon={<PeopleIcon />}
-                            iconPosition="start"
-                        />
-                        <Tab
-                            label={
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <span>Slot Requests</span>
-                                    {pendingRequestCount > 0 && (
-                                        <Chip
-                                            label={pendingRequestCount}
-                                            size="small"
-                                            color="warning"
-                                        />
-                                    )}
-                                </Stack>
-                            }
-                            icon={<GroupsIcon />}
-                            iconPosition="start"
-                        />
-                    </Tabs>
-
-                    {/* Tab 0: All Experts */}
-                    {selectedTab === 0 && (
-                        <>
-                            {/* Filters */}
-                            <Stack
-                                direction={{ xs: 'column', md: 'row' }}
-                                spacing={2}
-                                mb={3}
+                            <Tab
+                                label={`Advisers (${filteredAdviserCards.length})`}
+                                icon={<SchoolIcon />}
+                                iconPosition="start"
+                            />
+                            <Tab
+                                label={`Editors (${filteredEditorCards.length})`}
+                                icon={<EditNoteIcon />}
+                                iconPosition="start"
+                            />
+                            <Tab
+                                label={`Statisticians (${filteredStatisticianCards.length})`}
+                                icon={<StarRateIcon />}
+                                iconPosition="start"
+                            />
+                            <Tab
+                                label={`Students (${filteredStudents.length})`}
+                                icon={<PersonSearchIcon />}
+                                iconPosition="start"
+                            />
+                            <Tab
+                                label={
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <span>Slot Requests</span>
+                                        {pendingRequestCount > 0 && (
+                                            <Badge badgeContent={pendingRequestCount} color="warning" />
+                                        )}
+                                    </Stack>
+                                }
+                                icon={<GroupsIcon />}
+                                iconPosition="start"
+                            />
+                        </Tabs>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }}
+                        >
+                            <IconButton
+                                onClick={() => setInfoDialogOpen(true)}
+                                aria-label="How to use this page"
+                                size="small"
                             >
-                                <TextField
-                                    size="small"
-                                    placeholder="Search by name or email..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    slotProps={{
-                                        input: {
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <SearchIcon fontSize="small" />
-                                                </InputAdornment>
-                                            ),
-                                        },
-                                    }}
-                                    sx={{ minWidth: 250 }}
-                                />
-                                <TextField
-                                    size="small"
-                                    select
-                                    label="Role"
-                                    value={selectedRole}
-                                    onChange={(e) => setSelectedRole(e.target.value as ExpertRole | '')}
-                                    sx={{ minWidth: 150 }}
-                                >
-                                    <MenuItem value="">All Roles</MenuItem>
-                                    {EXPERT_ROLES.map((role) => (
-                                        <MenuItem key={role} value={role}>
-                                            {role.charAt(0).toUpperCase() + role.slice(1)}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-                                <TextField
-                                    size="small"
-                                    select
-                                    label="Department"
-                                    value={selectedDepartment}
-                                    onChange={(e) => setSelectedDepartment(e.target.value)}
-                                    sx={{ minWidth: 200 }}
-                                >
-                                    <MenuItem value="">All Departments</MenuItem>
-                                    {departments.map((dept) => (
-                                        <MenuItem key={dept} value={dept}>
-                                            {dept}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-                                <TextField
-                                    size="small"
-                                    select
-                                    label="Course"
-                                    value={selectedCourse}
-                                    onChange={(e) => setSelectedCourse(e.target.value)}
-                                    disabled={!selectedDepartment}
-                                    sx={{ minWidth: 200 }}
-                                >
-                                    <MenuItem value="">All Courses</MenuItem>
-                                    {courses.map((course) => (
-                                        <MenuItem key={course} value={course}>
-                                            {course}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-                            </Stack>
+                                <InfoOutlinedIcon />
+                            </IconButton>
+                            <IconButton
+                                onClick={handleRefresh}
+                                disabled={refreshing}
+                                aria-label="Refresh"
+                                size="small"
+                            >
+                                {refreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
+                            </IconButton>
+                        </Stack>
+                    </Box>
 
-                            {/* Expert Grid */}
-                            {filteredExperts.length === 0 ? (
-                                <Alert severity="info">
-                                    No experts found matching your filters.
-                                </Alert>
-                            ) : (
-                                <Grid container spacing={2}>
-                                    {filteredExperts.map((expert) => (
-                                        <Grid key={expert.uid} size={{ xs: 12, sm: 6, md: 4 }}>
-                                            <ExpertCard
-                                                expert={expert}
-                                                onEdit={setEditingExpert}
-                                                onViewProfile={setViewingExpert}
-                                            />
-                                        </Grid>
-                                    ))}
-                                </Grid>
-                            )}
-                        </>
+                    {/* Filters - show for expert and student tabs */}
+                    {selectedTab !== TAB_SLOT_REQUESTS && (
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={3}>
+                            <TextField
+                                size="small"
+                                placeholder="Search by name or email..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                    },
+                                }}
+                                sx={{ minWidth: 250 }}
+                            />
+                            <TextField
+                                size="small"
+                                select
+                                label="Department"
+                                value={selectedDepartment}
+                                onChange={(e) => setSelectedDepartment(e.target.value)}
+                                sx={{ minWidth: 200 }}
+                            >
+                                <MenuItem value="">All Departments</MenuItem>
+                                {departments.map((dept) => (
+                                    <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+                                ))}
+                            </TextField>
+                            <TextField
+                                size="small"
+                                select
+                                label="Course"
+                                value={selectedCourse}
+                                onChange={(e) => setSelectedCourse(e.target.value)}
+                                disabled={!selectedDepartment}
+                                sx={{ minWidth: 200 }}
+                            >
+                                <MenuItem value="">All Courses</MenuItem>
+                                {courses.map((course) => (
+                                    <MenuItem key={course} value={course}>{course}</MenuItem>
+                                ))}
+                            </TextField>
+                        </Stack>
                     )}
 
-                    {/* Tab 1: Slot Requests */}
-                    {selectedTab === 1 && (
+                    {/* Advisers Tab */}
+                    {selectedTab === TAB_ADVISERS && (
+                        <Grid container spacing={2}>
+                            {filteredAdviserCards.map((card) => (
+                                <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                    {renderExpertCard(card, 'Adviser')}
+                                </Grid>
+                            ))}
+                            {filteredAdviserCards.length === 0 && (
+                                <Grid size={{ xs: 12 }}>
+                                    <Alert severity="info">
+                                        No advisers found matching your filters.
+                                    </Alert>
+                                </Grid>
+                            )}
+                        </Grid>
+                    )}
+
+                    {/* Editors Tab */}
+                    {selectedTab === TAB_EDITORS && (
+                        <Grid container spacing={2}>
+                            {filteredEditorCards.map((card) => (
+                                <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                    {renderExpertCard(card, 'Editor')}
+                                </Grid>
+                            ))}
+                            {filteredEditorCards.length === 0 && (
+                                <Grid size={{ xs: 12 }}>
+                                    <Alert severity="info">
+                                        No editors found matching your filters.
+                                    </Alert>
+                                </Grid>
+                            )}
+                        </Grid>
+                    )}
+
+                    {/* Statisticians Tab */}
+                    {selectedTab === TAB_STATISTICIANS && (
+                        <Grid container spacing={2}>
+                            {filteredStatisticianCards.map((card) => (
+                                <Grid key={card.profile.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                    {renderExpertCard(card, 'Statistician')}
+                                </Grid>
+                            ))}
+                            {filteredStatisticianCards.length === 0 && (
+                                <Grid size={{ xs: 12 }}>
+                                    <Alert severity="info">
+                                        No statisticians found matching your filters.
+                                    </Alert>
+                                </Grid>
+                            )}
+                        </Grid>
+                    )}
+
+                    {/* Students Tab */}
+                    {selectedTab === TAB_STUDENTS && (
+                        <Grid container spacing={2}>
+                            {filteredStudents.map((student) => (
+                                <Grid key={student.uid} size={{ xs: 12, sm: 6, lg: 4 }}>
+                                    <StudentCard
+                                        student={student}
+                                        onViewProfile={handleOpenProfile}
+                                    />
+                                </Grid>
+                            ))}
+                            {filteredStudents.length === 0 && (
+                                <Grid size={{ xs: 12 }}>
+                                    <Alert severity="info">
+                                        No students found matching your filters.
+                                    </Alert>
+                                </Grid>
+                            )}
+                        </Grid>
+                    )}
+
+                    {/* Slot Requests Tab */}
+                    {selectedTab === TAB_SLOT_REQUESTS && (
                         <Box>
                             {slotRequests.length === 0 ? (
                                 <Alert severity="info">
@@ -1005,7 +1158,7 @@ export default function ExpertsPage() {
                 </Box>
             </GrowTransition>
 
-            {/* Edit Dialog */}
+            {/* Edit Expert Dialog */}
             <EditExpertDialog
                 open={!!editingExpert}
                 expert={editingExpert}
@@ -1015,11 +1168,51 @@ export default function ExpertsPage() {
 
             {/* Profile View Dialog */}
             <ProfileViewDialog
-                open={!!viewingExpert}
-                expert={viewingExpert}
-                groups={viewingExpert ? groupsByExpert.get(viewingExpert.uid) : undefined}
-                onClose={() => setViewingExpert(null)}
+                open={!!viewingProfile}
+                profile={viewingProfile}
+                groups={viewingProfile ? groupsByExpert.get(viewingProfile.uid) : undefined}
+                onClose={() => setViewingProfile(null)}
+                onEditSlots={handleEditExpert}
+                isExpert={isViewingExpert}
             />
+
+            {/* Info Dialog */}
+            <Dialog
+                open={infoDialogOpen}
+                onClose={() => setInfoDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>User Management Guide</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2}>
+                        <Typography variant="body2" color="text.secondary">
+                            This page allows you to manage all users in the system, including experts and students.
+                        </Typography>
+                        <Divider />
+                        <Box>
+                            <Typography variant="subtitle2" gutterBottom>Expert Tabs (Advisers, Editors, Statisticians)</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                View and manage expert profiles. Click on a card to view the full profile,
+                                and use the &quot;Edit Slots&quot; button to adjust slot allocations and skill ratings.
+                            </Typography>
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle2" gutterBottom>Students Tab</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Browse all student profiles. Click on a student card to view their detailed profile.
+                            </Typography>
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle2" gutterBottom>Slot Requests</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Review and respond to slot increase requests from experts.
+                                Approve or reject requests with optional notes.
+                            </Typography>
+                        </Box>
+                    </Stack>
+                </DialogContent>
+            </Dialog>
         </AnimatedPage>
     );
 }

@@ -32,13 +32,14 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
         >
             <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                    <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="h6" gutterBottom>
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Typography variant="h6" gutterBottom sx={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                             {entry.title}
                         </Typography>
                         <Box sx={{ mb: 2 }}>
                             <Typography variant="subtitle2">Brief Description</Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary"
+                                sx={{ wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}>
                                 {entry.description}
                             </Typography>
                         </Box>
@@ -63,7 +64,8 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                 {entry.problemStatement && (
                     <Box sx={{ mb: 1.5 }}>
                         <Typography variant="subtitle2">Problem Statement</Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary"
+                            sx={{ wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}>
                             {entry.problemStatement}
                         </Typography>
                     </Box>
@@ -72,7 +74,8 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                 {entry.expectedOutcome && (
                     <Box sx={{ mb: 1.5 }}>
                         <Typography variant="subtitle2">Expected Outcome</Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary"
+                            sx={{ wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}>
                             {entry.expectedOutcome}
                         </Typography>
                     </Box>

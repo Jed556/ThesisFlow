@@ -618,6 +618,24 @@ function mapManuscript(data: ManuscriptSnapshot): PanelCommentManuscript {
 }
 
 /**
+ * Sanitizes a path segment by normalizing to lowercase and replacing non-alphanumeric characters with hyphens.
+ * @param value - The value to sanitize
+ * @param fallback - The fallback value if the input is empty
+ * @returns A sanitized path segment
+ */
+function sanitizePathSegment(value: string | undefined | null, fallback: string = 'general'): string {
+    if (!value) {
+        return fallback;
+    }
+    return value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+/**
  * Generate storage path for manuscript files.
  * Path format: {year}/{department}/{course}/{group}/thesis/{thesis}/panel/manuscript/{filename}
  */
@@ -629,10 +647,10 @@ function generateManuscriptStoragePath(
 ): string {
     const timestamp = Date.now();
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const yearSegment = ctx.year || 'current';
-    const deptSegment = ctx.department || 'general';
-    const courseSegment = ctx.course || 'common';
-    const groupSegment = ctx.groupId;
+    const yearSegment = sanitizePathSegment(ctx.year, 'current');
+    const deptSegment = sanitizePathSegment(ctx.department, 'general');
+    const courseSegment = sanitizePathSegment(ctx.course, 'common');
+    const groupSegment = sanitizePathSegment(ctx.groupId, 'group');
 
     return `${yearSegment}/${deptSegment}/${courseSegment}/${groupSegment}/thesis/panel/manuscript/${stage}/${userUid}_${timestamp}_${sanitizedFileName}`;
 }

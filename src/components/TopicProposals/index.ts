@@ -4,3 +4,5 @@ export { default as TopicProposalEntryCard } from './TopicProposalEntryCard';
 export type { TopicProposalEntryCardProps } from './TopicProposalEntryCard';
 export { default as HeadApprovalDialog } from './HeadApprovalDialog';
 export type { HeadApprovalFormValues, HeadApprovalDialogProps } from './HeadApprovalDialog';
+export { default as TopicProposalDecisionDialog } from './TopicProposalDecisionDialog';
+export type { TopicProposalDecisionDialogProps } from './TopicProposalDecisionDialog';
