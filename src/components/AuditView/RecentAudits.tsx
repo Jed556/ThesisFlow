@@ -188,7 +188,7 @@ export function RecentAudits({
      * Check if the current user has access to the audit's navigation path
      */
     const canViewAuditDetails = React.useCallback((audit: UserAuditEntry): boolean => {
-        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details);
+        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details, userRole);
         if (!navInfo) return false;
         if (navInfo.allowedRoles.length === 0) return true;
         if (!userRole) return false;
@@ -204,15 +204,15 @@ export function RecentAudits({
             return;
         }
 
-        // Navigate to the relevant page
-        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details);
+        // Navigate to the relevant page (role-specific path)
+        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details, userRole);
         if (navInfo?.path && canViewAuditDetails(audit)) {
             navigate(navInfo.path);
         } else {
             // Fallback to audits page
             navigate('/audits');
         }
-    }, [onAuditClick, canViewAuditDetails, navigate]);
+    }, [onAuditClick, canViewAuditDetails, navigate, userRole]);
 
     return (
         <Box>

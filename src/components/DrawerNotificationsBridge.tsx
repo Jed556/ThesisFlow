@@ -6,6 +6,8 @@
  * 
  * Distributes notification badges to relevant navigation segments based on
  * the audit category and where its "View Details" action would navigate to.
+ * Uses role-specific segment mapping to ensure badges appear on the correct
+ * tabs for each user role.
  */
 
 import * as React from 'react';
@@ -18,7 +20,6 @@ import {
 } from '../utils/auditUtils';
 import {
     groupAuditsBySegment,
-    BADGEABLE_SEGMENTS
 } from '../utils/navigationMappingUtils';
 
 interface DrawerNotificationsBridgeProps {
@@ -30,6 +31,7 @@ interface DrawerNotificationsBridgeProps {
  * Component that bridges notification sources to drawer badges.
  * Distributes notification counts to the appropriate navigation segments
  * based on where each audit's "View Details" action would navigate to.
+ * Uses role-specific segment mapping for accurate badge placement.
  */
 export function DrawerNotificationsBridge({ userProfile }: DrawerNotificationsBridgeProps) {
     const { setNotification, clearNotification, clearAllNotifications } = useDrawerNotifications();
@@ -59,7 +61,8 @@ export function DrawerNotificationsBridge({ userProfile }: DrawerNotificationsBr
             {
                 onData: (entries: UserAuditEntry[]) => {
                     // Group audits by their target navigation segment
-                    const { counts } = groupAuditsBySegment(entries);
+                    // Pass user role for role-specific segment mapping
+                    const { counts } = groupAuditsBySegment(entries, userProfile.role);
 
                     // Track which segments we're updating this cycle
                     const updatedSegments = new Set<string>();

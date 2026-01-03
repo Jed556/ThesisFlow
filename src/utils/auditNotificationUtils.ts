@@ -14,11 +14,12 @@ import type {
     AuditAction, AuditCategory, AuditDetails, UserAuditEntryFormData, UserAuditContext, UserAuditLevel
 } from '../types/audit';
 import type { ThesisGroup, ThesisGroupMembers } from '../types/group';
-import type { UserProfile } from '../types/profile';
+import type { UserProfile, UserRole } from '../types/profile';
 import { createAuditEntry, buildAuditContextFromGroup } from './auditUtils';
 import { createUserAuditEntriesBatch } from './firebase/firestore/userAudits';
 import { findUsersByIds, getPathLevelForRole } from './firebase/firestore/user';
 import { getAcademicYear } from './dateUtils';
+import { getNavigationPathForCategory, getAllowedRolesForCategory } from './navigationMappingUtils';
 
 // ============================================================================
 // Types
@@ -260,69 +261,26 @@ export interface AuditNavigationInfo {
  * Build navigation path for an audit entry based on its category and details.
  * Returns both the path and the roles that have access to it.
  * Used to create "View Details" action buttons in notifications.
+ * 
+ * NOTE: This function uses CATEGORY_NAVIGATION_CONFIG from navigationMappingUtils
+ * as the single source of truth for category → path mappings.
+ * 
+ * @param category - The audit category
+ * @param action - The audit action (currently unused but kept for future specificity)
+ * @param details - Optional audit details (currently unused but kept for future specificity)
+ * @param userRole - Optional user role for role-specific path resolution
  */
 export function getAuditNavigationInfo(
     category: AuditCategory,
     _action: AuditAction,
-    _details?: AuditDetails
+    _details?: AuditDetails,
+    userRole?: UserRole
 ): AuditNavigationInfo | null {
-    // Map category/action to navigation paths with their required roles
-    switch (category) {
-        case 'group':
-            // Group page is accessible to students
-            return { path: '/group', allowedRoles: ['student'] };
 
-        case 'submission':
-            // Thesis workspace - different roles have different paths
-            // Students use student-thesis-workspace, experts have their own overview pages
-            return {
-                path: '/student-thesis-workspace',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'moderator'],
-            };
+    const path = getNavigationPathForCategory(category, userRole);
+    const allowedRoles = getAllowedRolesForCategory(category);
 
-        case 'proposal':
-            // Topic proposals - students, moderators, and heads can view
-            return {
-                path: '/proposals',
-                allowedRoles: ['student', 'moderator', 'head'],
-            };
-
-        case 'terminal':
-            // Terminal requirements
-            return {
-                path: '/terminal-requirements',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'panel'],
-            };
-
-        case 'panel':
-            // Panel comments/feedback
-            return {
-                path: '/panel-feedback',
-                allowedRoles: ['student', 'panel'],
-            };
-
-        case 'expert':
-            // Expert requests - accessible based on expert type
-            return {
-                path: '/expert-requests',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician'],
-            };
-
-        case 'comment':
-            // Comments are typically in thesis workspace
-            return {
-                path: '/student-thesis-workspace',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'moderator'],
-            };
-
-        case 'notification':
-            // Audits page is accessible to everyone
-            return { path: '/audits', allowedRoles: [] };
-
-        default:
-            // Default to audits page which is accessible to everyone
-            return { path: '/audits', allowedRoles: [] };
-    }
+    return { path, allowedRoles };
 }
 
 /**

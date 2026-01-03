@@ -85,15 +85,15 @@ export default function TopicProposalFormDialog(props: TopicProposalFormDialogPr
                         label="Title"
                         value={values.title}
                         onChange={(e) => {
-                            const value = e.target.value.slice(0, 200);
+                            const value = e.target.value.slice(0, 20);
                             setValues((prev) => ({ ...prev, title: value }));
                             setErrors((prev) => ({ ...prev, title: '' }));
                         }}
                         error={Boolean(errors.title)}
-                        helperText={errors.title || `${values.title.length}/200`}
+                        helperText={errors.title || `${values.title.length}/20`}
                         disabled={loading}
                         fullWidth
-                        slotProps={{ htmlInput: { maxLength: 200 } }}
+                        slotProps={{ htmlInput: { maxLength: 20 } }}
                     />
                     <TextField
                         label="Brief Description"

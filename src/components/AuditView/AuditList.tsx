@@ -117,7 +117,7 @@ export function AuditList({
      * Check if the current user has access to the audit's navigation path
      */
     const canViewAuditDetails = React.useCallback((audit: AnyAuditEntry): boolean => {
-        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details);
+        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details, userRole);
         if (!navInfo) return false;
         // If no role restrictions, anyone can access
         if (navInfo.allowedRoles.length === 0) return true;
@@ -131,11 +131,11 @@ export function AuditList({
      * Handle navigation to the relevant page for an audit entry
      */
     const handleViewDetails = React.useCallback((audit: AnyAuditEntry) => {
-        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details);
+        const navInfo = getAuditNavigationInfo(audit.category, audit.action, audit.details, userRole);
         if (navInfo?.path) {
             navigate(navInfo.path);
         }
-    }, [navigate]);
+    }, [navigate, userRole]);
 
     const handlePageChange = React.useCallback(
         (_: React.ChangeEvent<unknown>, newPage: number) => {
