@@ -42,6 +42,7 @@ const FormContext = React.createContext<{
     setEmailValue: (value: string) => void;
     setPasswordValue: (value: string) => void;
     noUsersState: boolean | null;
+    isLoading: boolean;
 } | null>(null);
 
 /**
@@ -126,6 +127,8 @@ function CustomPasswordField() {
  * Button component for submitting the sign-in form
  */
 function CustomButton() {
+    const formContext = React.useContext(FormContext);
+
     return (
         <Button
             type="submit"
@@ -134,6 +137,7 @@ function CustomButton() {
             variant="contained"
             disableElevation
             color="primary"
+            loading={formContext?.isLoading || false}
             sx={{
                 mt: 3,
                 mb: 2,
@@ -316,6 +320,7 @@ export default function SignIn() {
     const [emailValue, setEmailValue] = React.useState('');
     const [passwordValue, setPasswordValue] = React.useState('');
     const [noUsersState, setNoUsersState] = React.useState<boolean | null>(null);
+    const [isLoading, setIsLoading] = React.useState(false);
 
     React.useEffect(() => {
         let active = true;
@@ -372,6 +377,7 @@ export default function SignIn() {
         setEmailValue,
         setPasswordValue,
         noUsersState,
+        isLoading,
     };
 
     /**
@@ -411,6 +417,7 @@ export default function SignIn() {
                 <SignInPage
                     providers={[{ id: 'credentials', name: 'Knightmail' }]}
                     signIn={async (provider, formData, callbackUrl) => {
+                        setIsLoading(true);
                         let result;
                         try {
                             if (provider.id === 'credentials') {
@@ -535,6 +542,8 @@ export default function SignIn() {
                                 showNotification('An error occurred during sign in', 'error');
                             }
                             return { error: error instanceof Error ? error.message : 'An error occurred' };
+                        } finally {
+                            setIsLoading(false);
                         }
                     }}
                     slots={{
