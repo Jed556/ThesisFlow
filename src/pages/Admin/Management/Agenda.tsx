@@ -245,6 +245,9 @@ export default function AgendasManagementPage() {
     const [expandedDepartments, setExpandedDepartments] = React.useState<Set<string>>(new Set());
     const [expandedDeptAgendas, setExpandedDeptAgendas] = React.useState<Set<string>>(new Set());
 
+    // Import/Export functionality is intentionally disabled.
+    const ENABLE_AGENDA_IMPORT_EXPORT = false;
+
     // Dialog states
     const [agendaDialogOpen, setAgendaDialogOpen] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
@@ -685,20 +688,24 @@ export default function AgendasManagementPage() {
                     gap: 2,
                 }}>
                     <Stack direction="row" spacing={1} flexWrap="wrap">
-                        <Button
-                            variant="outlined"
-                            startIcon={<UploadIcon />}
-                            onClick={handleImportClick}
-                        >
-                            Import
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            startIcon={<DownloadIcon />}
-                            onClick={handleExport}
-                        >
-                            Export
-                        </Button>
+                        {ENABLE_AGENDA_IMPORT_EXPORT && (
+                            <>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<UploadIcon />}
+                                    onClick={handleImportClick}
+                                >
+                                    Import
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    onClick={handleExport}
+                                >
+                                    Export
+                                </Button>
+                            </>
+                        )}
                         <Button
                             variant="outlined"
                             color="warning"
@@ -710,13 +717,15 @@ export default function AgendasManagementPage() {
                 </Box>
 
                 {/* Hidden file input */}
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json"
-                    style={{ display: 'none' }}
-                    onChange={handleFileChange}
-                />
+                {ENABLE_AGENDA_IMPORT_EXPORT && (
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        style={{ display: 'none' }}
+                        onChange={handleFileChange}
+                    />
+                )}
 
                 {/* Institutional Research Agenda */}
                 <Card sx={{ borderRadius: 3 }}>

@@ -36,6 +36,9 @@ const EXPERT_ROLES: UserRole[] = ['adviser', 'editor', 'statistician'];
 
 const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_USER_PASSWORD || 'Password_123';
 
+// Import/Export functionality
+const ENABLE_USER_CSV_IMPORT_EXPORT = true;
+
 export const metadata: NavigationItem = {
     group: 'management',
     index: 0,
@@ -971,17 +974,17 @@ export default function AdminUsersPage() {
                     editable
                     additionalActions={getAdditionalActions}
                     enableMultiDelete
-                    enableExport
-                    enableImport
-                    importDisabled={hasActiveImport}
+                    enableExport={ENABLE_USER_CSV_IMPORT_EXPORT}
+                    enableImport={ENABLE_USER_CSV_IMPORT_EXPORT}
+                    importDisabled={ENABLE_USER_CSV_IMPORT_EXPORT && hasActiveImport}
                     enableRefresh
                     enableAdd
                     enableQuickFilter
                     onRowUpdate={handleInlineUpdate}
                     onRowUpdateError={(error) => showNotification('Update failed: ' + error.message, 'error')}
                     onRowsDelete={handleMultiDelete}
-                    onExport={handleExport}
-                    onImport={handleImport}
+                    onExport={ENABLE_USER_CSV_IMPORT_EXPORT ? handleExport : undefined}
+                    onImport={ENABLE_USER_CSV_IMPORT_EXPORT ? handleImport : undefined}
                     onRefresh={loadUsers}
                     onAdd={handleOpenCreateDialog}
                 />
