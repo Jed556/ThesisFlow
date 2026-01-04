@@ -1,5 +1,8 @@
 import * as React from 'react';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material';
+import {
+    limitWords, limitChars, wordLimitHelperText, charLimitHelperText
+} from '../../utils/textLimitUtils';
 
 export interface TopicProposalFormValues {
     title: string;
@@ -25,6 +28,12 @@ const EMPTY_VALUES: TopicProposalFormValues = {
     expectedOutcome: '',
     keywords: [],
 };
+
+// Text limits
+const TITLE_WORD_LIMIT = 20;
+const DESCRIPTION_CHAR_LIMIT = 1000;
+const PROBLEM_STATEMENT_CHAR_LIMIT = 1500;
+const EXPECTED_OUTCOME_CHAR_LIMIT = 1500;
 
 function toKeywordsInput(keywords: string[] | undefined): string {
     return keywords?.join(', ') ?? '';
@@ -85,59 +94,58 @@ export default function TopicProposalFormDialog(props: TopicProposalFormDialogPr
                         label="Title"
                         value={values.title}
                         onChange={(e) => {
-                            const value = e.target.value.slice(0, 20);
+                            const value = limitWords(e.target.value, TITLE_WORD_LIMIT);
                             setValues((prev) => ({ ...prev, title: value }));
                             setErrors((prev) => ({ ...prev, title: '' }));
                         }}
                         error={Boolean(errors.title)}
-                        helperText={errors.title || `${values.title.length}/20`}
+                        helperText={errors.title || wordLimitHelperText(values.title, TITLE_WORD_LIMIT)}
                         disabled={loading}
                         fullWidth
-                        slotProps={{ htmlInput: { maxLength: 20 } }}
                     />
                     <TextField
                         label="Brief Description"
                         value={values.description}
                         onChange={(e) => {
-                            const value = e.target.value.slice(0, 1000);
+                            const value = limitChars(e.target.value, DESCRIPTION_CHAR_LIMIT);
                             setValues((prev) => ({ ...prev, description: value }));
                             setErrors((prev) => ({ ...prev, description: '' }));
                         }}
                         error={Boolean(errors.description)}
-                        helperText={errors.description || `${values.description.length}/1000`}
+                        helperText={errors.description || charLimitHelperText(values.description, DESCRIPTION_CHAR_LIMIT)}
                         disabled={loading}
                         fullWidth
                         multiline
                         minRows={3}
-                        slotProps={{ htmlInput: { maxLength: 1000 } }}
+                        slotProps={{ htmlInput: { maxLength: DESCRIPTION_CHAR_LIMIT } }}
                     />
                     <TextField
                         label="Problem Statement"
                         value={values.problemStatement ?? ''}
                         onChange={(e) => {
-                            const value = e.target.value.slice(0, 1500);
+                            const value = limitChars(e.target.value, PROBLEM_STATEMENT_CHAR_LIMIT);
                             setValues((prev) => ({ ...prev, problemStatement: value }));
                         }}
                         disabled={loading}
                         fullWidth
                         multiline
                         minRows={2}
-                        helperText={`${(values.problemStatement ?? '').length}/1500`}
-                        slotProps={{ htmlInput: { maxLength: 1500 } }}
+                        helperText={charLimitHelperText(values.problemStatement ?? '', PROBLEM_STATEMENT_CHAR_LIMIT)}
+                        slotProps={{ htmlInput: { maxLength: PROBLEM_STATEMENT_CHAR_LIMIT } }}
                     />
                     <TextField
                         label="Expected Outcome"
                         value={values.expectedOutcome ?? ''}
                         onChange={(e) => {
-                            const value = e.target.value.slice(0, 1500);
+                            const value = limitChars(e.target.value, EXPECTED_OUTCOME_CHAR_LIMIT);
                             setValues((prev) => ({ ...prev, expectedOutcome: value }));
                         }}
                         disabled={loading}
                         fullWidth
                         multiline
                         minRows={2}
-                        helperText={`${(values.expectedOutcome ?? '').length}/1500`}
-                        slotProps={{ htmlInput: { maxLength: 1500 } }}
+                        helperText={charLimitHelperText(values.expectedOutcome ?? '', EXPECTED_OUTCOME_CHAR_LIMIT)}
+                        slotProps={{ htmlInput: { maxLength: EXPECTED_OUTCOME_CHAR_LIMIT } }}
                     />
                     <TextField
                         label="Keywords (comma separated)"

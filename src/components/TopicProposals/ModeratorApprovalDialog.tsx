@@ -11,9 +11,9 @@ import { ESG_VALUES, SDG_VALUES } from '../../types/thesis';
 import agendasData from '../../config/agendas.json';
 
 /**
- * Form values for head approval
+ * Form values for moderator approval (agenda/ESG/SDG classification)
  */
-export interface HeadApprovalFormValues {
+export interface ModeratorApprovalFormValues {
     notes: string;
     agendaType: AgendaType;
     department?: string;
@@ -23,7 +23,7 @@ export interface HeadApprovalFormValues {
     SDG: SDG | '';
 }
 
-export interface HeadApprovalDialogProps {
+export interface ModeratorApprovalDialogProps {
     /** Whether the dialog is open */
     open: boolean;
     /** The proposal entry being approved */
@@ -33,10 +33,10 @@ export interface HeadApprovalDialogProps {
     /** Callback when dialog is closed */
     onClose: () => void;
     /** Callback when approval is confirmed */
-    onConfirm: (values: HeadApprovalFormValues) => Promise<void> | void;
+    onConfirm: (values: ModeratorApprovalFormValues) => Promise<void> | void;
 }
 
-const EMPTY_VALUES: HeadApprovalFormValues = {
+const EMPTY_VALUES: ModeratorApprovalFormValues = {
     notes: '',
     agendaType: 'institutional',
     department: '',
@@ -69,12 +69,12 @@ function getAgendasAtDepth(
 }
 
 /**
- * Dialog for head approval of topic proposals.
- * Allows selecting research agenda, sub-theme, ESG, and SDG.
+ * Dialog for moderator approval of topic proposals.
+ * Allows selecting research agenda, sub-theme, ESG, and SDG to pass to head for review.
  */
-export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
+export default function ModeratorApprovalDialog(props: ModeratorApprovalDialogProps) {
     const { open, proposal, loading = false, onClose, onConfirm } = props;
-    const [values, setValues] = React.useState<HeadApprovalFormValues>(EMPTY_VALUES);
+    const [values, setValues] = React.useState<ModeratorApprovalFormValues>(EMPTY_VALUES);
     const [errors, setErrors] = React.useState<Record<string, string>>({});
 
     // Get institutional agendas
@@ -98,7 +98,9 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
             return institutionalAgendas;
         }
         if (values.department) {
-            const deptAgenda = departmentalAgendas.find((d: { department: string }) => d.department === values.department);
+            const deptAgenda = departmentalAgendas.find(
+                (d: { department: string }) => d.department === values.department
+            );
             return (deptAgenda?.agenda as AgendaItem[]) ?? [];
         }
         return [];
@@ -275,7 +277,7 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-            <DialogTitle>Review & Approve Topic Proposal</DialogTitle>
+            <DialogTitle>Approve Topic & Set Classification</DialogTitle>
             <DialogContent>
                 <Stack spacing={3} sx={{ mt: 1 }}>
                     {/* Proposal Info Summary */}
@@ -306,8 +308,8 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
                     </Box>
 
                     <Typography variant="body2" color="text.secondary">
-                        Review the classification set by the moderator below. You may adjust
-                        the agenda, ESG, and SDG before giving final approval.
+                        As a moderator, you are responsible for classifying this topic proposal.
+                        The head will review and confirm (or adjust) your classification before final approval.
                     </Typography>
 
                     {/* Research Agenda Selection */}
@@ -410,7 +412,9 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
                         multiline
                         minRows={3}
                         value={values.notes}
-                        onChange={(e) => setValues((prev) => ({ ...prev, notes: e.target.value.slice(0, 500) }))}
+                        onChange={(e) => setValues((prev) => ({
+                            ...prev, notes: e.target.value.slice(0, 500)
+                        }))}
                         placeholder="Provide feedback and guidance to the student group"
                         disabled={loading}
                         required
@@ -431,7 +435,7 @@ export default function HeadApprovalDialog(props: HeadApprovalDialogProps) {
                     color="success"
                     disabled={loading}
                 >
-                    Approve Topic
+                    Approve & Forward to Head
                 </Button>
             </DialogActions>
         </Dialog>

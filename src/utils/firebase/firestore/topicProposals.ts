@@ -52,6 +52,15 @@ export interface ProposalDecisionPayload {
 }
 
 /**
+ * Extended decision payload for moderator approval with agenda and sustainability classification
+ */
+export interface ModeratorDecisionPayload extends ProposalDecisionPayload {
+    agenda?: ThesisAgenda;
+    ESG?: ESG;
+    SDG?: SDG;
+}
+
+/**
  * Extended decision payload for head approval with agenda and sustainability classification
  */
 export interface HeadDecisionPayload extends ProposalDecisionPayload {
@@ -399,7 +408,7 @@ export async function submitProposalSet(
  */
 async function recordModeratorDecisionWithContext(
     ctx: ProposalContext,
-    payload: ProposalDecisionPayload
+    payload: ModeratorDecisionPayload
 ): Promise<void> {
     const proposal = await getProposalSet(ctx, payload.proposalId);
     if (!proposal) throw new Error('Proposal set not found.');
@@ -416,27 +425,52 @@ async function recordModeratorDecisionWithContext(
         ? 'head_review'
         : 'moderator_rejected';
 
-    updatedEntries[entryIndex] = {
+    // Build updated entry with optional agenda, ESG, and SDG fields (set by moderator)
+    const updatedEntry: TopicProposalEntry = {
         ...entry,
         status: newStatus,
         updatedAt: now,
     };
+
+    // Add agenda if provided (for approval)
+    if (payload.agenda) {
+        updatedEntry.agenda = payload.agenda;
+    }
+    // Add ESG if provided (for approval)
+    if (payload.ESG) {
+        updatedEntry.ESG = payload.ESG;
+    }
+    // Add SDG if provided (for approval)
+    if (payload.SDG) {
+        updatedEntry.SDG = payload.SDG;
+    }
+
+    updatedEntries[entryIndex] = updatedEntry;
 
     const newAudit: TopicProposalReviewEvent = {
         stage: 'moderator',
         status: payload.decision,
         reviewerUid: payload.reviewerUid,
         proposalId: payload.entryId,
-        notes: payload.notes,
         reviewedAt: now,
     };
+    // Only add notes if provided
+    if (payload.notes) {
+        newAudit.notes = payload.notes;
+    }
 
-    const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId);
+    const docPath = buildProposalDocPath(
+        ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId
+    );
     const docRef = doc(firebaseFirestore, docPath);
 
+    // Strip undefined from all entries and audits before saving
+    const cleanedEntries = updatedEntries.map((e) => stripUndefined(e));
+    const cleanedAudits = [...proposal.audits, newAudit].map((a) => stripUndefined(a));
+
     await updateDoc(docRef, {
-        entries: updatedEntries.map((e) => stripUndefined(e)),
-        audits: [...proposal.audits, stripUndefined(newAudit)],
+        entries: cleanedEntries,
+        audits: cleanedAudits,
         updatedAt: serverTimestamp(),
     });
 }
@@ -837,6 +871,18 @@ export interface ContextFreeDecisionPayload {
 }
 
 /**
+ * Extended payload for moderator approval with agenda, ESG, and SDG classification
+ */
+export interface ModeratorApprovalPayload extends ContextFreeDecisionPayload {
+    /** Research agenda classification */
+    agenda?: ThesisAgenda;
+    /** ESG category */
+    ESG?: ESG;
+    /** Sustainable Development Goal */
+    SDG?: SDG;
+}
+
+/**
  * Extended payload for head approval with agenda, ESG, and SDG classification
  */
 export interface HeadApprovalPayload extends ContextFreeDecisionPayload {
@@ -882,20 +928,37 @@ async function findProposalSetWithContext(
  * Record a moderator decision on a proposal entry (context-free version).
  * Finds the proposal by setId using collectionGroup and extracts context from path.
  *
- * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes
+ * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes, agenda, ESG, SDG
  */
-export async function recordModeratorDecision(payload: ContextFreeDecisionPayload): Promise<void> {
+export async function recordModeratorDecision(payload: ModeratorApprovalPayload): Promise<void> {
     const result = await findProposalSetWithContext(payload.setId);
     if (!result) throw new Error('Proposal set not found.');
 
     const { ctx } = result;
-    return recordModeratorDecisionWithContext(ctx, {
+
+    // Build decision payload, only including defined values
+    const decisionPayload: ModeratorDecisionPayload = {
         proposalId: payload.setId,
         entryId: payload.proposalId,
         reviewerUid: payload.reviewerUid,
         decision: payload.decision,
-        notes: payload.notes,
-    });
+    };
+
+    // Only add optional fields if they have values
+    if (payload.notes !== undefined) {
+        decisionPayload.notes = payload.notes;
+    }
+    if (payload.agenda?.agendaPath && payload.agenda.agendaPath.length > 0) {
+        decisionPayload.agenda = payload.agenda;
+    }
+    if (payload.ESG) {
+        decisionPayload.ESG = payload.ESG;
+    }
+    if (payload.SDG) {
+        decisionPayload.SDG = payload.SDG;
+    }
+
+    return recordModeratorDecisionWithContext(ctx, decisionPayload);
 }
 
 /**

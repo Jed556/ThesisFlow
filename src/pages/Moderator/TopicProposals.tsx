@@ -1,7 +1,6 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
-    Skeleton, Stack, Tooltip, Typography
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Skeleton, Stack, Tooltip, Typography
 } from '@mui/material';
 import type { ButtonProps } from '@mui/material';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
@@ -9,18 +8,20 @@ import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
 import type { Session } from '../../types/session';
 import type { ThesisGroup } from '../../types/group';
-import type { TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord } from '../../types/proposal';
+import type {
+    TopicProposalEntry, TopicProposalEntryStatus, TopicProposalSetRecord
+} from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
-import { TopicProposalEntryCard, TopicProposalDecisionDialog } from '../../components/TopicProposals';
+import {
+    TopicProposalEntryCard, TopicProposalDecisionDialog, ModeratorApprovalDialog
+} from '../../components/TopicProposals';
+import type { ModeratorApprovalFormValues } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
-import {
-    notifyModeratorApprovedTopicForHead,
-    notifyModeratorRejectedTopic,
-} from '../../utils/auditNotificationUtils';
+import { notifyModeratorApprovedTopicForHead, notifyModeratorRejectedTopic } from '../../utils/auditNotificationUtils';
 
 function splitSectionList(value?: string | null): string[] {
     if (!value) {
@@ -70,6 +71,11 @@ interface DecisionDialogState {
     decision: 'approved' | 'rejected';
 }
 
+interface ApprovalDialogState {
+    setId: string;
+    proposal: TopicProposalEntry;
+}
+
 /**
  * Moderator dashboard for reviewing student topic proposals before they advance to head approval.
  */
@@ -90,6 +96,8 @@ export default function ModeratorTopicProposalsPage() {
     // Cache of head user IDs by department for notifications
     const [headUsersByDept, setHeadUsersByDept] = React.useState<Map<string, string[]>>(new Map());
 
+    // Separate dialogs for approval (with classification) and rejection
+    const [approvalDialog, setApprovalDialog] = React.useState<ApprovalDialogState | null>(null);
     const [decisionDialog, setDecisionDialog] = React.useState<DecisionDialogState | null>(null);
     const [decisionLoading, setDecisionLoading] = React.useState(false);
 
@@ -259,11 +267,72 @@ export default function ModeratorTopicProposalsPage() {
         return [...assignedGroups].sort((a, b) => a.name.localeCompare(b.name));
     }, [assignedGroups]);
 
-    const handleOpenDecision = (setId: string, proposal: TopicProposalEntry, decision: 'approved' | 'rejected') => {
-        setDecisionDialog({ setId, proposal, decision });
+    const handleOpenApproval = (setId: string, proposal: TopicProposalEntry) => {
+        setApprovalDialog({ setId, proposal });
     };
 
-    const handleConfirmDecision = async (notes: string) => {
+    const handleOpenRejection = (setId: string, proposal: TopicProposalEntry) => {
+        setDecisionDialog({ setId, proposal, decision: 'rejected' });
+    };
+
+    /**
+     * Handle moderator approval with agenda/ESG/SDG classification
+     */
+    const handleConfirmApproval = async (values: ModeratorApprovalFormValues) => {
+        if (!approvalDialog || !moderatorUid) {
+            return;
+        }
+        setDecisionLoading(true);
+        try {
+            await recordModeratorDecision({
+                setId: approvalDialog.setId,
+                proposalId: approvalDialog.proposal.id,
+                reviewerUid: moderatorUid,
+                decision: 'approved',
+                notes: values.notes.trim() || undefined,
+                agenda: values.agendaPath.length > 0 ? {
+                    type: values.agendaType,
+                    department: values.department || undefined,
+                    agendaPath: values.agendaPath,
+                } : undefined,
+                ESG: values.ESG || undefined,
+                SDG: values.SDG || undefined,
+            });
+            showNotification('Topic approved and forwarded to head for review', 'success');
+
+            // Audit notification for moderator approval
+            const group = assignedGroups.find((g) =>
+                groupProposalSets.get(g.id)?.id === approvalDialog.setId
+            );
+            if (group) {
+                const deptHeadIds = headUsersByDept.get(group.department ?? '') ?? [];
+                void notifyModeratorApprovedTopicForHead({
+                    group,
+                    moderatorId: moderatorUid,
+                    proposalTitle: approvalDialog.proposal.title,
+                    headUserIds: deptHeadIds,
+                    details: {
+                        proposalId: approvalDialog.proposal.id,
+                        notes: values.notes.trim() || undefined,
+                        agenda: values.agendaPath.length > 0 ? values.agendaPath : undefined,
+                        ESG: values.ESG || undefined,
+                        SDG: values.SDG || undefined,
+                    },
+                });
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to approve topic';
+            showNotification(message, 'error');
+        } finally {
+            setDecisionLoading(false);
+            setApprovalDialog(null);
+        }
+    };
+
+    /**
+     * Handle moderator rejection
+     */
+    const handleConfirmRejection = async (notes: string) => {
         if (!decisionDialog || !moderatorUid) {
             return;
         }
@@ -273,47 +342,28 @@ export default function ModeratorTopicProposalsPage() {
                 setId: decisionDialog.setId,
                 proposalId: decisionDialog.proposal.id,
                 reviewerUid: moderatorUid,
-                decision: decisionDialog.decision,
-                notes: notes
+                decision: 'rejected',
+                notes: notes,
             });
-            showNotification('Decision recorded', 'success');
+            showNotification('Topic rejected', 'success');
 
-            // Audit notification for moderator proposal decision
+            // Audit notification for moderator rejection
             const group = assignedGroups.find((g) =>
                 groupProposalSets.get(g.id)?.id === decisionDialog.setId
             );
             if (group) {
-                const isApproved = decisionDialog.decision === 'approved';
-                // Get head user IDs for this group's department
-                const deptHeadIds = headUsersByDept.get(group.department ?? '') ?? [];
-
-                if (isApproved) {
-                    // Notify head that topic requires their decision + notify group members
-                    void notifyModeratorApprovedTopicForHead({
-                        group,
-                        moderatorId: moderatorUid,
-                        proposalTitle: decisionDialog.proposal.title,
-                        headUserIds: deptHeadIds,
-                        details: {
-                            proposalId: decisionDialog.proposal.id,
-                            notes: notes || undefined,
-                        },
-                    });
-                } else {
-                    // Notify group members about rejection
-                    void notifyModeratorRejectedTopic({
-                        group,
-                        moderatorId: moderatorUid,
-                        proposalTitle: decisionDialog.proposal.title,
-                        reason: notes,
-                        details: {
-                            proposalId: decisionDialog.proposal.id,
-                        },
-                    });
-                }
+                void notifyModeratorRejectedTopic({
+                    group,
+                    moderatorId: moderatorUid,
+                    proposalTitle: decisionDialog.proposal.title,
+                    reason: notes,
+                    details: {
+                        proposalId: decisionDialog.proposal.id,
+                    },
+                });
             }
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to record decision';
+            const message = error instanceof Error ? error.message : 'Failed to reject topic';
             showNotification(message, 'error');
         } finally {
             setDecisionLoading(false);
@@ -442,16 +492,16 @@ export default function ModeratorTopicProposalsPage() {
                                                         variant="contained"
                                                         color="success"
                                                         size="small"
-                                                        onClick={() => handleOpenDecision(record.id, entry, 'approved')}
+                                                        onClick={() => handleOpenApproval(record.id, entry)}
                                                     >
-                                                        Approve
+                                                        Approve & Classify
                                                     </Button>,
                                                     <Button
                                                         key="reject"
                                                         variant="outlined"
                                                         color="error"
                                                         size="small"
-                                                        onClick={() => handleOpenDecision(record.id, entry, 'rejected')}
+                                                        onClick={() => handleOpenRejection(record.id, entry)}
                                                     >
                                                         Reject
                                                     </Button>,
@@ -500,14 +550,24 @@ export default function ModeratorTopicProposalsPage() {
                 })}
             </Stack>
 
+            {/* Moderator approval dialog with agenda/ESG/SDG classification */}
+            <ModeratorApprovalDialog
+                open={Boolean(approvalDialog)}
+                proposal={approvalDialog?.proposal ?? null}
+                loading={decisionLoading}
+                onClose={() => setApprovalDialog(null)}
+                onConfirm={handleConfirmApproval}
+            />
+
+            {/* Rejection dialog (simple notes only) */}
             <TopicProposalDecisionDialog
                 open={Boolean(decisionDialog)}
-                decision={decisionDialog?.decision ?? 'approved'}
+                decision="rejected"
                 role="moderator"
                 proposalTitle={decisionDialog?.proposal.title}
                 loading={decisionLoading}
                 onClose={() => setDecisionDialog(null)}
-                onConfirm={handleConfirmDecision}
+                onConfirm={handleConfirmRejection}
             />
         </AnimatedPage>
     );
