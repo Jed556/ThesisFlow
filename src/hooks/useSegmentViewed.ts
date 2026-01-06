@@ -1,9 +1,12 @@
 /**
  * useSegmentViewed Hook
  * 
- * Hook to mark audit notifications as read when a navigation segment/page is viewed.
- * This automatically marks all unread audits for a specific segment as read
+ * Hook to mark audit notifications as "page viewed" when a navigation segment/page is visited.
+ * This automatically marks all unviewed audits for a specific segment as pageViewed
  * when the page is mounted or when the segment changes.
+ * 
+ * The `pageViewed` field is used for drawer badge counting - only audits where
+ * pageViewed !== true are counted in the notification badges.
  */
 
 import * as React from 'react';
@@ -12,31 +15,32 @@ import type { Session } from '../types/session';
 import type { UserProfile } from '../types/profile';
 import type { UserAuditContext } from '../types/audit';
 import { buildUserAuditContextFromProfile } from '../utils/auditUtils';
-import { markUserAuditsBySegmentAsRead } from '../utils/firebase/firestore/userAudits';
+import { markUserAuditsBySegmentAsPageViewed } from '../utils/firebase/firestore/userAudits';
 import { onUserProfile } from '../utils/firebase/firestore/user';
 
 interface UseSegmentViewedOptions {
     /** The navigation segment to mark as viewed (e.g., 'group', 'thesis') */
     segment: string;
-    /** Whether to mark audits as read (default: true) */
+    /** Whether to mark audits as page-viewed (default: true) */
     enabled?: boolean;
-    /** Delay in ms before marking as read (default: 1000ms to avoid marking on quick navigation) */
+    /** Delay in ms before marking as viewed (default: 1000ms to avoid marking on quick navigation) */
     delay?: number;
 }
 
 interface UseSegmentViewedResult {
-    /** Number of audits marked as read */
+    /** Number of audits marked as page-viewed */
     markedCount: number;
     /** Whether the marking operation is in progress */
     isMarking: boolean;
     /** Error if marking failed */
     error: Error | null;
-    /** Manually trigger marking as read */
-    markAsRead: () => Promise<void>;
+    /** Manually trigger marking as page-viewed */
+    markAsViewed: () => Promise<void>;
 }
 
 /**
- * Hook to automatically mark audit notifications as read when viewing a page segment.
+ * Hook to automatically mark audit notifications as page-viewed when visiting a page segment.
+ * This removes the notification badge count for that segment.
  * 
  * @example
  * // In a page component:
@@ -48,13 +52,13 @@ interface UseSegmentViewedResult {
  * @example
  * // With manual control:
  * function ThesisPage() {
- *     const { markAsRead, markedCount } = useSegmentViewed({
+ *     const { markAsViewed, markedCount } = useSegmentViewed({
  *         segment: 'thesis',
  *         enabled: false // Don't auto-mark
  *     });
  *     
  *     // Mark when user clicks a button
- *     return <Button onClick={markAsRead}>Mark as Read ({markedCount})</Button>;
+ *     return <Button onClick={markAsViewed}>Clear Badge ({markedCount})</Button>;
  * }
  */
 export function useSegmentViewed({
@@ -95,24 +99,29 @@ export function useSegmentViewed({
         return buildUserAuditContextFromProfile(profile);
     }, [profile]);
 
-    // Function to mark audits as read
-    const markAsRead = React.useCallback(async () => {
+    // Function to mark audits as page-viewed
+    const markAsViewed = React.useCallback(async () => {
         if (!userContext || isMarking) return;
 
         setIsMarking(true);
         setError(null);
 
         try {
-            const count = await markUserAuditsBySegmentAsRead(userContext, segment);
+            // Pass user role for role-specific segment mapping
+            const count = await markUserAuditsBySegmentAsPageViewed(
+                userContext,
+                segment,
+                profile?.role
+            );
             setMarkedCount(prev => prev + count);
             hasMarkedRef.current = segment;
         } catch (err) {
-            console.error(`Error marking audits as read for segment '${segment}':`, err);
-            setError(err instanceof Error ? err : new Error('Failed to mark audits as read'));
+            console.error(`Error marking audits as page-viewed for segment '${segment}':`, err);
+            setError(err instanceof Error ? err : new Error('Failed to mark audits as page-viewed'));
         } finally {
             setIsMarking(false);
         }
-    }, [userContext, segment, isMarking]);
+    }, [userContext, segment, isMarking, profile?.role]);
 
     // Auto-mark when segment is viewed (with delay)
     React.useEffect(() => {
@@ -122,13 +131,13 @@ export function useSegmentViewed({
         }
 
         const timeoutId = setTimeout(() => {
-            void markAsRead();
+            void markAsViewed();
         }, delay);
 
         return () => {
             clearTimeout(timeoutId);
         };
-    }, [enabled, userContext, segment, delay, markAsRead]);
+    }, [enabled, userContext, segment, delay, markAsViewed]);
 
     // Reset hasMarked when segment changes
     React.useEffect(() => {
@@ -142,7 +151,7 @@ export function useSegmentViewed({
         markedCount,
         isMarking,
         error,
-        markAsRead,
+        markAsViewed,
     };
 }
 

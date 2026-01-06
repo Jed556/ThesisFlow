@@ -328,31 +328,34 @@ export function getSegmentForAuditEntry(
  * Interface for segment-grouped audit counts
  */
 export interface SegmentAuditCounts {
-    /** Map of segment to unread count */
+    /** Map of segment to unviewed count (for badge display) */
     counts: Map<string, number>;
-    /** Total unread count across all segments */
-    totalUnread: number;
+    /** Total unviewed count across all segments (for badge display) */
+    totalUnviewed: number;
 }
 
 /**
- * Group audit entries by their target navigation segment and count unread items
+ * Group audit entries by their target navigation segment and count unviewed items.
+ * Only counts audits where `pageViewed !== true` for badge display purposes.
+ * 
  * @param entries - Array of user audit entries
  * @param userRole - Optional user role for role-specific segment mapping
- * @returns Object with counts per segment and total unread
+ * @returns Object with counts per segment and total unviewed
  */
 export function groupAuditsBySegment(
     entries: UserAuditEntry[],
     userRole?: UserRole
 ): SegmentAuditCounts {
     const counts = new Map<string, number>();
-    let totalUnread = 0;
+    let totalUnviewed = 0;
 
     for (const entry of entries) {
-        if (entry.read) {
-            continue; // Skip read entries
+        // Skip entries that have been page-viewed (badge should not count them)
+        if (entry.pageViewed === true) {
+            continue;
         }
 
-        totalUnread++;
+        totalUnviewed++;
 
         const segment = getSegmentForAuditEntry(
             entry.category,
@@ -364,7 +367,7 @@ export function groupAuditsBySegment(
         counts.set(segment, (counts.get(segment) ?? 0) + 1);
     }
 
-    return { counts, totalUnread };
+    return { counts, totalUnviewed };
 }
 
 /**
