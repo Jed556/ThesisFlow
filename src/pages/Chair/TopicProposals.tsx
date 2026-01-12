@@ -14,14 +14,14 @@ import type {
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
 import {
-    TopicProposalEntryCard, TopicProposalDecisionDialog, ModeratorApprovalDialog
+    TopicProposalEntryCard, TopicProposalDecisionDialog, ChairApprovalDialog
 } from '../../components/TopicProposals';
-import type { ModeratorApprovalFormValues } from '../../components/TopicProposals';
+import type { ChairApprovalFormValues } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
-import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../utils/firebase/firestore/topicProposals';
+import { listenTopicProposalSetsByGroup, recordChairDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
-import { notifyModeratorApprovedTopicForChair, notifyModeratorRejectedTopic } from '../../utils/auditNotificationUtils';
+import { notifyChairApprovedTopicForHead, notifyChairRejectedTopic } from '../../utils/auditNotificationUtils';
 import { useSegmentViewed } from '../../hooks';
 
 function splitSectionList(value?: string | null): string[] {
@@ -40,7 +40,10 @@ interface StatusActionButtonConfig {
     variant?: ButtonProps['variant'];
 }
 
-function getModeratorStatusButtonConfig(status: TopicProposalEntryStatus): StatusActionButtonConfig | null {
+/**
+ * Get button config for chair based on entry status
+ */
+function getChairStatusButtonConfig(status: TopicProposalEntryStatus): StatusActionButtonConfig | null {
     switch (status) {
         case 'head_review':
             return { label: 'Approved - awaiting head', color: 'success', variant: 'outlined' };
@@ -48,8 +51,12 @@ function getModeratorStatusButtonConfig(status: TopicProposalEntryStatus): Statu
             return { label: 'Head approved', color: 'success', variant: 'contained' };
         case 'head_rejected':
             return { label: 'Head rejected', color: 'error', variant: 'contained' };
-        case 'moderator_rejected':
+        case 'chair_rejected':
             return { label: 'Rejected', color: 'error', variant: 'outlined' };
+        case 'moderator_rejected':
+            return { label: 'Moderator rejected', color: 'error', variant: 'outlined' };
+        case 'submitted':
+            return { label: 'Awaiting moderator', color: 'info', variant: 'outlined' };
         case 'draft':
             return { label: 'Draft in progress', color: 'inherit', variant: 'outlined' };
         default:
@@ -59,11 +66,11 @@ function getModeratorStatusButtonConfig(status: TopicProposalEntryStatus): Statu
 
 export const metadata: NavigationItem = {
     group: 'management',
-    index: 0,
+    index: 1,
     title: 'Topic Proposals',
-    segment: 'mod-topic-proposals',
+    segment: 'chair-topic-proposals',
     icon: <HistoryEduIcon />,
-    roles: ['moderator'],
+    roles: ['chair'],
 };
 
 interface DecisionDialogState {
@@ -78,12 +85,13 @@ interface ApprovalDialogState {
 }
 
 /**
- * Moderator dashboard for reviewing student topic proposals before they advance to head approval.
+ * Program Chair dashboard for reviewing student topic proposals after moderator approval.
+ * Approved topics are forwarded to the Research Head for final review.
  */
-export default function ModeratorTopicProposalsPage() {
-    useSegmentViewed({ segment: 'mod-topic-proposals' });
+export default function ChairTopicProposalsPage() {
+    useSegmentViewed({ segment: 'chair-topic-proposals' });
     const session = useSession<Session>();
-    const moderatorUid = session?.user?.uid;
+    const chairUid = session?.user?.uid;
     const { showNotification } = useSnackbar();
 
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
@@ -95,8 +103,10 @@ export default function ModeratorTopicProposalsPage() {
     const [groupsError, setGroupsError] = React.useState<string | null>(null);
     const [groupProposalSets, setGroupProposalSets] = React.useState<Map<string, TopicProposalSetRecord | null>>(new Map());
 
-    // Cache of chair user IDs by course for notifications (moderator approval now goes to chair)
-    const [chairUsersByCourse, setChairUsersByCourse] = React.useState<Map<string, string[]>>(new Map());
+    // Cache of head user IDs by department for notifications
+    const [headUsersByDept, setHeadUsersByDept] = React.useState<Map<string, string[]>>(new Map());
+    // Cache of moderator user IDs by course for notifications
+    const [moderatorUsersByCourse, setModeratorUsersByCourse] = React.useState<Map<string, string[]>>(new Map());
 
     // Separate dialogs for approval (with classification) and rejection
     const [approvalDialog, setApprovalDialog] = React.useState<ApprovalDialogState | null>(null);
@@ -104,7 +114,7 @@ export default function ModeratorTopicProposalsPage() {
     const [decisionLoading, setDecisionLoading] = React.useState(false);
 
     React.useEffect(() => {
-        if (!moderatorUid) {
+        if (!chairUid) {
             setProfile(null);
             setProfileLoading(false);
             return;
@@ -114,7 +124,7 @@ export default function ModeratorTopicProposalsPage() {
         setProfileLoading(true);
         setProfileError(null);
 
-        void findUserById(moderatorUid)
+        void findUserById(chairUid)
             .then((userProfile) => {
                 if (cancelled) {
                     return;
@@ -122,7 +132,7 @@ export default function ModeratorTopicProposalsPage() {
                 setProfile(userProfile ?? null);
             })
             .catch((fetchError) => {
-                console.error('Failed to fetch moderator profile:', fetchError);
+                console.error('Failed to fetch chair profile:', fetchError);
                 if (!cancelled) {
                     setProfileError('Unable to load your profile.');
                     setProfile(null);
@@ -137,28 +147,29 @@ export default function ModeratorTopicProposalsPage() {
         return () => {
             cancelled = true;
         };
-    }, [moderatorUid]);
+    }, [chairUid]);
 
-    const moderatorSections = React.useMemo(() => {
+    // Chair can manage courses they are assigned to (via moderatedCourses or course field)
+    const chairCourses = React.useMemo(() => {
         if (!profile) {
             return [];
         }
 
-        const explicitSections = (profile.moderatedCourses ?? []).filter(Boolean);
-        if (explicitSections.length > 0) {
-            return explicitSections;
+        const explicitCourses = (profile.moderatedCourses ?? []).filter(Boolean);
+        if (explicitCourses.length > 0) {
+            return explicitCourses;
         }
 
-        const fallbackSections = splitSectionList(profile.course);
-        if (fallbackSections.length > 0) {
-            return fallbackSections;
+        const fallbackCourses = splitSectionList(profile.course);
+        if (fallbackCourses.length > 0) {
+            return fallbackCourses;
         }
 
         return [];
     }, [profile]);
 
     React.useEffect(() => {
-        if (moderatorSections.length === 0) {
+        if (chairCourses.length === 0) {
             setAssignedGroups([]);
             return;
         }
@@ -170,7 +181,7 @@ export default function ModeratorTopicProposalsPage() {
         void (async () => {
             try {
                 const resolvedGroups = await Promise.all(
-                    moderatorSections.map((section) => getGroupsByCourse(section))
+                    chairCourses.map((course) => getGroupsByCourse(course))
                 );
 
                 if (cancelled) {
@@ -183,9 +194,9 @@ export default function ModeratorTopicProposalsPage() {
                 });
                 setAssignedGroups(Array.from(deduped.values()));
             } catch (fetchError) {
-                console.error('Failed to fetch moderator groups:', fetchError);
+                console.error('Failed to fetch chair groups:', fetchError);
                 if (!cancelled) {
-                    setGroupsError('Unable to load groups for your assigned sections.');
+                    setGroupsError('Unable to load groups for your assigned courses.');
                     setAssignedGroups([]);
                 }
             } finally {
@@ -198,30 +209,46 @@ export default function ModeratorTopicProposalsPage() {
         return () => {
             cancelled = true;
         };
-    }, [moderatorSections]);
+    }, [chairCourses]);
 
     React.useEffect(() => {
         if (assignedGroups.length === 0) {
             setGroupProposalSets(new Map());
-            setChairUsersByCourse(new Map());
+            setHeadUsersByDept(new Map());
+            setModeratorUsersByCourse(new Map());
             return () => { /* no-op */ };
         }
 
-        // Fetch chair users for all unique courses in assigned groups
-        // (moderator approval now goes to chair, not head)
+        // Fetch head users for all unique departments in assigned groups
+        const uniqueDepartments = [...new Set(assignedGroups.map(g => g.department).filter(Boolean))];
+        void (async () => {
+            const deptHeadMap = new Map<string, string[]>();
+            for (const dept of uniqueDepartments) {
+                if (!dept) continue;
+                try {
+                    const heads = await findUsersByFilter({ role: 'head', department: dept });
+                    deptHeadMap.set(dept, heads.map(h => h.uid));
+                } catch (error) {
+                    console.error(`Failed to fetch heads for department ${dept}:`, error);
+                }
+            }
+            setHeadUsersByDept(deptHeadMap);
+        })();
+
+        // Fetch moderator users for all unique courses in assigned groups
         const uniqueCourses = [...new Set(assignedGroups.map(g => g.course).filter(Boolean))];
         void (async () => {
-            const courseChairMap = new Map<string, string[]>();
+            const courseModeratorMap = new Map<string, string[]>();
             for (const course of uniqueCourses) {
                 if (!course) continue;
                 try {
-                    const chairs = await findUsersByFilter({ role: 'chair', course });
-                    courseChairMap.set(course, chairs.map(c => c.uid));
+                    const moderators = await findUsersByFilter({ role: 'moderator', course });
+                    courseModeratorMap.set(course, moderators.map(m => m.uid));
                 } catch (error) {
-                    console.error(`Failed to fetch chairs for course ${course}:`, error);
+                    console.error(`Failed to fetch moderators for course ${course}:`, error);
                 }
             }
-            setChairUsersByCourse(courseChairMap);
+            setModeratorUsersByCourse(courseModeratorMap);
         })();
 
         const unsubscribes = assignedGroups.map((group) =>
@@ -250,21 +277,21 @@ export default function ModeratorTopicProposalsPage() {
             if (!record) {
                 return;
             }
-            total += record.entries.filter((entry) => entry.status === 'submitted').length;
+            total += record.entries.filter((entry) => entry.status === 'chair_review').length;
         });
         return total;
     }, [groupProposalSets]);
 
-    const sectionsLabel = React.useMemo(() => {
-        if (moderatorSections.length === 0) {
-            return 'No sections assigned';
+    const coursesLabel = React.useMemo(() => {
+        if (chairCourses.length === 0) {
+            return 'No courses assigned';
         }
-        if (moderatorSections.length <= 2) {
-            return moderatorSections.join(', ');
+        if (chairCourses.length <= 2) {
+            return chairCourses.join(', ');
         }
-        const [first, second] = moderatorSections;
-        return `${first}, ${second} +${moderatorSections.length - 2} more`;
-    }, [moderatorSections]);
+        const [first, second] = chairCourses;
+        return `${first}, ${second} +${chairCourses.length - 2} more`;
+    }, [chairCourses]);
 
     const sortedGroups = React.useMemo(() => {
         return [...assignedGroups].sort((a, b) => a.name.localeCompare(b.name));
@@ -279,18 +306,18 @@ export default function ModeratorTopicProposalsPage() {
     };
 
     /**
-     * Handle moderator approval with agenda/ESG/SDG classification
+     * Handle chair approval with optional agenda/ESG/SDG classification updates
      */
-    const handleConfirmApproval = async (values: ModeratorApprovalFormValues) => {
-        if (!approvalDialog || !moderatorUid) {
+    const handleConfirmApproval = async (values: ChairApprovalFormValues) => {
+        if (!approvalDialog || !chairUid) {
             return;
         }
         setDecisionLoading(true);
         try {
-            await recordModeratorDecision({
+            await recordChairDecision({
                 setId: approvalDialog.setId,
                 proposalId: approvalDialog.proposal.id,
-                reviewerUid: moderatorUid,
+                reviewerUid: chairUid,
                 decision: 'approved',
                 notes: values.notes.trim() || undefined,
                 agenda: values.agendaPath.length > 0 ? {
@@ -301,19 +328,21 @@ export default function ModeratorTopicProposalsPage() {
                 ESG: values.ESG || undefined,
                 SDG: values.SDG || undefined,
             });
-            showNotification('Topic approved and forwarded to Program Chair for review', 'success');
+            showNotification('Topic approved and forwarded to head for final review', 'success');
 
-            // Audit notification for moderator approval (now goes to chair)
+            // Audit notification for chair approval
             const group = assignedGroups.find((g) =>
                 groupProposalSets.get(g.id)?.id === approvalDialog.setId
             );
             if (group) {
-                const courseChairIds = chairUsersByCourse.get(group.course ?? '') ?? [];
-                void notifyModeratorApprovedTopicForChair({
+                const deptHeadIds = headUsersByDept.get(group.department ?? '') ?? [];
+                const courseModeratorIds = moderatorUsersByCourse.get(group.course ?? '') ?? [];
+                void notifyChairApprovedTopicForHead({
                     group,
-                    moderatorId: moderatorUid,
+                    chairId: chairUid,
                     proposalTitle: approvalDialog.proposal.title,
-                    chairUserIds: courseChairIds,
+                    headUserIds: deptHeadIds,
+                    moderatorUserIds: courseModeratorIds,
                     details: {
                         proposalId: approvalDialog.proposal.id,
                         notes: values.notes.trim() || undefined,
@@ -333,33 +362,35 @@ export default function ModeratorTopicProposalsPage() {
     };
 
     /**
-     * Handle moderator rejection
+     * Handle chair rejection
      */
     const handleConfirmRejection = async (notes: string) => {
-        if (!decisionDialog || !moderatorUid) {
+        if (!decisionDialog || !chairUid) {
             return;
         }
         setDecisionLoading(true);
         try {
-            await recordModeratorDecision({
+            await recordChairDecision({
                 setId: decisionDialog.setId,
                 proposalId: decisionDialog.proposal.id,
-                reviewerUid: moderatorUid,
+                reviewerUid: chairUid,
                 decision: 'rejected',
                 notes: notes,
             });
             showNotification('Topic rejected', 'success');
 
-            // Audit notification for moderator rejection
+            // Audit notification for chair rejection
             const group = assignedGroups.find((g) =>
                 groupProposalSets.get(g.id)?.id === decisionDialog.setId
             );
             if (group) {
-                void notifyModeratorRejectedTopic({
+                const courseModeratorIds = moderatorUsersByCourse.get(group.course ?? '') ?? [];
+                void notifyChairRejectedTopic({
                     group,
-                    moderatorId: moderatorUid,
+                    chairId: chairUid,
                     proposalTitle: decisionDialog.proposal.title,
                     reason: notes,
+                    moderatorUserIds: courseModeratorIds,
                     details: {
                         proposalId: decisionDialog.proposal.id,
                     },
@@ -384,7 +415,7 @@ export default function ModeratorTopicProposalsPage() {
         );
     }
 
-    if (!moderatorUid) {
+    if (!chairUid) {
         return (
             <AnimatedPage variant="slideUp">
                 <Alert severity="info">Sign in to review topic proposals.</Alert>
@@ -397,8 +428,8 @@ export default function ModeratorTopicProposalsPage() {
             <Stack spacing={3}>
                 <Box>
                     <Typography variant="body1" color="text.secondary">
-                        Monitor every group in the sections you moderate. You can view drafts at any time,
-                        but only proposals that were formally submitted can be approved or rejected.
+                        Review topic proposals approved by moderators. Approved topics will be forwarded
+                        to the Research Head for final decision.
                     </Typography>
                 </Box>
 
@@ -411,13 +442,13 @@ export default function ModeratorTopicProposalsPage() {
                             justifyContent="space-between"
                         >
                             <Box>
-                                <Typography variant="subtitle1">Pending proposals</Typography>
+                                <Typography variant="subtitle1">Awaiting chair decision</Typography>
                                 <Typography variant="h4">{pendingCount}</Typography>
                             </Box>
                             <Chip
-                                label={sectionsLabel}
-                                color={moderatorSections.length > 0 ? 'info' : 'default'}
-                                variant={moderatorSections.length > 0 ? 'filled' : 'outlined'}
+                                label={coursesLabel}
+                                color={chairCourses.length > 0 ? 'info' : 'default'}
+                                variant={chairCourses.length > 0 ? 'filled' : 'outlined'}
                             />
                         </Stack>
                     </CardContent>
@@ -425,10 +456,10 @@ export default function ModeratorTopicProposalsPage() {
 
                 {profileError && <Alert severity="error">{profileError}</Alert>}
                 {groupsError && <Alert severity="error">{groupsError}</Alert>}
-                {!profileLoading && moderatorSections.length === 0 && (
+                {!profileLoading && chairCourses.length === 0 && (
                     <Alert severity="info">
-                        Your profile does not list any sections to moderate. Update your course assignments to see
-                        student submissions.
+                        Your profile does not list any courses. Update your course assignments to see
+                        topic proposals.
                     </Alert>
                 )}
 
@@ -440,14 +471,15 @@ export default function ModeratorTopicProposalsPage() {
                     </Stack>
                 )}
 
-                {!groupsLoading && moderatorSections.length > 0 && sortedGroups.length === 0 && (
-                    <Alert severity="info">No thesis groups are assigned to your sections yet.</Alert>
+                {!groupsLoading && chairCourses.length > 0 && sortedGroups.length === 0 && (
+                    <Alert severity="info">No thesis groups are assigned to your courses yet.</Alert>
                 )}
 
                 {sortedGroups.map((group) => {
                     const record = groupProposalSets.get(group.id);
                     const entries = record?.entries ?? [];
                     const awaitingHead = Boolean(record?.awaitingHead);
+                    const awaitingChair = Boolean(record?.awaitingChair);
 
                     return (
                         <Card key={group.id} variant="outlined">
@@ -461,11 +493,12 @@ export default function ModeratorTopicProposalsPage() {
                                     <Box>
                                         <Typography variant="h6">{group.name}</Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            {group.course ?? 'Unassigned section'} • {group.department ?? 'No department listed'}
+                                            {group.course ?? 'Unassigned course'} • {group.department ?? 'No department listed'}
                                         </Typography>
                                     </Box>
                                     <Stack direction="row" spacing={1}>
                                         <Chip label={`Batch ${record?.batch ?? 1}`} size="small" />
+                                        {awaitingChair && <Chip label="Chair queue" size="small" color="info" />}
                                         {awaitingHead && <Chip label="Head queue" size="small" color="warning" />}
                                     </Stack>
                                 </Stack>
@@ -485,10 +518,10 @@ export default function ModeratorTopicProposalsPage() {
                                 {record && entries.length > 0 && (
                                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
                                         {entries.map((entry) => {
-                                            const statusButton = getModeratorStatusButtonConfig(
+                                            const statusButton = getChairStatusButtonConfig(
                                                 entry.status ?? 'draft'
                                             );
-                                            const actions = entry.status === 'submitted'
+                                            const actions = entry.status === 'chair_review'
                                                 ? [
                                                     <Button
                                                         key="approve"
@@ -497,7 +530,7 @@ export default function ModeratorTopicProposalsPage() {
                                                         size="small"
                                                         onClick={() => handleOpenApproval(record.id, entry)}
                                                     >
-                                                        Approve & Classify
+                                                        Approve
                                                     </Button>,
                                                     <Button
                                                         key="reject"
@@ -524,12 +557,12 @@ export default function ModeratorTopicProposalsPage() {
                                                     : [
                                                         <Tooltip
                                                             key="view-only"
-                                                            title="Only submitted proposals can be reviewed"
+                                                            title="Only moderator-approved proposals can be reviewed"
                                                             placement="top"
                                                         >
                                                             <span>
                                                                 <Button size="small" disabled>
-                                                                    Await submission
+                                                                    Await moderator
                                                                 </Button>
                                                             </span>
                                                         </Tooltip>,
@@ -553,8 +586,8 @@ export default function ModeratorTopicProposalsPage() {
                 })}
             </Stack>
 
-            {/* Moderator approval dialog with agenda/ESG/SDG classification */}
-            <ModeratorApprovalDialog
+            {/* Chair approval dialog with optional agenda/ESG/SDG classification updates */}
+            <ChairApprovalDialog
                 open={Boolean(approvalDialog)}
                 proposal={approvalDialog?.proposal ?? null}
                 loading={decisionLoading}
@@ -566,7 +599,7 @@ export default function ModeratorTopicProposalsPage() {
             <TopicProposalDecisionDialog
                 open={Boolean(decisionDialog)}
                 decision="rejected"
-                role="moderator"
+                role="chair"
                 proposalTitle={decisionDialog?.proposal.title}
                 loading={decisionLoading}
                 onClose={() => setDecisionDialog(null)}

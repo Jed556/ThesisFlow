@@ -86,6 +86,13 @@ service cloud.firestore {
         }
 
         /**
+         * Check if user is program chair
+         */
+        function isChair() {
+            return hasRole('chair');
+        }
+
+        /**
          * Check if user is statistician
          */
         function isStatistician() {
@@ -110,7 +117,7 @@ service cloud.firestore {
          * Check if user is staff (any role with elevated privileges)
          */
         function isStaff() {
-            return hasAnyRole(['admin', 'developer', 'head', 'adviser', 'editor', 'moderator', 'statistician', 'panel']);
+            return hasAnyRole(['admin', 'developer', 'head', 'chair', 'adviser', 'editor', 'moderator', 'statistician', 'panel']);
         }
 
         /**
@@ -121,10 +128,10 @@ service cloud.firestore {
         }
 
         /**
-         * Check if user is moderator or above (moderator, head, admin)
+         * Check if user is moderator or above (moderator, chair, head, admin)
          */
         function isModeratorOrAbove() {
-            return hasAnyRole(['moderator', 'head', 'admin', 'developer']);
+            return hasAnyRole(['moderator', 'chair', 'head', 'admin', 'developer']);
         }
 
         /**

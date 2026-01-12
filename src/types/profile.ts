@@ -44,9 +44,14 @@ export interface UserProfile {
      */
     email: string;
     /**
-     * System-wide user role
+     * System-wide user role (primary role)
      */
-    role: UserRole; // System-wide role: student, editor, adviser, admin
+    role: UserRole;
+    /**
+     * Additional roles the user has beyond their primary role.
+     * Useful for users who serve in multiple capacities (e.g., adviser + panel, moderator + chair).
+     */
+    secondaryRoles?: UserRole[];
     /**
      * User's department or affiliation within the institution
      */

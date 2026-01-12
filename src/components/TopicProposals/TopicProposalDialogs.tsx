@@ -27,13 +27,14 @@ export interface TopicProposalApprovalFormValues {
 }
 
 export type ModeratorApprovalFormValues = TopicProposalApprovalFormValues;
+export type ChairApprovalFormValues = TopicProposalApprovalFormValues;
 export type HeadApprovalFormValues = TopicProposalApprovalFormValues;
 
 export interface TopicProposalApprovalDialogProps {
     /** Whether the dialog is open */
     open: boolean;
     /** Role of approver; changes copy/CTA */
-    role: 'moderator' | 'head';
+    role: 'moderator' | 'chair' | 'head';
     /** The proposal entry being approved */
     proposal: TopicProposalEntry | null;
     /** Whether the dialog is in loading state */
@@ -46,6 +47,10 @@ export interface TopicProposalApprovalDialogProps {
 
 export type ModeratorApprovalDialogProps = Omit<TopicProposalApprovalDialogProps, 'role' | 'onConfirm'> & {
     onConfirm: (values: ModeratorApprovalFormValues) => Promise<void> | void;
+};
+
+export type ChairApprovalDialogProps = Omit<TopicProposalApprovalDialogProps, 'role' | 'onConfirm'> & {
+    onConfirm: (values: ChairApprovalFormValues) => Promise<void> | void;
 };
 
 export type HeadApprovalDialogProps = Omit<TopicProposalApprovalDialogProps, 'role' | 'onConfirm'> & {
@@ -284,11 +289,38 @@ export function TopicProposalApprovalDialog(props: TopicProposalApprovalDialogPr
     }
 
     const isModerator = role === 'moderator';
+    const isChair = role === 'chair';
+    const _isHead = role === 'head';
+
+    const getDialogTitle = () => {
+        if (isModerator) return 'Approve Topic & Set Classification';
+        if (isChair) return 'Review & Approve Topic Proposal';
+        return 'Review & Approve Topic Proposal';
+    };
+
+    const getDescriptionText = () => {
+        if (isModerator) {
+            return 'As a moderator, you are responsible for classifying this topic proposal. '
+                + 'The Program Chair will review and confirm (or adjust) your classification before it goes to the head.';
+        }
+        if (isChair) {
+            return 'Review the classification set by the moderator below. '
+                + 'You may adjust the agenda, ESG, and SDG before forwarding to the Research Head for final approval.';
+        }
+        return 'Review the classification set by the moderator and Program Chair below. '
+            + 'You may adjust the agenda, ESG, and SDG before giving final approval.';
+    };
+
+    const getApproveButtonText = () => {
+        if (isModerator) return 'Approve & Forward to Chair';
+        if (isChair) return 'Approve & Forward to Head';
+        return 'Approve Topic';
+    };
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
             <DialogTitle>
-                {isModerator ? 'Approve Topic & Set Classification' : 'Review & Approve Topic Proposal'}
+                {getDialogTitle()}
             </DialogTitle>
             <DialogContent>
                 <Stack spacing={3} sx={{ mt: 1 }}>
@@ -319,15 +351,7 @@ export function TopicProposalApprovalDialog(props: TopicProposalApprovalDialogPr
                     </Box>
 
                     <Typography variant="body2" color="text.secondary">
-                        {isModerator
-                            ? (
-                                'As a moderator, you are responsible for classifying this topic proposal. '
-                                + 'The head will review and confirm (or adjust) your classification before final approval.'
-                            )
-                            : (
-                                'Review the classification set by the moderator below. '
-                                + 'You may adjust the agenda, ESG, and SDG before giving final approval.'
-                            )}
+                        {getDescriptionText()}
                     </Typography>
 
                     <Typography variant="subtitle1" fontWeight="medium">
@@ -448,7 +472,7 @@ export function TopicProposalApprovalDialog(props: TopicProposalApprovalDialogPr
                     color="success"
                     disabled={loading}
                 >
-                    {isModerator ? 'Approve & Forward to Head' : 'Approve Topic'}
+                    {getApproveButtonText()}
                 </Button>
             </DialogActions>
         </Dialog>
@@ -463,6 +487,18 @@ export function ModeratorApprovalDialog(props: ModeratorApprovalDialogProps) {
         <TopicProposalApprovalDialog
             {...props}
             role="moderator"
+        />
+    );
+}
+
+/**
+ * Wrapper for program chair approval.
+ */
+export function ChairApprovalDialog(props: ChairApprovalDialogProps) {
+    return (
+        <TopicProposalApprovalDialog
+            {...props}
+            role="chair"
         />
     );
 }
@@ -485,7 +521,7 @@ export interface TopicProposalDecisionDialogProps {
     /** The decision type */
     decision: 'approved' | 'rejected';
     /** The role of the user making the decision */
-    role: 'moderator' | 'head';
+    role: 'moderator' | 'chair' | 'head';
     /** The proposal title for display */
     proposalTitle?: string;
     /** Whether the dialog is in loading state */
@@ -524,7 +560,7 @@ export function TopicProposalDecisionDialog({
     };
 
     const isApproval = decision === 'approved';
-    const roleLabel = role === 'moderator' ? 'Moderator' : 'Head';
+    const roleLabel = role === 'moderator' ? 'Moderator' : role === 'chair' ? 'Program Chair' : 'Head';
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">

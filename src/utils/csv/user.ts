@@ -5,10 +5,58 @@
 import type { UserProfile, UserRole } from '../../types/profile';
 import { parseCsvText, normalizeHeader, mapHeaderIndexes, splitArrayField, generateCsvText } from './parser';
 
+/** Valid user roles for validation */
+const VALID_ROLES: UserRole[] = [
+    'student',
+    'statistician',
+    'editor',
+    'adviser',
+    'panel',
+    'moderator',
+    'chair',
+    'head',
+    'admin',
+    'developer'
+];
+
 /**
  * User with optional password for CSV import
  */
 export type ImportedUser = UserProfile & { password?: string };
+
+/**
+ * Parse and validate roles from CSV, supporting both single role and multi-role formats.
+ * Supports formats like: "adviser", "adviser;panel", "adviser|moderator|chair"
+ * @returns Object with primary role and optional secondary roles
+ */
+function parseRolesFromCsv(
+    roleSource: string,
+    secondaryRolesSource: string
+): { role: UserRole; secondaryRoles?: UserRole[] } {
+    // Parse roles from the main 'role' or 'roles' field (supports separators)
+    const rolesFromMain = splitArrayField(roleSource)
+        .map(r => r.toLowerCase().trim() as UserRole)
+        .filter(r => VALID_ROLES.includes(r));
+
+    // Parse explicit secondary roles field
+    const rolesFromSecondary = splitArrayField(secondaryRolesSource)
+        .map(r => r.toLowerCase().trim() as UserRole)
+        .filter(r => VALID_ROLES.includes(r));
+
+    // Combine all roles, main field takes priority for primary role
+    const allRoles = [...rolesFromMain, ...rolesFromSecondary];
+
+    // Primary role is the first valid role, or 'student' as default
+    const primaryRole = allRoles[0] || 'student';
+
+    // Secondary roles are all other unique roles (excluding primary)
+    const secondaryRoles = [...new Set(allRoles.slice(1).filter(r => r !== primaryRole))];
+
+    return {
+        role: primaryRole,
+        ...(secondaryRoles.length > 0 && { secondaryRoles }),
+    };
+}
 
 /**
  * Import users from CSV text
@@ -28,32 +76,25 @@ export function importUsersFromCsv(csvText: string): { parsed: ImportedUser[]; e
         const middleName = get('middleName') || get('middle_name') || get('middle');
         const prefix = get('prefix');
         const suffix = get('suffix');
-        const roleRaw = (get('role') || 'student').toLowerCase() as UserRole;
         const uidRaw = get('uid') || get('id') || '';
         const password = get('password') || get('pass');
+
+        // Parse roles - supports single role or multi-role with separators (;|)
+        const roleSource = get('role') || get('roles') || 'student';
+        const secondaryRolesSource = get('secondaryRoles') || get('secondary_roles') || get('additionalRoles') || '';
+        const { role: normalizedRole, secondaryRoles } = parseRolesFromCsv(roleSource, secondaryRolesSource);
+
+        // Parse courses
         const courseSource = get('courses') || get('course');
         const courseEntries = splitArrayField(courseSource) || [];
         const courseValue = courseEntries[0] || courseSource || undefined;
         const moderatedCourseSource = get('moderatedCourses') || get('sections');
         const moderatedCourseEntries = splitArrayField(moderatedCourseSource);
 
-        const normalizedRole: UserRole = (
-            [
-                'student',
-                'statistician',
-                'editor',
-                'adviser',
-                'panel',
-                'moderator',
-                'head',
-                'admin',
-                'developer'
-            ].includes(roleRaw)
-                ? roleRaw
-                : 'student'
-        );
-
-        const moderatorSections = normalizedRole === 'moderator'
+        // For moderator/chair roles, combine moderated courses from both fields
+        const isModerationRole = normalizedRole === 'moderator' || normalizedRole === 'chair'
+            || secondaryRoles?.includes('moderator') || secondaryRoles?.includes('chair');
+        const moderatorSections = isModerationRole
             ? Array.from(new Set([...moderatedCourseEntries, ...courseEntries])).filter(Boolean)
             : moderatedCourseEntries;
 
@@ -80,6 +121,7 @@ export function importUsersFromCsv(csvText: string): { parsed: ImportedUser[]; e
                 ...(suffix && { suffix }),
             },
             role: normalizedRole,
+            ...(secondaryRoles && secondaryRoles.length > 0 && { secondaryRoles }),
             department: get('department') || undefined,
             course: courseValue,
             avatar: get('avatar') || undefined,
@@ -116,6 +158,7 @@ export function exportUsersToCsv(users: UserProfile[], includePassword: boolean 
         'prefix',
         'suffix',
         'role',
+        'secondaryRoles',
         'department',
         'course',
         'moderatedCourses',
@@ -135,6 +178,7 @@ export function exportUsersToCsv(users: UserProfile[], includePassword: boolean 
         user.name.prefix || '',
         user.name.suffix || '',
         user.role,
+        user.secondaryRoles?.join(';') || '',
         user.department || '',
         user.course || '',
         user.moderatedCourses?.join(';') || '',

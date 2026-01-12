@@ -12,11 +12,16 @@ export interface TopicProposalReviewerDecision {
 
 /**
  * Topic proposal entry status - workflow states
+ * Flow: draft -> submitted -> moderator_rejected | chair_review
+ *       chair_review -> chair_rejected | head_review
+ *       head_review -> head_rejected | head_approved
  */
 export type TopicProposalEntryStatus =
     | 'draft'
     | 'submitted'
     | 'moderator_rejected'
+    | 'chair_review'
+    | 'chair_rejected'
     | 'head_review'
     | 'head_approved'
     | 'head_rejected';
@@ -28,6 +33,8 @@ export const TOPIC_PROPOSAL_ENTRY_STATUSES: TopicProposalEntryStatus[] = [
     'draft',
     'submitted',
     'moderator_rejected',
+    'chair_review',
+    'chair_rejected',
     'head_review',
     'head_approved',
     'head_rejected',
@@ -63,7 +70,7 @@ export interface TopicProposalEntry {
  * Historical review events for auditing the topic proposal lifecycle.
  */
 export interface TopicProposalReviewEvent {
-    stage: 'moderator' | 'head';
+    stage: 'moderator' | 'chair' | 'head';
     status: 'approved' | 'rejected';
     reviewerUid: string;
     proposalId: string;
@@ -88,6 +95,8 @@ export interface TopicProposalBatch {
     batch?: number;
     /** Whether any entry is awaiting head review */
     awaitingHead?: boolean;
+    /** Whether any entry is awaiting chair review */
+    awaitingChair?: boolean;
     /** Whether any entry is awaiting moderator review */
     awaitingModerator?: boolean;
     /** Group ID this proposal set belongs to (extracted from path) */

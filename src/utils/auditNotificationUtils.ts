@@ -1104,7 +1104,7 @@ export async function notifyPanelCommentsReleased(options: {
 export async function notifyNewChatMessage(options: {
     group: ThesisGroup;
     senderId: string;
-    senderRole: 'student' | 'adviser' | 'editor' | 'statistician' | 'moderator';
+    senderRole: 'student' | 'adviser' | 'editor' | 'statistician' | 'moderator' | 'chair';
     chapterName: string;
     stageName?: string;
     hasAttachments?: boolean;
@@ -1198,8 +1198,47 @@ export async function notifyDraftDeleted(options: {
 // ============================================================================
 
 /**
+ * Notify chair that a topic proposal requires their decision after moderator approval.
+ * Also notifies group members about the moderator approval.
+ */
+export async function notifyModeratorApprovedTopicForChair(options: {
+    group: ThesisGroup;
+    moderatorId: string;
+    proposalTitle: string;
+    chairUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, moderatorId, proposalTitle, chairUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: moderatorId,
+        name: 'Topic Awaiting Program Chair Decision',
+        description: `Topic "${proposalTitle}" has been approved by the moderator and now requires Program Chair decision.`,
+        category: 'proposal',
+        action: 'proposal_approved',
+        targets: {
+            groupMembers: true,
+            userIds: chairUserIds,
+            excludeUserId: moderatorId,
+        },
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'moderator',
+            nextReviewerRole: 'chair',
+            awaitingChairDecision: true,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Proposal',
+    });
+}
+
+/**
  * Notify head that a topic proposal requires their decision after moderator approval.
  * Also notifies group members about the moderator approval.
+ * NOTE: With the new flow, moderator -> chair -> head, this now sends to chair first.
+ * @deprecated Use notifyModeratorApprovedTopicForChair instead
  */
 export async function notifyModeratorApprovedTopicForHead(options: {
     group: ThesisGroup;
@@ -1213,8 +1252,8 @@ export async function notifyModeratorApprovedTopicForHead(options: {
     return auditAndNotify({
         group,
         userId: moderatorId,
-        name: 'Topic Awaiting Head Decision',
-        description: `Topic "${proposalTitle}" has been approved by the moderator and now requires head decision.`,
+        name: 'Topic Awaiting Program Chair Decision',
+        description: `Topic "${proposalTitle}" has been approved by the moderator and now requires Program Chair decision.`,
         category: 'proposal',
         action: 'proposal_approved',
         targets: {
@@ -1226,8 +1265,8 @@ export async function notifyModeratorApprovedTopicForHead(options: {
             ...details,
             proposalTitle,
             reviewerRole: 'moderator',
-            nextReviewerRole: 'head',
-            awaitingHeadDecision: true,
+            nextReviewerRole: 'chair',
+            awaitingChairDecision: true,
         },
         sendEmail: true,
         emailActionText: 'Review Proposal',
@@ -1383,6 +1422,89 @@ export async function notifyHeadRejectedTopic(options: {
             ...details,
             proposalTitle,
             reviewerRole: 'head',
+            reason,
+        },
+        sendEmail: true,
+        emailActionText: 'View Feedback',
+    });
+}
+
+// ============================================================================
+// Program Chair (Chair) Notification Functions
+// ============================================================================
+
+/**
+ * Notify head that a topic proposal requires their decision after chair approval.
+ * Also notifies group members and moderators about the chair approval.
+ */
+export async function notifyChairApprovedTopicForHead(options: {
+    group: ThesisGroup;
+    chairId: string;
+    proposalTitle: string;
+    headUserIds: string[];
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, chairId, proposalTitle, headUserIds, moderatorUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: chairId,
+        name: 'Topic Awaiting Head Decision',
+        description: `Topic "${proposalTitle}" has been approved by the Program Chair and now requires Research Head decision.`,
+        category: 'proposal',
+        action: 'proposal_approved',
+        targets: {
+            groupMembers: true,
+            moderators: true,
+            userIds: headUserIds,
+            excludeUserId: chairId,
+        },
+        moderatorUserIds,
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'chair',
+            nextReviewerRole: 'head',
+            awaitingHeadDecision: true,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Proposal',
+    });
+}
+
+/**
+ * Notify when chair rejects a topic proposal.
+ * Notifies group members and moderators.
+ */
+export async function notifyChairRejectedTopic(options: {
+    group: ThesisGroup;
+    chairId: string;
+    proposalTitle: string;
+    reason?: string;
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, chairId, proposalTitle, reason, moderatorUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: chairId,
+        name: 'Topic Rejected by Program Chair',
+        description: `Topic "${proposalTitle}" has been rejected by the Program Chair.` +
+            `${reason ? ` Reason: ${reason}` : ''}`,
+        category: 'proposal',
+        action: 'proposal_rejected',
+        targets: {
+            groupMembers: true,
+            moderators: true,
+            excludeUserId: chairId,
+        },
+        moderatorUserIds,
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'chair',
             reason,
         },
         sendEmail: true,

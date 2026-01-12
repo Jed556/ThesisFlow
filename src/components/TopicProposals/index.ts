@@ -1,4 +1,5 @@
 export {
+    ChairApprovalDialog,
     HeadApprovalDialog,
     ModeratorApprovalDialog,
     TopicProposalApprovalDialog,
@@ -6,6 +7,8 @@ export {
     TopicProposalFormDialog,
 } from './TopicProposalDialogs';
 export type {
+    ChairApprovalDialogProps,
+    ChairApprovalFormValues,
     HeadApprovalDialogProps,
     HeadApprovalFormValues,
     ModeratorApprovalDialogProps,
