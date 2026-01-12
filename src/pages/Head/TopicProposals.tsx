@@ -17,6 +17,7 @@ import { listenTopicProposalSetsByGroup, recordHeadDecision } from '../../utils/
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { notifyHeadApprovedTopic, notifyHeadRejectedTopic } from '../../utils/auditNotificationUtils';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -58,6 +59,7 @@ function describeHeadRestriction(status: TopicProposalEntry['status']): { label:
  * Head reviewer workspace scoped to their assigned departments.
  */
 export default function HeadTopicProposalsPage() {
+    useSegmentViewed({ segment: 'head-topic-proposals' });
     const session = useSession<Session>();
     const headUid = session?.user?.uid;
     const { showNotification } = useSnackbar();

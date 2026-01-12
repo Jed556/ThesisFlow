@@ -22,6 +22,7 @@ import { listenTopicProposalSetsByGroup, recordModeratorDecision } from '../../u
 import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { notifyModeratorApprovedTopicForHead, notifyModeratorRejectedTopic } from '../../utils/auditNotificationUtils';
+import { useSegmentViewed } from '../../hooks';
 
 function splitSectionList(value?: string | null): string[] {
     if (!value) {
@@ -80,6 +81,7 @@ interface ApprovalDialogState {
  * Moderator dashboard for reviewing student topic proposals before they advance to head approval.
  */
 export default function ModeratorTopicProposalsPage() {
+    useSegmentViewed({ segment: 'mod-topic-proposals' });
     const session = useSession<Session>();
     const moderatorUid = session?.user?.uid;
     const { showNotification } = useSnackbar();

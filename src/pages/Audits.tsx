@@ -6,6 +6,7 @@ import { AnimatedPage } from '../components/Animate';
 import { AuditView } from '../components/AuditView';
 import type { NavigationItem } from '../types/navigation';
 import type { Session } from '../types/session';
+import { useSegmentViewed } from '../hooks';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -27,6 +28,7 @@ export const metadata: NavigationItem = {
  */
 export default function AuditsPage(): React.ReactElement {
     const session = useSession<Session>();
+    useSegmentViewed({ segment: 'audits' });
 
     const userUid = session?.user?.uid ?? null;
     const userRole = session?.user?.role;

@@ -21,6 +21,7 @@ import type { UserProfile } from '../../../types/profile';
 import type { Session } from '../../../types/session';
 import type { ThesisGroup } from '../../../types/group';
 import { devError, devLog } from '../../../utils/devUtils';
+import { useSegmentViewed } from '../../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'experts',
@@ -38,6 +39,7 @@ export default function AdviserEditorRecommendationsPage() {
     const session = useSession<Session>();
     const studentUid = session?.user?.uid ?? null;
     const navigate = useNavigate();
+    useSegmentViewed({ segment: 'recommendation' });
     const [activeTab, setActiveTab] = React.useState(0);
     const [infoDialogOpen, setInfoDialogOpen] = React.useState(false);
     const [adviserProfiles, setAdviserProfiles] = React.useState<UserProfile[]>([]);

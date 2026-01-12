@@ -21,6 +21,7 @@ import { findAndListenTerminalRequirements } from '../../utils/firebase/firestor
 import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRequirementSubmission';
 import { notifySubmissionApproval, notifyRevisionRequested, notifyNewChatMessage } from '../../utils/auditNotificationUtils';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -32,6 +33,7 @@ export const metadata: NavigationItem = {
 };
 
 export default function StatisticianThesisOverviewPage() {
+    useSegmentViewed({ segment: 'statistician-thesis-overview' });
     const session = useSession<Session>();
     const statisticianUid = session?.user?.uid ?? '';
 

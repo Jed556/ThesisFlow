@@ -143,6 +143,8 @@ export type ChapterSubmissionStatus = 'draft' | 'under_review' | 'approved' | 'r
 export interface ChapterSubmissionEntry {
     id: string;
     status: ChapterSubmissionStatus;
+    /** Document link URL (for link submission mode) */
+    link?: string;
 }
 
 /**
@@ -154,6 +156,8 @@ export interface ChapterSubmission {
     submittedAt?: Date;
     submittedBy?: UserRole;
     files?: FileAttachment[];
+    /** Document link URL (for link submission mode) */
+    link?: string;
     /** Expert approval states for this submission */
     expertApprovals?: ExpertApprovalState;
 }

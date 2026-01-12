@@ -1,23 +1,35 @@
 import * as React from 'react';
 import {
-    Box, Button, Card, CardContent, Chip, LinearProgress, Skeleton, Stack, Tooltip, Typography,
+    Box, Button, Card, CardContent, Chip, LinearProgress, Skeleton, Stack,
+    TextField, Tooltip, Typography,
 } from '@mui/material';
-import { CloudUpload as CloudUploadIcon, Download as DownloadIcon } from '@mui/icons-material';
+import {
+    CloudUpload as CloudUploadIcon, Download as DownloadIcon,
+    Link as LinkIcon, CheckCircle as CheckCircleIcon,
+} from '@mui/icons-material';
 import type { FileAttachment } from '../../types/file';
 import type {
     TerminalRequirement,
     TerminalRequirementStatus,
 } from '../../types/terminalRequirement';
+import type { SubmissionMode } from '../../types/systemSettings';
 import { FileCard } from '../File';
 
-const STATUS_META: Record<TerminalRequirementStatus, { label: string; color: 'default' | 'success'; variant: 'filled' | 'outlined'; }> = {
+const STATUS_META: Record<TerminalRequirementStatus,
+    { label: string; color: 'default' | 'success'; variant: 'filled' | 'outlined'; }> = {
     pending: { label: 'Pending', color: 'default', variant: 'outlined' },
     submitted: { label: 'Submitted', color: 'success', variant: 'filled' },
 };
 
 export interface TerminalRequirementCardProps {
     requirement: TerminalRequirement;
+    /** Submission mode - 'file' for upload, 'link' for URL submission */
+    submissionMode?: SubmissionMode;
     files?: FileAttachment[];
+    /** Link URL when in link mode */
+    linkUrl?: string;
+    /** Whether link is marked as submitted */
+    linkSubmitted?: boolean;
     status: TerminalRequirementStatus;
     loading?: boolean;
     uploading?: boolean;
@@ -26,11 +38,18 @@ export interface TerminalRequirementCardProps {
     onUpload?: (files: FileList) => void;
     onDeleteFile?: (file: FileAttachment) => void;
     onViewFile?: (file: FileAttachment) => void;
+    /** Handler for link URL changes (link mode) */
+    onLinkChange?: (url: string) => void;
+    /** Handler for marking link as submitted (link mode) */
+    onLinkSubmit?: () => void;
 }
 
 export function TerminalRequirementCard({
     requirement,
+    submissionMode = 'file',
     files,
+    linkUrl,
+    linkSubmitted,
     status,
     loading,
     uploading,
@@ -39,6 +58,8 @@ export function TerminalRequirementCard({
     onUpload,
     onDeleteFile,
     onViewFile,
+    onLinkChange,
+    onLinkSubmit,
 }: TerminalRequirementCardProps) {
     const inputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -81,8 +102,10 @@ export function TerminalRequirementCard({
 
     const statusMeta = STATUS_META[status];
     const hasFiles = Boolean(files && files.length > 0);
-    const canUpload = Boolean(onUpload);
+    const canUpload = Boolean(onUpload) && submissionMode === 'file';
     const uploadDisabled = disabled || uploading || !canUpload;
+    const isLinkMode = submissionMode === 'link';
+    const canEditLink = Boolean(onLinkChange) && !disabled && !linkSubmitted;
 
     return (
         <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -107,6 +130,55 @@ export function TerminalRequirementCard({
                     </Stack>
                 </Stack>
 
+                {/* Link submission mode */}
+                {isLinkMode && (
+                    <Stack spacing={1.5}>
+                        <TextField
+                            label="Document URL"
+                            placeholder="https://docs.google.com/... or https://drive.google.com/..."
+                            value={linkUrl ?? ''}
+                            onChange={(e) => onLinkChange?.(e.target.value)}
+                            disabled={!canEditLink}
+                            size="small"
+                            fullWidth
+                            slotProps={{
+                                input: {
+                                    startAdornment: <LinkIcon sx={{ mr: 1, color: 'action.active' }} />,
+                                },
+                            }}
+                            helperText={linkSubmitted
+                                ? 'Link submitted for review'
+                                : 'Paste a Google Docs or Google Drive URL'
+                            }
+                        />
+                        {linkUrl && !linkSubmitted && onLinkSubmit && (
+                            <Button
+                                variant="contained"
+                                startIcon={<CheckCircleIcon />}
+                                onClick={onLinkSubmit}
+                                disabled={disabled || !linkUrl.trim()}
+                                size="small"
+                            >
+                                Mark as submitted
+                            </Button>
+                        )}
+                        {linkSubmitted && linkUrl && (
+                            <Button
+                                variant="text"
+                                startIcon={<LinkIcon />}
+                                component="a"
+                                href={linkUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                size="small"
+                            >
+                                Open document
+                            </Button>
+                        )}
+                    </Stack>
+                )}
+
+                {/* File upload mode */}
                 {canUpload && (
                     <>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
@@ -157,47 +229,50 @@ export function TerminalRequirementCard({
                     </Typography>
                 )}
 
-                <Box sx={{ flexGrow: 1 }}>
-                    {hasFiles ? (
-                        <Stack spacing={1}>
-                            {files!.map((file) => (
-                                <Tooltip
-                                    key={file.id ?? file.url}
-                                    title={onViewFile ? 'Click to view' : ''}
-                                    placement="top"
-                                    arrow
-                                >
-                                    <Box
-                                        onClick={onViewFile ? () => onViewFile(file) : undefined}
-                                        sx={{
-                                            cursor: onViewFile ? 'pointer' : 'default',
-                                            borderRadius: 1,
-                                            transition: (theme) => theme.transitions.create(
-                                                ['background-color', 'box-shadow'],
-                                                { duration: theme.transitions.duration.short }
-                                            ),
-                                            ...(onViewFile && {
-                                                '&:hover': {
-                                                    bgcolor: 'action.hover',
-                                                },
-                                            }),
-                                        }}
+                {/* File list - only show in file mode */}
+                {!isLinkMode && (
+                    <Box sx={{ flexGrow: 1 }}>
+                        {hasFiles ? (
+                            <Stack spacing={1}>
+                                {files!.map((file) => (
+                                    <Tooltip
+                                        key={file.id ?? file.url}
+                                        title={onViewFile ? 'Click to view' : ''}
+                                        placement="top"
+                                        arrow
                                     >
-                                        <FileCard
-                                            file={file}
-                                            showDeleteButton={Boolean(onDeleteFile)}
-                                            onDelete={onDeleteFile ? () => handleDeleteFile(file) : undefined}
-                                        />
-                                    </Box>
-                                </Tooltip>
-                            ))}
-                        </Stack>
-                    ) : (
-                        <Typography variant="body2" color="text.secondary">
-                            No uploads yet. Submit your document to mark this requirement as submitted.
-                        </Typography>
-                    )}
-                </Box>
+                                        <Box
+                                            onClick={onViewFile ? () => onViewFile(file) : undefined}
+                                            sx={{
+                                                cursor: onViewFile ? 'pointer' : 'default',
+                                                borderRadius: 1,
+                                                transition: (theme) => theme.transitions.create(
+                                                    ['background-color', 'box-shadow'],
+                                                    { duration: theme.transitions.duration.short }
+                                                ),
+                                                ...(onViewFile && {
+                                                    '&:hover': {
+                                                        bgcolor: 'action.hover',
+                                                    },
+                                                }),
+                                            }}
+                                        >
+                                            <FileCard
+                                                file={file}
+                                                showDeleteButton={Boolean(onDeleteFile)}
+                                                onDelete={onDeleteFile ? () => handleDeleteFile(file) : undefined}
+                                            />
+                                        </Box>
+                                    </Tooltip>
+                                ))}
+                            </Stack>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary">
+                                No uploads yet. Submit your document to mark this requirement as submitted.
+                            </Typography>
+                        )}
+                    </Box>
+                )}
 
                 {requirement.instructions && (
                     <Typography variant="caption" color="text.secondary">

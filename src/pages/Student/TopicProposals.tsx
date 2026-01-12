@@ -15,6 +15,7 @@ import { TopicProposalEntryCard, TopicProposalFormDialog, type TopicProposalForm
 import { ApprovalStatusChip, type ApprovalChipStatus } from '../../components/StatusChip';
 import UnauthorizedNotice from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../contexts/SnackbarContext';
+import { useSegmentViewed } from '../../hooks';
 import {
     createProposalSetByGroup, listenTopicProposalSetsByGroup, markProposalAsThesisBySetId,
     submitProposalSetBySetId, updateDraftEntriesBySetId,
@@ -117,6 +118,7 @@ export default function StudentTopicProposalsPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid;
     const { showNotification } = useSnackbar();
+    useSegmentViewed({ segment: 'topic-proposals' });
 
     const [group, setGroup] = React.useState<ThesisGroup | null>(null);
     const [groupError, setGroupError] = React.useState<string | null>(null);

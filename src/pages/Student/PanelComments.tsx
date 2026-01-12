@@ -34,6 +34,7 @@ import {
 } from '../../utils/panelCommentUtils';
 import { DEFAULT_YEAR } from '../../config/firestore';
 import { formatFileSize } from '../../utils/fileUtils';
+import { useSegmentViewed } from '../../hooks';
 import { FileCard, FileViewer } from '../../components/File';
 import type { FileAttachment } from '../../types/file';
 import { buildAuditContextFromGroup, createAuditEntry } from '../../utils/auditUtils';
@@ -58,6 +59,7 @@ interface PanelistOption {
 export default function StudentPanelCommentsPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid ?? null;
+    useSegmentViewed({ segment: 'panel-comments' });
     const { showNotification } = useSnackbar();
 
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);

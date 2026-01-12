@@ -18,6 +18,7 @@ import { getDisplayName } from '../../utils/userUtils';
 import { notifySubmissionApproval, notifyRevisionRequested, notifyNewChatMessage } from '../../utils/auditNotificationUtils';
 import { getStageLabel } from '../../utils/thesisStageUtils';
 import { findGroupById } from '../../utils/firebase/firestore/groups';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -29,6 +30,7 @@ export const metadata: NavigationItem = {
 };
 
 export default function EditorThesisOverviewPage() {
+    useSegmentViewed({ segment: 'editor-thesis-overview' });
     const session = useSession<Session>();
     const editorUid = session?.user?.uid ?? '';
 

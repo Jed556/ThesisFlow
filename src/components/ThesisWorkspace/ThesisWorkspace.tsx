@@ -10,6 +10,8 @@ import type {
 import type { ChapterSubmissionEntry, ExpertRole, ThesisChapter, ThesisData, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ChatMessage } from '../../types/chat';
+import type { SystemSettings, SubmissionMode } from '../../types/systemSettings';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../types/systemSettings';
 import { ConversationPanel, type ConversationParticipant } from '../Conversation';
 import { FileViewer } from '../File';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
@@ -20,6 +22,7 @@ import { listenThesisDocument, type ThesisDocumentContext } from '../../utils/fi
 import {
     listenAllChaptersForThesis, type ThesisChaptersContext,
 } from '../../utils/firebase/firestore/chapters';
+import { listenSystemSettings } from '../../utils/firebase/firestore/systemSettings';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getAssignedExpertRoles } from '../../utils/expertUtils';
 import { normalizeChapterSubmissions, normalizeSubmissionEntry } from '../../utils/chapterSubmissionUtils';
@@ -156,6 +159,16 @@ export default function ThesisWorkspace({
     const [submissionChats, setSubmissionChats] = React.useState<ChatMessage[]>([]);
     /** Whether chats are currently loading (reserved for future loading states) */
     const [_isLoadingChats, setIsLoadingChats] = React.useState(false);
+    /** System settings for submission mode */
+    const [systemSettings, setSystemSettings] = React.useState<SystemSettings | null>(null);
+    /** Link URLs for link submission mode (keyed by chapter ID) */
+    const [chapterLinks, setChapterLinks] = React.useState<Record<number, string>>({});
+
+    // Derive submission mode from system settings
+    const chapterSubmissionMode: SubmissionMode = systemSettings?.chapterSubmissions?.mode ?? 'link';
+    const isLinkMode = chapterSubmissionMode === 'link';
+    const linkPlaceholder = systemSettings?.chapterSubmissions?.linkPlaceholder
+        ?? DEFAULT_SYSTEM_SETTINGS.chapterSubmissions.linkPlaceholder;
 
     React.useEffect(() => {
         setChapterFiles({});
@@ -225,6 +238,21 @@ export default function ThesisWorkspace({
             unsubscribe();
         };
     }, [thesisId, groupId, year, department, course]);
+
+    // Listen to system settings for submission mode
+    React.useEffect(() => {
+        const unsubscribe = listenSystemSettings({
+            onData: (settings: SystemSettings) => {
+                setSystemSettings(settings);
+            },
+            onError: (err: Error) => {
+                console.error('Failed to load system settings:', err);
+                // Use defaults on error
+                setSystemSettings({ id: 'settings', ...DEFAULT_SYSTEM_SETTINGS });
+            },
+        });
+        return () => unsubscribe();
+    }, []);
 
     const thesisSource = liveThesis ?? thesis ?? null;
 
@@ -439,6 +467,60 @@ export default function ThesisWorkspace({
             }
         })();
     }, [onUploadChapter, thesisId, groupId, year, department, course, activeStage]);
+
+    /**
+     * Handle link submission for chapters (link mode)
+     * Creates a submission record with the provided URL
+     */
+    const handleChapterLinkSubmit = React.useCallback((chapterId: number, link: string) => {
+        if (!onUploadChapter || !thesisId) {
+            return;
+        }
+        const chapterStage = activeStage;
+        setUploadError(null);
+        setUploadingChapterId(chapterId);
+        setActiveChapterId(chapterId);
+        setActiveVersionIndex(null);
+
+        void (async () => {
+            try {
+                // Create a submission with the link URL (no file upload)
+                await onUploadChapter({
+                    thesisId, chapterId, chapterStage,
+                    link, // Pass link instead of file
+                    groupId: groupId ?? '',
+                    year,
+                    department,
+                    course,
+                });
+                // Clear the link input after successful submission
+                setChapterLinks((current) => {
+                    const next = { ...current };
+                    delete next[chapterId];
+                    return next;
+                });
+                setChapterFiles((current) => {
+                    const next = { ...current };
+                    delete next[chapterId];
+                    return next;
+                });
+            } catch (error) {
+                const message = error instanceof Error
+                    ? error.message
+                    : 'Failed to submit chapter link.';
+                setUploadError(message);
+            } finally {
+                setUploadingChapterId((current) => (current === chapterId ? null : current));
+            }
+        })();
+    }, [onUploadChapter, thesisId, groupId, year, department, course, activeStage]);
+
+    /**
+     * Handle link value change for a chapter
+     */
+    const handleChapterLinkChange = React.useCallback((chapterId: number, link: string) => {
+        setChapterLinks((current) => ({ ...current, [chapterId]: link }));
+    }, []);
 
     React.useEffect(() => {
         if (isStageLocked || stageChapters.length === 0) {
@@ -1152,6 +1234,17 @@ export default function ThesisWorkspace({
                                                 isLoading={isFetchingChapterFiles}
                                                 loadingMessage="Fetching submissions…"
                                                 activeStage={activeStage}
+                                                submissionMode={chapterSubmissionMode}
+                                                linkValue={activeChapterId ? chapterLinks[activeChapterId] ?? '' : ''}
+                                                onLinkChange={activeChapter
+                                                    ? (link: string) => handleChapterLinkChange(activeChapter.id, link)
+                                                    : undefined
+                                                }
+                                                onLinkSubmit={enableUploads && activeChapter
+                                                    ? (link: string) => handleChapterLinkSubmit(activeChapter.id, link)
+                                                    : undefined
+                                                }
+                                                linkPlaceholder={linkPlaceholder}
                                             />
                                         </Box>
                                     </CardContent>

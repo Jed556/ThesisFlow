@@ -6,13 +6,16 @@ import {
     CardContent,
     CircularProgress,
     Stack,
+    TextField,
     Typography,
 } from '@mui/material';
 import {
     Upload as UploadIcon,
+    Link as LinkIcon,
 } from '@mui/icons-material';
 import type { ExpertRole, ThesisChapter, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
+import type { SubmissionMode } from '../../types/systemSettings';
 import type { ConversationParticipant } from '../Conversation';
 import { SubmissionCard } from '../File';
 import type { VersionOption } from '../../types/workspace';
@@ -41,8 +44,13 @@ export const buildVersionOptions = (
     const submissions = normalizeChapterSubmissions(chapter.submissions);
     const fileMap = new Map((files ?? []).map((file) => [file.id ?? '', file]));
     const defaultStage = resolveChapterStage(chapter);
-    const matchesStage = (file?: FileAttachment) => {
+    const matchesStage = (file?: FileAttachment, link?: string) => {
         if (!stageFilter) {
+            return true;
+        }
+        // Link submissions are already fetched from the correct stage via Firestore path
+        // They don't have chapterStage stored, so always include them
+        if (!file && link) {
             return true;
         }
         if (!file) {
@@ -57,14 +65,17 @@ export const buildVersionOptions = (
     if (submissions.length > 0) {
         return submissions.reduce<VersionOption[]>((acc, submission, index) => {
             const file = submission.id ? fileMap.get(submission.id) : undefined;
-            if (!matchesStage(file)) {
+            if (!matchesStage(file, submission.link)) {
                 return acc;
             }
             acc.push({
                 id: submission.id || file?.id || `version-${index + 1}`,
-                label: file?.name ?? `Version ${index + 1}`,
+                label: submission.link
+                    ? `Link ${index + 1}`
+                    : (file?.name ?? `Version ${index + 1}`),
                 versionIndex: index,
                 file,
+                link: submission.link,
                 status: submission.status,
             });
             return acc;
@@ -133,6 +144,16 @@ interface SubmissionsRailProps {
     loadingMessage?: string;
     /** Active stage filter */
     activeStage?: ThesisStageName;
+    /** Submission mode for chapters ('file' or 'link') */
+    submissionMode?: SubmissionMode;
+    /** Current link value for link submission mode */
+    linkValue?: string;
+    /** Callback when link value changes */
+    onLinkChange?: (link: string) => void;
+    /** Callback when link is submitted */
+    onLinkSubmit?: (link: string) => void;
+    /** Placeholder text for link input */
+    linkPlaceholder?: string;
 }
 
 /**
@@ -158,7 +179,14 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
     processingVersionId,
     isLoading,
     loadingMessage,
+    submissionMode = 'file',
+    linkValue = '',
+    onLinkChange,
+    onLinkSubmit,
+    linkPlaceholder = 'Enter Google Docs or Google Drive URL',
 }) => {
+    const isLinkMode = submissionMode === 'link';
+
     const handleUploadChange = React.useCallback(
         (event: React.ChangeEvent<HTMLInputElement>) => {
             const file = event.target.files?.[0];
@@ -170,6 +198,12 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
         },
         [onUploadVersion]
     );
+
+    const handleLinkSubmit = React.useCallback(() => {
+        if (linkValue.trim() && onLinkSubmit) {
+            onLinkSubmit(linkValue.trim());
+        }
+    }, [linkValue, onLinkSubmit]);
 
     // Check if any version is approved (used to mark others as ignored)
     const hasApprovedVersion = versions.some(
@@ -230,8 +264,12 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
             {!isLoading && versions.length === 0 && (
                 <Typography variant="body2" color="text.secondary">
                     {isStudent
-                        ? 'No versions yet. Upload a file to start the conversation.'
-                        : 'No versions have been uploaded for this chapter.'}
+                        ? isLinkMode
+                            ? 'No submissions yet. Submit a document link to start.'
+                            : 'No versions yet. Upload a file to start the conversation.'
+                        : isLinkMode
+                            ? 'No link submissions have been made for this chapter.'
+                            : 'No versions have been uploaded for this chapter.'}
                 </Typography>
             )}
 
@@ -250,6 +288,7 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                     <Box key={version.id}>
                         <SubmissionCard
                             file={version.file}
+                            link={version.link}
                             versionLabel={`v${version.versionIndex + 1}`}
                             versionIndex={version.versionIndex}
                             status={versionStatus}
@@ -270,9 +309,19 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                                     ? () => onSubmit(version.id, version.file)
                                     : undefined
                             }
+                            onSubmitLink={
+                                isStudent && isDraft && onSubmit && version.link
+                                    ? () => onSubmit(version.id, undefined)
+                                    : undefined
+                            }
                             onApprove={
                                 currentExpertRole && onApprove && version.file
                                     ? () => onApprove(version.id, version.file)
+                                    : undefined
+                            }
+                            onApproveLink={
+                                currentExpertRole && onApprove && version.link
+                                    ? () => onApprove(version.id, undefined)
                                     : undefined
                             }
                             onRequestRevision={
@@ -280,9 +329,19 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                                     ? () => onReject(version.id, version.file)
                                     : undefined
                             }
+                            onRequestRevisionLink={
+                                currentExpertRole && onReject && version.link
+                                    ? () => onReject(version.id, undefined)
+                                    : undefined
+                            }
                             onDelete={
                                 isStudent && isDraft && onDelete && version.file
                                     ? () => onDelete(version.id, version.file)
+                                    : undefined
+                            }
+                            onDeleteLink={
+                                isStudent && isDraft && onDelete && version.link
+                                    ? () => onDelete(version.id, undefined)
                                     : undefined
                             }
                             isProcessing={isProcessing}
@@ -292,8 +351,46 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                 );
             })}
 
-            {/* Upload button */}
-            {allowUploads && (
+            {/* Link submission mode */}
+            {isLinkMode && isStudent && onLinkSubmit && !uploadsLockedByStatus && (
+                <Stack spacing={1}>
+                    <TextField
+                        size="small"
+                        fullWidth
+                        label="Document Link"
+                        placeholder={linkPlaceholder}
+                        value={linkValue}
+                        onChange={(e) => onLinkChange?.(e.target.value)}
+                        disabled={isUploading}
+                        InputProps={{
+                            startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                        }}
+                    />
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={
+                            isUploading ? (
+                                <CircularProgress size={16} />
+                            ) : (
+                                <LinkIcon fontSize="small" />
+                            )
+                        }
+                        disabled={isUploading || !linkValue.trim()}
+                        onClick={handleLinkSubmit}
+                    >
+                        {isUploading ? 'Submitting…' : 'Submit Link'}
+                    </Button>
+                    {uploadHelperText && (
+                        <Typography variant="body2" color="text.secondary">
+                            {uploadHelperText}
+                        </Typography>
+                    )}
+                </Stack>
+            )}
+
+            {/* File upload mode */}
+            {!isLinkMode && allowUploads && (
                 <Stack spacing={0.5}>
                     <Button
                         variant="outlined"

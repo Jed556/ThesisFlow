@@ -10,6 +10,7 @@ import GroupView, { type GroupViewHeaderContext } from '../../components/Group/G
 import { useSession } from '@toolpad/core';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { cancelJoinRequest, requestToJoinGroup } from '../../utils/firebase/firestore/groups';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     title: 'Group Details',
@@ -24,6 +25,7 @@ export default function StudentGroupViewPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid;
     const { showNotification } = useSnackbar();
+    useSegmentViewed({ segment: 'group' });
     const [actionLoading, setActionLoading] = React.useState(false);
     const [refreshToken, setRefreshToken] = React.useState(0);
 

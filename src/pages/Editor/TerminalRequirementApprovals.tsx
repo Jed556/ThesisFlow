@@ -4,6 +4,7 @@ import { FactCheck as FactCheckIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
 import { AnimatedPage } from '../../components/Animate';
 import { TerminalRequirementApprovalWorkspace } from '../../components/TerminalRequirements';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -15,6 +16,7 @@ export const metadata: NavigationItem = {
 };
 
 export default function EditorTerminalRequirementApprovalsPage() {
+    useSegmentViewed({ segment: 'editor-terminal-requirements' });
     return (
         <AnimatedPage variant="slideUp">
             <TerminalRequirementApprovalWorkspace

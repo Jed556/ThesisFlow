@@ -14,6 +14,7 @@ import { findThesisByGroupId, type ThesisWithGroupContext } from '../../utils/fi
 import { findUserById } from '../../utils/firebase/firestore/user';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { getDisplayName } from '../../utils/userUtils';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -25,6 +26,7 @@ export const metadata: NavigationItem = {
 };
 
 export default function HeadThesisOverviewPage() {
+    useSegmentViewed({ segment: 'head-thesis-overview' });
     const session = useSession<Session>();
     const headUid = session?.user?.uid ?? '';
 

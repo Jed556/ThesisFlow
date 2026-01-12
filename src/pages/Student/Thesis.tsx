@@ -49,6 +49,7 @@ import {
     resolveStepState, applyPrerequisiteLocks, getStepMeta, getActiveStepIndex, formatPrerequisiteMessage,
 } from '../../utils/workflowUtils';
 import StagesConfig from '../../config/stages.json';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -476,6 +477,9 @@ export default function ThesisPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid;
     const navigate = useNavigate();
+
+    // Mark audit notifications as page-viewed when visiting this page
+    useSegmentViewed({ segment: 'thesis' });
 
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [userTheses, setUserTheses] = React.useState<ThesisRecord[]>([]);

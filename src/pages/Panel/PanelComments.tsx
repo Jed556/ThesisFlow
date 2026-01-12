@@ -37,6 +37,7 @@ import { findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { formatFileSize } from '../../utils/fileUtils';
 import { FileCard, FileViewer } from '../../components/File';
 import type { FileAttachment } from '../../types/file';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -50,6 +51,7 @@ export const metadata: NavigationItem = {
 type EditorMode = 'create' | 'edit';
 
 export default function PanelPanelCommentsPage() {
+    useSegmentViewed({ segment: 'panel-feedback' });
     const session = useSession<Session>();
     const userUid = session?.user?.uid ?? null;
     const userName = session?.user?.name ?? 'Panel member';

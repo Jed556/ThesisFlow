@@ -44,6 +44,8 @@ export const normalizeSubmissionEntry = (
     return {
         id: submission.id,
         status: normalizeStatus(submission.status),
+        // Preserve link for link submissions
+        link: (submission as { link?: string }).link,
     } satisfies ChapterSubmissionEntry;
 };
 

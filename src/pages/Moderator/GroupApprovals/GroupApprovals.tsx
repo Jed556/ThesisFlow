@@ -20,6 +20,7 @@ import {
     approveGroup, rejectGroup, listenToGroupsByMultipleCourses,
 } from '../../../utils/firebase/firestore/groups';
 import { auditAndNotify } from '../../../utils/auditNotificationUtils';
+import { useSegmentViewed } from '../../../hooks';
 
 /** Filter options for moderator group view */
 type GroupFilterStatus = 'all' | 'review' | 'active' | 'rejected';
@@ -47,6 +48,7 @@ function splitSectionList(value?: string | null): string[] {
  * Moderator view for approving group formation requests limited to assigned courses.
  */
 export default function ModeratorGroupApprovalsPage() {
+    useSegmentViewed({ segment: 'mod-group-approvals' });
     const session = useSession<Session>();
     const moderatorUid = session?.user?.uid;
     const { showNotification } = useSnackbar();

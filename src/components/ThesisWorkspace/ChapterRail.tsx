@@ -129,8 +129,13 @@ export const buildVersionOptions = (
     const submissions = normalizeChapterSubmissions(chapter.submissions);
     const fileMap = new Map((files ?? []).map((file) => [file.id ?? '', file]));
     const defaultStage = resolveChapterStage(chapter);
-    const matchesStage = (file?: FileAttachment) => {
+    const matchesStage = (file?: FileAttachment, link?: string) => {
         if (!stageFilter) {
+            return true;
+        }
+        // Link submissions are already fetched from the correct stage via Firestore path
+        // They don't have chapterStage stored, so always include them
+        if (!file && link) {
             return true;
         }
         if (!file) {
@@ -145,14 +150,17 @@ export const buildVersionOptions = (
     if (submissions.length > 0) {
         return submissions.reduce<VersionOption[]>((acc, submission, index) => {
             const file = submission.id ? fileMap.get(submission.id) : undefined;
-            if (!matchesStage(file)) {
+            if (!matchesStage(file, submission.link)) {
                 return acc;
             }
             acc.push({
                 id: submission.id || file?.id || `version-${index + 1}`,
-                label: file?.name ?? `Version ${index + 1}`,
+                label: submission.link
+                    ? `Link ${index + 1}`
+                    : (file?.name ?? `Version ${index + 1}`),
                 versionIndex: index,
                 file,
+                link: submission.link,
                 status: submission.status,
             });
             return acc;
