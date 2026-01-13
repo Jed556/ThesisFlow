@@ -45,6 +45,21 @@ export interface TerminalRequirementSettings {
 }
 
 /**
+ * Panel comment manuscript settings
+ * Controls how students submit manuscripts for panel review
+ */
+export interface PanelCommentSettings {
+    /**
+     * Submission mode for panel comment manuscripts
+     * - 'link': Students provide Google Docs/Drive URLs (no storage costs)
+     * - 'file': Students upload files to Firebase Storage
+     */
+    mode: SubmissionMode;
+    /** Optional placeholder text for URL input when mode is 'link' */
+    linkPlaceholder?: string;
+}
+
+/**
  * Chat feature settings
  */
 export interface ChatSettings {
@@ -66,6 +81,8 @@ export interface SystemSettings {
     chapterSubmissions: ChapterSubmissionSettings;
     /** Terminal requirement settings */
     terminalRequirements: TerminalRequirementSettings;
+    /** Panel comment manuscript settings */
+    panelComments: PanelCommentSettings;
     /** Chat feature settings */
     chat: ChatSettings;
     /** Last update timestamp */
@@ -88,8 +105,10 @@ export const DEFAULT_SYSTEM_SETTINGS: Omit<SystemSettings, 'id'> = {
     },
     terminalRequirements: {
         mode: 'link',
-    },
-    chat: {
+    }, panelComments: {
+        mode: 'link',
+        linkPlaceholder: 'Enter Google Docs or Google Drive URL',
+    }, chat: {
         attachmentsEnabled: false,
         maxAttachmentSizeMb: 10,
         allowedAttachmentTypes: ['image/*', 'application/pdf', 'application/msword'],

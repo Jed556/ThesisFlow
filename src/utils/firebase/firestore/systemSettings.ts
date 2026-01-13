@@ -10,7 +10,7 @@ import {
 import { firebaseFirestore } from '../firebaseConfig';
 import type {
     SystemSettings, ChapterSubmissionSettings, TerminalRequirementSettings,
-    ChatSettings
+    PanelCommentSettings, ChatSettings
 } from '../../../types/systemSettings';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../../types/systemSettings';
 import { normalizeTimestamp } from '../../dateUtils';
@@ -43,6 +43,7 @@ function getSettingsDocPath(): string {
 function mapSettingsDoc(data: Record<string, unknown>): Omit<SystemSettings, 'id'> {
     const chapterData = data.chapterSubmissions as ChapterSubmissionSettings | undefined;
     const terminalData = data.terminalRequirements as TerminalRequirementSettings | undefined;
+    const panelData = data.panelComments as PanelCommentSettings | undefined;
     const chatData = data.chat as ChatSettings | undefined;
 
     return {
@@ -56,6 +57,11 @@ function mapSettingsDoc(data: Record<string, unknown>): Omit<SystemSettings, 'id
         terminalRequirements: {
             mode: terminalData?.mode ?? DEFAULT_SYSTEM_SETTINGS.terminalRequirements.mode,
             defaultDriveFolderUrl: terminalData?.defaultDriveFolderUrl,
+        },
+        panelComments: {
+            mode: panelData?.mode ?? DEFAULT_SYSTEM_SETTINGS.panelComments.mode,
+            linkPlaceholder: panelData?.linkPlaceholder
+                ?? DEFAULT_SYSTEM_SETTINGS.panelComments.linkPlaceholder,
         },
         chat: {
             attachmentsEnabled: chatData?.attachmentsEnabled
@@ -183,6 +189,22 @@ export async function updateTerminalRequirementSettings(
     await updateSystemSettings({
         terminalRequirements: {
             ...current.terminalRequirements,
+            ...settings,
+        },
+    }, updatedBy);
+}
+
+/**
+ * Update panel comment settings specifically
+ */
+export async function updatePanelCommentSettings(
+    settings: Partial<PanelCommentSettings>,
+    updatedBy?: string
+): Promise<void> {
+    const current = await getSystemSettings();
+    await updateSystemSettings({
+        panelComments: {
+            ...current.panelComments,
             ...settings,
         },
     }, updatedBy);

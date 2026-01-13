@@ -18,6 +18,7 @@ import {
     Description as ChapterIcon,
     AttachFile as AttachmentIcon,
     Info as InfoIcon,
+    CommentBank as PanelIcon,
 } from '@mui/icons-material';
 import { AnimatedPage } from '../../../components/Animate';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
@@ -27,7 +28,7 @@ import type { SystemSettings, SubmissionMode } from '../../../types/systemSettin
 import { DEFAULT_SYSTEM_SETTINGS } from '../../../types/systemSettings';
 import {
     listenSystemSettings, updateChapterSubmissionSettings,
-    updateTerminalRequirementSettings, updateChatSettings
+    updateTerminalRequirementSettings, updatePanelCommentSettings, updateChatSettings
 } from '../../../utils/firebase/firestore/systemSettings';
 import { useSession } from '@toolpad/core/useSession';
 
@@ -230,6 +231,24 @@ export default function AdminSettingsPage() {
         }
     }, [userUid, showNotification]);
 
+    // Handle panel comment mode change
+    const handlePanelCommentModeChange = React.useCallback(async (mode: SubmissionMode) => {
+        if (!userUid) return;
+        setSaving('panel');
+        try {
+            await updatePanelCommentSettings({ mode }, userUid);
+            showNotification(
+                `Panel comment manuscripts mode changed to ${mode === 'link' ? 'Link' : 'File Upload'}`,
+                'success'
+            );
+        } catch (error) {
+            console.error('Failed to update panel comment settings:', error);
+            showNotification('Failed to update settings', 'error');
+        } finally {
+            setSaving(null);
+        }
+    }, [userUid, showNotification]);
+
     // Handle chat attachments toggle
     const handleChatAttachmentsChange = React.useCallback(async (enabled: boolean) => {
         if (!userUid) return;
@@ -415,6 +434,33 @@ export default function AdminSettingsPage() {
                                         placeholder="https://drive.google.com/drive/folders/..."
                                     />
                                 </>
+                            )}
+                        </Stack>
+                    </SettingsSection>
+
+                    {/* Panel Comment Settings */}
+                    <SettingsSection
+                        icon={<PanelIcon />}
+                        title="Panel Comment Manuscripts"
+                        description={
+                            'Configure how students submit manuscripts for panel review. ' +
+                            'Link mode uses external URLs to reduce storage costs.'
+                        }
+                    >
+                        <Stack spacing={3}>
+                            <SubmissionModeToggle
+                                mode={currentSettings.panelComments.mode}
+                                onChange={handlePanelCommentModeChange}
+                                disabled={saving === 'panel'}
+                                linkDescription="Students provide Google Docs/Drive URLs for panel manuscript review."
+                                fileDescription="Students upload manuscript files directly to Firebase Storage."
+                            />
+
+                            {currentSettings.panelComments.mode === 'link' && (
+                                <Alert severity="info" icon={<InfoIcon />}>
+                                    When using link mode, students will provide URLs to their manuscript documents.
+                                    Panels can click the link to view and review the document directly.
+                                </Alert>
                             )}
                         </Stack>
                     </SettingsSection>

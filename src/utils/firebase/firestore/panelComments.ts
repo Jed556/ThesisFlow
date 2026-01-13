@@ -9,7 +9,7 @@ import { buildPanelCommentEntriesCollectionPath, buildPanelCommentEntryDocPath, 
 import {
     createDefaultPanelCommentReleaseMap, type PanelCommentApprovalStatus, type PanelCommentEntry, type PanelCommentEntryInput,
     type PanelCommentEntryUpdate, type PanelCommentReleaseMap, type PanelCommentStage, type PanelCommentStudentUpdate,
-    type PanelCommentTableReleaseMap, type PanelCommentManuscript,
+    type PanelCommentTableReleaseMap, type PanelCommentManuscript, type PanelManuscriptType, type PanelCommentManuscriptLinkInput,
 } from '../../../types/panelComment';
 
 // ============================================================================
@@ -587,16 +587,21 @@ interface ManuscriptSnapshot {
     id: string;
     groupId: string;
     stage: PanelCommentStage;
-    fileName: string;
-    fileSize: number;
-    mimeType: string;
-    url: string;
-    storagePath: string;
+    type: PanelManuscriptType;
     uploadedBy: string;
     uploadedAt?: unknown;
     reviewRequested?: boolean;
     reviewRequestedAt?: unknown;
     reviewRequestedBy?: string;
+    // File-specific fields
+    fileName?: string;
+    fileSize?: number;
+    mimeType?: string;
+    url?: string;
+    storagePath?: string;
+    // Link-specific fields
+    link?: string;
+    linkLabel?: string;
 }
 
 function mapManuscript(data: ManuscriptSnapshot): PanelCommentManuscript {
@@ -604,16 +609,21 @@ function mapManuscript(data: ManuscriptSnapshot): PanelCommentManuscript {
         id: data.id,
         groupId: data.groupId,
         stage: data.stage,
-        fileName: data.fileName,
-        fileSize: data.fileSize,
-        mimeType: data.mimeType,
-        url: data.url,
-        storagePath: data.storagePath,
+        type: data.type ?? 'file', // Default to 'file' for backwards compatibility
         uploadedBy: data.uploadedBy,
         uploadedAt: normalizeTimestamp(data.uploadedAt, true),
         reviewRequested: data.reviewRequested ?? false,
         reviewRequestedAt: normalizeTimestamp(data.reviewRequestedAt) || undefined,
         reviewRequestedBy: data.reviewRequestedBy,
+        // File-specific fields
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        mimeType: data.mimeType,
+        url: data.url,
+        storagePath: data.storagePath,
+        // Link-specific fields
+        link: data.link,
+        linkLabel: data.linkLabel,
     };
 }
 
@@ -708,6 +718,7 @@ export async function uploadPanelManuscript(
         id: manuscriptId,
         groupId: ctx.groupId,
         stage,
+        type: 'file' as const,
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type,
@@ -724,6 +735,63 @@ export async function uploadPanelManuscript(
         groupId: ctx.groupId,
         manuscripts: {
             [stage]: manuscriptData,
+        },
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    return {
+        ...manuscriptData,
+        uploadedAt: new Date().toISOString(),
+    };
+}
+
+/**
+ * Save a manuscript link for panel review.
+ * If a manuscript already exists (file or link), the old record is replaced.
+ * If the old manuscript was a file, it's also deleted from storage.
+ * @param ctx - Panel comment context
+ * @param input - The link submission input
+ * @returns The created manuscript record
+ */
+export async function savePanelManuscriptLink(
+    ctx: PanelCommentContext,
+    input: PanelCommentManuscriptLinkInput
+): Promise<PanelCommentManuscript> {
+    if (!ctx.groupId) {
+        throw new Error('Group ID is required to save manuscript link.');
+    }
+
+    // Delete existing manuscript from storage if it was a file upload
+    const existingManuscript = await getPanelManuscript(ctx, input.stage);
+    if (existingManuscript?.type === 'file' && existingManuscript.storagePath) {
+        try {
+            const oldStorageRef = ref(firebaseStorage, existingManuscript.storagePath);
+            await deleteObject(oldStorageRef);
+        } catch (storageError) {
+            // Log but don't fail - file may already be deleted or not exist
+            console.warn('Failed to delete old manuscript from storage:', storageError);
+        }
+    }
+
+    const manuscriptId = `${input.stage}_link_${Date.now()}`;
+    const manuscriptData = {
+        id: manuscriptId,
+        groupId: ctx.groupId,
+        stage: input.stage,
+        type: 'link' as const,
+        link: input.link,
+        ...(input.linkLabel && { linkLabel: input.linkLabel }),
+        uploadedBy: input.uploadedBy,
+        uploadedAt: serverTimestamp(),
+        reviewRequested: false,
+    };
+
+    // Save manuscript metadata to Firestore
+    const releaseDocRef = getReleaseDoc(ctx);
+    await setDoc(releaseDocRef, {
+        groupId: ctx.groupId,
+        manuscripts: {
+            [input.stage]: manuscriptData,
         },
         updatedAt: serverTimestamp(),
     }, { merge: true });

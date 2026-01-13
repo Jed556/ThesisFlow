@@ -1,11 +1,12 @@
 import * as React from 'react';
 import {
     Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle,
-    IconButton, Paper, Skeleton, Stack, Tab, Tabs, Tooltip, Typography,
+    IconButton, Paper, Skeleton, Stack, Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
     CommentBank as CommentBankIcon, CloudUpload as CloudUploadIcon,
     RateReview as RequestReviewIcon, Close as CloseIcon, Download as DownloadIcon,
+    Link as LinkIcon,
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
@@ -23,12 +24,16 @@ import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { useSnackbar } from '../../components/Snackbar';
 import {
     listenPanelCommentEntries, listenPanelCommentRelease, updatePanelCommentStudentFields, listenPanelManuscript,
-    uploadPanelManuscript, requestManuscriptReview, deletePanelManuscript, type PanelCommentContext,
+    uploadPanelManuscript, requestManuscriptReview, deletePanelManuscript, savePanelManuscriptLink,
+    type PanelCommentContext,
 } from '../../utils/firebase/firestore/panelComments';
 import { findGroupById, getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { findThesisByGroupId } from '../../utils/firebase/firestore/thesis';
 import { findAndListenTerminalRequirements } from '../../utils/firebase/firestore/terminalRequirements';
 import { findUsersByIds } from '../../utils/firebase/firestore/user';
+import { listenSystemSettings } from '../../utils/firebase/firestore/systemSettings';
+import type { SystemSettings, SubmissionMode } from '../../types/systemSettings';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../types/systemSettings';
 import {
     PANEL_COMMENT_STAGE_METADATA, canStudentAccessPanelStage, formatPanelistDisplayName, getPanelCommentStageLabel
 } from '../../utils/panelCommentUtils';
@@ -89,6 +94,12 @@ export default function StudentPanelCommentsPage() {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     /** All entries for the active stage (across all panelists) to check for revision_required */
     const [allStageEntries, setAllStageEntries] = React.useState<PanelCommentEntry[]>([]);
+    /** System settings for submission mode */
+    const [systemSettings, setSystemSettings] = React.useState<SystemSettings | null>(null);
+    /** Link input value for link mode */
+    const [linkInput, setLinkInput] = React.useState('');
+    /** Whether the link is being saved */
+    const [savingLink, setSavingLink] = React.useState(false);
 
     /** Build panel comment context from group */
     const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
@@ -100,6 +111,33 @@ export default function StudentPanelCommentsPage() {
             groupId: group.id,
         };
     }, [group]);
+
+    // Listen to system settings for submission mode
+    React.useEffect(() => {
+        const unsubscribe = listenSystemSettings({
+            onData: (settings: SystemSettings) => {
+                setSystemSettings(settings);
+            },
+            onError: (err: Error) => {
+                console.error('Failed to load system settings:', err);
+                setSystemSettings({ id: 'settings', ...DEFAULT_SYSTEM_SETTINGS });
+            },
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Derive submission mode from system settings
+    const submissionMode: SubmissionMode = systemSettings?.panelComments?.mode ?? 'link';
+    const isLinkMode = submissionMode === 'link';
+
+    // Sync link input with manuscript data when in link mode
+    React.useEffect(() => {
+        if (manuscript?.type === 'link' && manuscript.link) {
+            setLinkInput(manuscript.link);
+        } else if (!manuscript) {
+            setLinkInput('');
+        }
+    }, [manuscript]);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -513,12 +551,73 @@ export default function StudentPanelCommentsPage() {
     }, [panelCommentCtx, userUid, manuscript, activeStage, group, showNotification]);
 
     /**
+     * Handle saving a manuscript link (link mode).
+     */
+    const handleSaveLink = React.useCallback(async () => {
+        if (!panelCommentCtx || !userUid) {
+            showNotification('Sign in to save a manuscript link.', 'error');
+            return;
+        }
+
+        const trimmedLink = linkInput.trim();
+        if (!trimmedLink) {
+            showNotification('Please enter a link to your manuscript.', 'error');
+            return;
+        }
+
+        // Validate URL format
+        try {
+            new URL(trimmedLink);
+        } catch {
+            showNotification('Please enter a valid URL.', 'error');
+            return;
+        }
+
+        setSavingLink(true);
+        try {
+            await savePanelManuscriptLink(panelCommentCtx, {
+                groupId: panelCommentCtx.groupId,
+                stage: activeStage,
+                link: trimmedLink,
+                uploadedBy: userUid,
+            });
+
+            // Create group audit entry
+            if (group) {
+                const auditCtx = buildAuditContextFromGroup(group);
+                await createAuditEntry(auditCtx, {
+                    name: 'Manuscript Link Saved',
+                    description:
+                        `Manuscript link saved for ${getPanelCommentStageLabel(activeStage)} panel review`,
+                    userId: userUid,
+                    category: 'thesis',
+                    action: 'link_submitted',
+                    details: {
+                        link: trimmedLink,
+                        stage: activeStage,
+                    },
+                });
+            }
+
+            showNotification('Manuscript link saved successfully.', 'success');
+        } catch (error) {
+            console.error('Failed to save manuscript link:', error);
+            showNotification('Unable to save link. Please try again.', 'error');
+        } finally {
+            setSavingLink(false);
+        }
+    }, [panelCommentCtx, userUid, linkInput, activeStage, group, showNotification]);
+
+    /**
      * Handle requesting panel review for the uploaded manuscript.
      * This notifies all panels via email and creates audit entries.
      */
     const handleRequestReview = React.useCallback(async () => {
         if (!panelCommentCtx || !userUid || !manuscript || !group) {
-            showNotification('Upload a manuscript first before requesting review.', 'error');
+            showNotification(
+                isLinkMode ? 'Save a link first before requesting review.' : 'Upload a manuscript first before requesting review.',
+                'error'
+            );
             return;
         }
 
@@ -532,6 +631,9 @@ export default function StudentPanelCommentsPage() {
             await requestManuscriptReview(panelCommentCtx, activeStage, userUid);
 
             const stageLabel = getPanelCommentStageLabel(activeStage);
+            const manuscriptLabel = manuscript.type === 'link'
+                ? manuscript.link ?? 'Manuscript Link'
+                : manuscript.fileName ?? 'Manuscript File';
 
             // Create group audit entry for tracking
             const auditCtx = buildAuditContextFromGroup(group);
@@ -542,7 +644,8 @@ export default function StudentPanelCommentsPage() {
                 category: 'panel',
                 action: 'panel_review_requested',
                 details: {
-                    fileName: manuscript.fileName,
+                    ...(manuscript.type === 'file' && { fileName: manuscript.fileName }),
+                    ...(manuscript.type === 'link' && { link: manuscript.link }),
                     stage: activeStage,
                     course: group.course,
                 },
@@ -553,7 +656,7 @@ export default function StudentPanelCommentsPage() {
                 group,
                 studentId: userUid,
                 stageName: stageLabel,
-                fileName: manuscript.fileName,
+                fileName: manuscriptLabel,
                 details: { stage: activeStage },
             });
 
@@ -564,7 +667,7 @@ export default function StudentPanelCommentsPage() {
         } finally {
             setRequestingReview(false);
         }
-    }, [panelCommentCtx, userUid, manuscript, activeStage, group, showNotification]);
+    }, [panelCommentCtx, userUid, manuscript, activeStage, group, showNotification, isLinkMode]);
 
     const renderTabs = () => (
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -666,26 +769,103 @@ export default function StudentPanelCommentsPage() {
                                 Manuscript for Panel Review
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Upload your revised manuscript for the panel to review.
-                                You must upload a file before requesting a review.
+                                {isLinkMode
+                                    ? 'Provide a link to your manuscript (Google Docs, Drive, etc.) for the panel to review.'
+                                    : 'Upload your revised manuscript for the panel to review. You must upload a file before requesting a review.'
+                                }
                             </Typography>
 
                             {manuscriptLoading ? (
                                 <Skeleton variant="rectangular" height={56} />
+                            ) : isLinkMode ? (
+                                /* Link Mode UI */
+                                <Stack spacing={2}>
+                                    <TextField
+                                        label="Manuscript Link"
+                                        placeholder={systemSettings?.panelComments?.linkPlaceholder
+                                            || 'https://docs.google.com/document/d/...'}
+                                        value={linkInput}
+                                        onChange={(e) => setLinkInput(e.target.value)}
+                                        fullWidth
+                                        disabled={savingLink || (manuscript?.reviewRequested && !hasRevisionRequired)}
+                                        InputProps={{
+                                            startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                                        }}
+                                        helperText={manuscript?.reviewRequested && !hasRevisionRequired
+                                            ? 'Link is locked after review is requested.'
+                                            : 'Paste a link to your Google Docs, Drive, or other document.'
+                                        }
+                                    />
+
+                                    {/* Show revision required alert */}
+                                    {hasRevisionRequired && manuscript?.reviewRequested && (
+                                        <Alert severity="warning">
+                                            The panel has requested revisions. You may update your link and request another review.
+                                        </Alert>
+                                    )}
+
+                                    <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                                        {/* Save link button - show when link changed or no manuscript */}
+                                        {(!manuscript || manuscript.link !== linkInput.trim() ||
+                                            (hasRevisionRequired && manuscript.reviewRequested)) && (
+                                                <Button
+                                                    variant="outlined"
+                                                    startIcon={savingLink ? <CircularProgress size={16} /> : <LinkIcon />}
+                                                    onClick={handleSaveLink}
+                                                    disabled={savingLink || !linkInput.trim()}
+                                                >
+                                                    {savingLink ? 'Saving...' : 'Save Link'}
+                                                </Button>
+                                            )}
+
+                                        {/* Request review button */}
+                                        {manuscript && (
+                                            <Button
+                                                variant="contained"
+                                                color="primary"
+                                                startIcon={
+                                                    requestingReview
+                                                        ? <CircularProgress size={16} />
+                                                        : <RequestReviewIcon />
+                                                }
+                                                onClick={handleRequestReview}
+                                                disabled={
+                                                    requestingReview ||
+                                                    (manuscript.reviewRequested && !hasRevisionRequired)
+                                                }
+                                            >
+                                                {manuscript.reviewRequested && !hasRevisionRequired
+                                                    ? 'Review Requested'
+                                                    : hasRevisionRequired
+                                                        ? 'Request Re-Review'
+                                                        : 'Request Panel Review'
+                                                }
+                                            </Button>
+                                        )}
+
+                                        {manuscript?.reviewRequested && !hasRevisionRequired && (
+                                            <Typography variant="body2" color="success.main">
+                                                ✓ Review requested on{' '}
+                                                {new Date(manuscript.reviewRequestedAt || '').toLocaleDateString()}
+                                            </Typography>
+                                        )}
+                                    </Stack>
+                                </Stack>
                             ) : manuscript ? (
+                                /* File Mode - Has existing manuscript */
                                 <Stack spacing={2}>
                                     <FileCard
                                         file={{
-                                            name: manuscript.fileName,
-                                            size: formatFileSize(manuscript.fileSize),
-                                            type: manuscript.mimeType,
-                                            mimeType: manuscript.mimeType,
-                                            url: manuscript.url,
+                                            name: manuscript.fileName ?? 'Manuscript',
+                                            size: formatFileSize(manuscript.fileSize ?? 0),
+                                            type: manuscript.mimeType ?? 'application/pdf',
+                                            mimeType: manuscript.mimeType ?? 'application/pdf',
+                                            url: manuscript.url ?? '',
                                             uploadDate: manuscript.uploadedAt,
                                             author: manuscript.uploadedBy,
                                         } as FileAttachment}
-                                        title={manuscript.fileName}
-                                        sizeLabel={formatFileSize(manuscript.fileSize)}
+                                        title={manuscript.fileName ?? 'Manuscript'}
+                                        sizeLabel={formatFileSize(manuscript.fileSize ?? 0)}
                                         metaLabel={`Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}`}
                                         onClick={() => setFileViewerOpen(true)}
                                         onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
@@ -755,6 +935,7 @@ export default function StudentPanelCommentsPage() {
                                     </Stack>
                                 </Stack>
                             ) : (
+                                /* File Mode - No manuscript yet */
                                 <Stack direction="row" spacing={2} alignItems="center">
                                     <input
                                         ref={fileInputRef}
@@ -843,52 +1024,54 @@ export default function StudentPanelCommentsPage() {
                 )}
             </Stack>
 
-            {/* File Viewer Dialog */}
-            <Dialog
-                open={fileViewerOpen}
-                onClose={() => setFileViewerOpen(false)}
-                maxWidth="lg"
-                fullWidth
-                slotProps={{ paper: { sx: { height: '80vh' } } }}
-            >
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
-                    <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
-                        {manuscript?.fileName ?? 'Manuscript'}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5}>
-                        <Tooltip title="Download file">
-                            <IconButton
-                                size="small"
-                                onClick={() => manuscript?.url && window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
-                            >
-                                <DownloadIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Close">
-                            <IconButton size="small" onClick={() => setFileViewerOpen(false)}>
-                                <CloseIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Stack>
-                </DialogTitle>
-                <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
-                    {manuscript && (
-                        <FileViewer
-                            file={{
-                                name: manuscript.fileName,
-                                size: formatFileSize(manuscript.fileSize),
-                                type: manuscript.mimeType,
-                                mimeType: manuscript.mimeType,
-                                url: manuscript.url,
-                                uploadDate: manuscript.uploadedAt,
-                                author: manuscript.uploadedBy,
-                            } as FileAttachment}
-                            showToolbar={false}
-                            height="100%"
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            {/* File Viewer Dialog - Only show for file type manuscripts */}
+            {manuscript?.type !== 'link' && (
+                <Dialog
+                    open={fileViewerOpen}
+                    onClose={() => setFileViewerOpen(false)}
+                    maxWidth="lg"
+                    fullWidth
+                    slotProps={{ paper: { sx: { height: '80vh' } } }}
+                >
+                    <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+                        <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
+                            {manuscript?.fileName ?? 'Manuscript'}
+                        </Typography>
+                        <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="Download file">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => manuscript?.url && window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                                >
+                                    <DownloadIcon />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Close">
+                                <IconButton size="small" onClick={() => setFileViewerOpen(false)}>
+                                    <CloseIcon />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+                    </DialogTitle>
+                    <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
+                        {manuscript && (
+                            <FileViewer
+                                file={{
+                                    name: manuscript.fileName ?? 'Manuscript',
+                                    size: formatFileSize(manuscript.fileSize ?? 0),
+                                    type: manuscript.mimeType ?? 'application/pdf',
+                                    mimeType: manuscript.mimeType ?? 'application/pdf',
+                                    url: manuscript.url ?? '',
+                                    uploadDate: manuscript.uploadedAt,
+                                    author: manuscript.uploadedBy,
+                                } as FileAttachment}
+                                showToolbar={false}
+                                height="100%"
+                            />
+                        )}
+                    </DialogContent>
+                </Dialog>
+            )}
         </AnimatedPage>
     );
 }
