@@ -19,7 +19,7 @@ import {
 import type { ChairApprovalFormValues } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordChairDecision } from '../../utils/firebase/firestore/topicProposals';
-import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
+import { getGroupsByCourse, getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { notifyChairApprovedTopicForHead, notifyChairRejectedTopic } from '../../utils/auditNotificationUtils';
 import { useSegmentViewed } from '../../hooks';
@@ -65,7 +65,7 @@ function getChairStatusButtonConfig(status: TopicProposalEntryStatus): StatusAct
 }
 
 export const metadata: NavigationItem = {
-    group: 'management',
+    group: 'thesis',
     index: 1,
     title: 'Topic Proposals',
     segment: 'chair-topic-proposals',
@@ -149,27 +149,40 @@ export default function ChairTopicProposalsPage() {
         };
     }, [chairUid]);
 
-    // Chair can manage courses they are assigned to (via moderatedCourses or course field)
-    const chairCourses = React.useMemo(() => {
+    // Chair scope configuration:
+    // - If chair has specific courses (moderatedCourses or course field), scope to those courses
+    // - If chair has only a department (no courses), scope to all courses in that department
+    type ChairScopeType =
+        | { type: 'courses'; courses: string[] }
+        | { type: 'department'; department: string }
+        | null;
+
+    const chairScope = React.useMemo<ChairScopeType>(() => {
         if (!profile) {
-            return [];
+            return null;
         }
 
+        // First check for explicit course assignments
         const explicitCourses = (profile.moderatedCourses ?? []).filter(Boolean);
         if (explicitCourses.length > 0) {
-            return explicitCourses;
+            return { type: 'courses', courses: explicitCourses };
         }
 
         const fallbackCourses = splitSectionList(profile.course);
         if (fallbackCourses.length > 0) {
-            return fallbackCourses;
+            return { type: 'courses', courses: fallbackCourses };
         }
 
-        return [];
+        // If no courses specified but department is set, scope to entire department
+        if (profile.department) {
+            return { type: 'department', department: profile.department };
+        }
+
+        return null;
     }, [profile]);
 
     React.useEffect(() => {
-        if (chairCourses.length === 0) {
+        if (!chairScope) {
             setAssignedGroups([]);
             return;
         }
@@ -180,23 +193,35 @@ export default function ChairTopicProposalsPage() {
 
         void (async () => {
             try {
-                const resolvedGroups = await Promise.all(
-                    chairCourses.map((course) => getGroupsByCourse(course))
-                );
+                let resolvedGroups: ThesisGroup[];
+
+                if (chairScope.type === 'department') {
+                    // Fetch all groups in the department
+                    resolvedGroups = await getGroupsByDepartment(chairScope.department);
+                } else {
+                    // Fetch groups for specific courses
+                    const groupsByCourse = await Promise.all(
+                        chairScope.courses.map((course) => getGroupsByCourse(course))
+                    );
+                    resolvedGroups = groupsByCourse.flat();
+                }
 
                 if (cancelled) {
                     return;
                 }
 
                 const deduped = new Map<string, ThesisGroup>();
-                resolvedGroups.flat().forEach((group) => {
+                resolvedGroups.forEach((group) => {
                     deduped.set(group.id, group);
                 });
                 setAssignedGroups(Array.from(deduped.values()));
             } catch (fetchError) {
                 console.error('Failed to fetch chair groups:', fetchError);
                 if (!cancelled) {
-                    setGroupsError('Unable to load groups for your assigned courses.');
+                    const errorMsg = chairScope.type === 'department'
+                        ? 'Unable to load groups for your department.'
+                        : 'Unable to load groups for your assigned courses.';
+                    setGroupsError(errorMsg);
                     setAssignedGroups([]);
                 }
             } finally {
@@ -209,7 +234,7 @@ export default function ChairTopicProposalsPage() {
         return () => {
             cancelled = true;
         };
-    }, [chairCourses]);
+    }, [chairScope]);
 
     React.useEffect(() => {
         if (assignedGroups.length === 0) {
@@ -282,16 +307,20 @@ export default function ChairTopicProposalsPage() {
         return total;
     }, [groupProposalSets]);
 
-    const coursesLabel = React.useMemo(() => {
-        if (chairCourses.length === 0) {
-            return 'No courses assigned';
+    const scopeLabel = React.useMemo(() => {
+        if (!chairScope) {
+            return 'No scope assigned';
         }
-        if (chairCourses.length <= 2) {
-            return chairCourses.join(', ');
+        if (chairScope.type === 'department') {
+            return chairScope.department;
         }
-        const [first, second] = chairCourses;
-        return `${first}, ${second} +${chairCourses.length - 2} more`;
-    }, [chairCourses]);
+        const courses = chairScope.courses;
+        if (courses.length <= 2) {
+            return courses.join(', ');
+        }
+        const [first, second] = courses;
+        return `${first}, ${second} +${courses.length - 2} more`;
+    }, [chairScope]);
 
     const sortedGroups = React.useMemo(() => {
         return [...assignedGroups].sort((a, b) => a.name.localeCompare(b.name));
@@ -446,9 +475,9 @@ export default function ChairTopicProposalsPage() {
                                 <Typography variant="h4">{pendingCount}</Typography>
                             </Box>
                             <Chip
-                                label={coursesLabel}
-                                color={chairCourses.length > 0 ? 'info' : 'default'}
-                                variant={chairCourses.length > 0 ? 'filled' : 'outlined'}
+                                label={scopeLabel}
+                                color={chairScope ? 'info' : 'default'}
+                                variant={chairScope ? 'filled' : 'outlined'}
                             />
                         </Stack>
                     </CardContent>
@@ -456,9 +485,9 @@ export default function ChairTopicProposalsPage() {
 
                 {profileError && <Alert severity="error">{profileError}</Alert>}
                 {groupsError && <Alert severity="error">{groupsError}</Alert>}
-                {!profileLoading && chairCourses.length === 0 && (
+                {!profileLoading && !chairScope && (
                     <Alert severity="info">
-                        Your profile does not list any courses. Update your course assignments to see
+                        Your profile does not have a department or course assigned. Update your profile to see
                         topic proposals.
                     </Alert>
                 )}
@@ -471,8 +500,12 @@ export default function ChairTopicProposalsPage() {
                     </Stack>
                 )}
 
-                {!groupsLoading && chairCourses.length > 0 && sortedGroups.length === 0 && (
-                    <Alert severity="info">No thesis groups are assigned to your courses yet.</Alert>
+                {!groupsLoading && chairScope && sortedGroups.length === 0 && (
+                    <Alert severity="info">
+                        {chairScope.type === 'department'
+                            ? 'No thesis groups found in your department.'
+                            : 'No thesis groups are assigned to your courses yet.'}
+                    </Alert>
                 )}
 
                 {sortedGroups.map((group) => {

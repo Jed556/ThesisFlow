@@ -17,7 +17,7 @@ import {
 } from '../../utils/firebase/firestore/thesis';
 import { createChat } from '../../utils/firebase/firestore/chat';
 import { findUserById } from '../../utils/firebase/firestore/user';
-import { getGroupsByCourse } from '../../utils/firebase/firestore/groups';
+import { getGroupsByCourse, getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { uploadConversationAttachments } from '../../utils/firebase/storage/conversation';
 import { getDisplayName } from '../../utils/userUtils';
 import { notifyNewChatMessage } from '../../utils/auditNotificationUtils';
@@ -50,6 +50,10 @@ export default function ChairThesisOverviewPage() {
 
     const [profile, setProfile] = React.useState<UserProfile | null>(null);
     const [profileLoading, setProfileLoading] = React.useState(true);
+
+    // Scope configuration for chair - can be course-based or department-based
+    const [_scopeType, setScopeType] = React.useState<'courses' | 'department' | null>(null);
+    const [scopeDepartment, setScopeDepartment] = React.useState<string | null>(null);
 
     const [courses, setCourses] = React.useState<string[]>([]);
     const [selectedCourse, setSelectedCourse] = React.useState('');
@@ -110,15 +114,40 @@ export default function ChairThesisOverviewPage() {
         setError(null);
 
         void findUserById(chairUid)
-            .then((userProfile) => {
+            .then(async (userProfile) => {
                 if (cancelled) {
                     return;
                 }
                 setProfile(userProfile ?? null);
-                const derived = userProfile
-                    ? (userProfile.moderatedCourses?.filter(Boolean) ?? splitSectionList(userProfile.course))
-                    : [];
-                setCourses(derived);
+
+                // Determine scope type and derive courses
+                const explicitCourses = userProfile?.moderatedCourses?.filter(Boolean) ?? [];
+                const fallbackCourses = splitSectionList(userProfile?.course);
+
+                if (explicitCourses.length > 0 || fallbackCourses.length > 0) {
+                    // Course-based scope
+                    setScopeType('courses');
+                    setScopeDepartment(null);
+                    setCourses(explicitCourses.length > 0 ? explicitCourses : fallbackCourses);
+                } else if (userProfile?.department) {
+                    // Department-based scope - fetch all groups in department to get course list
+                    setScopeType('department');
+                    setScopeDepartment(userProfile.department);
+                    try {
+                        const deptGroups = await getGroupsByDepartment(userProfile.department);
+                        const uniqueCourses = [...new Set(
+                            deptGroups.map(g => g.course).filter((c): c is string => Boolean(c))
+                        )];
+                        setCourses(uniqueCourses.sort());
+                    } catch (err) {
+                        console.error('Failed to fetch department courses:', err);
+                        setCourses([]);
+                    }
+                } else {
+                    setScopeType(null);
+                    setScopeDepartment(null);
+                    setCourses([]);
+                }
             })
             .catch((fetchError) => {
                 console.error('Failed to load chair profile:', fetchError);
@@ -264,6 +293,19 @@ export default function ChairThesisOverviewPage() {
 
     const filters: WorkspaceFilterConfig[] = React.useMemo(() => {
         const filterList: WorkspaceFilterConfig[] = [];
+
+        // Show department scope if department-based access
+        if (scopeDepartment) {
+            filterList.push({
+                id: 'department',
+                label: 'Department',
+                value: scopeDepartment,
+                options: [{ value: scopeDepartment, label: scopeDepartment }],
+                onChange: () => { /* read-only */ },
+                disabled: true,
+            });
+        }
+
         filterList.push({
             id: 'course',
             label: 'Course',
@@ -298,7 +340,7 @@ export default function ChairThesisOverviewPage() {
         });
 
         return filterList;
-    }, [courses, selectedCourse, groups, selectedGroupId, groupsLoading]);
+    }, [courses, selectedCourse, groups, selectedGroupId, groupsLoading, scopeDepartment]);
 
     const handleCreateComment = React.useCallback(async ({
         chapterId,
