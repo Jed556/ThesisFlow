@@ -526,7 +526,7 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
 
                         {/* Right side: action buttons */}
                         <Stack direction="row" spacing={1} alignItems="center">
-                            {canTakeExpertAction && canApprove && onApprove && (
+                            {canTakeExpertAction && canApprove && (onApprove || onApproveLink) && (
                                 <Button
                                     size="small"
                                     variant="contained"
@@ -539,7 +539,7 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                                     {isProcessing ? 'Approving…' : 'Approve'}
                                 </Button>
                             )}
-                            {canTakeExpertAction && canApprove && onRequestRevision && (
+                            {canTakeExpertAction && canApprove && (onRequestRevision || onRequestRevisionLink) && (
                                 <Button
                                     size="small"
                                     variant="outlined"

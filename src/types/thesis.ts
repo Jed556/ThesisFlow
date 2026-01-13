@@ -145,6 +145,8 @@ export interface ChapterSubmissionEntry {
     status: ChapterSubmissionStatus;
     /** Document link URL (for link submission mode) */
     link?: string;
+    /** Expert approval states for this submission */
+    expertApprovals?: ExpertApprovalState;
 }
 
 /**

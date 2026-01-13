@@ -1,5 +1,5 @@
 import type { FileAttachment } from './file';
-import type { ChapterSubmissionStatus, ExpertRole, ThesisStageName } from './thesis';
+import type { ChapterSubmissionStatus, ExpertApprovalState, ExpertRole, ThesisStageName } from './thesis';
 
 export interface WorkspaceFilterOption {
     label: string;
@@ -75,6 +75,8 @@ export interface VersionOption {
     /** Document link URL (for link submission mode) */
     link?: string;
     status?: ChapterSubmissionStatus;
+    /** Expert approval states (for link submissions without files) */
+    expertApprovals?: ExpertApprovalState;
 }
 
 export type ChapterVersionMap = Record<number, VersionOption[]>;

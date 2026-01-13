@@ -196,7 +196,7 @@ export default function AdviserThesisOverviewPage() {
                 options: assignments.map((assignment) => ({
                     value: assignment.thesisId,
                     label: assignment.thesisTitle || assignment.thesisId,
-                    description: assignment.stage,
+                    description: assignment.id,
                 })),
                 onChange: (value) => setSelectedThesisId(value),
             },

@@ -77,6 +77,8 @@ export const buildVersionOptions = (
                 file,
                 link: submission.link,
                 status: submission.status,
+                // Include expertApprovals for link submissions (file submissions get it from file.expertApprovals)
+                expertApprovals: submission.expertApprovals,
             });
             return acc;
         }, []);
@@ -278,8 +280,8 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                 const isVersionActive = version.versionIndex === selectedVersionIndex;
                 const isDraft = isDraftSubmission(version);
                 const isProcessing = processingVersionId === version.id;
-                // Use per-file expertApprovals (status is now per-submission)
-                const fileExpertApprovals = version.file?.expertApprovals;
+                // Use per-file expertApprovals for file submissions, or version.expertApprovals for link submissions
+                const versionExpertApprovals = version.file?.expertApprovals ?? version.expertApprovals;
                 // Mark as ignored if another version is approved and this one is under review
                 const versionStatus = version.file?.submissionStatus ?? version.status;
                 const isIgnored = hasApprovedVersion && versionStatus === 'under_review';
@@ -294,7 +296,7 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                             status={versionStatus}
                             isDraft={isDraft}
                             isIgnored={isIgnored}
-                            expertApprovals={fileExpertApprovals}
+                            expertApprovals={versionExpertApprovals}
                             selected={isVersionActive}
                             participants={participants}
                             isStudent={isStudent}

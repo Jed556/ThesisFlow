@@ -162,6 +162,8 @@ export const buildVersionOptions = (
                 file,
                 link: submission.link,
                 status: submission.status,
+                // Include expertApprovals for link submissions (file submissions get it from file.expertApprovals)
+                expertApprovals: submission.expertApprovals,
             });
             return acc;
         }, []);

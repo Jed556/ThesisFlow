@@ -289,7 +289,7 @@ export default function ModeratorThesisOverviewPage() {
             options: groups.map((group) => ({
                 value: group.id,
                 label: group.name,
-                description: group.status,
+                description: group.id,
             })),
             onChange: (value) => setSelectedGroupId(value),
             disabled: groups.length === 0,
