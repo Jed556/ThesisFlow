@@ -3,6 +3,9 @@ import { isCompletedGroupStatus } from './expertProfileUtils';
 import type { ThesisGroup } from '../types/group';
 import { devLog } from './devUtils';
 
+/** Toggle whether open slots should influence expert scoring */
+export const INCLUDE_SLOTS_IN_SCORING = false;
+
 type ThesisExpertRole = 'adviser' | 'editor' | 'statistician';
 
 export interface ThesisRoleStats {
@@ -200,7 +203,9 @@ export function computeExpertCards(
             profile, stats, role, skillMatchScore
         );
 
-        const score = compatibility + openSlots * 5 + skillMatchScore * 50;
+        // Combine into a single score (slots conditionally included, skill match heavily weighted)
+        const slotsBonus = INCLUDE_SLOTS_IN_SCORING ? openSlots * 1 : 0;
+        const score = compatibility + slotsBonus + skillMatchScore * 100;
 
         // Log computation results for debugging (includes ALL skills with weighted contributions)
         devLog('[recommendUtils] Expert scoring:', {
@@ -326,8 +331,9 @@ function computeFinalScore(
     // Compute raw compatibility
     const compatibility = computeCompatibilityWithSkills(profile, stats, role, skillMatchScore);
 
-    // Return finalScore using the same formula as computeExpertCards
-    return compatibility + openSlots * 5 + skillMatchScore * 50;
+    // Return finalScore using the same formula as computeExpertCards (slots conditionally included)
+    const slotsBonus = INCLUDE_SLOTS_IN_SCORING ? openSlots * 1 : 0;
+    return compatibility + slotsBonus + skillMatchScore * 100;
 }
 
 /**
