@@ -272,6 +272,13 @@ export default function ThesisWorkspace({
         [allChapters, activeStage],
     );
 
+    // Stable list of chapter IDs for the active stage (used in effect dependencies)
+    // This prevents re-triggering effects when allChapters changes due to submission updates
+    const stageChapterIds = React.useMemo(
+        () => stageChapters.map((chapter) => chapter.id).sort((a, b) => a - b).join(','),
+        [stageChapters],
+    );
+
     const stageCompletionMap = React.useMemo(
         () => buildStageCompletionMap(allChapters, { treatEmptyAsComplete: false }),
         [allChapters],
@@ -549,15 +556,18 @@ export default function ThesisWorkspace({
         activeChapterId,
     ]);
 
-    // Derive chapter status from its file submissions
+    // Derive chapter status from its file and link submissions
     const activeChapterFiles = activeChapterId ? chapterFiles[activeChapterId] : undefined;
-    const activeChapterStatus = deriveChapterStatus(activeChapterFiles);
+    const hasStatistician = expertRoles.includes('statistician');
+    const activeChapterStatus = deriveChapterStatus(activeChapterFiles, activeChapter, hasStatistician);
     const isConversationReadOnly = activeChapterStatus === 'approved';
 
     // Listen to submission files for ALL chapters in the current stage
     // This ensures version counts and statuses are accurate before selection
     React.useEffect(() => {
-        if (!thesisId || !groupId || !year || !department || !course || stageChapters.length === 0) {
+        // Use stageChapterIds as dependency to avoid re-triggering when submissions update
+        const chapterIdList = stageChapterIds ? stageChapterIds.split(',').map(Number).filter(Boolean) : [];
+        if (!thesisId || !groupId || !year || !department || !course || chapterIdList.length === 0) {
             setIsFetchingChapterFiles(false);
             setChapterFilesError(null);
             return;
@@ -569,7 +579,7 @@ export default function ThesisWorkspace({
         // Create listeners for all chapters in the stage
         const unsubscribers: (() => void)[] = [];
 
-        stageChapters.forEach((chapter) => {
+        chapterIdList.forEach((chapterId) => {
             const fileCtx: FileQueryContext = {
                 year,
                 department,
@@ -577,19 +587,19 @@ export default function ThesisWorkspace({
                 groupId,
                 thesisId,
                 stage: activeStage,
-                chapterId: String(chapter.id),
+                chapterId: String(chapterId),
             };
 
             const unsubscribe = listenFilesForChapter(fileCtx, {
                 onData: (files) => {
-                    setChapterFiles((prev) => ({ ...prev, [chapter.id]: files }));
+                    setChapterFiles((prev) => ({ ...prev, [chapterId]: files }));
                     // Only clear loading state after all chapters have been processed
                     // This is a simple approach - in practice, the last callback will set it to false
                     setIsFetchingChapterFiles(false);
                 },
                 onError: (error) => {
                     const message = error instanceof Error ? error.message : 'Unable to load uploaded files.';
-                    console.error(`Error loading files for chapter ${chapter.id}:`, message);
+                    console.error(`Error loading files for chapter ${chapterId}:`, message);
                     setChapterFilesError(message);
                     setIsFetchingChapterFiles(false);
                 },
@@ -601,41 +611,50 @@ export default function ThesisWorkspace({
         return () => {
             unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, [thesisId, groupId, year, department, course, activeStage, stageChapters]);
+    }, [thesisId, groupId, year, department, course, activeStage, stageChapterIds]);
 
-    // Listen to submission metadata for the active chapter in real-time
+    // Listen to submission metadata for ALL chapters in the current stage
+    // This ensures chapter status is accurate for both file and link submissions
     React.useEffect(() => {
-        if (!thesisId || !groupId || !year || !department || !course || !activeChapter) {
+        // Use stageChapterIds as dependency to avoid re-triggering when submissions update
+        const chapterIdList = stageChapterIds ? stageChapterIds.split(',').map(Number).filter(Boolean) : [];
+        if (!thesisId || !groupId || !year || !department || !course || chapterIdList.length === 0) {
             return;
         }
 
-        const submissionCtx: SubmissionContext = {
-            year,
-            department,
-            course,
-            groupId,
-            thesisId,
-            stage: activeStage,
-            chapterId: String(activeChapter.id),
-        };
+        const unsubscribers: (() => void)[] = [];
 
-        const unsubscribe = listenSubmissionsForChapter(submissionCtx, {
-            onData: (submissions) => {
-                const entries = submissions.map((submission) => normalizeSubmissionEntry(submission));
-                setChapterSubmissionEntries((prev) => ({
-                    ...prev,
-                    [activeChapter.id]: entries,
-                }));
-            },
-            onError: (error) => {
-                console.error('Unable to load submissions for chapter:', error);
-            },
+        chapterIdList.forEach((chapterId) => {
+            const submissionCtx: SubmissionContext = {
+                year,
+                department,
+                course,
+                groupId,
+                thesisId,
+                stage: activeStage,
+                chapterId: String(chapterId),
+            };
+
+            const unsubscribe = listenSubmissionsForChapter(submissionCtx, {
+                onData: (submissions) => {
+                    const entries = submissions.map((submission) => normalizeSubmissionEntry(submission));
+                    setChapterSubmissionEntries((prev) => ({
+                        ...prev,
+                        [chapterId]: entries,
+                    }));
+                },
+                onError: (error) => {
+                    console.error(`Unable to load submissions for chapter ${chapterId}:`, error);
+                },
+            });
+
+            unsubscribers.push(unsubscribe);
         });
 
         return () => {
-            unsubscribe();
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, [thesisId, groupId, year, department, course, activeStage, activeChapter?.id]);
+    }, [thesisId, groupId, year, department, course, activeStage, stageChapterIds]);
 
     const versionOptionsByChapter = React.useMemo<ChapterVersionMap>(() => {
         const map: ChapterVersionMap = {};
@@ -1184,6 +1203,7 @@ export default function ThesisWorkspace({
                                                 )}
                                                 chapterFiles={chapterFiles}
                                                 isLoading={isFetchingChapterFiles}
+                                                hasStatistician={expertRoles.includes('statistician')}
                                             />
                                         </Box>
                                     </CardContent>

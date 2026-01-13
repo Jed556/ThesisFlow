@@ -62,3 +62,20 @@ export interface TerminalRequirementSubmissionRecord {
 }
 
 export type TerminalRequirementApproverAssignments = Partial<Record<TerminalRequirementApprovalRole, string[]>>;
+
+/**
+ * Link submission entry for terminal requirements (link submission mode)
+ * Stored per requirement for persistence across page refreshes.
+ */
+export interface TerminalRequirementLinkEntry {
+    /** Requirement ID this link is for */
+    requirementId: string;
+    /** The submitted link URL */
+    linkUrl: string;
+    /** Whether the link has been marked as submitted */
+    submitted: boolean;
+    /** When the link was submitted */
+    submittedAt?: string;
+    /** Who submitted the link (user UID) */
+    submittedBy?: string;
+}

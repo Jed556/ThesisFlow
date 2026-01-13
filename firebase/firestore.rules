@@ -208,6 +208,13 @@ service cloud.firestore {
             allow write: if isAuthenticated();
         }
 
+        // Collection group: terminalLinks (for link submission mode)
+        // Note: More specific rules apply at the nested path level
+        match /{path=**}/terminalLinks/{linkId} {
+            allow read: if isAuthenticated();
+            allow write: if isAuthenticated();
+        }
+
         // Collection group: proposals
         match /{path=**}/proposals/{proposalId} {
             allow read: if isAuthenticated();
@@ -831,6 +838,17 @@ service cloud.firestore {
                                     allow create: if isGroupMember() || isAssignedExpert() || isAdminOrDeveloper();
                                     allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                     allow delete: if isAdminOrDeveloper() || isHead();
+                                }
+
+                                // ================================
+                                // TERMINAL REQUIREMENT LINKS (for link submission mode)
+                                // ================================
+
+                                match /terminalLinks/{linkId} {
+                                    allow read: if isAuthenticated() && hasThesisAccess();
+                                    allow create: if isGroupMember() || isAdminOrDeveloper();
+                                    allow update: if isGroupMember() || isAdminOrDeveloper();
+                                    allow delete: if isGroupMember() || isAdminOrDeveloper();
                                 }
                             }
                         }

@@ -21,6 +21,7 @@ import { SubmissionCard } from '../File';
 import type { VersionOption } from '../../types/workspace';
 import { normalizeChapterSubmissions } from '../../utils/chapterSubmissionUtils';
 import { resolveChapterStage } from '../../utils/thesisStageUtils';
+import { hasRoleApproved } from '../../utils/expertUtils';
 
 const ACCEPTED_FILE_TYPES = [
     '.pdf', '.doc', '.docx',
@@ -105,6 +106,36 @@ export const buildVersionOptions = (
 const isDraftSubmission = (version: VersionOption): boolean => {
     const status = version.file?.submissionStatus ?? version.status;
     return !status || status === 'draft';
+};
+
+/**
+ * Check if a submission is fully approved by experts (adviser, editor, and optionally statistician)
+ */
+const isFullyApprovedByExperts = (
+    expertApprovals: FileAttachment['expertApprovals'] | VersionOption['expertApprovals'],
+    hasStatistician = false,
+): boolean => {
+    if (!expertApprovals || !Array.isArray(expertApprovals) || expertApprovals.length === 0) {
+        return false;
+    }
+    const hasAdviser = hasRoleApproved(expertApprovals, 'adviser');
+    const hasEditor = hasRoleApproved(expertApprovals, 'editor');
+    const hasStatisticianApproval = hasRoleApproved(expertApprovals, 'statistician');
+    return hasAdviser && hasEditor && (!hasStatistician || hasStatisticianApproval);
+};
+
+/**
+ * Check if a version is approved (by status or expertApprovals)
+ */
+const isVersionApproved = (
+    version: VersionOption,
+    hasStatisticianRole = false,
+): boolean => {
+    const status = version.file?.submissionStatus ?? version.status;
+    if (status === 'approved') return true;
+    // Check expertApprovals for both file and link submissions
+    const approvals = version.file?.expertApprovals ?? version.expertApprovals;
+    return isFullyApprovedByExperts(approvals, hasStatisticianRole);
 };
 
 interface SubmissionsRailProps {
@@ -207,21 +238,20 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
         }
     }, [linkValue, onLinkSubmit]);
 
-    // Check if any version is approved (used to mark others as ignored)
-    const hasApprovedVersion = versions.some(
-        (v) => v.file?.submissionStatus === 'approved' || v.status === 'approved'
-    );
+    // Check if any version is approved (by status OR expertApprovals)
+    const hasApprovedVersion = versions.some((v) => isVersionApproved(v, hasStatistician));
 
-    // Derive chapter status from the latest file submissions
-    const latestFile = versions.length > 0 ? versions[versions.length - 1]?.file : undefined;
-    const derivedChapterStatus = latestFile?.submissionStatus;
+    // Derive chapter status from the latest submission (file OR link)
+    const latestVersion = versions.length > 0 ? versions[versions.length - 1] : undefined;
+    const latestStatus = latestVersion?.file?.submissionStatus ?? latestVersion?.status;
+    const isLatestApproved = latestVersion ? isVersionApproved(latestVersion, hasStatistician) : false;
+    const isLatestUnderReview = latestStatus === 'under_review';
 
-    // Determine if uploads are allowed based on derived status
-    const uploadsLockedByStatus =
-        derivedChapterStatus === 'approved' || derivedChapterStatus === 'under_review';
+    // Determine if uploads/links are allowed based on derived status
+    const uploadsLockedByStatus = isLatestApproved || isLatestUnderReview;
     const allowUploads = Boolean(isStudent && onUploadVersion && !uploadsLockedByStatus);
     const uploadHelperText = isStudent && uploadsLockedByStatus
-        ? derivedChapterStatus === 'approved'
+        ? isLatestApproved
             ? 'This chapter is approved. Upload a new version only after it is reopened.'
             : 'Uploads are disabled while this chapter is under review.'
         : undefined;
@@ -282,9 +312,12 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                 const isProcessing = processingVersionId === version.id;
                 // Use per-file expertApprovals for file submissions, or version.expertApprovals for link submissions
                 const versionExpertApprovals = version.file?.expertApprovals ?? version.expertApprovals;
-                // Mark as ignored if another version is approved and this one is under review
+                // Check if this version is approved (by status OR expertApprovals)
                 const versionStatus = version.file?.submissionStatus ?? version.status;
-                const isIgnored = hasApprovedVersion && versionStatus === 'under_review';
+                const isThisVersionApproved = isVersionApproved(version, hasStatistician);
+                // Mark as ignored if another version is approved and this one is under review but NOT approved
+                // A version with under_review status but fully approved via expertApprovals should NOT be ignored
+                const isIgnored = hasApprovedVersion && versionStatus === 'under_review' && !isThisVersionApproved;
 
                 return (
                     <Box key={version.id}>
@@ -383,12 +416,14 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                     >
                         {isUploading ? 'Submitting…' : 'Submit Link'}
                     </Button>
-                    {uploadHelperText && (
-                        <Typography variant="body2" color="text.secondary">
-                            {uploadHelperText}
-                        </Typography>
-                    )}
                 </Stack>
+            )}
+
+            {/* Status message when link submissions are locked */}
+            {isLinkMode && isStudent && uploadsLockedByStatus && uploadHelperText && (
+                <Typography variant="body2" color="text.secondary">
+                    {uploadHelperText}
+                </Typography>
             )}
 
             {/* File upload mode */}

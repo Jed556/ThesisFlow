@@ -21,6 +21,7 @@ import { AnimatedPage } from '../../components/Animate';
 import { RecentAudits } from '../../components/AuditView';
 import type { deriveChapterStatus } from '../../components/ThesisWorkspace/ChapterRail';
 import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
+import { hasRoleApproved } from '../../utils/expertUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { listenTopicProposalSetsByGroup } from '../../utils/firebase/firestore/topicProposals';
@@ -69,23 +70,46 @@ type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembersById>> extends (
     : never;
 
 /**
+ * Check if a submission is fully approved by experts (adviser, editor, and optionally statistician)
+ */
+function isFullyApprovedByExperts(
+    expertApprovals: ThesisChapter['submissions'][0]['expertApprovals'],
+    hasStatistician: boolean
+): boolean {
+    if (!expertApprovals) return false;
+    const hasAdviser = hasRoleApproved(expertApprovals, 'adviser');
+    const hasEditor = hasRoleApproved(expertApprovals, 'editor');
+    const hasStatisticianApproval = hasRoleApproved(expertApprovals, 'statistician');
+    return hasAdviser && hasEditor && (!hasStatistician || hasStatisticianApproval);
+}
+
+/**
  * Derive chapter status from its submissions
  * Priority: latest submission status, or check if any approved/under_review/revision
+ * Also checks expertApprovals for fully approved state
  */
-function getChapterStatusFromSubmissions(chapter: ThesisChapter): ReturnType<typeof deriveChapterStatus> {
+function getChapterStatusFromSubmissions(
+    chapter: ThesisChapter,
+    hasStatistician = false
+): ReturnType<typeof deriveChapterStatus> {
     const submissions = chapter.submissions ?? [];
     if (submissions.length === 0) {
         return 'not_submitted';
     }
 
-    // Check the latest submission's status
+    // Check the latest submission's status OR expertApprovals
     const latestSubmission = submissions[submissions.length - 1];
-    if (latestSubmission?.status === 'approved') return 'approved';
+    if (latestSubmission?.status === 'approved' ||
+        isFullyApprovedByExperts(latestSubmission?.expertApprovals, hasStatistician)) {
+        return 'approved';
+    }
     if (latestSubmission?.status === 'under_review') return 'under_review';
     if (latestSubmission?.status === 'revision_required') return 'revision_required';
 
-    // Fallback: check if any submission has a status
-    const hasApproved = submissions.some((s) => s.status === 'approved');
+    // Fallback: check if any submission is approved (by status or expertApprovals)
+    const hasApproved = submissions.some((s) =>
+        s.status === 'approved' || isFullyApprovedByExperts(s.expertApprovals, hasStatistician)
+    );
     if (hasApproved) return 'approved';
 
     const hasUnderReview = submissions.some((s) => s.status === 'under_review');

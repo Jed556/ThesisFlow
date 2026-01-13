@@ -6,6 +6,7 @@ import {
 import {
     CloudUpload as CloudUploadIcon, Download as DownloadIcon,
     Link as LinkIcon, CheckCircle as CheckCircleIcon,
+    Delete as DeleteIcon,
 } from '@mui/icons-material';
 import type { FileAttachment } from '../../types/file';
 import type {
@@ -42,6 +43,8 @@ export interface TerminalRequirementCardProps {
     onLinkChange?: (url: string) => void;
     /** Handler for marking link as submitted (link mode) */
     onLinkSubmit?: () => void;
+    /** Handler for deleting/clearing a submitted link (link mode) */
+    onDeleteLink?: () => void;
 }
 
 export function TerminalRequirementCard({
@@ -60,6 +63,7 @@ export function TerminalRequirementCard({
     onViewFile,
     onLinkChange,
     onLinkSubmit,
+    onDeleteLink,
 }: TerminalRequirementCardProps) {
     const inputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -163,17 +167,30 @@ export function TerminalRequirementCard({
                             </Button>
                         )}
                         {linkSubmitted && linkUrl && (
-                            <Button
-                                variant="text"
-                                startIcon={<LinkIcon />}
-                                component="a"
-                                href={linkUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                size="small"
-                            >
-                                Open document
-                            </Button>
+                            <Stack direction="row" spacing={1}>
+                                <Button
+                                    variant="text"
+                                    startIcon={<LinkIcon />}
+                                    component="a"
+                                    href={linkUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    size="small"
+                                >
+                                    Open document
+                                </Button>
+                                {onDeleteLink && !disabled && (
+                                    <Button
+                                        variant="text"
+                                        color="error"
+                                        startIcon={<DeleteIcon />}
+                                        onClick={onDeleteLink}
+                                        size="small"
+                                    >
+                                        Remove
+                                    </Button>
+                                )}
+                            </Stack>
                         )}
                     </Stack>
                 )}

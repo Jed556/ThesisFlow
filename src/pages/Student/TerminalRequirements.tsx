@@ -33,7 +33,8 @@ import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
 import {
     getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement,
-    type TerminalContext,
+    saveTerminalRequirementLink, deleteTerminalRequirementLink, listenTerminalRequirementLinks,
+    type TerminalContext, type TerminalLinkContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
 import {
     listenPanelCommentRelease, listenPanelCommentCompletion, type PanelCommentContext
@@ -309,6 +310,44 @@ export default function TerminalRequirementsPage() {
             unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
     }, [thesis?.id]);
+
+    // Listen to terminal requirement links for all stages (link submission mode)
+    React.useEffect(() => {
+        if (!thesis?.id || !groupMeta?.id || !groupMeta?.department || !groupMeta?.course) {
+            return;
+        }
+
+        const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => {
+            const linkContext: TerminalLinkContext = {
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+                groupId: groupMeta.id,
+                thesisId: thesis.id,
+                stage: stageMeta.value,
+            };
+            return listenTerminalRequirementLinks(linkContext, {
+                onData: (links) => {
+                    // Update local state from Firestore
+                    const newLinks: RequirementLinkMap = {};
+                    const newSubmitted: RequirementLinkSubmittedMap = {};
+                    links.forEach((link) => {
+                        newLinks[link.requirementId] = link.linkUrl;
+                        newSubmitted[link.requirementId] = link.submitted;
+                    });
+                    setRequirementLinks((prev) => ({ ...prev, ...newLinks }));
+                    setLinkSubmittedMap((prev) => ({ ...prev, ...newSubmitted }));
+                },
+                onError: (err) => {
+                    console.error(`Terminal link listener error for ${stageMeta.value}:`, err);
+                },
+            });
+        });
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [thesis?.id, groupMeta?.id, groupMeta?.department, groupMeta?.course, groupMeta?.year]);
 
     const configRequirementMap = React.useMemo(() => {
         if (!requirementsConfig) {
@@ -640,15 +679,58 @@ export default function TerminalRequirementsPage() {
         setRequirementLinks((prev) => ({ ...prev, [requirementId]: url }));
     }, []);
 
-    const handleLinkSubmit = React.useCallback((requirementId: string) => {
+    const handleLinkSubmit = React.useCallback(async (requirementId: string, stage: ThesisStageName) => {
         const url = requirementLinks[requirementId];
         if (!url?.trim()) {
             showNotification('Please enter a valid URL before marking as submitted.', 'error');
             return;
         }
-        setLinkSubmittedMap((prev) => ({ ...prev, [requirementId]: true }));
-        showNotification('Requirement marked as submitted.', 'success');
-    }, [requirementLinks, showNotification]);
+        if (!thesis?.id || !groupMeta?.id || !userUid) {
+            showNotification('Missing context. Please try again.', 'error');
+            return;
+        }
+
+        try {
+            const linkContext: TerminalLinkContext = {
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+                groupId: groupMeta.id,
+                thesisId: thesis.id,
+                stage,
+            };
+            await saveTerminalRequirementLink(linkContext, requirementId, url.trim(), userUid);
+            // Local state will be updated by the listener
+            showNotification('Requirement marked as submitted.', 'success');
+        } catch (err) {
+            console.error('Failed to save link submission:', err);
+            showNotification('Failed to save link. Please try again.', 'error');
+        }
+    }, [requirementLinks, showNotification, thesis?.id, groupMeta, userUid]);
+
+    const handleDeleteLink = React.useCallback(async (requirementId: string, stage: ThesisStageName) => {
+        if (!thesis?.id || !groupMeta?.id) {
+            showNotification('Missing context. Please try again.', 'error');
+            return;
+        }
+
+        try {
+            const linkContext: TerminalLinkContext = {
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+                groupId: groupMeta.id,
+                thesisId: thesis.id,
+                stage,
+            };
+            await deleteTerminalRequirementLink(linkContext, requirementId);
+            // Local state will be updated by the listener
+            showNotification('Link submission removed.', 'success');
+        } catch (err) {
+            console.error('Failed to delete link submission:', err);
+            showNotification('Failed to remove link. Please try again.', 'error');
+        }
+    }, [showNotification, thesis?.id, groupMeta]);
 
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStageName) => {
         setActiveStage(nextStage);
@@ -1035,7 +1117,10 @@ export default function TerminalRequirementsPage() {
                                                             ? (url) => handleLinkChange(requirement.id, url)
                                                             : undefined}
                                                         onLinkSubmit={allowFileActions && isLinkMode
-                                                            ? () => handleLinkSubmit(requirement.id)
+                                                            ? () => handleLinkSubmit(requirement.id, activeStage)
+                                                            : undefined}
+                                                        onDeleteLink={allowFileActions && isLinkMode
+                                                            ? () => handleDeleteLink(requirement.id, activeStage)
                                                             : undefined}
                                                     />
                                                 </Grid>
