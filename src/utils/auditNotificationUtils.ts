@@ -14,11 +14,12 @@ import type {
     AuditAction, AuditCategory, AuditDetails, UserAuditEntryFormData, UserAuditContext, UserAuditLevel
 } from '../types/audit';
 import type { ThesisGroup, ThesisGroupMembers } from '../types/group';
-import type { UserProfile } from '../types/profile';
+import type { UserProfile, UserRole } from '../types/profile';
 import { createAuditEntry, buildAuditContextFromGroup } from './auditUtils';
 import { createUserAuditEntriesBatch } from './firebase/firestore/userAudits';
 import { findUsersByIds, getPathLevelForRole } from './firebase/firestore/user';
 import { getAcademicYear } from './dateUtils';
+import { getNavigationPathForCategory, getAllowedRolesForCategory } from './navigationMappingUtils';
 
 // ============================================================================
 // Types
@@ -260,69 +261,26 @@ export interface AuditNavigationInfo {
  * Build navigation path for an audit entry based on its category and details.
  * Returns both the path and the roles that have access to it.
  * Used to create "View Details" action buttons in notifications.
+ * 
+ * NOTE: This function uses CATEGORY_NAVIGATION_CONFIG from navigationMappingUtils
+ * as the single source of truth for category → path mappings.
+ * 
+ * @param category - The audit category
+ * @param action - The audit action (currently unused but kept for future specificity)
+ * @param details - Optional audit details (currently unused but kept for future specificity)
+ * @param userRole - Optional user role for role-specific path resolution
  */
 export function getAuditNavigationInfo(
     category: AuditCategory,
     _action: AuditAction,
-    _details?: AuditDetails
+    _details?: AuditDetails,
+    userRole?: UserRole
 ): AuditNavigationInfo | null {
-    // Map category/action to navigation paths with their required roles
-    switch (category) {
-        case 'group':
-            // Group page is accessible to students
-            return { path: '/group', allowedRoles: ['student'] };
 
-        case 'submission':
-            // Thesis workspace - different roles have different paths
-            // Students use student-thesis-workspace, experts have their own overview pages
-            return {
-                path: '/student-thesis-workspace',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'moderator'],
-            };
+    const path = getNavigationPathForCategory(category, userRole);
+    const allowedRoles = getAllowedRolesForCategory(category);
 
-        case 'proposal':
-            // Topic proposals - students, moderators, and heads can view
-            return {
-                path: '/proposals',
-                allowedRoles: ['student', 'moderator', 'head'],
-            };
-
-        case 'terminal':
-            // Terminal requirements
-            return {
-                path: '/terminal-requirements',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'panel'],
-            };
-
-        case 'panel':
-            // Panel comments/feedback
-            return {
-                path: '/panel-feedback',
-                allowedRoles: ['student', 'panel'],
-            };
-
-        case 'expert':
-            // Expert requests - accessible based on expert type
-            return {
-                path: '/expert-requests',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician'],
-            };
-
-        case 'comment':
-            // Comments are typically in thesis workspace
-            return {
-                path: '/student-thesis-workspace',
-                allowedRoles: ['student', 'adviser', 'editor', 'statistician', 'moderator'],
-            };
-
-        case 'notification':
-            // Audits page is accessible to everyone
-            return { path: '/audits', allowedRoles: [] };
-
-        default:
-            // Default to audits page which is accessible to everyone
-            return { path: '/audits', allowedRoles: [] };
-    }
+    return { path, allowedRoles };
 }
 
 /**
@@ -1146,7 +1104,7 @@ export async function notifyPanelCommentsReleased(options: {
 export async function notifyNewChatMessage(options: {
     group: ThesisGroup;
     senderId: string;
-    senderRole: 'student' | 'adviser' | 'editor' | 'statistician' | 'moderator';
+    senderRole: 'student' | 'adviser' | 'editor' | 'statistician' | 'moderator' | 'chair';
     chapterName: string;
     stageName?: string;
     hasAttachments?: boolean;
@@ -1240,8 +1198,47 @@ export async function notifyDraftDeleted(options: {
 // ============================================================================
 
 /**
+ * Notify chair that a topic proposal requires their decision after moderator approval.
+ * Also notifies group members about the moderator approval.
+ */
+export async function notifyModeratorApprovedTopicForChair(options: {
+    group: ThesisGroup;
+    moderatorId: string;
+    proposalTitle: string;
+    chairUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, moderatorId, proposalTitle, chairUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: moderatorId,
+        name: 'Topic Awaiting Program Chair Decision',
+        description: `Topic "${proposalTitle}" has been approved by the moderator and now requires Program Chair decision.`,
+        category: 'proposal',
+        action: 'proposal_approved',
+        targets: {
+            groupMembers: true,
+            userIds: chairUserIds,
+            excludeUserId: moderatorId,
+        },
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'moderator',
+            nextReviewerRole: 'chair',
+            awaitingChairDecision: true,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Proposal',
+    });
+}
+
+/**
  * Notify head that a topic proposal requires their decision after moderator approval.
  * Also notifies group members about the moderator approval.
+ * NOTE: With the new flow, moderator -> chair -> head, this now sends to chair first.
+ * @deprecated Use notifyModeratorApprovedTopicForChair instead
  */
 export async function notifyModeratorApprovedTopicForHead(options: {
     group: ThesisGroup;
@@ -1255,8 +1252,8 @@ export async function notifyModeratorApprovedTopicForHead(options: {
     return auditAndNotify({
         group,
         userId: moderatorId,
-        name: 'Topic Awaiting Head Decision',
-        description: `Topic "${proposalTitle}" has been approved by the moderator and now requires head decision.`,
+        name: 'Topic Awaiting Program Chair Decision',
+        description: `Topic "${proposalTitle}" has been approved by the moderator and now requires Program Chair decision.`,
         category: 'proposal',
         action: 'proposal_approved',
         targets: {
@@ -1268,8 +1265,8 @@ export async function notifyModeratorApprovedTopicForHead(options: {
             ...details,
             proposalTitle,
             reviewerRole: 'moderator',
-            nextReviewerRole: 'head',
-            awaitingHeadDecision: true,
+            nextReviewerRole: 'chair',
+            awaitingChairDecision: true,
         },
         sendEmail: true,
         emailActionText: 'Review Proposal',
@@ -1425,6 +1422,89 @@ export async function notifyHeadRejectedTopic(options: {
             ...details,
             proposalTitle,
             reviewerRole: 'head',
+            reason,
+        },
+        sendEmail: true,
+        emailActionText: 'View Feedback',
+    });
+}
+
+// ============================================================================
+// Program Chair (Chair) Notification Functions
+// ============================================================================
+
+/**
+ * Notify head that a topic proposal requires their decision after chair approval.
+ * Also notifies group members and moderators about the chair approval.
+ */
+export async function notifyChairApprovedTopicForHead(options: {
+    group: ThesisGroup;
+    chairId: string;
+    proposalTitle: string;
+    headUserIds: string[];
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, chairId, proposalTitle, headUserIds, moderatorUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: chairId,
+        name: 'Topic Awaiting Head Decision',
+        description: `Topic "${proposalTitle}" has been approved by the Program Chair and now requires Research Head decision.`,
+        category: 'proposal',
+        action: 'proposal_approved',
+        targets: {
+            groupMembers: true,
+            moderators: true,
+            userIds: headUserIds,
+            excludeUserId: chairId,
+        },
+        moderatorUserIds,
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'chair',
+            nextReviewerRole: 'head',
+            awaitingHeadDecision: true,
+        },
+        sendEmail: true,
+        emailActionText: 'Review Proposal',
+    });
+}
+
+/**
+ * Notify when chair rejects a topic proposal.
+ * Notifies group members and moderators.
+ */
+export async function notifyChairRejectedTopic(options: {
+    group: ThesisGroup;
+    chairId: string;
+    proposalTitle: string;
+    reason?: string;
+    moderatorUserIds: string[];
+    details?: AuditDetails;
+}): Promise<AuditAndNotifyResult> {
+    const { group, chairId, proposalTitle, reason, moderatorUserIds, details } = options;
+
+    return auditAndNotify({
+        group,
+        userId: chairId,
+        name: 'Topic Rejected by Program Chair',
+        description: `Topic "${proposalTitle}" has been rejected by the Program Chair.` +
+            `${reason ? ` Reason: ${reason}` : ''}`,
+        category: 'proposal',
+        action: 'proposal_rejected',
+        targets: {
+            groupMembers: true,
+            moderators: true,
+            excludeUserId: chairId,
+        },
+        moderatorUserIds,
+        details: {
+            ...details,
+            proposalTitle,
+            reviewerRole: 'chair',
             reason,
         },
         sendEmail: true,

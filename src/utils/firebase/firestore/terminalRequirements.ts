@@ -48,7 +48,7 @@ import type {
 import type {
     TerminalRequirementApprovalRole, TerminalRequirementApprovalState, TerminalRequirementApprovalStatus,
     TerminalRequirementApproverAssignments, TerminalRequirementMemberApproval, TerminalRequirementSubmissionHistoryEntry,
-    TerminalRequirementSubmissionRecord, TerminalRequirementSubmissionStatus,
+    TerminalRequirementSubmissionRecord, TerminalRequirementSubmissionStatus, TerminalRequirementLinkEntry,
 } from '../../../types/terminalRequirementSubmission';
 
 // ============================================================================
@@ -230,14 +230,14 @@ function normalizeApprovals(
                     decidedBy: previous.decidedBy,
                 } : {}),
             };
-        } else {
+        } else
             // Single approver - use simple status tracking
             if (previous && previous.status === 'approved') {
                 acc[role] = { ...previous, role };
             } else {
                 acc[role] = { role, status: 'pending' };
             }
-        }
+
         return acc;
     }, {});
 }
@@ -1495,4 +1495,151 @@ export async function seedMissingTerminalRequirementConfigs(
     }
 
     return seededCount;
+}
+
+// ============================================================================
+// Terminal Requirement Link Submissions (for link submission mode)
+// ============================================================================
+
+/**
+ * Build the Firestore path for terminal requirement links subcollection
+ * Path: year/{year}/departments/{dept}/courses/{course}/groups/{group}/thesis/{thesis}/stages/{stage}/terminalLinks
+ */
+function buildTerminalLinksCollectionPath(
+    year: string,
+    department: string,
+    course: string,
+    groupId: string,
+    thesisId: string,
+    stage: ThesisStageName,
+): string {
+    const stageKey = normalizeStageKey(stage);
+    return `year/${sanitizePathSegment(year, DEFAULT_YEAR)}/departments/${sanitizePathSegment(department, DEFAULT_DEPARTMENT_SEGMENT)}/courses/${sanitizePathSegment(course, DEFAULT_COURSE_SEGMENT)}/groups/${groupId}/thesis/${thesisId}/stages/${stageKey}/terminalLinks`;
+}
+
+/**
+ * Build the Firestore path for a specific terminal requirement link document
+ */
+function buildTerminalLinkDocPath(
+    year: string,
+    department: string,
+    course: string,
+    groupId: string,
+    thesisId: string,
+    stage: ThesisStageName,
+    requirementId: string,
+): string {
+    return `${buildTerminalLinksCollectionPath(year, department, course, groupId, thesisId, stage)}/${requirementId}`;
+}
+
+export interface TerminalLinkContext {
+    year: string;
+    department: string;
+    course: string;
+    groupId: string;
+    thesisId: string;
+    stage: ThesisStageName;
+}
+
+/**
+ * Save a terminal requirement link submission
+ */
+export async function saveTerminalRequirementLink(
+    context: TerminalLinkContext,
+    requirementId: string,
+    linkUrl: string,
+    userUid: string,
+): Promise<void> {
+    const docPath = buildTerminalLinkDocPath(
+        context.year,
+        context.department,
+        context.course,
+        context.groupId,
+        context.thesisId,
+        context.stage,
+        requirementId,
+    );
+    const docRef = doc(firebaseFirestore, docPath);
+    const linkEntry: TerminalRequirementLinkEntry = {
+        requirementId,
+        linkUrl,
+        submitted: true,
+        submittedAt: new Date().toISOString(),
+        submittedBy: userUid,
+    };
+    await setDoc(docRef, cleanData(linkEntry), { merge: true });
+}
+
+/**
+ * Delete a terminal requirement link submission
+ */
+export async function deleteTerminalRequirementLink(
+    context: TerminalLinkContext,
+    requirementId: string,
+): Promise<void> {
+    const docPath = buildTerminalLinkDocPath(
+        context.year,
+        context.department,
+        context.course,
+        context.groupId,
+        context.thesisId,
+        context.stage,
+        requirementId,
+    );
+    const docRef = doc(firebaseFirestore, docPath);
+    await deleteDoc(docRef);
+}
+
+/**
+ * Get all terminal requirement links for a stage
+ */
+export async function getTerminalRequirementLinks(
+    context: TerminalLinkContext,
+): Promise<TerminalRequirementLinkEntry[]> {
+    const collectionPath = buildTerminalLinksCollectionPath(
+        context.year,
+        context.department,
+        context.course,
+        context.groupId,
+        context.thesisId,
+        context.stage,
+    );
+    const collectionRef = collection(firebaseFirestore, collectionPath);
+    const snapshot = await getDocs(collectionRef);
+    return snapshot.docs.map((docSnap) => ({
+        ...(docSnap.data() as TerminalRequirementLinkEntry),
+        requirementId: docSnap.id,
+    }));
+}
+
+/**
+ * Listen to terminal requirement links for a stage in real-time
+ */
+export function listenTerminalRequirementLinks(
+    context: TerminalLinkContext,
+    callbacks: {
+        onData: (links: TerminalRequirementLinkEntry[]) => void;
+        onError: (error: Error) => void;
+    },
+): () => void {
+    const collectionPath = buildTerminalLinksCollectionPath(
+        context.year,
+        context.department,
+        context.course,
+        context.groupId,
+        context.thesisId,
+        context.stage,
+    );
+    const collectionRef = collection(firebaseFirestore, collectionPath);
+    return onSnapshot(
+        collectionRef,
+        (snapshot) => {
+            const links = snapshot.docs.map((docSnap) => ({
+                ...(docSnap.data() as TerminalRequirementLinkEntry),
+                requirementId: docSnap.id,
+            }));
+            callbacks.onData(links);
+        },
+        (error) => callbacks.onError(error),
+    );
 }

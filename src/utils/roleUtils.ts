@@ -11,6 +11,9 @@ import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { findUserById } from './firebase/firestore/user';
 import { GROUPS_SUBCOLLECTION } from '../config/firestore';
 
+// Re-export role color utilities for convenience
+export { getRoleColor, ROLE_COLORS } from '../config/colors';
+
 /**
  * Determines system-wide user role from Firebase Auth custom claims or Firestore
  * Prioritizes Auth token claims over Firestore data for better performance and security
@@ -58,6 +61,58 @@ export function hasRoleAccess(userRole: UserRole, requiredRoles: string[]): bool
     }
 
     return requiredRoles.includes(userRole);
+}
+
+/**
+ * Check whether a user has a specific role (either as primary or secondary role).
+ * Useful for multi-role users who have both a primary role and secondary roles.
+ * @param userRole - The user's primary role
+ * @param secondaryRoles - The user's secondary roles (optional)
+ * @param roleToCheck - The role to check for
+ * @returns true if the user has the specified role as primary or secondary
+ */
+export function userHasRole(
+    userRole: UserRole,
+    secondaryRoles: UserRole[] | undefined,
+    roleToCheck: UserRole
+): boolean {
+    if (userRole === roleToCheck) return true;
+    if (secondaryRoles?.includes(roleToCheck)) return true;
+    return false;
+}
+
+/**
+ * Check whether a user has any of the specified roles (either as primary or secondary).
+ * @param userRole - The user's primary role
+ * @param secondaryRoles - The user's secondary roles (optional)
+ * @param rolesToCheck - Array of roles to check for
+ * @returns true if the user has any of the specified roles
+ */
+export function userHasAnyRole(
+    userRole: UserRole,
+    secondaryRoles: UserRole[] | undefined,
+    rolesToCheck: UserRole[]
+): boolean {
+    if (rolesToCheck.includes(userRole)) return true;
+    if (secondaryRoles?.some(r => rolesToCheck.includes(r))) return true;
+    return false;
+}
+
+/**
+ * Get all roles for a user (primary + secondary combined).
+ * @param userRole - The user's primary role
+ * @param secondaryRoles - The user's secondary roles (optional)
+ * @returns Array of all user roles (primary first, then secondary)
+ */
+export function getAllUserRoles(
+    userRole: UserRole,
+    secondaryRoles: UserRole[] | undefined
+): UserRole[] {
+    const roles = [userRole];
+    if (secondaryRoles?.length) {
+        roles.push(...secondaryRoles.filter(r => r !== userRole));
+    }
+    return roles;
 }
 
 /**

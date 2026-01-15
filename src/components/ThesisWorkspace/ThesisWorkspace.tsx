@@ -10,6 +10,8 @@ import type {
 import type { ChapterSubmissionEntry, ExpertRole, ThesisChapter, ThesisData, ThesisStageName } from '../../types/thesis';
 import type { FileAttachment } from '../../types/file';
 import type { ChatMessage } from '../../types/chat';
+import type { SystemSettings, SubmissionMode } from '../../types/systemSettings';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../types/systemSettings';
 import { ConversationPanel, type ConversationParticipant } from '../Conversation';
 import { FileViewer } from '../File';
 import { thesisCommentToChatMessage } from '../../utils/chatUtils';
@@ -20,6 +22,7 @@ import { listenThesisDocument, type ThesisDocumentContext } from '../../utils/fi
 import {
     listenAllChaptersForThesis, type ThesisChaptersContext,
 } from '../../utils/firebase/firestore/chapters';
+import { listenSystemSettings } from '../../utils/firebase/firestore/systemSettings';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getAssignedExpertRoles } from '../../utils/expertUtils';
 import { normalizeChapterSubmissions, normalizeSubmissionEntry } from '../../utils/chapterSubmissionUtils';
@@ -156,6 +159,16 @@ export default function ThesisWorkspace({
     const [submissionChats, setSubmissionChats] = React.useState<ChatMessage[]>([]);
     /** Whether chats are currently loading (reserved for future loading states) */
     const [_isLoadingChats, setIsLoadingChats] = React.useState(false);
+    /** System settings for submission mode */
+    const [systemSettings, setSystemSettings] = React.useState<SystemSettings | null>(null);
+    /** Link URLs for link submission mode (keyed by chapter ID) */
+    const [chapterLinks, setChapterLinks] = React.useState<Record<number, string>>({});
+
+    // Derive submission mode from system settings
+    const chapterSubmissionMode: SubmissionMode = systemSettings?.chapterSubmissions?.mode ?? 'link';
+    const isLinkMode = chapterSubmissionMode === 'link';
+    const linkPlaceholder = systemSettings?.chapterSubmissions?.linkPlaceholder
+        ?? DEFAULT_SYSTEM_SETTINGS.chapterSubmissions.linkPlaceholder;
 
     React.useEffect(() => {
         setChapterFiles({});
@@ -226,6 +239,21 @@ export default function ThesisWorkspace({
         };
     }, [thesisId, groupId, year, department, course]);
 
+    // Listen to system settings for submission mode
+    React.useEffect(() => {
+        const unsubscribe = listenSystemSettings({
+            onData: (settings: SystemSettings) => {
+                setSystemSettings(settings);
+            },
+            onError: (err: Error) => {
+                console.error('Failed to load system settings:', err);
+                // Use defaults on error
+                setSystemSettings({ id: 'settings', ...DEFAULT_SYSTEM_SETTINGS });
+            },
+        });
+        return () => unsubscribe();
+    }, []);
+
     const thesisSource = liveThesis ?? thesis ?? null;
 
     // Use chapters from subcollection (new hierarchical structure)
@@ -242,6 +270,13 @@ export default function ThesisWorkspace({
     const stageChapters = React.useMemo(
         () => allChapters.filter((chapter) => chapterHasStage(chapter, activeStage)),
         [allChapters, activeStage],
+    );
+
+    // Stable list of chapter IDs for the active stage (used in effect dependencies)
+    // This prevents re-triggering effects when allChapters changes due to submission updates
+    const stageChapterIds = React.useMemo(
+        () => stageChapters.map((chapter) => chapter.id).sort((a, b) => a - b).join(','),
+        [stageChapters],
     );
 
     const stageCompletionMap = React.useMemo(
@@ -440,6 +475,60 @@ export default function ThesisWorkspace({
         })();
     }, [onUploadChapter, thesisId, groupId, year, department, course, activeStage]);
 
+    /**
+     * Handle link submission for chapters (link mode)
+     * Creates a submission record with the provided URL
+     */
+    const handleChapterLinkSubmit = React.useCallback((chapterId: number, link: string) => {
+        if (!onUploadChapter || !thesisId) {
+            return;
+        }
+        const chapterStage = activeStage;
+        setUploadError(null);
+        setUploadingChapterId(chapterId);
+        setActiveChapterId(chapterId);
+        setActiveVersionIndex(null);
+
+        void (async () => {
+            try {
+                // Create a submission with the link URL (no file upload)
+                await onUploadChapter({
+                    thesisId, chapterId, chapterStage,
+                    link, // Pass link instead of file
+                    groupId: groupId ?? '',
+                    year,
+                    department,
+                    course,
+                });
+                // Clear the link input after successful submission
+                setChapterLinks((current) => {
+                    const next = { ...current };
+                    delete next[chapterId];
+                    return next;
+                });
+                setChapterFiles((current) => {
+                    const next = { ...current };
+                    delete next[chapterId];
+                    return next;
+                });
+            } catch (error) {
+                const message = error instanceof Error
+                    ? error.message
+                    : 'Failed to submit chapter link.';
+                setUploadError(message);
+            } finally {
+                setUploadingChapterId((current) => (current === chapterId ? null : current));
+            }
+        })();
+    }, [onUploadChapter, thesisId, groupId, year, department, course, activeStage]);
+
+    /**
+     * Handle link value change for a chapter
+     */
+    const handleChapterLinkChange = React.useCallback((chapterId: number, link: string) => {
+        setChapterLinks((current) => ({ ...current, [chapterId]: link }));
+    }, []);
+
     React.useEffect(() => {
         if (isStageLocked || stageChapters.length === 0) {
             setActiveChapterId(null);
@@ -467,15 +556,18 @@ export default function ThesisWorkspace({
         activeChapterId,
     ]);
 
-    // Derive chapter status from its file submissions
+    // Derive chapter status from its file and link submissions
     const activeChapterFiles = activeChapterId ? chapterFiles[activeChapterId] : undefined;
-    const activeChapterStatus = deriveChapterStatus(activeChapterFiles);
+    const hasStatistician = expertRoles.includes('statistician');
+    const activeChapterStatus = deriveChapterStatus(activeChapterFiles, activeChapter, hasStatistician);
     const isConversationReadOnly = activeChapterStatus === 'approved';
 
     // Listen to submission files for ALL chapters in the current stage
     // This ensures version counts and statuses are accurate before selection
     React.useEffect(() => {
-        if (!thesisId || !groupId || !year || !department || !course || stageChapters.length === 0) {
+        // Use stageChapterIds as dependency to avoid re-triggering when submissions update
+        const chapterIdList = stageChapterIds ? stageChapterIds.split(',').map(Number).filter(Boolean) : [];
+        if (!thesisId || !groupId || !year || !department || !course || chapterIdList.length === 0) {
             setIsFetchingChapterFiles(false);
             setChapterFilesError(null);
             return;
@@ -487,7 +579,7 @@ export default function ThesisWorkspace({
         // Create listeners for all chapters in the stage
         const unsubscribers: (() => void)[] = [];
 
-        stageChapters.forEach((chapter) => {
+        chapterIdList.forEach((chapterId) => {
             const fileCtx: FileQueryContext = {
                 year,
                 department,
@@ -495,19 +587,19 @@ export default function ThesisWorkspace({
                 groupId,
                 thesisId,
                 stage: activeStage,
-                chapterId: String(chapter.id),
+                chapterId: String(chapterId),
             };
 
             const unsubscribe = listenFilesForChapter(fileCtx, {
                 onData: (files) => {
-                    setChapterFiles((prev) => ({ ...prev, [chapter.id]: files }));
+                    setChapterFiles((prev) => ({ ...prev, [chapterId]: files }));
                     // Only clear loading state after all chapters have been processed
                     // This is a simple approach - in practice, the last callback will set it to false
                     setIsFetchingChapterFiles(false);
                 },
                 onError: (error) => {
                     const message = error instanceof Error ? error.message : 'Unable to load uploaded files.';
-                    console.error(`Error loading files for chapter ${chapter.id}:`, message);
+                    console.error(`Error loading files for chapter ${chapterId}:`, message);
                     setChapterFilesError(message);
                     setIsFetchingChapterFiles(false);
                 },
@@ -519,41 +611,50 @@ export default function ThesisWorkspace({
         return () => {
             unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, [thesisId, groupId, year, department, course, activeStage, stageChapters]);
+    }, [thesisId, groupId, year, department, course, activeStage, stageChapterIds]);
 
-    // Listen to submission metadata for the active chapter in real-time
+    // Listen to submission metadata for ALL chapters in the current stage
+    // This ensures chapter status is accurate for both file and link submissions
     React.useEffect(() => {
-        if (!thesisId || !groupId || !year || !department || !course || !activeChapter) {
+        // Use stageChapterIds as dependency to avoid re-triggering when submissions update
+        const chapterIdList = stageChapterIds ? stageChapterIds.split(',').map(Number).filter(Boolean) : [];
+        if (!thesisId || !groupId || !year || !department || !course || chapterIdList.length === 0) {
             return;
         }
 
-        const submissionCtx: SubmissionContext = {
-            year,
-            department,
-            course,
-            groupId,
-            thesisId,
-            stage: activeStage,
-            chapterId: String(activeChapter.id),
-        };
+        const unsubscribers: (() => void)[] = [];
 
-        const unsubscribe = listenSubmissionsForChapter(submissionCtx, {
-            onData: (submissions) => {
-                const entries = submissions.map((submission) => normalizeSubmissionEntry(submission));
-                setChapterSubmissionEntries((prev) => ({
-                    ...prev,
-                    [activeChapter.id]: entries,
-                }));
-            },
-            onError: (error) => {
-                console.error('Unable to load submissions for chapter:', error);
-            },
+        chapterIdList.forEach((chapterId) => {
+            const submissionCtx: SubmissionContext = {
+                year,
+                department,
+                course,
+                groupId,
+                thesisId,
+                stage: activeStage,
+                chapterId: String(chapterId),
+            };
+
+            const unsubscribe = listenSubmissionsForChapter(submissionCtx, {
+                onData: (submissions) => {
+                    const entries = submissions.map((submission) => normalizeSubmissionEntry(submission));
+                    setChapterSubmissionEntries((prev) => ({
+                        ...prev,
+                        [chapterId]: entries,
+                    }));
+                },
+                onError: (error) => {
+                    console.error(`Unable to load submissions for chapter ${chapterId}:`, error);
+                },
+            });
+
+            unsubscribers.push(unsubscribe);
         });
 
         return () => {
-            unsubscribe();
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, [thesisId, groupId, year, department, course, activeStage, activeChapter?.id]);
+    }, [thesisId, groupId, year, department, course, activeStage, stageChapterIds]);
 
     const versionOptionsByChapter = React.useMemo<ChapterVersionMap>(() => {
         const map: ChapterVersionMap = {};
@@ -1102,6 +1203,7 @@ export default function ThesisWorkspace({
                                                 )}
                                                 chapterFiles={chapterFiles}
                                                 isLoading={isFetchingChapterFiles}
+                                                hasStatistician={expertRoles.includes('statistician')}
                                             />
                                         </Box>
                                     </CardContent>
@@ -1152,6 +1254,17 @@ export default function ThesisWorkspace({
                                                 isLoading={isFetchingChapterFiles}
                                                 loadingMessage="Fetching submissions…"
                                                 activeStage={activeStage}
+                                                submissionMode={chapterSubmissionMode}
+                                                linkValue={activeChapterId ? chapterLinks[activeChapterId] ?? '' : ''}
+                                                onLinkChange={activeChapter
+                                                    ? (link: string) => handleChapterLinkChange(activeChapter.id, link)
+                                                    : undefined
+                                                }
+                                                onLinkSubmit={enableUploads && activeChapter
+                                                    ? (link: string) => handleChapterLinkSubmit(activeChapter.id, link)
+                                                    : undefined
+                                                }
+                                                linkPlaceholder={linkPlaceholder}
                                             />
                                         </Box>
                                     </CardContent>

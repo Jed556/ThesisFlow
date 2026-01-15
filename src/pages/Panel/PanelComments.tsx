@@ -4,7 +4,7 @@ import {
     Paper, Skeleton, Stack, Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
-    Send as SendIcon, Close as CloseIcon, Download as DownloadIcon,
+    Send as SendIcon, Close as CloseIcon, Download as DownloadIcon, Link as LinkIcon,
 } from '@mui/icons-material';
 import CommentBankIcon from '@mui/icons-material/CommentBank';
 import { useSession } from '@toolpad/core';
@@ -37,6 +37,7 @@ import { findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { formatFileSize } from '../../utils/fileUtils';
 import { FileCard, FileViewer } from '../../components/File';
 import type { FileAttachment } from '../../types/file';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -50,6 +51,7 @@ export const metadata: NavigationItem = {
 type EditorMode = 'create' | 'edit';
 
 export default function PanelPanelCommentsPage() {
+    useSegmentViewed({ segment: 'panel-feedback' });
     const session = useSession<Session>();
     const userUid = session?.user?.uid ?? null;
     const userName = session?.user?.name ?? 'Panel member';
@@ -507,33 +509,78 @@ export default function PanelPanelCommentsPage() {
                                     </Typography>
                                     {!manuscript.reviewRequested && (
                                         <Alert severity="info" sx={{ py: 0.5 }}>
-                                            Waiting for student to request review. You can view the file but
-                                            cannot approve/request revisions yet.
+                                            Waiting for student to request review. You can view the{' '}
+                                            {manuscript.type === 'link' ? 'link' : 'file'} but cannot
+                                            approve/request revisions yet.
                                         </Alert>
                                     )}
-                                    <FileCard
-                                        file={{
-                                            name: manuscript.fileName,
-                                            size: formatFileSize(manuscript.fileSize),
-                                            mimeType: manuscript.mimeType,
-                                            url: manuscript.url,
-                                            type: manuscript.mimeType,
-                                            uploadDate: manuscript.uploadedAt,
-                                            author: manuscript.uploadedBy ?? '',
-                                        } as FileAttachment}
-                                        title={manuscript.fileName}
-                                        sizeLabel={formatFileSize(manuscript.fileSize)}
-                                        metaLabel={
-                                            `Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}` +
-                                            (manuscript.reviewRequestedAt
-                                                ? ` · Review requested ${new Date(manuscript.reviewRequestedAt).toLocaleDateString()}`
-                                                : '')
-                                        }
-                                        onClick={() => setFileViewerOpen(true)}
-                                        onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
-                                        showDownloadButton
-                                        showDeleteButton={false}
-                                    />
+                                    {manuscript.type === 'link' ? (
+                                        /* Link mode - display link info */
+                                        <Stack
+                                            direction="row"
+                                            spacing={2}
+                                            alignItems="center"
+                                            sx={{
+                                                p: 2,
+                                                bgcolor: 'action.hover',
+                                                borderRadius: 1,
+                                            }}
+                                        >
+                                            <LinkIcon color="primary" />
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="body2" fontWeight="medium" noWrap>
+                                                    {manuscript.linkLabel || 'Manuscript Link'}
+                                                </Typography>
+                                                <Typography
+                                                    variant="caption"
+                                                    color="text.secondary"
+                                                    noWrap
+                                                    sx={{ display: 'block' }}
+                                                >
+                                                    Submitted{' '}
+                                                    {new Date(manuscript.uploadedAt).toLocaleDateString()}
+                                                    {manuscript.reviewRequestedAt && (
+                                                        <> · Review requested{' '}
+                                                            {new Date(manuscript.reviewRequestedAt).toLocaleDateString()}
+                                                        </>
+                                                    )}
+                                                </Typography>
+                                            </Box>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                startIcon={<LinkIcon />}
+                                                onClick={() => window.open(manuscript.link, '_blank', 'noopener,noreferrer')}
+                                            >
+                                                Open Link
+                                            </Button>
+                                        </Stack>
+                                    ) : (
+                                        /* File mode - display FileCard */
+                                        <FileCard
+                                            file={{
+                                                name: manuscript.fileName ?? 'Manuscript',
+                                                size: formatFileSize(manuscript.fileSize ?? 0),
+                                                mimeType: manuscript.mimeType ?? 'application/pdf',
+                                                url: manuscript.url ?? '',
+                                                type: manuscript.mimeType ?? 'application/pdf',
+                                                uploadDate: manuscript.uploadedAt,
+                                                author: manuscript.uploadedBy ?? '',
+                                            } as FileAttachment}
+                                            title={manuscript.fileName ?? 'Manuscript'}
+                                            sizeLabel={formatFileSize(manuscript.fileSize ?? 0)}
+                                            metaLabel={
+                                                `Uploaded ${new Date(manuscript.uploadedAt).toLocaleDateString()}` +
+                                                (manuscript.reviewRequestedAt
+                                                    ? ` · Review requested ${new Date(manuscript.reviewRequestedAt).toLocaleDateString()}`
+                                                    : '')
+                                            }
+                                            onClick={() => setFileViewerOpen(true)}
+                                            onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                                            showDownloadButton
+                                            showDeleteButton={false}
+                                        />
+                                    )}
                                 </Stack>
                             </Paper>
                         )}
@@ -566,52 +613,54 @@ export default function PanelPanelCommentsPage() {
                 submitting={saving}
             />
 
-            {/* File Viewer Dialog */}
-            <Dialog
-                open={fileViewerOpen}
-                onClose={() => setFileViewerOpen(false)}
-                maxWidth="lg"
-                fullWidth
-                slotProps={{ paper: { sx: { height: '80vh' } } }}
-            >
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
-                    <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
-                        {manuscript?.fileName ?? 'Manuscript'}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5}>
-                        <Tooltip title="Download file">
-                            <IconButton
-                                size="small"
-                                onClick={() => manuscript?.url && window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
-                            >
-                                <DownloadIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Close">
-                            <IconButton size="small" onClick={() => setFileViewerOpen(false)}>
-                                <CloseIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Stack>
-                </DialogTitle>
-                <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
-                    {manuscript && (
-                        <FileViewer
-                            file={{
-                                name: manuscript.fileName,
-                                size: formatFileSize(manuscript.fileSize),
-                                mimeType: manuscript.mimeType,
-                                url: manuscript.url,
-                                type: manuscript.mimeType,
-                                uploadDate: manuscript.uploadedAt,
-                                author: manuscript.uploadedBy ?? '',
-                            } as FileAttachment}
-                            showToolbar={false}
-                            height="100%"
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            {/* File Viewer Dialog - Only show for file type manuscripts */}
+            {manuscript?.type !== 'link' && (
+                <Dialog
+                    open={fileViewerOpen}
+                    onClose={() => setFileViewerOpen(false)}
+                    maxWidth="lg"
+                    fullWidth
+                    slotProps={{ paper: { sx: { height: '80vh' } } }}
+                >
+                    <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+                        <Typography variant="h6" component="span" noWrap sx={{ flex: 1 }}>
+                            {manuscript?.fileName ?? 'Manuscript'}
+                        </Typography>
+                        <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="Download file">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => manuscript?.url && window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
+                                >
+                                    <DownloadIcon />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Close">
+                                <IconButton size="small" onClick={() => setFileViewerOpen(false)}>
+                                    <CloseIcon />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+                    </DialogTitle>
+                    <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
+                        {manuscript && (
+                            <FileViewer
+                                file={{
+                                    name: manuscript.fileName ?? 'Manuscript',
+                                    size: formatFileSize(manuscript.fileSize ?? 0),
+                                    mimeType: manuscript.mimeType ?? 'application/pdf',
+                                    url: manuscript.url ?? '',
+                                    type: manuscript.mimeType ?? 'application/pdf',
+                                    uploadDate: manuscript.uploadedAt,
+                                    author: manuscript.uploadedBy ?? '',
+                                } as FileAttachment}
+                                showToolbar={false}
+                                height="100%"
+                            />
+                        )}
+                    </DialogContent>
+                </Dialog>
+            )}
         </AnimatedPage>
     );
 }

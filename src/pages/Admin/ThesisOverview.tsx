@@ -271,7 +271,7 @@ export default function AdminThesisOverviewPage() {
                 options: filteredGroups.map((group) => ({
                     value: group.id,
                     label: group.name,
-                    description: group.status,
+                    description: group.id,
                 })),
                 onChange: (value) => setSelectedGroupId(value),
                 disabled: filteredGroups.length === 0 || !selectedCourse,

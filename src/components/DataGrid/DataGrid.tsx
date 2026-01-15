@@ -22,6 +22,9 @@ type OwnerState = {
     expanded: boolean;
 };
 
+// Import/Export functionality is intentionally disabled.
+const ENABLE_DATA_GRID_IMPORT_EXPORT = true;
+
 const StyledQuickFilter = styled(QuickFilter)({
     display: 'grid',
     alignItems: 'center',
@@ -512,7 +515,7 @@ export default function DataGrid<T extends GridValidRowModel>({
                 <Divider orientation="vertical" variant="middle" flexItem sx={{ mx: 0.5 }} />
 
                 {/* Import Button */}
-                {enableImport && onImport && (
+                {ENABLE_DATA_GRID_IMPORT_EXPORT && enableImport && onImport && (
                     <>
                         <input
                             ref={fileInputRef}
@@ -530,7 +533,7 @@ export default function DataGrid<T extends GridValidRowModel>({
                 )}
 
                 {/* Export Menu */}
-                {enableExport && onExport && (
+                {ENABLE_DATA_GRID_IMPORT_EXPORT && enableExport && onExport && (
                     <>
                         <Tooltip title="Export">
                             <ToolbarButton

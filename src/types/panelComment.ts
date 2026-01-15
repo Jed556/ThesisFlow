@@ -147,8 +147,12 @@ export interface PanelCommentStudentUpdate {
 // Panel Comment Manuscript Types
 // ============================================================================
 
+/** Submission type for panel comment manuscripts */
+export type PanelManuscriptType = 'file' | 'link';
+
 /**
  * Manuscript attachment uploaded by student for panel review.
+ * Supports both file uploads and link submissions.
  */
 export interface PanelCommentManuscript {
     /** Unique ID for the manuscript */
@@ -157,19 +161,11 @@ export interface PanelCommentManuscript {
     groupId: string;
     /** Stage that the manuscript is tied to */
     stage: PanelCommentStage;
-    /** Original file name */
-    fileName: string;
-    /** File size in bytes */
-    fileSize: number;
-    /** MIME type of the file */
-    mimeType: string;
-    /** Download URL for the file */
-    url: string;
-    /** Storage path for the file */
-    storagePath: string;
-    /** Firebase UID of the uploader */
+    /** Type of submission: 'file' or 'link' */
+    type: PanelManuscriptType;
+    /** Firebase UID of the uploader/submitter */
     uploadedBy: string;
-    /** ISO timestamp for when the manuscript was uploaded */
+    /** ISO timestamp for when the manuscript was submitted */
     uploadedAt: string;
     /** Whether review has been requested */
     reviewRequested: boolean;
@@ -177,14 +173,43 @@ export interface PanelCommentManuscript {
     reviewRequestedAt?: string;
     /** Firebase UID who requested the review */
     reviewRequestedBy?: string;
+
+    // File-specific fields (only present when type === 'file')
+    /** Original file name */
+    fileName?: string;
+    /** File size in bytes */
+    fileSize?: number;
+    /** MIME type of the file */
+    mimeType?: string;
+    /** Download URL for the file */
+    url?: string;
+    /** Storage path for the file */
+    storagePath?: string;
+
+    // Link-specific fields (only present when type === 'link')
+    /** External link URL (Google Docs, Drive, etc.) */
+    link?: string;
+    /** Optional display label for the link */
+    linkLabel?: string;
 }
 
 /**
- * Input payload for uploading a new manuscript.
+ * Input payload for uploading a new manuscript file.
  */
 export interface PanelCommentManuscriptInput {
     groupId: string;
     stage: PanelCommentStage;
     file: File;
+    uploadedBy: string;
+}
+
+/**
+ * Input payload for submitting a manuscript link.
+ */
+export interface PanelCommentManuscriptLinkInput {
+    groupId: string;
+    stage: PanelCommentStage;
+    link: string;
+    linkLabel?: string;
     uploadedBy: string;
 }

@@ -61,21 +61,39 @@ function extractGroupContext(refPath: string): { year: string; department: strin
 // ============================================================================
 
 /**
- * Create a new thesis group
+ * Create a new thesis group.
+ * If groupId is provided, it will be used as both the document ID and name.
+ * Otherwise, a random ID is generated and the name from data is used.
+ *
+ * @param year - Academic year
+ * @param department - Department identifier
+ * @param course - Course identifier
+ * @param data - Group form data
+ * @param groupId - Optional custom group ID (will also be used as name)
+ * @returns The created group ID
  */
 export async function createGroup(
     year: string,
     department: string,
     course: string,
-    data: ThesisGroupFormData
+    data: ThesisGroupFormData,
+    groupId?: string
 ): Promise<string> {
     const collectionPath = buildGroupsCollectionPath(year, department, course);
     const groupsRef = collection(firebaseFirestore, collectionPath);
-    const newDocRef = doc(groupsRef);
+
+    // Use provided groupId or generate a random one
+    const docRef = groupId
+        ? doc(groupsRef, groupId)
+        : doc(groupsRef);
+
+    const finalId = docRef.id;
+    // Use groupId as name if provided, otherwise fall back to data.name or the generated ID
+    const finalName = groupId || data.name || finalId;
 
     const groupData = {
-        id: newDocRef.id,
-        name: data.name,
+        id: finalId,
+        name: finalName,
         description: data.description || '',
         members: {
             leader: data.leader,
@@ -92,8 +110,8 @@ export async function createGroup(
         updatedAt: serverTimestamp(),
     };
 
-    await setDoc(newDocRef, groupData);
-    return newDocRef.id;
+    await setDoc(docRef, groupData);
+    return finalId;
 }
 
 /**
@@ -1451,15 +1469,17 @@ async function getGroupContext(
  * @param userDepartment User's department
  * @param userCourse User's course
  * @param data Group form data
+ * @param groupId Optional custom group ID (will also be used as name)
  * @returns The created group ID
  */
 export async function createGroupForUser(
     userDepartment: string,
     userCourse: string,
-    data: ThesisGroupFormData
+    data: ThesisGroupFormData,
+    groupId?: string
 ): Promise<string> {
     const year = getAcademicYear();
-    return createGroup(year, userDepartment, userCourse, data);
+    return createGroup(year, userDepartment, userCourse, data, groupId);
 }
 
 /**

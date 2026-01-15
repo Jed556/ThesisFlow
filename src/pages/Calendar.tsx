@@ -51,6 +51,9 @@ const DEFAULT_CALENDAR_COLORS = [
 // Default fallback color for events
 const defaultEventColor = '#bdbdbd';
 
+// Import/Export functionality is intentionally disabled.
+const ENABLE_CALENDAR_CSV_IMPORT_EXPORT = false;
+
 
 /**
  * Generate a unique key for a calendar based on its level and pathContext
@@ -839,13 +842,21 @@ export default function CalendarPage() {
                                     New Calendar
                                 </Button>
                             )}
-                            <Button variant="outlined" startIcon={<Upload />} onClick={handleImportCSV}>
-                                Import CSV
-                            </Button>
-                            <Button variant="outlined" startIcon={<Download />} onClick={handleExportCSV}
-                                disabled={filteredEvents.length === 0}>
-                                Export CSV
-                            </Button>
+                            {ENABLE_CALENDAR_CSV_IMPORT_EXPORT && (
+                                <>
+                                    <Button variant="outlined" startIcon={<Upload />} onClick={handleImportCSV}>
+                                        Import CSV
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<Download />}
+                                        onClick={handleExportCSV}
+                                        disabled={filteredEvents.length === 0}
+                                    >
+                                        Export CSV
+                                    </Button>
+                                </>
+                            )}
                         </Box>
                     </Box>
 

@@ -22,6 +22,7 @@ import { uploadConversationAttachments } from '../../utils/firebase/storage/conv
 import { getDisplayName } from '../../utils/userUtils';
 import { notifyNewChatMessage } from '../../utils/auditNotificationUtils';
 import { getStageLabel } from '../../utils/thesisStageUtils';
+import { useSegmentViewed } from '../../hooks';
 
 function splitSectionList(value?: string | null): string[] {
     if (!value) {
@@ -43,6 +44,7 @@ export const metadata: NavigationItem = {
 };
 
 export default function ModeratorThesisOverviewPage() {
+    useSegmentViewed({ segment: 'moderator-thesis-overview' });
     const session = useSession<Session>();
     const moderatorUid = session?.user?.uid ?? '';
 
@@ -287,7 +289,7 @@ export default function ModeratorThesisOverviewPage() {
             options: groups.map((group) => ({
                 value: group.id,
                 label: group.name,
-                description: group.status,
+                description: group.id,
             })),
             onChange: (value) => setSelectedGroupId(value),
             disabled: groups.length === 0,

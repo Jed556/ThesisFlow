@@ -1,12 +1,12 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Chip, Divider, IconButton, LinearProgress, List, ListItem, ListItemIcon,
+    Alert, Box, Button, Divider, IconButton, LinearProgress, List, ListItem, ListItemIcon,
     ListItemText, Paper, Skeleton, Stack, Step, StepContent, StepLabel, Stepper, Tooltip, Typography
 } from '@mui/material';
 import {
     School as SchoolIcon, Groups as GroupsIcon, PersonAdd as PersonAddIcon,
     Topic as TopicIcon, Article as ArticleIcon, Upload as UploadIcon, Event as EventIcon,
-    Notifications as NotificationsIcon, CommentBank as CommentBankIcon, CalendarMonth as CalendarMonthIcon
+    CommentBank as CommentBankIcon, CalendarMonth as CalendarMonthIcon
 } from '@mui/icons-material';
 import { useSession } from '@toolpad/core';
 import type { NavigationItem } from '../../types/navigation';
@@ -16,17 +16,16 @@ import type { ThesisGroup } from '../../types/group';
 import type { PanelCommentReleaseMap, PanelCommentStage } from '../../types/panelComment';
 import type { TopicProposalSetRecord } from '../../utils/firebase/firestore/topicProposals';
 import type { ScheduleEvent } from '../../types/schedule';
-import type { GroupNotificationDoc } from '../../types/notification';
+import type { UserAuditEntry, UserAuditContext } from '../../types/audit';
 import { AnimatedPage } from '../../components/Animate';
+import { RecentAudits } from '../../components/AuditView';
 import type { deriveChapterStatus } from '../../components/ThesisWorkspace/ChapterRail';
 import { getThesisTeamMembersById, isTopicApproved } from '../../utils/thesisUtils';
+import { hasRoleApproved } from '../../utils/expertUtils';
 import { listenThesesForParticipant } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { listenTopicProposalSetsByGroup } from '../../utils/firebase/firestore/topicProposals';
 import { listenEventsByThesisIds } from '../../utils/firebase/firestore/events';
-import {
-    listenGroupNotifications, ensureGroupNotificationDocument
-} from '../../utils/firebase/firestore/groupNotifications';
 import { listenChaptersForStage, type ChapterContext } from '../../utils/firebase/firestore/chapters';
 import {
     listenPanelCommentRelease, listenPanelCommentCompletion, type PanelCommentContext
@@ -35,6 +34,11 @@ import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
 import {
     findAndListenTerminalRequirements, type TerminalRequirementSubmissionRecord
 } from '../../utils/firebase/firestore/terminalRequirements';
+import {
+    listenAllUserAuditEntries, buildUserAuditContextFromProfile
+} from '../../utils/auditUtils';
+import { onUserProfile } from '../../utils/firebase/firestore/user';
+import type { UserProfile } from '../../types/profile';
 import { THESIS_STAGE_METADATA } from '../../utils/thesisStageUtils';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 import { DEFAULT_YEAR } from '../../config/firestore';
@@ -46,6 +50,7 @@ import {
     resolveStepState, applyPrerequisiteLocks, getStepMeta, getActiveStepIndex, formatPrerequisiteMessage,
 } from '../../utils/workflowUtils';
 import StagesConfig from '../../config/stages.json';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'thesis',
@@ -65,23 +70,46 @@ type TeamMember = Awaited<ReturnType<typeof getThesisTeamMembersById>> extends (
     : never;
 
 /**
+ * Check if a submission is fully approved by experts (adviser, editor, and optionally statistician)
+ */
+function isFullyApprovedByExperts(
+    expertApprovals: ThesisChapter['submissions'][0]['expertApprovals'],
+    hasStatistician: boolean
+): boolean {
+    if (!expertApprovals) return false;
+    const hasAdviser = hasRoleApproved(expertApprovals, 'adviser');
+    const hasEditor = hasRoleApproved(expertApprovals, 'editor');
+    const hasStatisticianApproval = hasRoleApproved(expertApprovals, 'statistician');
+    return hasAdviser && hasEditor && (!hasStatistician || hasStatisticianApproval);
+}
+
+/**
  * Derive chapter status from its submissions
  * Priority: latest submission status, or check if any approved/under_review/revision
+ * Also checks expertApprovals for fully approved state
  */
-function getChapterStatusFromSubmissions(chapter: ThesisChapter): ReturnType<typeof deriveChapterStatus> {
+function getChapterStatusFromSubmissions(
+    chapter: ThesisChapter,
+    hasStatistician = false
+): ReturnType<typeof deriveChapterStatus> {
     const submissions = chapter.submissions ?? [];
     if (submissions.length === 0) {
         return 'not_submitted';
     }
 
-    // Check the latest submission's status
+    // Check the latest submission's status OR expertApprovals
     const latestSubmission = submissions[submissions.length - 1];
-    if (latestSubmission?.status === 'approved') return 'approved';
+    if (latestSubmission?.status === 'approved' ||
+        isFullyApprovedByExperts(latestSubmission?.expertApprovals, hasStatistician)) {
+        return 'approved';
+    }
     if (latestSubmission?.status === 'under_review') return 'under_review';
     if (latestSubmission?.status === 'revision_required') return 'revision_required';
 
-    // Fallback: check if any submission has a status
-    const hasApproved = submissions.some((s) => s.status === 'approved');
+    // Fallback: check if any submission is approved (by status or expertApprovals)
+    const hasApproved = submissions.some((s) =>
+        s.status === 'approved' || isFullyApprovedByExperts(s.expertApprovals, hasStatistician)
+    );
     if (hasApproved) return 'approved';
 
     const hasUnderReview = submissions.some((s) => s.status === 'under_review');
@@ -474,6 +502,9 @@ export default function ThesisPage() {
     const userUid = session?.user?.uid;
     const navigate = useNavigate();
 
+    // Mark audit notifications as page-viewed when visiting this page
+    useSegmentViewed({ segment: 'thesis' });
+
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [userTheses, setUserTheses] = React.useState<ThesisRecord[]>([]);
     const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>([]);
@@ -501,11 +532,14 @@ export default function ThesisPage() {
         Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>
     >({} as Record<ThesisStageName, TerminalRequirementSubmissionRecord[]>);
 
-    // Upcoming events and recent updates state
+    // Upcoming events state
     const [upcomingEvents, setUpcomingEvents] = React.useState<EventRecord[]>([]);
-    const [groupNotifications, setGroupNotifications] = React.useState<GroupNotificationDoc[]>([]);
     const [eventsLoading, setEventsLoading] = React.useState<boolean>(false);
-    const [notificationsLoading, setNotificationsLoading] = React.useState<boolean>(false);
+
+    // Recent audits state
+    const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
+    const [recentAudits, setRecentAudits] = React.useState<UserAuditEntry[]>([]);
+    const [auditsLoading, setAuditsLoading] = React.useState<boolean>(false);
 
     React.useEffect(() => {
         if (!userUid) {
@@ -745,34 +779,6 @@ export default function ThesisPage() {
         };
     }, [thesis?.id]);
 
-    // Load group notifications when group is available
-    React.useEffect(() => {
-        if (!group?.id) {
-            setGroupNotifications([]);
-            return;
-        }
-
-        // Ensure notification document exists
-        void ensureGroupNotificationDocument(group.id);
-
-        setNotificationsLoading(true);
-        const unsubscribe = listenGroupNotifications([group.id], {
-            onData: (notifications) => {
-                setGroupNotifications(notifications);
-                setNotificationsLoading(false);
-            },
-            onError: (err) => {
-                console.error('Failed to load notifications:', err);
-                setGroupNotifications([]);
-                setNotificationsLoading(false);
-            },
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [group?.id]);
-
     // Build panel comment context from group
     const panelCommentCtx: PanelCommentContext | null = React.useMemo(() => {
         if (!group) return null;
@@ -871,6 +877,62 @@ export default function ThesisPage() {
             return acc;
         }, {} as Record<ThesisStageName, boolean>);
     }, [terminalSubmissionsByStage]);
+
+    // Load user profile for audits
+    React.useEffect(() => {
+        if (!userUid) {
+            setUserProfile(null);
+            return;
+        }
+
+        const unsubscribe = onUserProfile(userUid, (profileData) => {
+            setUserProfile(profileData);
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [userUid]);
+
+    // Build user audit context
+    const userAuditContext = React.useMemo<UserAuditContext | null>(() => {
+        if (!userProfile?.uid) return null;
+        return buildUserAuditContextFromProfile(userProfile);
+    }, [userProfile]);
+
+    // Listen to recent audits for the user
+    React.useEffect(() => {
+        if (!userUid || !userAuditContext) {
+            setRecentAudits([]);
+            return;
+        }
+
+        setAuditsLoading(true);
+
+        const unsubscribe = listenAllUserAuditEntries(
+            userUid,
+            {
+                onData: (entries: UserAuditEntry[]) => {
+                    // Sort by timestamp descending (most recent first)
+                    const sorted = [...entries].sort((a, b) =>
+                        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                    );
+                    setRecentAudits(sorted);
+                    setAuditsLoading(false);
+                },
+                onError: (auditError: Error) => {
+                    console.error('Error listening to audits:', auditError);
+                    setRecentAudits([]);
+                    setAuditsLoading(false);
+                },
+            },
+            userAuditContext
+        );
+
+        return () => {
+            unsubscribe?.();
+        };
+    }, [userUid, userAuditContext]);
 
     // Compute workflow steps before any conditional returns (hooks must be called unconditionally)
     const workflowSteps = React.useMemo(
@@ -1313,32 +1375,19 @@ export default function ThesisPage() {
                                     minHeight: 0,
                                 }}
                             >
-                                <Stack
-                                    direction="row"
-                                    alignItems="center"
-                                    spacing={1}
-                                    sx={{ mb: 1.5, flexShrink: 0 }}
-                                >
-                                    <NotificationsIcon color="primary" fontSize="small" />
-                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                        Recent Updates
-                                    </Typography>
-                                </Stack>
-                                <Box
-                                    sx={{
-                                        flex: 1,
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                    }}
-                                >
-                                    <NotificationsIcon
-                                        sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
+                                <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                                    <RecentAudits
+                                        audits={recentAudits}
+                                        loading={auditsLoading}
+                                        userRole={session?.user?.role}
+                                        maxItems={5}
+                                        showAvatars
+                                        showCategories
+                                        title="Recent Updates"
+                                        showViewAll
+                                        viewAllPath="/audits"
+                                        emptyMessage="No recent updates"
                                     />
-                                    <Typography variant="body2" color="text.secondary">
-                                        No recent updates
-                                    </Typography>
                                 </Box>
                             </Paper>
                         </Stack>
@@ -1653,107 +1702,19 @@ export default function ThesisPage() {
 
                         {/* Recent Updates Card - Flex to fill space */}
                         <Paper sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                            <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={1}
-                                sx={{ mb: 1.5, flexShrink: 0 }}
-                            >
-                                <NotificationsIcon color="primary" fontSize="small" />
-                                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                    Recent Updates
-                                </Typography>
-                            </Stack>
                             <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                                {notificationsLoading ? (
-                                    <Stack spacing={1}>
-                                        {Array.from({ length: 3 }).map((_, idx) => (
-                                            <Skeleton key={idx} variant="rectangular" height={40} />
-                                        ))}
-                                    </Stack>
-                                ) : groupNotifications.length > 0 &&
-                                    groupNotifications.some((doc) => doc.notifications.length > 0) ? (
-                                    <List disablePadding dense>
-                                        {groupNotifications
-                                            .flatMap((doc) => doc.notifications)
-                                            .sort(
-                                                (a, b) =>
-                                                    (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
-                                            )
-                                            .map((notification, index) => (
-                                                <React.Fragment key={notification.id}>
-                                                    {index > 0 && <Divider />}
-                                                    <ListItem
-                                                        disableGutters
-                                                        disablePadding
-                                                        sx={{ py: 0.75 }}
-                                                    >
-                                                        <ListItemIcon sx={{ minWidth: 32 }}>
-                                                            <NotificationsIcon
-                                                                fontSize="small"
-                                                                color="action"
-                                                            />
-                                                        </ListItemIcon>
-                                                        <ListItemText
-                                                            primary={notification.title}
-                                                            secondary={notification.message}
-                                                            slotProps={{
-                                                                primary: {
-                                                                    variant: 'body2',
-                                                                    fontWeight: 500,
-                                                                    noWrap: true,
-                                                                },
-                                                                secondary: {
-                                                                    variant: 'caption',
-                                                                    sx: {
-                                                                        overflow: 'hidden',
-                                                                        textOverflow: 'ellipsis',
-                                                                        display: '-webkit-box',
-                                                                        WebkitLineClamp: 2,
-                                                                        WebkitBoxOrient: 'vertical',
-                                                                    },
-                                                                },
-                                                            }}
-                                                        />
-                                                        <Chip
-                                                            label={notification.category}
-                                                            size="small"
-                                                            color={
-                                                                notification.category === 'milestone'
-                                                                    ? 'success'
-                                                                    : notification.category === 'deadline'
-                                                                        ? 'warning'
-                                                                        : notification.category === 'feedback'
-                                                                            ? 'info'
-                                                                            : 'default'
-                                                            }
-                                                            variant="outlined"
-                                                            sx={{ ml: 1, flexShrink: 0 }}
-                                                        />
-                                                    </ListItem>
-                                                </React.Fragment>
-                                            ))}
-                                    </List>
-                                ) : (
-                                    <Box
-                                        sx={{
-                                            textAlign: 'center',
-                                            py: 2,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            height: '100%',
-                                        }}
-                                    >
-                                        <NotificationsIcon
-                                            sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
-                                        />
-                                        <Typography variant="body2" color="text.secondary">
-                                            No recent updates
-                                        </Typography>
-                                    </Box>
-                                )}
+                                <RecentAudits
+                                    audits={recentAudits}
+                                    loading={auditsLoading}
+                                    userRole={session?.user?.role}
+                                    maxItems={5}
+                                    showAvatars
+                                    showCategories
+                                    title="Recent Updates"
+                                    showViewAll
+                                    viewAllPath="/audits"
+                                    emptyMessage="No recent updates"
+                                />
                             </Box>
                         </Paper>
                     </Stack>

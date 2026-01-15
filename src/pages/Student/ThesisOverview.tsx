@@ -29,6 +29,7 @@ import type { TerminalRequirementSubmissionRecord } from '../../types/terminalRe
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { getGroupsByLeader, getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { useSegmentViewed } from '../../hooks';
 import { auditAndNotify, notifyDraftDeleted } from '../../utils/auditNotificationUtils';
 
 export const metadata: NavigationItem = {
@@ -65,6 +66,7 @@ const PANEL_COMMENT_STAGE_TO_THESIS_STAGE: Record<PanelCommentStage, ThesisStage
 export default function StudentThesisOverviewPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid ?? null;
+    useSegmentViewed({ segment: 'student-thesis-workspace' });
 
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [group, setGroup] = React.useState<ThesisGroup | null>(null);
@@ -295,13 +297,40 @@ export default function StudentThesisOverviewPage() {
     }, [terminalSubmissions]);
 
     const handleUploadChapter = React.useCallback(async (
-        { thesisId, groupId, chapterId, chapterStage, file, year, department, course }: WorkspaceUploadPayload
+        { thesisId, groupId, chapterId, chapterStage, file, link, year, department, course }: WorkspaceUploadPayload
     ) => {
         if (!userUid) {
             throw new Error('You must be signed in to upload a chapter.');
         }
         if (!group) {
             throw new Error('Group context is not available.');
+        }
+
+        // Build submission context for hierarchical storage
+        const submissionCtx: SubmissionContext = {
+            year: year ?? DEFAULT_YEAR,
+            department: department ?? group.department ?? '',
+            course: course ?? group.course ?? '',
+            groupId,
+            thesisId,
+            stage: chapterStage,
+            chapterId: String(chapterId),
+        };
+
+        // Link submission mode - create submission with link URL
+        if (link) {
+            await createSubmission(submissionCtx, {
+                status: 'draft',
+                submittedAt: new Date(),
+                submittedBy: 'student',
+                link, // Store the link URL
+            });
+            return;
+        }
+
+        // File submission mode - upload file to storage
+        if (!file) {
+            throw new Error('Either a file or link must be provided.');
         }
 
         const result = await uploadThesisFile({
@@ -322,17 +351,6 @@ export default function StudentThesisOverviewPage() {
         if (!submissionId) {
             throw new Error('Upload failed to return a submission identifier.');
         }
-
-        // Build submission context for hierarchical storage
-        const submissionCtx: SubmissionContext = {
-            year: DEFAULT_YEAR,
-            department: group.department ?? '',
-            course: group.course ?? '',
-            groupId,
-            thesisId,
-            stage: chapterStage,
-            chapterId: String(chapterId),
-        };
 
         // Create submission record with file reference - starts as 'draft' until student submits
         await createSubmission(submissionCtx, {

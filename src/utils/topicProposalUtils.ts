@@ -16,6 +16,7 @@ export type TopicProposalSetWorkflowState = 'draft' | 'under_review' | 'approved
 
 export interface TopicProposalSetMeta {
     awaitingModerator: boolean;
+    awaitingChair: boolean;
     awaitingHead: boolean;
     hasApproved: boolean;
     allRejected: boolean;
@@ -31,10 +32,14 @@ export function formatProposalStatus(status: TopicProposalEntryStatus): string {
             return 'Draft';
         case 'submitted':
             return 'Awaiting Moderator';
+        case 'chair_review':
+            return 'Awaiting Program Chair';
         case 'head_review':
             return 'Awaiting Head';
         case 'moderator_rejected':
             return 'Rejected (Moderator)';
+        case 'chair_rejected':
+            return 'Rejected (Program Chair)';
         case 'head_rejected':
             return 'Rejected (Head)';
         case 'head_approved':
@@ -53,12 +58,16 @@ export function getStatusChipConfig(status: TopicProposalEntryStatus): ProposalS
             return { label: 'Draft', color: 'default' };
         case 'submitted':
             return { label: 'Awaiting Moderator', color: 'info' };
+        case 'chair_review':
+            return { label: 'Awaiting Program Chair', color: 'info' };
         case 'head_review':
             return { label: 'Awaiting Head', color: 'warning' };
         case 'head_approved':
             return { label: 'Approved', color: 'success' };
         case 'head_rejected':
             return { label: 'Rejected (Head)', color: 'error' };
+        case 'chair_rejected':
+            return { label: 'Rejected (Program Chair)', color: 'error' };
         case 'moderator_rejected':
         default:
             return { label: 'Rejected (Moderator)', color: 'error' };
@@ -112,7 +121,7 @@ export function hasApprovedProposal(set: TopicProposalBatch | null | undefined):
 }
 
 /**
- * Determines whether every proposal entry has been rejected by moderators or heads.
+ * Determines whether every proposal entry has been rejected by moderators, chairs, or heads.
  */
 export function areAllProposalsRejected(entries: TopicProposalEntry[]): boolean {
     if (entries.length === 0) {
@@ -120,7 +129,9 @@ export function areAllProposalsRejected(entries: TopicProposalEntry[]): boolean 
     }
 
     return entries.every((entry) =>
-        entry.status === 'moderator_rejected' || entry.status === 'head_rejected'
+        entry.status === 'moderator_rejected' ||
+        entry.status === 'chair_rejected' ||
+        entry.status === 'head_rejected'
     );
 }
 
@@ -129,6 +140,7 @@ export function areAllProposalsRejected(entries: TopicProposalEntry[]): boolean 
  */
 export function summarizeProposalEntries(entries: TopicProposalEntry[]): TopicProposalSetMeta {
     const awaitingModerator = entries.some((entry) => entry.status === 'submitted');
+    const awaitingChair = entries.some((entry) => entry.status === 'chair_review');
     const awaitingHead = entries.some((entry) => entry.status === 'head_review');
     const hasApproved = entries.some((entry) => entry.status === 'head_approved');
     const allRejected = areAllProposalsRejected(entries);
@@ -138,12 +150,13 @@ export function summarizeProposalEntries(entries: TopicProposalEntry[]): TopicPr
         workflowState = 'approved';
     } else if (allRejected) {
         workflowState = 'rejected';
-    } else if (awaitingModerator || awaitingHead) {
+    } else if (awaitingModerator || awaitingChair || awaitingHead) {
         workflowState = 'under_review';
     }
 
     return {
         awaitingModerator,
+        awaitingChair,
         awaitingHead,
         hasApproved,
         allRejected,

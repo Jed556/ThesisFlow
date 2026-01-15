@@ -175,7 +175,7 @@ export default function ExpertRequestDecisionActions({ request, group, role, rol
                 <DialogContent>
                     <DialogContentText sx={{ mb: 2 }}>
                         {dialogMode === 'approve'
-                            ? 'Approving this request assigns you to the group immediately.'
+                            ? 'Please provide a note explaining your decision to the group.'
                             : 'Please include a short note so the group understands the rejection.'}
                     </DialogContentText>
                     <TextField
@@ -184,15 +184,16 @@ export default function ExpertRequestDecisionActions({ request, group, role, rol
                         minRows={3}
                         fullWidth
                         value={dialogNote}
-                        onChange={(event) => setDialogNote(event.target.value)}
+                        onChange={(event) => setDialogNote(event.target.value.slice(0, 500))}
                         placeholder={dialogMode === 'approve'
-                            ? 'Optional note for the group'
+                            ? 'Explain your approval decision'
                             : 'Explain why the request is being rejected'}
-                        required={dialogMode === 'reject'}
-                        error={dialogMode === 'reject' && dialogNote.trim().length === 0}
-                        helperText={dialogMode === 'reject'
-                            ? 'A note is required when rejecting a request.'
-                            : 'Optional'}
+                        required
+                        error={dialogNote.trim().length === 0}
+                        helperText={dialogNote.trim().length === 0
+                            ? `A note is required. (${dialogNote.length}/500)`
+                            : `${dialogNote.length}/500`}
+                        slotProps={{ htmlInput: { maxLength: 500 } }}
                     />
                 </DialogContent>
                 <DialogActions>
@@ -203,10 +204,7 @@ export default function ExpertRequestDecisionActions({ request, group, role, rol
                         variant="contained"
                         color={dialogMode === 'approve' ? 'success' : 'error'}
                         onClick={handleSubmit}
-                        disabled={
-                            submitting ||
-                            (dialogMode === 'reject' && dialogNote.trim().length === 0)
-                        }
+                        disabled={submitting || dialogNote.trim().length === 0}
                     >
                         {dialogMode === 'approve' ? 'Approve Request' : 'Reject Request'}
                     </Button>

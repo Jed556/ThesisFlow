@@ -20,7 +20,7 @@ import GroupManageDialog from '../../../components/Group/GroupManageDialog';
 import GroupDeleteDialog from '../../../components/Group/GroupDeleteDialog';
 import StudentGroupCard from './StudentGroupCard';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
-import { buildGroupProfileMap } from '../../../utils/groupUtils';
+import { buildGroupProfileMap, generateNextGroupId } from '../../../utils/groupUtils';
 import { getAcademicYear } from '../../../utils/dateUtils';
 import {
     acceptInvite, acceptJoinRequest, createGroupForUser, deleteGroupById, findGroupById,
@@ -355,12 +355,31 @@ export default function StudentGroupPage() {
         };
     }, [userUid, userProfile?.course]);
 
-    const handleOpenCreateDialog = React.useCallback(() => {
+    const handleOpenCreateDialog = React.useCallback(async () => {
         if (!userUid || !userProfile) return;
 
+        // Generate next group ID based on existing groups in the course
+        // This ID will also be used as the display name
+        let generatedId = '';
+        if (userProfile.course) {
+            try {
+                // Combine all known groups to get the most accurate count
+                const allCourseGroups = [...allMyGroups, ...availableGroups];
+                // Deduplicate by ID
+                const uniqueGroups = Array.from(
+                    new Map(allCourseGroups.map(g => [g.id, g])).values()
+                );
+                generatedId = await generateNextGroupId(userProfile.course, uniqueGroups);
+            } catch (err) {
+                console.error('Failed to generate group ID:', err);
+                // Fall back to empty if generation fails
+            }
+        }
+
         // Pre-fill form with student's info
+        // The name field stores the generated ID which will be used as both ID and name
         setFormData({
-            name: '',
+            name: generatedId,
             description: '',
             leader: userUid,
             members: [],
@@ -375,17 +394,16 @@ export default function StudentGroupPage() {
         setStudentOptions([]);
         setStudentOptionsLoading(false);
         setCreateDialogOpen(true);
-    }, [userUid, userProfile]);
+    }, [userUid, userProfile, allMyGroups, availableGroups]);
 
     const handleFormFieldChange = React.useCallback((changes: Partial<ThesisGroupFormData>) => {
-        // Prevent changes to department and course - these must match the creator
+        // Prevent changes to department, course, and name - name is auto-generated as group ID
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { department, course, ...allowedChanges } = changes;
+        const { department, course, name, ...allowedChanges } = changes;
         setFormData((prev) => ({ ...prev, ...allowedChanges }));
         // Clear related errors
         setFormErrors((prevErrors) => {
             const nextErrors = { ...prevErrors };
-            if (changes.name && nextErrors.name) delete nextErrors.name;
             return nextErrors;
         });
     }, []);
@@ -515,10 +533,10 @@ export default function StudentGroupPage() {
     const handleSaveGroup = React.useCallback(async () => {
         if (!userUid || !userProfile) return;
 
-        // Final validation
+        // Final validation - ensure we have a generated group ID
         const errors: Partial<Record<GroupFormErrorKey, string>> = {};
         if (!formData.name.trim()) {
-            errors.name = 'Group name is required';
+            errors.name = 'Group ID is required';
             setActiveStep(0);
         }
 
@@ -529,8 +547,11 @@ export default function StudentGroupPage() {
 
         setSaving(true);
         try {
+            // The formData.name contains the generated group ID (e.g., "CS-1")
+            const generatedGroupId = formData.name.trim();
+
             const newGroupData: ThesisGroupFormData = {
-                name: formData.name.trim(),
+                name: generatedGroupId, // Name will be same as ID
                 description: formData.description?.trim(),
                 leader: userUid,
                 members: formData.members,
@@ -539,10 +560,12 @@ export default function StudentGroupPage() {
                 department: userProfile.department || '',
             };
 
+            // Pass the generated ID to use as both document ID and name
             const createdGroupId = await createGroupForUser(
                 userProfile.department || '',
                 userProfile.course || '',
-                newGroupData
+                newGroupData,
+                generatedGroupId
             );
             const createdGroup = await findGroupById(createdGroupId);
             if (!createdGroup) throw new Error('Failed to find created group');

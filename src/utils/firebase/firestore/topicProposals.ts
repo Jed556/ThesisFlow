@@ -52,6 +52,24 @@ export interface ProposalDecisionPayload {
 }
 
 /**
+ * Extended decision payload for moderator approval with agenda and sustainability classification
+ */
+export interface ModeratorDecisionPayload extends ProposalDecisionPayload {
+    agenda?: ThesisAgenda;
+    ESG?: ESG;
+    SDG?: SDG;
+}
+
+/**
+ * Extended decision payload for chair approval with agenda and sustainability classification
+ */
+export interface ChairDecisionPayload extends ProposalDecisionPayload {
+    agenda?: ThesisAgenda;
+    ESG?: ESG;
+    SDG?: SDG;
+}
+
+/**
  * Extended decision payload for head approval with agenda and sustainability classification
  */
 export interface HeadDecisionPayload extends ProposalDecisionPayload {
@@ -122,7 +140,7 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
     const auditsRaw = Array.isArray(data.audits) ? data.audits : [];
     const audits: TopicProposalReviewEvent[] = auditsRaw.map((audit: Record<string, unknown>) => {
         const baseAudit: TopicProposalReviewEvent = {
-            stage: audit.stage as 'moderator' | 'head',
+            stage: audit.stage as 'moderator' | 'chair' | 'head',
             status: audit.status as 'approved' | 'rejected',
             reviewerUid: typeof audit.reviewerUid === 'string' ? audit.reviewerUid : '',
             proposalId: typeof audit.proposalId === 'string' ? audit.proposalId : '',
@@ -139,6 +157,7 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
 
     // Compute awaiting flags
     const awaitingModerator = entries.some((e) => e.status === 'submitted');
+    const awaitingChair = entries.some((e) => e.status === 'chair_review');
     const awaitingHead = entries.some((e) => e.status === 'head_review');
 
     const result: TopicProposalSetRecord = {
@@ -149,6 +168,7 @@ function docToProposalSet(docSnap: TopicProposalSnapshot): TopicProposalSetRecor
         entries,
         audits,
         awaitingHead,
+        awaitingChair,
         awaitingModerator,
     };
 
@@ -396,10 +416,11 @@ export async function submitProposalSet(
 
 /**
  * Record a moderator decision on a proposal entry (context-required version)
+ * Flow: moderator approval sends to chair_review, rejection sends to moderator_rejected
  */
 async function recordModeratorDecisionWithContext(
     ctx: ProposalContext,
-    payload: ProposalDecisionPayload
+    payload: ModeratorDecisionPayload
 ): Promise<void> {
     const proposal = await getProposalSet(ctx, payload.proposalId);
     if (!proposal) throw new Error('Proposal set not found.');
@@ -411,32 +432,130 @@ async function recordModeratorDecisionWithContext(
     const now = new Date();
 
     const updatedEntries = [...proposal.entries];
-    // Update status to string-based workflow state
+    // Update status: approval goes to chair_review (not head_review)
     const newStatus: TopicProposalEntry['status'] = payload.decision === 'approved'
-        ? 'head_review'
+        ? 'chair_review'
         : 'moderator_rejected';
 
-    updatedEntries[entryIndex] = {
+    // Build updated entry with optional agenda, ESG, and SDG fields (set by moderator)
+    const updatedEntry: TopicProposalEntry = {
         ...entry,
         status: newStatus,
         updatedAt: now,
     };
+
+    // Add agenda if provided (for approval)
+    if (payload.agenda) {
+        updatedEntry.agenda = payload.agenda;
+    }
+    // Add ESG if provided (for approval)
+    if (payload.ESG) {
+        updatedEntry.ESG = payload.ESG;
+    }
+    // Add SDG if provided (for approval)
+    if (payload.SDG) {
+        updatedEntry.SDG = payload.SDG;
+    }
+
+    updatedEntries[entryIndex] = updatedEntry;
 
     const newAudit: TopicProposalReviewEvent = {
         stage: 'moderator',
         status: payload.decision,
         reviewerUid: payload.reviewerUid,
         proposalId: payload.entryId,
-        notes: payload.notes,
         reviewedAt: now,
     };
+    // Only add notes if provided
+    if (payload.notes) {
+        newAudit.notes = payload.notes;
+    }
 
-    const docPath = buildProposalDocPath(ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId);
+    const docPath = buildProposalDocPath(
+        ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId
+    );
     const docRef = doc(firebaseFirestore, docPath);
 
+    // Strip undefined from all entries and audits before saving
+    const cleanedEntries = updatedEntries.map((e) => stripUndefined(e));
+    const cleanedAudits = [...proposal.audits, newAudit].map((a) => stripUndefined(a));
+
     await updateDoc(docRef, {
-        entries: updatedEntries.map((e) => stripUndefined(e)),
-        audits: [...proposal.audits, stripUndefined(newAudit)],
+        entries: cleanedEntries,
+        audits: cleanedAudits,
+        updatedAt: serverTimestamp(),
+    });
+}
+
+/**
+ * Record a chair decision on a proposal entry (context-required version)
+ * Flow: chair approval sends to head_review, rejection sends to chair_rejected
+ */
+async function recordChairDecisionWithContext(
+    ctx: ProposalContext,
+    payload: ChairDecisionPayload
+): Promise<void> {
+    const proposal = await getProposalSet(ctx, payload.proposalId);
+    if (!proposal) throw new Error('Proposal set not found.');
+
+    const entryIndex = proposal.entries.findIndex((e) => e.id === payload.entryId);
+    if (entryIndex === -1) throw new Error('Proposal entry not found.');
+
+    const entry = proposal.entries[entryIndex];
+    const now = new Date();
+
+    const updatedEntries = [...proposal.entries];
+    // Update status: approval goes to head_review, rejection to chair_rejected
+    const newStatus: TopicProposalEntry['status'] = payload.decision === 'approved'
+        ? 'head_review'
+        : 'chair_rejected';
+
+    // Build updated entry with optional agenda, ESG, and SDG fields
+    const updatedEntry: TopicProposalEntry = {
+        ...entry,
+        status: newStatus,
+        updatedAt: now,
+    };
+
+    // Add agenda if provided (for approval)
+    if (payload.agenda) {
+        updatedEntry.agenda = payload.agenda;
+    }
+    // Add ESG if provided (for approval)
+    if (payload.ESG) {
+        updatedEntry.ESG = payload.ESG;
+    }
+    // Add SDG if provided (for approval)
+    if (payload.SDG) {
+        updatedEntry.SDG = payload.SDG;
+    }
+
+    updatedEntries[entryIndex] = updatedEntry;
+
+    const newAudit: TopicProposalReviewEvent = {
+        stage: 'chair',
+        status: payload.decision,
+        reviewerUid: payload.reviewerUid,
+        proposalId: payload.entryId,
+        reviewedAt: now,
+    };
+    // Only add notes if provided
+    if (payload.notes) {
+        newAudit.notes = payload.notes;
+    }
+
+    const docPath = buildProposalDocPath(
+        ctx.year, ctx.department, ctx.course, ctx.groupId, payload.proposalId
+    );
+    const docRef = doc(firebaseFirestore, docPath);
+
+    // Strip undefined from all entries and audits before saving
+    const cleanedEntries = updatedEntries.map((e) => stripUndefined(e));
+    const cleanedAudits = [...proposal.audits, newAudit].map((a) => stripUndefined(a));
+
+    await updateDoc(docRef, {
+        entries: cleanedEntries,
+        audits: cleanedAudits,
         updatedAt: serverTimestamp(),
     });
 }
@@ -725,6 +844,23 @@ export function listenProposalsAwaitingHead(
     });
 }
 
+/**
+ * Listen to proposals awaiting chair review
+ */
+export function listenProposalsAwaitingChair(
+    options: TopicProposalListenerOptions
+): () => void {
+    return listenAllProposals(undefined, {
+        onData: (proposals) => {
+            const awaiting = proposals.filter((p) =>
+                p.entries.some((e) => e.status === 'chair_review')
+            );
+            options.onData(awaiting);
+        },
+        onError: options.onError,
+    });
+}
+
 // ============================================================================
 // Alias Functions
 // ============================================================================
@@ -837,6 +973,30 @@ export interface ContextFreeDecisionPayload {
 }
 
 /**
+ * Extended payload for moderator approval with agenda, ESG, and SDG classification
+ */
+export interface ModeratorApprovalPayload extends ContextFreeDecisionPayload {
+    /** Research agenda classification */
+    agenda?: ThesisAgenda;
+    /** ESG category */
+    ESG?: ESG;
+    /** Sustainable Development Goal */
+    SDG?: SDG;
+}
+
+/**
+ * Extended payload for chair approval with agenda, ESG, and SDG classification
+ */
+export interface ChairApprovalPayload extends ContextFreeDecisionPayload {
+    /** Research agenda classification */
+    agenda?: ThesisAgenda;
+    /** ESG category */
+    ESG?: ESG;
+    /** Sustainable Development Goal */
+    SDG?: SDG;
+}
+
+/**
  * Extended payload for head approval with agenda, ESG, and SDG classification
  */
 export interface HeadApprovalPayload extends ContextFreeDecisionPayload {
@@ -882,20 +1042,74 @@ async function findProposalSetWithContext(
  * Record a moderator decision on a proposal entry (context-free version).
  * Finds the proposal by setId using collectionGroup and extracts context from path.
  *
- * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes
+ * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes, agenda, ESG, SDG
  */
-export async function recordModeratorDecision(payload: ContextFreeDecisionPayload): Promise<void> {
+export async function recordModeratorDecision(payload: ModeratorApprovalPayload): Promise<void> {
     const result = await findProposalSetWithContext(payload.setId);
     if (!result) throw new Error('Proposal set not found.');
 
     const { ctx } = result;
-    return recordModeratorDecisionWithContext(ctx, {
+
+    // Build decision payload, only including defined values
+    const decisionPayload: ModeratorDecisionPayload = {
         proposalId: payload.setId,
         entryId: payload.proposalId,
         reviewerUid: payload.reviewerUid,
         decision: payload.decision,
-        notes: payload.notes,
-    });
+    };
+
+    // Only add optional fields if they have values
+    if (payload.notes !== undefined) {
+        decisionPayload.notes = payload.notes;
+    }
+    if (payload.agenda?.agendaPath && payload.agenda.agendaPath.length > 0) {
+        decisionPayload.agenda = payload.agenda;
+    }
+    if (payload.ESG) {
+        decisionPayload.ESG = payload.ESG;
+    }
+    if (payload.SDG) {
+        decisionPayload.SDG = payload.SDG;
+    }
+
+    return recordModeratorDecisionWithContext(ctx, decisionPayload);
+}
+
+/**
+ * Record a chair decision on a proposal entry (context-free version).
+ * Finds the proposal by setId using collectionGroup and extracts context from path.
+ *
+ * @param payload Decision payload with setId, proposalId (entry ID), reviewerUid, decision, notes, agenda, ESG, SDG
+ */
+export async function recordChairDecision(payload: ChairApprovalPayload): Promise<void> {
+    const result = await findProposalSetWithContext(payload.setId);
+    if (!result) throw new Error('Proposal set not found.');
+
+    const { ctx } = result;
+
+    // Build decision payload, only including defined values
+    const decisionPayload: ChairDecisionPayload = {
+        proposalId: payload.setId,
+        entryId: payload.proposalId,
+        reviewerUid: payload.reviewerUid,
+        decision: payload.decision,
+    };
+
+    // Only add optional fields if they have values
+    if (payload.notes !== undefined) {
+        decisionPayload.notes = payload.notes;
+    }
+    if (payload.agenda?.agendaPath && payload.agenda.agendaPath.length > 0) {
+        decisionPayload.agenda = payload.agenda;
+    }
+    if (payload.ESG) {
+        decisionPayload.ESG = payload.ESG;
+    }
+    if (payload.SDG) {
+        decisionPayload.SDG = payload.SDG;
+    }
+
+    return recordChairDecisionWithContext(ctx, decisionPayload);
 }
 
 /**

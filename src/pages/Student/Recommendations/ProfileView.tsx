@@ -326,9 +326,19 @@ export default function ExpertProfileViewPage() {
         }
         return leaderGroups.filter((group) => !group.members[expertRole]);
     }, [leaderGroups, expertRole]);
+
+    // Check if the expert is already assigned to any of the viewer's groups
+    const isExpertAlreadyAssigned = React.useMemo(() => {
+        if (!expertRole || !profile) {
+            return false;
+        }
+        return leaderGroups.some((group) => group.members[expertRole] === profile.uid);
+    }, [leaderGroups, expertRole, profile]);
+
     const ownsAnyLeaderGroup = leaderGroups.length > 0;
     const noGroupMessage = 'Create and lead a thesis group before sending requests.';
     const allRolesFilledMessage = `All of your groups already have ${roleArticle} ${roleLabelLower} assigned.`;
+    const expertAlreadyAssignedMessage = `This ${roleLabelLower} is already assigned to your group.`;
 
     React.useEffect(() => {
         setGroupRequests(new Map());
@@ -373,7 +383,9 @@ export default function ExpertProfileViewPage() {
     const canShowRequestButton = viewerRole === 'student' && Boolean(expertRole);
 
     let requestDisabledReason: string | undefined;
-    if (hasPendingRequest) {
+    if (isExpertAlreadyAssigned) {
+        requestDisabledReason = expertAlreadyAssignedMessage;
+    } else if (hasPendingRequest) {
         requestDisabledReason = 'You already have a pending request for this expert.';
     } else if (slotsFull) {
         requestDisabledReason = 'This expert is not accepting requests right now.';
@@ -383,12 +395,16 @@ export default function ExpertProfileViewPage() {
         requestDisabledReason = allRolesFilledMessage;
     }
 
-    const requestButtonDisabled = Boolean(slotsFull || requestableGroups.length === 0 || requestSubmitting || hasPendingRequest);
-    const requestButtonLabel = hasPendingRequest
-        ? 'Request pending'
-        : slotsFull
-            ? 'Not accepting requests'
-            : `Request as ${roleLabel}`;
+    const requestButtonDisabled = Boolean(
+        isExpertAlreadyAssigned || slotsFull || requestableGroups.length === 0 || requestSubmitting || hasPendingRequest
+    );
+    const requestButtonLabel = isExpertAlreadyAssigned
+        ? 'Already assigned'
+        : hasPendingRequest
+            ? 'Request pending'
+            : slotsFull
+                ? 'Not accepting requests'
+                : `Request as ${roleLabel}`;
     const canSubmitExpertRequest = Boolean(
         selectedGroupId && requestableGroups.length > 0 && !requestSubmitting && !hasPendingRequest
     );

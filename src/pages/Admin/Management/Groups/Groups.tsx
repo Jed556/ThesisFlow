@@ -33,6 +33,9 @@ export const metadata: NavigationItem = {
     roles: ['admin', 'developer'],
 };
 
+// Import/Export functionality is intentionally disabled.
+const ENABLE_GROUP_CSV_IMPORT_EXPORT = false;
+
 const emptyFormData: ThesisGroupFormData = {
     name: '',
     description: '',
@@ -951,35 +954,41 @@ export default function AdminGroupManagementPage() {
                             >
                                 Refresh
                             </Button>
-                            <Button
-                                variant="outlined"
-                                startIcon={<FileDownloadIcon />}
-                                onClick={() => handleExport(groups)}
-                                disabled={loading || groups.length === 0}
-                            >
-                                Export
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                startIcon={<CloudUploadIcon />}
-                                onClick={handleImportButtonClick}
-                                disabled={hasActiveImport}
-                            >
-                                Import
-                            </Button>
+                            {ENABLE_GROUP_CSV_IMPORT_EXPORT && (
+                                <>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<FileDownloadIcon />}
+                                        onClick={() => handleExport(groups)}
+                                        disabled={loading || groups.length === 0}
+                                    >
+                                        Export
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<CloudUploadIcon />}
+                                        onClick={handleImportButtonClick}
+                                        disabled={hasActiveImport}
+                                    >
+                                        Import
+                                    </Button>
+                                </>
+                            )}
                             <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateDialog}>
                                 New Group
                             </Button>
                         </Stack>
                     </Stack>
 
-                    <input
-                        type="file"
-                        hidden
-                        ref={fileInputRef}
-                        accept=".csv,text/csv"
-                        onChange={handleFileInputChange}
-                    />
+                    {ENABLE_GROUP_CSV_IMPORT_EXPORT && (
+                        <input
+                            type="file"
+                            hidden
+                            ref={fileInputRef}
+                            accept=".csv,text/csv"
+                            onChange={handleFileInputChange}
+                        />
+                    )}
                 </Stack>
 
                 {loading ? (

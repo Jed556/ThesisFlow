@@ -86,6 +86,13 @@ service cloud.firestore {
         }
 
         /**
+         * Check if user is program chair
+         */
+        function isChair() {
+            return hasRole('chair');
+        }
+
+        /**
          * Check if user is statistician
          */
         function isStatistician() {
@@ -110,7 +117,7 @@ service cloud.firestore {
          * Check if user is staff (any role with elevated privileges)
          */
         function isStaff() {
-            return hasAnyRole(['admin', 'developer', 'head', 'adviser', 'editor', 'moderator', 'statistician', 'panel']);
+            return hasAnyRole(['admin', 'developer', 'head', 'chair', 'adviser', 'editor', 'moderator', 'statistician', 'panel']);
         }
 
         /**
@@ -121,10 +128,10 @@ service cloud.firestore {
         }
 
         /**
-         * Check if user is moderator or above (moderator, head, admin)
+         * Check if user is moderator or above (moderator, chair, head, admin)
          */
         function isModeratorOrAbove() {
-            return hasAnyRole(['moderator', 'head', 'admin', 'developer']);
+            return hasAnyRole(['moderator', 'chair', 'head', 'admin', 'developer']);
         }
 
         /**
@@ -198,6 +205,13 @@ service cloud.firestore {
             allow read: if isAuthenticated();
             // Write operations should go through the nested path rules
             // which check group membership
+            allow write: if isAuthenticated();
+        }
+
+        // Collection group: terminalLinks (for link submission mode)
+        // Note: More specific rules apply at the nested path level
+        match /{path=**}/terminalLinks/{linkId} {
+            allow read: if isAuthenticated();
             allow write: if isAuthenticated();
         }
 
@@ -825,6 +839,17 @@ service cloud.firestore {
                                     allow update: if isGroupMember() || isAssignedExpert() || isModeratorOrAbove();
                                     allow delete: if isAdminOrDeveloper() || isHead();
                                 }
+
+                                // ================================
+                                // TERMINAL REQUIREMENT LINKS (for link submission mode)
+                                // ================================
+
+                                match /terminalLinks/{linkId} {
+                                    allow read: if isAuthenticated() && hasThesisAccess();
+                                    allow create: if isGroupMember() || isAdminOrDeveloper();
+                                    allow update: if isGroupMember() || isAdminOrDeveloper();
+                                    allow delete: if isGroupMember() || isAdminOrDeveloper();
+                                }
                             }
                         }
                     }
@@ -851,19 +876,6 @@ service cloud.firestore {
             allow create: if isStaff();
             allow update: if isStaff();
             allow delete: if isAdminOrDeveloper() || isHead();
-        }
-
-        // Group Notifications - group-specific notification documents
-        // Document ID is the groupId, contains notifications array for that group
-        match /groupNotifications/{groupId} {
-            // Allow read if user is authenticated (group membership check would require reading group doc)
-            // For now, allow any authenticated user to read - frontend filters by group membership
-            allow read: if isAuthenticated();
-            // Allow create/update if authenticated (system creates these for groups)
-            allow create: if isAuthenticated();
-            allow update: if isAuthenticated();
-            // Only admin/developer can delete
-            allow delete: if isAdminOrDeveloper();
         }
 
         // Notifications - user-specific notifications
@@ -896,9 +908,11 @@ service cloud.firestore {
             allow delete: if isAdminOrDeveloper();
         }
 
-        // System settings
-        match /settings/{settingId} {
+        // Global collection - system-wide configuration
+        match /global/{docId} {
+            // All authenticated users can read global settings (needed for UI behavior)
             allow read: if isAuthenticated();
+            // Only admins/developers can modify global settings
             allow write: if isAdminOrDeveloper();
         }
 

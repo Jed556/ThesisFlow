@@ -1,5 +1,5 @@
 import type { FileAttachment } from './file';
-import type { ChapterSubmissionStatus, ExpertRole, ThesisStageName } from './thesis';
+import type { ChapterSubmissionStatus, ExpertApprovalState, ExpertRole, ThesisStageName } from './thesis';
 
 export interface WorkspaceFilterOption {
     label: string;
@@ -40,7 +40,10 @@ export interface WorkspaceUploadPayload {
     groupId: string;
     chapterId: number;
     chapterStage: ThesisStageName;
-    file: File;
+    /** File to upload (for file mode) */
+    file?: File;
+    /** Link URL to submit (for link mode) */
+    link?: string;
     /** Academic year for hierarchical storage path */
     year?: string;
     /** Department for hierarchical storage path */
@@ -69,7 +72,11 @@ export interface VersionOption {
     label: string;
     versionIndex: number;
     file?: FileAttachment;
+    /** Document link URL (for link submission mode) */
+    link?: string;
     status?: ChapterSubmissionStatus;
+    /** Expert approval states (for link submissions without files) */
+    expertApprovals?: ExpertApprovalState;
 }
 
 export type ChapterVersionMap = Record<number, VersionOption[]>;

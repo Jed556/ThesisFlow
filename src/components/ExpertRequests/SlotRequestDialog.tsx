@@ -267,8 +267,10 @@ export function SlotRequestDialog({
                             rows={4}
                             fullWidth
                             value={reason}
-                            onChange={(e) => setReason(e.target.value)}
+                            onChange={(e) => setReason(e.target.value.slice(0, 1000))}
                             placeholder="Explain why you need additional slots (e.g., high demand, research needs)"
+                            helperText={`${reason.length}/1000`}
+                            slotProps={{ htmlInput: { maxLength: 1000 } }}
                         />
 
                         {/* Skill rating requirement notice */}

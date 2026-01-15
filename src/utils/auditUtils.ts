@@ -43,6 +43,7 @@ export {
     markUserAuditSnackbarShown,
     markUserAuditSnackbarsShown,
     markAllUserAuditsAsRead,
+    markUserAuditsBySegmentAsPageViewed,
     deleteUserAuditEntry,
     deleteUserAuditEntries,
     deleteReadUserAudits,

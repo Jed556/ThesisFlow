@@ -3,9 +3,13 @@ import {
     Alert, Box, Button, Card, CardContent, Dialog, Grid, LinearProgress,
     Skeleton, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
-import { FactCheck as FactCheckIcon, TaskAlt as TaskAltIcon } from '@mui/icons-material';
+import {
+    FactCheck as FactCheckIcon, TaskAlt as TaskAltIcon, Link as LinkIcon,
+} from '@mui/icons-material';
 import { AnimatedPage } from '../../components/Animate';
-import { SubmissionStatus, TerminalRequirementCard, TERMINAL_REQUIREMENT_ROLE_LABELS } from '../../components/TerminalRequirements';
+import {
+    SubmissionStatus, TerminalRequirementCard, TERMINAL_REQUIREMENT_ROLE_LABELS,
+} from '../../components/TerminalRequirements';
 import { FileViewer } from '../../components/File';
 import { useSession } from '@toolpad/core';
 import type { Session } from '../../types/session';
@@ -20,17 +24,22 @@ import type {
 } from '../../types/terminalRequirementSubmission';
 import type { ThesisChapter } from '../../types/thesis';
 import type { PanelCommentReleaseMap, PanelCommentStage } from '../../types/panelComment';
+import type { SystemSettings, SubmissionMode } from '../../types/systemSettings';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../types/systemSettings';
 import { createDefaultPanelCommentReleaseMap } from '../../types/panelComment';
 import { useSnackbar } from '../../components/Snackbar';
 import { listenThesesForParticipant, type ThesisRecord } from '../../utils/firebase/firestore/thesis';
 import { getGroupsByMember } from '../../utils/firebase/firestore/groups';
 import { listenAllChaptersForThesis, type ThesisChaptersContext } from '../../utils/firebase/firestore/chapters';
 import {
-    getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement, type TerminalContext,
+    getTerminalRequirementConfig, findAndListenTerminalRequirements, submitTerminalRequirement,
+    saveTerminalRequirementLink, deleteTerminalRequirementLink, listenTerminalRequirementLinks,
+    type TerminalContext, type TerminalLinkContext,
 } from '../../utils/firebase/firestore/terminalRequirements';
 import {
     listenPanelCommentRelease, listenPanelCommentCompletion, type PanelCommentContext
 } from '../../utils/firebase/firestore/panelComments';
+import { listenSystemSettings } from '../../utils/firebase/firestore/systemSettings';
 import { isAnyTableReleasedForStage } from '../../utils/panelCommentUtils';
 import { uploadThesisFile, deleteThesisFile, listTerminalRequirementFiles } from '../../utils/firebase/storage/thesis';
 import {
@@ -41,6 +50,7 @@ import {
 import { getTerminalRequirementStatus } from '../../utils/terminalRequirements';
 import { UnauthorizedNotice } from '../../layouts/UnauthorizedNotice';
 import { DEFAULT_YEAR } from '../../config/firestore';
+import { useSegmentViewed } from '../../hooks';
 import {
     notifyTerminalSubmittedForChecking, notifyTerminalDraftUploaded
 } from '../../utils/auditNotificationUtils';
@@ -59,11 +69,16 @@ export const metadata: NavigationItem = {
 type RequirementFilesMap = Record<string, FileAttachment[]>;
 type RequirementFlagMap = Record<string, boolean>;
 type RequirementMessageMap = Record<string, string | null>;
+/** Map of requirement ID to link URL (for link submission mode) */
+type RequirementLinkMap = Record<string, string>;
+/** Map of requirement ID to submitted flag (for link submission mode) */
+type RequirementLinkSubmittedMap = Record<string, boolean>;
 
 export default function TerminalRequirementsPage() {
     const session = useSession<Session>();
     const userUid = session?.user?.uid ?? null;
     const { showNotification } = useSnackbar();
+    useSegmentViewed({ segment: 'terminal-requirements' });
 
     const [thesis, setThesis] = React.useState<ThesisRecord | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -92,6 +107,12 @@ export default function TerminalRequirementsPage() {
     const [panelCommentApprovalMap, setPanelCommentApprovalMap] = React.useState<
         Partial<Record<ThesisStageName, boolean>>
     >({});
+    /** System settings for submission mode */
+    const [systemSettings, setSystemSettings] = React.useState<SystemSettings | null>(null);
+    /** Link URLs for link submission mode */
+    const [requirementLinks, setRequirementLinks] = React.useState<RequirementLinkMap>({});
+    /** Link submitted flags for link submission mode */
+    const [linkSubmittedMap, setLinkSubmittedMap] = React.useState<RequirementLinkSubmittedMap>({});
 
     const formatDateTime = React.useCallback((value?: string | null) => {
         if (!value) {
@@ -103,6 +124,25 @@ export default function TerminalRequirementsPage() {
         }
         return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     }, []);
+
+    // Listen to system settings for submission mode
+    React.useEffect(() => {
+        const unsubscribe = listenSystemSettings({
+            onData: (settings: SystemSettings) => {
+                setSystemSettings(settings);
+            },
+            onError: (err: Error) => {
+                console.error('Failed to load system settings:', err);
+                // Use defaults on error
+                setSystemSettings({ id: 'settings', ...DEFAULT_SYSTEM_SETTINGS });
+            },
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Derive submission mode from system settings
+    const submissionMode: SubmissionMode = systemSettings?.terminalRequirements?.mode ?? 'link';
+    const isLinkMode = submissionMode === 'link';
 
     React.useEffect(() => {
         if (!userUid) {
@@ -270,6 +310,44 @@ export default function TerminalRequirementsPage() {
             unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
     }, [thesis?.id]);
+
+    // Listen to terminal requirement links for all stages (link submission mode)
+    React.useEffect(() => {
+        if (!thesis?.id || !groupMeta?.id || !groupMeta?.department || !groupMeta?.course) {
+            return;
+        }
+
+        const unsubscribers = THESIS_STAGE_METADATA.map((stageMeta) => {
+            const linkContext: TerminalLinkContext = {
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+                groupId: groupMeta.id,
+                thesisId: thesis.id,
+                stage: stageMeta.value,
+            };
+            return listenTerminalRequirementLinks(linkContext, {
+                onData: (links) => {
+                    // Update local state from Firestore
+                    const newLinks: RequirementLinkMap = {};
+                    const newSubmitted: RequirementLinkSubmittedMap = {};
+                    links.forEach((link) => {
+                        newLinks[link.requirementId] = link.linkUrl;
+                        newSubmitted[link.requirementId] = link.submitted;
+                    });
+                    setRequirementLinks((prev) => ({ ...prev, ...newLinks }));
+                    setLinkSubmittedMap((prev) => ({ ...prev, ...newSubmitted }));
+                },
+                onError: (err) => {
+                    console.error(`Terminal link listener error for ${stageMeta.value}:`, err);
+                },
+            });
+        });
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [thesis?.id, groupMeta?.id, groupMeta?.department, groupMeta?.course, groupMeta?.year]);
 
     const configRequirementMap = React.useMemo(() => {
         if (!requirementsConfig) {
@@ -596,12 +674,76 @@ export default function TerminalRequirementsPage() {
         }
     }, [loadRequirementFiles, showNotification, thesis?.id]);
 
+    // Link mode handlers
+    const handleLinkChange = React.useCallback((requirementId: string, url: string) => {
+        setRequirementLinks((prev) => ({ ...prev, [requirementId]: url }));
+    }, []);
+
+    const handleLinkSubmit = React.useCallback(async (requirementId: string, stage: ThesisStageName) => {
+        const url = requirementLinks[requirementId];
+        if (!url?.trim()) {
+            showNotification('Please enter a valid URL before marking as submitted.', 'error');
+            return;
+        }
+        if (!thesis?.id || !groupMeta?.id || !userUid) {
+            showNotification('Missing context. Please try again.', 'error');
+            return;
+        }
+
+        try {
+            const linkContext: TerminalLinkContext = {
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+                groupId: groupMeta.id,
+                thesisId: thesis.id,
+                stage,
+            };
+            await saveTerminalRequirementLink(linkContext, requirementId, url.trim(), userUid);
+            // Local state will be updated by the listener
+            showNotification('Requirement marked as submitted.', 'success');
+        } catch (err) {
+            console.error('Failed to save link submission:', err);
+            showNotification('Failed to save link. Please try again.', 'error');
+        }
+    }, [requirementLinks, showNotification, thesis?.id, groupMeta, userUid]);
+
+    const handleDeleteLink = React.useCallback(async (requirementId: string, stage: ThesisStageName) => {
+        if (!thesis?.id || !groupMeta?.id) {
+            showNotification('Missing context. Please try again.', 'error');
+            return;
+        }
+
+        try {
+            const linkContext: TerminalLinkContext = {
+                year: groupMeta.year ?? DEFAULT_YEAR,
+                department: groupMeta.department ?? '',
+                course: groupMeta.course ?? '',
+                groupId: groupMeta.id,
+                thesisId: thesis.id,
+                stage,
+            };
+            await deleteTerminalRequirementLink(linkContext, requirementId);
+            // Local state will be updated by the listener
+            showNotification('Link submission removed.', 'success');
+        } catch (err) {
+            console.error('Failed to delete link submission:', err);
+            showNotification('Failed to remove link. Please try again.', 'error');
+        }
+    }, [showNotification, thesis?.id, groupMeta]);
+
     const handleStageChange = React.useCallback((_: React.SyntheticEvent, nextStage: ThesisStageName) => {
         setActiveStage(nextStage);
     }, []);
 
+    // Calculate stage progress based on submission mode
     const stageProgress = React.useMemo(() => {
         const submittedCount = stageRequirements.filter((requirement) => {
+            if (isLinkMode) {
+                // In link mode, check if link is submitted
+                return linkSubmittedMap[requirement.id] && requirementLinks[requirement.id]?.trim();
+            }
+            // In file mode, check if files exist
             const files = requirementFiles[requirement.id];
             return files && files.length > 0;
         }).length;
@@ -611,7 +753,7 @@ export default function TerminalRequirementsPage() {
             total: stageRequirements.length,
             percent: Math.round((submittedCount / total) * 100),
         };
-    }, [stageRequirements, requirementFiles]);
+    }, [stageRequirements, requirementFiles, isLinkMode, linkSubmittedMap, requirementLinks]);
 
     const stageTitle = activeStageMeta?.label ?? activeStage;
     const stageLockedDescription = React.useMemo(() => {
@@ -629,8 +771,18 @@ export default function TerminalRequirementsPage() {
     // Stage is locked by workflow if ANY submission is locked
     const stageLockedByWorkflow = activeSubmissions.some((s) => s.locked);
     const allowFileActions = !activeStageLocked && !stageLockedByWorkflow;
-    const readyForSubmission = stageRequirements.length > 0
-        && stageRequirements.every((requirement) => (requirementFiles[requirement.id]?.length ?? 0) > 0);
+
+    // Check readiness based on submission mode
+    const readyForSubmission = React.useMemo(() => {
+        if (stageRequirements.length === 0) return false;
+        return stageRequirements.every((requirement) => {
+            if (isLinkMode) {
+                return linkSubmittedMap[requirement.id] && requirementLinks[requirement.id]?.trim();
+            }
+            return (requirementFiles[requirement.id]?.length ?? 0) > 0;
+        });
+    }, [stageRequirements, isLinkMode, linkSubmittedMap, requirementLinks, requirementFiles]);
+
     const submitButtonLabel = activeSubmission?.status === 'returned'
         ? 'Resubmit requirements'
         : 'Submit requirements';
@@ -654,7 +806,10 @@ export default function TerminalRequirementsPage() {
             return;
         }
         if (!readyForSubmission) {
-            showNotification('Upload all required files before submitting.', 'error');
+            const msg = isLinkMode
+                ? 'Mark all requirements as submitted before proceeding.'
+                : 'Upload all required files before submitting.';
+            showNotification(msg, 'error');
             return;
         }
 
@@ -844,7 +999,12 @@ export default function TerminalRequirementsPage() {
             <Stack spacing={3}>
                 <Box>
                     <Typography variant="body1" color="text.secondary">
-                        Upload the signed forms and supporting documents needed for each stage after your chapters are approved.
+                        {isLinkMode
+                            ? 'Add links to your signed forms and supporting documents ' +
+                            'for each stage after your chapters are approved.'
+                            : 'Upload the signed forms and supporting documents needed ' +
+                            'for each stage after your chapters are approved.'
+                        }
                     </Typography>
                 </Box>
 
@@ -900,11 +1060,22 @@ export default function TerminalRequirementsPage() {
                                             </Button>
                                             {!readyForSubmission && allowFileActions && (
                                                 <Typography variant="caption" color="text.secondary">
-                                                    Upload files for every requirement to enable submission.
+                                                    {isLinkMode
+                                                        ? 'Add links and mark each requirement as submitted.'
+                                                        : 'Upload files for every requirement to enable submission.'
+                                                    }
                                                 </Typography>
                                             )}
                                         </Stack>
                                     </Box>
+
+                                    {/* Show submission mode indicator */}
+                                    {isLinkMode && (
+                                        <Alert severity="info" icon={<LinkIcon />}>
+                                            <strong>Link Submission Mode:</strong> Paste Google Docs/Drive URLs
+                                            for each requirement and mark them as submitted.
+                                        </Alert>
+                                    )}
 
                                     {workflowAlert}
 
@@ -923,19 +1094,34 @@ export default function TerminalRequirementsPage() {
                                                 <Grid key={requirement.id} size={{ xs: 12, md: 6 }}>
                                                     <TerminalRequirementCard
                                                         requirement={requirement}
+                                                        submissionMode={submissionMode}
                                                         files={requirementFiles[requirement.id]}
-                                                        status={getTerminalRequirementStatus(requirementFiles[requirement.id])}
+                                                        linkUrl={requirementLinks[requirement.id]}
+                                                        linkSubmitted={linkSubmittedMap[requirement.id]}
+                                                        status={isLinkMode
+                                                            ? (linkSubmittedMap[requirement.id] ? 'submitted' : 'pending')
+                                                            : getTerminalRequirementStatus(requirementFiles[requirement.id])
+                                                        }
                                                         loading={requirementLoading[requirement.id]}
                                                         uploading={uploadingMap[requirement.id]}
                                                         error={uploadErrors[requirement.id] ?? undefined}
                                                         disabled={!allowFileActions}
-                                                        onUpload={allowFileActions
+                                                        onUpload={allowFileActions && !isLinkMode
                                                             ? (files) => handleUploadRequirement(requirement, files)
                                                             : undefined}
-                                                        onDeleteFile={allowFileActions
+                                                        onDeleteFile={allowFileActions && !isLinkMode
                                                             ? (file) => handleDeleteFile(requirement, file)
                                                             : undefined}
-                                                        onViewFile={setViewingFile}
+                                                        onViewFile={!isLinkMode ? setViewingFile : undefined}
+                                                        onLinkChange={allowFileActions && isLinkMode
+                                                            ? (url) => handleLinkChange(requirement.id, url)
+                                                            : undefined}
+                                                        onLinkSubmit={allowFileActions && isLinkMode
+                                                            ? () => handleLinkSubmit(requirement.id, activeStage)
+                                                            : undefined}
+                                                        onDeleteLink={allowFileActions && isLinkMode
+                                                            ? () => handleDeleteLink(requirement.id, activeStage)
+                                                            : undefined}
                                                     />
                                                 </Grid>
                                             ))}

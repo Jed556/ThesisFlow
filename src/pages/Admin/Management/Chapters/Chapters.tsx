@@ -73,6 +73,9 @@ export default function AdminChapterManagementPage() {
     const [formData, setFormData] = React.useState<ChapterConfigFormData>({ ...emptyFormData });
     const [formErrors, setFormErrors] = React.useState<Partial<Record<ChapterFormErrorKey, string>>>({});
 
+    // Import/Export functionality is intentionally disabled.
+    const ENABLE_CHAPTER_TEMPLATES_IMPORT_EXPORT = false;
+
     // File input ref for import
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -411,14 +414,15 @@ export default function AdminChapterManagementPage() {
     return (
         <AnimatedPage variant="fade">
             <Box>
-                {/* Hidden file input for import */}
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept=".json"
-                    style={{ display: 'none' }}
-                    onChange={handleFileChange}
-                />
+                {ENABLE_CHAPTER_TEMPLATES_IMPORT_EXPORT && (
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept=".json"
+                        style={{ display: 'none' }}
+                        onChange={handleFileChange}
+                    />
+                )}
 
                 <Stack
                     direction={{ xs: 'column', md: 'row' }}
@@ -447,12 +451,16 @@ export default function AdminChapterManagementPage() {
                         <Button startIcon={<RefreshIcon />} variant="outlined" onClick={loadConfigs}>
                             Refresh
                         </Button>
-                        <Button startIcon={<ExportIcon />} variant="outlined" onClick={handleExport}>
-                            Export
-                        </Button>
-                        <Button startIcon={<ImportIcon />} variant="outlined" onClick={handleImportClick}>
-                            Import
-                        </Button>
+                        {ENABLE_CHAPTER_TEMPLATES_IMPORT_EXPORT && (
+                            <>
+                                <Button startIcon={<ExportIcon />} variant="outlined" onClick={handleExport}>
+                                    Export
+                                </Button>
+                                <Button startIcon={<ImportIcon />} variant="outlined" onClick={handleImportClick}>
+                                    Import
+                                </Button>
+                            </>
+                        )}
                         <Button
                             startIcon={<ResetIcon />}
                             variant="outlined"

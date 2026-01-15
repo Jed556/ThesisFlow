@@ -427,6 +427,88 @@ export async function markAllUserAuditsAsRead(ctx: UserAuditContext): Promise<vo
     await markUserAuditsAsRead(ctx, entries.map((e) => e.id));
 }
 
+/**
+ * Mark user audit entries as read by navigation segment.
+ * Uses the navigation mapping to determine which audits belong to a specific segment.
+ * @param ctx - User audit context
+ * @param segment - Navigation segment (e.g., 'group', 'thesis', 'audits')
+ * @returns Number of entries marked as read
+ */
+export async function markUserAuditsBySegmentAsRead(
+    ctx: UserAuditContext,
+    segment: string
+): Promise<number> {
+    // Import dynamically to avoid circular dependencies
+    const { getSegmentForAuditEntry } = await import('../../navigationMappingUtils');
+
+    const entries = await getUserAuditEntries(ctx, { read: false });
+    if (entries.length === 0) return 0;
+
+    // Filter entries that belong to this segment
+    const segmentEntries = entries.filter(entry => {
+        const entrySegment = getSegmentForAuditEntry(
+            entry.category,
+            entry.action,
+            entry.details
+        );
+        return entrySegment === segment;
+    });
+
+    if (segmentEntries.length === 0) return 0;
+
+    await markUserAuditsAsRead(ctx, segmentEntries.map((e) => e.id));
+    return segmentEntries.length;
+}
+
+/**
+ * Mark user audit entries as page-viewed by navigation segment.
+ * This is used for drawer badge counting - only audits where pageViewed !== true are counted.
+ * When a user visits a page, all unviewed audits for that segment should be marked as pageViewed.
+ * 
+ * @param ctx - User audit context
+ * @param segment - Navigation segment (e.g., 'group', 'thesis', 'audits')
+ * @param userRole - Optional user role for role-specific segment mapping
+ * @returns Number of entries marked as page-viewed
+ */
+export async function markUserAuditsBySegmentAsPageViewed(
+    ctx: UserAuditContext,
+    segment: string,
+    userRole?: string
+): Promise<number> {
+    // Import dynamically to avoid circular dependencies
+    const { getSegmentForAuditEntry } = await import('../../navigationMappingUtils');
+
+    // Get all entries that haven't been page-viewed yet
+    const entries = await getUserAuditEntries(ctx, {});
+    const unviewedEntries = entries.filter(entry => entry.pageViewed !== true);
+
+    if (unviewedEntries.length === 0) return 0;
+
+    // Filter entries that belong to this segment (with role-specific mapping)
+    const segmentEntries = unviewedEntries.filter(entry => {
+        const entrySegment = getSegmentForAuditEntry(
+            entry.category,
+            entry.action,
+            entry.details,
+            userRole as import('../../../types/profile').UserRole | undefined
+        );
+        return entrySegment === segment;
+    });
+
+    if (segmentEntries.length === 0) return 0;
+
+    // Batch update all matching entries
+    const batch = writeBatch(firebaseFirestore);
+    for (const entry of segmentEntries) {
+        const docPath = buildUserAuditDocumentPath(ctx, entry.id);
+        const docRef = doc(firebaseFirestore, docPath);
+        batch.update(docRef, { pageViewed: true });
+    }
+    await batch.commit();
+
+    return segmentEntries.length;
+}
+
 // ============================================================================
 // Delete Operations
 // ============================================================================

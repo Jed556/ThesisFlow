@@ -193,6 +193,12 @@ export interface BaseAuditEntry {
     snackbarShown?: boolean;
     /** Whether the audit entry has been read (for user audits) */
     read?: boolean;
+    /** 
+     * Whether the audit's target page has been viewed.
+     * Used for drawer badge counting - only audits where pageViewed !== true are counted.
+     * This is set when the user visits the page associated with this audit's category.
+     */
+    pageViewed?: boolean;
 }
 
 /**

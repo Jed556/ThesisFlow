@@ -1,7 +1,6 @@
 import * as React from 'react';
 import {
-    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
-    DialogContent, DialogTitle, Skeleton, Stack, TextField, Tooltip, Typography,
+    Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Skeleton, Stack, Tooltip, Typography,
 } from '@mui/material';
 import { HistoryEdu as HistoryEduIcon } from '@mui/icons-material';
 import type { NavigationItem } from '../../types/navigation';
@@ -11,13 +10,14 @@ import type { ThesisGroup } from '../../types/group';
 import type { TopicProposalEntry, TopicProposalSetRecord } from '../../types/proposal';
 import type { UserProfile } from '../../types/profile';
 import { AnimatedPage } from '../../components/Animate';
-import { HeadApprovalDialog, TopicProposalEntryCard } from '../../components/TopicProposals';
+import { HeadApprovalDialog, TopicProposalEntryCard, TopicProposalDecisionDialog } from '../../components/TopicProposals';
 import type { HeadApprovalFormValues } from '../../components/TopicProposals';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { listenTopicProposalSetsByGroup, recordHeadDecision } from '../../utils/firebase/firestore/topicProposals';
 import { getGroupsByDepartment } from '../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../utils/firebase/firestore/user';
 import { notifyHeadApprovedTopic, notifyHeadRejectedTopic } from '../../utils/auditNotificationUtils';
+import { useSegmentViewed } from '../../hooks';
 
 export const metadata: NavigationItem = {
     group: 'management',
@@ -59,6 +59,7 @@ function describeHeadRestriction(status: TopicProposalEntry['status']): { label:
  * Head reviewer workspace scoped to their assigned departments.
  */
 export default function HeadTopicProposalsPage() {
+    useSegmentViewed({ segment: 'head-topic-proposals' });
     const session = useSession<Session>();
     const headUid = session?.user?.uid;
     const { showNotification } = useSnackbar();
@@ -78,7 +79,6 @@ export default function HeadTopicProposalsPage() {
     // Separate state for approval and rejection dialogs
     const [approvalDialog, setApprovalDialog] = React.useState<ApprovalDialogState | null>(null);
     const [rejectionDialog, setRejectionDialog] = React.useState<RejectionDialogState | null>(null);
-    const [rejectionNotes, setRejectionNotes] = React.useState('');
     const [decisionLoading, setDecisionLoading] = React.useState(false);
 
     React.useEffect(() => {
@@ -245,7 +245,6 @@ export default function HeadTopicProposalsPage() {
 
     const handleOpenRejection = (setId: string, proposal: TopicProposalEntry) => {
         setRejectionDialog({ setId, proposal });
-        setRejectionNotes('');
     };
 
     const handleConfirmApproval = async (values: HeadApprovalFormValues) => {
@@ -301,7 +300,7 @@ export default function HeadTopicProposalsPage() {
         }
     };
 
-    const handleConfirmRejection = async () => {
+    const handleConfirmRejection = async (notes: string) => {
         if (!rejectionDialog || !headUid) {
             return;
         }
@@ -312,7 +311,7 @@ export default function HeadTopicProposalsPage() {
                 proposalId: rejectionDialog.proposal.id,
                 reviewerUid: headUid,
                 decision: 'rejected',
-                notes: rejectionNotes.trim() || undefined,
+                notes: notes
             });
             showNotification('Topic rejected', 'success');
 
@@ -328,7 +327,7 @@ export default function HeadTopicProposalsPage() {
                     group,
                     headId: headUid,
                     proposalTitle: rejectionDialog.proposal.title,
-                    reason: rejectionNotes.trim() || undefined,
+                    reason: notes,
                     moderatorUserIds: courseModeratorIds,
                     details: {
                         proposalId: rejectionDialog.proposal.id,
@@ -512,37 +511,16 @@ export default function HeadTopicProposalsPage() {
                 onConfirm={handleConfirmApproval}
             />
 
-            {/* Simple Rejection Dialog */}
-            <Dialog open={Boolean(rejectionDialog)} onClose={() => setRejectionDialog(null)} fullWidth maxWidth="sm">
-                <DialogTitle>Reject Topic Proposal</DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Provide feedback to help the group improve their proposal.
-                    </Typography>
-                    <TextField
-                        label="Rejection Notes"
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        value={rejectionNotes}
-                        onChange={(event) => setRejectionNotes(event.target.value)}
-                        placeholder="Explain why this topic is being rejected"
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setRejectionDialog(null)} color="inherit" disabled={decisionLoading}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleConfirmRejection}
-                        variant="contained"
-                        color="error"
-                        disabled={decisionLoading}
-                    >
-                        Reject Topic
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            {/* Head Rejection Dialog using centralized component */}
+            <TopicProposalDecisionDialog
+                open={Boolean(rejectionDialog)}
+                decision="rejected"
+                role="head"
+                proposalTitle={rejectionDialog?.proposal.title}
+                loading={decisionLoading}
+                onClose={() => setRejectionDialog(null)}
+                onConfirm={handleConfirmRejection}
+            />
         </AnimatedPage>
     );
 }

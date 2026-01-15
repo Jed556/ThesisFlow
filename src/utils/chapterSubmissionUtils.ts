@@ -1,6 +1,7 @@
 import type {
     ChapterSubmissionEntry,
     ChapterSubmissionStatus,
+    ExpertApprovalState,
     ThesisChapter,
 } from '../types/thesis';
 
@@ -44,6 +45,10 @@ export const normalizeSubmissionEntry = (
     return {
         id: submission.id,
         status: normalizeStatus(submission.status),
+        // Preserve link for link submissions
+        link: (submission as { link?: string }).link,
+        // Preserve expertApprovals for link submissions (needed for approval workflow)
+        expertApprovals: (submission as { expertApprovals?: ExpertApprovalState }).expertApprovals,
     } satisfies ChapterSubmissionEntry;
 };
 
