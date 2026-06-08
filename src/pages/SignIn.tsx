@@ -1,10 +1,11 @@
 import * as React from 'react';
 import {
     TextField, Button, Link, Alert, Typography, FormControl, IconButton,
-    InputAdornment, InputLabel, OutlinedInput, Fab, CircularProgress, Tooltip
+    InputAdornment, InputLabel, OutlinedInput, Fab, CircularProgress, Tooltip, Box
 } from '@mui/material';
 import { Visibility, VisibilityOff, Engineering as EngineeringIcon } from '@mui/icons-material';
 import { SignInPage } from '@toolpad/core/SignInPage';
+import { ThemeSwitcher } from '@toolpad/core/DashboardLayout';
 import { useNavigate, useLocation } from 'react-router';
 import { useSession } from '@toolpad/core';
 import { AuthenticationContext } from '@toolpad/core/AppProvider';
@@ -18,6 +19,7 @@ import { encryptPassword } from '../utils/cryptoUtils';
 import type { NavigationItem } from '../types/navigation';
 import type { Session, ExtendedAuthentication } from '../types/session';
 import { AnimatedPage } from '../components/Animate';
+import BrandingLogo from '../components/BrandingLogo';
 
 export const metadata: NavigationItem = {
     title: 'Sign In',
@@ -78,6 +80,7 @@ function CustomEmailField() {
             size="small"
             fullWidth
             variant="outlined"
+            sx={{ mt: 2 }}
             value={formContext?.emailValue || ''}
             onChange={(e) => formContext?.setEmailValue(e.target.value)}
         />
@@ -95,7 +98,7 @@ function CustomPasswordField() {
     const handleMouseDownPassword = (event: React.MouseEvent) => event.preventDefault();
 
     return (
-        <FormControl sx={{ my: 2 }} fullWidth variant="outlined">
+        <FormControl sx={{ mt: 3, mb: 0 }} fullWidth variant="outlined">
             <InputLabel size="small" htmlFor="password">Password</InputLabel>
             <OutlinedInput
                 id="password"
@@ -154,9 +157,11 @@ function CustomButton() {
  */
 function ForgotPasswordLink() {
     return (
-        <Link href="/forgot-password" variant="body2">
-            Forgot password?
-        </Link>
+        <Box sx={{ pt: 0.75, pl: 0.5, display: 'block' }}>
+            <Link href="/forgot-password" variant="body2">
+                Forgot password?
+            </Link>
+        </Box>
     );
 }
 
@@ -269,6 +274,17 @@ function DevAccountFab({ onSignIn, showFab }: DevAccountFabProps) {
                 )}
             </Fab>
         </Tooltip>
+    );
+}
+
+function CustomTitle() {
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 1 }}>
+            <BrandingLogo sx={{ width: 48, height: 48, mb: 1.5 }} />
+            <Typography variant="h5" component="h1" fontWeight="bold">
+                Sign in to ThesisFlow
+            </Typography>
+        </Box>
     );
 }
 
@@ -414,6 +430,9 @@ export default function SignIn() {
     return (
         <AnimatedPage variant='fade' duration='enteringScreen'>
             <FormContext.Provider value={formContextValue}>
+                <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1100 }}>
+                    <ThemeSwitcher />
+                </Box>
                 <SignInPage
                     providers={[{ id: 'credentials', name: 'Knightmail' }]}
                     signIn={async (provider, formData, callbackUrl) => {
@@ -547,6 +566,7 @@ export default function SignIn() {
                         }
                     }}
                     slots={{
+                        title: CustomTitle,
                         subtitle: Alerts,
                         emailField: CustomEmailField,
                         passwordField: CustomPasswordField,
