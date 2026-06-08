@@ -42,7 +42,7 @@ export default function ErrorBoundary() {
                 </Box>
 
                 <Box sx={{ mb: 4 }}>
-                    <Typography variant="body1" paragraph>
+                    <Typography variant="body1" gutterBottom>
                         We're sorry for the inconvenience. The page you're looking for might not exist or there was an unexpected error.
                     </Typography>
                     <Typography

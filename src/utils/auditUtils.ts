@@ -1047,6 +1047,7 @@ export function getAuditActionLabel(action: AuditAction): string {
         group_submitted_for_review: 'Submitted for Review',
         group_approved: 'Approved',
         group_rejected: 'Rejected',
+        link_submitted: 'Link Submitted',
         // Member actions
         member_joined: 'Joined',
         member_invited: 'Invited',

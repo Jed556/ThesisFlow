@@ -49,13 +49,13 @@ export const ColorPickerDialog: React.FC<ColorPickerDialogProps> = ({
     return (
         <Dialog
             open={open}
-            onClose={handleCancel}
+            onClose={onClose}
             maxWidth="md"
             fullWidth
-            PaperProps={{
-                sx: {
-                    maxHeight: '90vh',
-                },
+            slotProps={{
+                paper: {
+                    sx: { maxHeight: '90vh' }
+                }
             }}
         >
             <DialogTitle

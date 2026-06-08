@@ -273,12 +273,13 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
                                 label="Assigned panels"
                                 placeholder="Search panel members"
                                 slotProps={{
+                                    ...params.slotProps,
                                     input: {
-                                        ...params.InputProps,
+                                        ...params.slotProps?.input,
                                         endAdornment: (
                                             <>
                                                 {loadingOptions ? <CircularProgress color="inherit" size={16} /> : null}
-                                                {params.InputProps.endAdornment}
+                                                {params.slotProps?.input?.endAdornment}
                                             </>
                                         ),
                                     },

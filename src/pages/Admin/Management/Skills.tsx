@@ -587,14 +587,15 @@ export default function SkillsManagementPage() {
                                         label="Department"
                                         placeholder="Select a department"
                                         slotProps={{
+                                            ...params.slotProps,
                                             input: {
-                                                ...params.InputProps,
+                                                ...params.slotProps?.input,
                                                 endAdornment: (
                                                     <>
                                                         {departmentsLoading ? (
                                                             <CircularProgress size={20} />
                                                         ) : null}
-                                                        {params.InputProps?.endAdornment}
+                                                        {params.slotProps?.input?.endAdornment}
                                                     </>
                                                 ),
                                             },

@@ -91,6 +91,7 @@ export type AuditAction =
     | 'submission_approved'
     | 'submission_rejected'
     | 'submission_revision_requested'
+    | 'link_submitted'
     // Proposal actions
     | 'proposal_created'
     | 'proposal_updated'

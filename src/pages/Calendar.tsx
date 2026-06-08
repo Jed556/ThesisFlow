@@ -327,11 +327,11 @@ export default function CalendarPage() {
                         session.user.uid,
                         session.user.role,
                         userContext,
-                        allGroups
-                            .filter(g =>
-                                g.members?.leader === session.user.uid ||
-                                g.members?.members?.includes(session.user.uid)
-                            )
+                            allGroups
+                                .filter(g =>
+                                    g.members?.leader === session.user!.uid ||
+                                    g.members?.members?.includes(session.user!.uid)
+                                )
                             .map(g => ({ id: g.id, department: g.department, course: g.course })),
                         allUsers.map(u => ({ department: u.department, course: u.course })),
                         allGroups.map(g => ({ id: g.id, department: g.department, course: g.course }))

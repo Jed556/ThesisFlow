@@ -1499,7 +1499,7 @@ export default function ThesisPage() {
                                                     opacity: stepMeta.accessible ? 1 : 0.5,
                                                 }}
                                             >
-                                                <Typography variant="body1" color={stepTitleColor}>
+                                                <Typography variant="body1" sx={{ fontWeight: 500 }} color={stepTitleColor}>
                                                     {step.title}
                                                 </Typography>
                                             </StepLabel>
@@ -1688,7 +1688,7 @@ export default function ThesisPage() {
                                                         slotProps={{
                                                             primary: {
                                                                 variant: 'body2',
-                                                                fontWeight: 500,
+                                                                sx: { fontWeight: 500 },
                                                                 noWrap: true,
                                                             },
                                                             secondary: { variant: 'caption' },

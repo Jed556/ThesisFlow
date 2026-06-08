@@ -403,8 +403,10 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                         value={linkValue}
                         onChange={(e) => onLinkChange?.(e.target.value)}
                         disabled={isUploading}
-                        InputProps={{
-                            startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                        slotProps={{
+                            input: {
+                                startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                            }
                         }}
                     />
                     <Button

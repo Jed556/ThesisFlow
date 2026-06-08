@@ -794,8 +794,10 @@ export default function StudentPanelCommentsPage() {
                                         onChange={(e) => setLinkInput(e.target.value)}
                                         fullWidth
                                         disabled={savingLink || (manuscript?.reviewRequested && !hasRevisionRequired)}
-                                        InputProps={{
-                                            startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                                        slotProps={{
+                                            input: {
+                                                startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                                            }
                                         }}
                                         helperText={manuscript?.reviewRequested && !hasRevisionRequired
                                             ? 'Link is locked after review is requested.'

@@ -256,9 +256,10 @@ export default function ProfileCard({
                                 {stat.icon}
                                 <Typography
                                     variant="subtitle1"
-                                    sx={[{
-                                        fontWeight: 600
-                                    }, stat.color ? { color: stat.color } : undefined]}>
+                                    sx={{
+                                        fontWeight: 600,
+                                        color: stat.color || undefined
+                                    }}>
                                     {stat.value}
                                 </Typography>
                             </Box>

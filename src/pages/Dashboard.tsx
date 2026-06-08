@@ -1038,7 +1038,7 @@ function DashboardPage(): React.ReactElement {
                                             }]}
                                             width={400}
                                             height={300}
-                                            slotProps={{ legend: { direction: 'row', position: { vertical: 'bottom', horizontal: 'middle' }, padding: -5 } }}
+                                            slotProps={{ legend: { position: { vertical: 'bottom', horizontal: 'center' } } }}
                                         />
                                     </Box>
                                 ) : (
@@ -1155,7 +1155,7 @@ function DashboardPage(): React.ReactElement {
                                             }]}
                                             width={500}
                                             height={300}
-                                            slotProps={{ legend: { hidden: true } }}
+
                                         />
                                     </Box>
                                 ) : (
