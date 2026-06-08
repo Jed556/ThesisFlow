@@ -14,8 +14,7 @@ export default function BrandingLogo({ sx: incomingSx, ...props }: SvgIconProps)
     const baseSx: SxProps<Theme> = {
         width: 32,
         height: 32,
-        color: theme.palette.primary?.main ?? '#1976d2',
-        verticalAlign: 'middle',
+        color: 'inherit',
     };
 
     const mergedSx: SxProps<Theme> = incomingSx

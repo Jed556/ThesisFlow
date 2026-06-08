@@ -27,11 +27,17 @@ import type { User } from 'firebase/auth';
 import type { UserProfile } from './types/profile';
 
 import { CssBaseline } from '@mui/material';
+import { Box } from '@mui/material';
 import BrandingLogo from './components/BrandingLogo';
 
 const BRANDING = {
-    title: 'ThesisFlow',
-    logo: <BrandingLogo />,
+    title: (
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', gap: 1.5 }}>
+            <BrandingLogo />
+            <Box sx={{ pt: '3px' }}>ThesisFlow</Box>
+        </Box>
+    ),
+    logo: '',
     homeUrl: '/dashboard'
 };
 
