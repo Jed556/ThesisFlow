@@ -218,7 +218,9 @@ const ApprovalStatusChips: React.FC<ApprovalStatusChipsProps> = ({
     chips.push('editor');
 
     return (
-        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={0.5} useFlexGap sx={{
+            flexWrap: 'wrap'
+        }}>
             {chips.map((role) => (
                 <ApprovalStatusChip
                     key={role}
@@ -406,9 +408,17 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                 {isLinkSubmission ? (
                     <Box>
                         {/* Link card header */}
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                                alignItems: 'center',
+                                mb: 1
+                            }}>
                             <LinkIcon color="primary" />
-                            <Typography variant="subtitle2" fontWeight={600}>
+                            <Typography variant="subtitle2" sx={{
+                                fontWeight: 600
+                            }}>
                                 {versionLabel ?? `v${versionIndex + 1}`}
                             </Typography>
                             {isDraft && (
@@ -423,15 +433,14 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                         <Stack
                             direction="row"
                             spacing={1}
-                            alignItems="center"
                             sx={{
+                                alignItems: 'center',
                                 p: 1.5,
                                 bgcolor: 'action.hover',
                                 borderRadius: 1,
                                 border: 1,
-                                borderColor: 'divider',
-                            }}
-                        >
+                                borderColor: 'divider'
+                            }}>
                             <Typography
                                 variant="body2"
                                 sx={{
@@ -481,7 +490,7 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                     </Box>
                 ) : (
                     /* Main file card wrapped in tooltip */
-                    <Tooltip title={tooltipText} placement="top" arrow>
+                    (<Tooltip title={tooltipText} placement="top" arrow>
                         <Box>
                             <FileCard
                                 file={file}
@@ -501,7 +510,7 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                                 showDownloadButton={Boolean(file?.url)}
                             />
                         </Box>
-                    </Tooltip>
+                    </Tooltip>)
                 )}
 
                 {/* Approval status chips and expert action buttons */}
@@ -509,14 +518,18 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                     <Stack
                         direction="row"
                         spacing={1}
-                        sx={{ mt: 1.5, ml: 1 }}
-                        flexWrap="wrap"
                         useFlexGap
-                        alignItems="center"
-                        justifyContent="space-between"
-                    >
+                        sx={{
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            mt: 1.5,
+                            ml: 1
+                        }}>
                         {/* Left side: approval status chips */}
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={0.5} useFlexGap sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             <ApprovalStatusChips
                                 expertApprovals={expertApprovals}
                                 hasStatistician={hasStatistician}
@@ -525,7 +538,9 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                         </Stack>
 
                         {/* Right side: action buttons */}
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: 'center'
+                        }}>
                             {canTakeExpertAction && canApprove && (onApprove || onApproveLink) && (
                                 <Button
                                     size="small"
@@ -553,13 +568,17 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
                                 </Button>
                             )}
                             {canTakeExpertAction && !canApprove && currentExpertRole && (
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Waiting for {getNextApprover(expertApprovals, hasStatistician)} approval
                                 </Typography>
                             )}
                             {/* Awaiting revision indicator - shown when revision was requested */}
                             {isAwaitingRevision && !isStudent && (
-                                <Typography variant="caption" color="warning.main">
+                                <Typography variant="caption" sx={{
+                                    color: 'warning.main'
+                                }}>
                                     Awaiting student revision
                                 </Typography>
                             )}
@@ -579,7 +598,13 @@ export const SubmissionCard: React.FC<SubmissionCardProps> = ({
 
                 {/* Student actions */}
                 {canSubmitDraft && (
-                    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} justifyContent="flex-end">
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            justifyContent: 'flex-end',
+                            mt: 1.5
+                        }}>
                         <Button
                             size="small"
                             variant="contained"

@@ -114,14 +114,30 @@ export function TerminalRequirementCard({
     return (
         <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1 }}>
-                <Stack direction="row" spacing={2} alignItems="flex-start" justifyContent="space-between">
+                <Stack
+                    direction="row"
+                    spacing={2}
+                    sx={{
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between'
+                    }}>
                     <Box sx={{ flex: 1 }}>
-                        <Typography variant="subtitle1" fontWeight={600}>{requirement.title}</Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="subtitle1" sx={{
+                            fontWeight: 600
+                        }}>{requirement.title}</Typography>
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {requirement.description}
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            flexWrap: 'wrap',
+                            justifyContent: 'flex-end'
+                        }}>
                         {requirement.optional && (
                             <Chip label="Optional" size="small" variant="outlined" color="default" />
                         )}
@@ -198,7 +214,9 @@ export function TerminalRequirementCard({
                 {/* File upload mode */}
                 {canUpload && (
                     <>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{
+                            alignItems: { sm: 'center' }
+                        }}>
                             <Button
                                 variant="contained"
                                 startIcon={<CloudUploadIcon />}
@@ -284,7 +302,9 @@ export function TerminalRequirementCard({
                                 ))}
                             </Stack>
                         ) : (
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 No uploads yet. Submit your document to mark this requirement as submitted.
                             </Typography>
                         )}
@@ -292,7 +312,9 @@ export function TerminalRequirementCard({
                 )}
 
                 {requirement.instructions && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {requirement.instructions}
                     </Typography>
                 )}

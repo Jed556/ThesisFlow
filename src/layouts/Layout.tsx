@@ -22,8 +22,13 @@ function CustomActions() {
     const role = session?.user?.role;
 
     return (
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-
+        <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+                alignItems: 'center',
+                minWidth: 0
+            }}>
             {role ? (
                 <Chip
                     label={formatRoleLabel(role)}
@@ -36,7 +41,6 @@ function CustomActions() {
                     }}
                 />
             ) : null}
-
             <ThemeSwitcher />
         </Stack>
     );

@@ -122,9 +122,9 @@ export async function createSlotRequest(
             const moreCount = skillValidation.unratedSkillNames.length - 3;
             const moreText = moreCount > 0 ? ` and ${moreCount} more` : '';
             throw new Error(
-                `You must rate all your skills before requesting slots. ` +
+                'You must rate all your skills before requesting slots. ' +
                 `Missing ratings for: ${unratedNames}${moreText}. ` +
-                `Please complete your skill ratings in your profile settings.`
+                'Please complete your skill ratings in your profile settings.'
             );
         }
     }

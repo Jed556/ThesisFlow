@@ -100,13 +100,19 @@ function MemberList({ title, entries, profiles }: { title: string; entries: Pers
                     {entries.map((entry) => {
                         const profile = profiles.get(entry.uid);
                         return (
-                            <Stack key={entry.uid} direction="row" spacing={2} alignItems="center">
+                            <Stack key={entry.uid} direction="row" spacing={2} sx={{
+                                alignItems: 'center'
+                            }}>
                                 <Avatar uid={entry.uid} size={48} tooltip="full" loading={!profile} editable={false} />
                                 <Box sx={{ flex: 1 }}>
-                                    <Typography variant="subtitle1" fontWeight={600}>
+                                    <Typography variant="subtitle1" sx={{
+                                        fontWeight: 600
+                                    }}>
                                         {buildUserName(profile, entry.label)}
                                     </Typography>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {profile?.email ?? entry.context ?? entry.uid}
                                     </Typography>
                                 </Box>
@@ -130,12 +136,16 @@ function InfoList({ title, entries }: { title: string; entries: { label: string;
                         <ListItem key={entry.label} sx={{ px: 0, py: 1 }}>
                             <ListItemText
                                 primary={(
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {entry.label}
                                     </Typography>
                                 )}
                                 secondary={(
-                                    <Typography variant="body1" fontWeight={500}>
+                                    <Typography variant="body1" sx={{
+                                        fontWeight: 500
+                                    }}>
                                         {entry.value}
                                     </Typography>
                                 )}
@@ -299,7 +309,9 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
     return (
         <Stack spacing={3}>
             <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{
+                    alignItems: { xs: 'flex-start', md: 'center' }
+                }}>
                     <Box sx={{ flex: 1 }}>
                         <Stack spacing={1}>
                             {backButton ? (
@@ -317,7 +329,9 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
                                 {group.name}
                             </Typography>
                         </Stack>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={1} useFlexGap sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             <Chip label={formatGroupStatus(group.status)} color={statusColor} size="small" />
                             {group.department && (
                                 <Chip label={group.department} size="small" variant="outlined" />
@@ -327,7 +341,12 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
                             )}
                         </Stack>
                         {hint ? (
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: 'text.secondary',
+                                    mt: 1
+                                }}>
                                 {hint}
                             </Typography>
                         ) : null}
@@ -339,7 +358,6 @@ export function GroupView({ groupId, headerActions, hint, refreshToken, backButt
                     ) : null}
                 </Stack>
             </Paper>
-
             <Box
                 sx={{
                     display: 'grid',

@@ -237,7 +237,9 @@ export default function FileViewer({
                 }}
             >
                 {errorComponent ?? (
-                    <Typography color="text.secondary">No file selected</Typography>
+                    <Typography sx={{
+                        color: 'text.secondary'
+                    }}>No file selected</Typography>
                 )}
             </Box>
         );
@@ -261,25 +263,23 @@ export default function FileViewer({
 
         // Show loading state while fetching blob URL
         if (isLoading && needsBlobUrl) {
-            return (
-                loadingComponent ?? (
-                    <Box
-                        sx={{
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 2,
-                        }}
-                    >
-                        <CircularProgress size={40} />
-                        <Typography color="text.secondary" variant="body2">
-                            Loading file...
-                        </Typography>
-                    </Box>
-                )
-            );
+            return (loadingComponent ?? (<Box
+                sx={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 2,
+                }}
+            >
+                <CircularProgress size={40} />
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
+                    Loading file...
+                </Typography>
+            </Box>));
         }
 
         // Show error state

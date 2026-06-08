@@ -456,7 +456,9 @@ export default function ChairTopicProposalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Review topic proposals approved by moderators. Approved topics will be forwarded
                         to the Research Head for final decision.
                     </Typography>
@@ -467,9 +469,10 @@ export default function ChairTopicProposalsPage() {
                         <Stack
                             direction={{ xs: 'column', sm: 'row' }}
                             spacing={2}
-                            alignItems="center"
-                            justifyContent="space-between"
-                        >
+                            sx={{
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
                             <Box>
                                 <Typography variant="subtitle1">Awaiting chair decision</Typography>
                                 <Typography variant="h4">{pendingCount}</Typography>
@@ -519,13 +522,16 @@ export default function ChairTopicProposalsPage() {
                             <CardContent>
                                 <Stack
                                     direction={{ xs: 'column', sm: 'row' }}
-                                    justifyContent="space-between"
                                     spacing={1}
-                                    sx={{ mb: 2 }}
-                                >
+                                    sx={{
+                                        justifyContent: 'space-between',
+                                        mb: 2
+                                    }}>
                                     <Box>
                                         <Typography variant="h6">{group.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             {group.course ?? 'Unassigned course'} • {group.department ?? 'No department listed'}
                                         </Typography>
                                     </Box>
@@ -549,7 +555,9 @@ export default function ChairTopicProposalsPage() {
                                 )}
 
                                 {record && entries.length > 0 && (
-                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
+                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap sx={{
+                                        flexWrap: 'wrap'
+                                    }}>
                                         {entries.map((entry) => {
                                             const statusButton = getChairStatusButtonConfig(
                                                 entry.status ?? 'draft'
@@ -618,7 +626,6 @@ export default function ChairTopicProposalsPage() {
                     );
                 })}
             </Stack>
-
             {/* Chair approval dialog with optional agenda/ESG/SDG classification updates */}
             <ChairApprovalDialog
                 open={Boolean(approvalDialog)}
@@ -627,7 +634,6 @@ export default function ChairTopicProposalsPage() {
                 onClose={() => setApprovalDialog(null)}
                 onConfirm={handleConfirmApproval}
             />
-
             {/* Rejection dialog (simple notes only) */}
             <TopicProposalDecisionDialog
                 open={Boolean(decisionDialog)}

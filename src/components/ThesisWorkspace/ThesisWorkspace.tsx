@@ -106,7 +106,9 @@ const WorkspaceFilters = ({ filters }: { filters?: WorkspaceFilterConfig[]; }) =
                             <Stack spacing={0.5}>
                                 <Typography variant="body2">{option.label}</Typography>
                                 {option.description && (
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {option.description}
                                     </Typography>
                                 )}
@@ -1101,8 +1103,12 @@ export default function ThesisWorkspace({
                                     key={stage.value}
                                     value={stage.value}
                                     label={(
-                                        <Stack spacing={0.5} alignItems="center">
-                                            <Typography variant="body2" fontWeight={600}>{stage.label}</Typography>
+                                        <Stack spacing={0.5} sx={{
+                                            alignItems: 'center'
+                                        }}>
+                                            <Typography variant="body2" sx={{
+                                                fontWeight: 600
+                                            }}>{stage.label}</Typography>
                                             <Chip
                                                 label={chipLabel}
                                                 size="small"
@@ -1186,7 +1192,9 @@ export default function ThesisWorkspace({
                                     }}>
                                         <Box sx={{ mb: 2, flexShrink: 0 }}>
                                             <Typography variant="h6">Chapters</Typography>
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 Select a chapter to view its submissions.
                                             </Typography>
                                         </Box>
@@ -1381,7 +1389,9 @@ export default function ThesisWorkspace({
                                     }}>
                                         <Box sx={{ mb: 1, flexShrink: 0 }}>
                                             <Typography variant="h6" noWrap>Conversation</Typography>
-                                            <Typography variant="caption" color="text.secondary" noWrap>
+                                            <Typography variant="caption" noWrap sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 {conversationHeaderStatus}
                                             </Typography>
                                         </Box>
@@ -1412,7 +1422,6 @@ export default function ThesisWorkspace({
                     </Box>
                 )}
             </Box>
-
             <Dialog
                 open={Boolean(pendingDecision)}
                 onClose={handleCloseDecisionDialog}

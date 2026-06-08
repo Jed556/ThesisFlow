@@ -514,20 +514,26 @@ export default function SkillsManagementPage() {
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 10, gap: 2 }}>
                     {isSeeding ? (
                         <>
-                            <Typography variant="h6" color="text.secondary">
+                            <Typography variant="h6" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Seeding skill templates for all departments...
                             </Typography>
                             <Box sx={{ width: '100%', maxWidth: 400 }}>
                                 <LinearProgress />
                             </Box>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Setting up default skills from department templates
                             </Typography>
                         </>
                     ) : (
                         <>
                             <CircularProgress />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Loading skills management...
                             </Typography>
                         </>
@@ -555,7 +561,9 @@ export default function SkillsManagementPage() {
                     <Typography variant="h5" gutterBottom>
                         Adviser Skills Management
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Define the skills that advisers, editors, and statisticians can rate themselves on.
                         Experts must rate their skills before requesting additional thesis slots.
                     </Typography>
@@ -564,7 +572,9 @@ export default function SkillsManagementPage() {
                 {/* Department selector */}
                 <Card>
                     <CardContent>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{
+                            alignItems: 'flex-start'
+                        }}>
                             <Autocomplete
                                 options={departments}
                                 value={selectedDepartment}
@@ -577,14 +587,15 @@ export default function SkillsManagementPage() {
                                         label="Department"
                                         placeholder="Select a department"
                                         slotProps={{
+                                            ...params.slotProps,
                                             input: {
-                                                ...params.InputProps,
+                                                ...params.slotProps?.input,
                                                 endAdornment: (
                                                     <>
                                                         {departmentsLoading ? (
                                                             <CircularProgress size={20} />
                                                         ) : null}
-                                                        {params.InputProps.endAdornment}
+                                                        {params.slotProps?.input?.endAdornment}
                                                     </>
                                                 ),
                                             },
@@ -654,7 +665,12 @@ export default function SkillsManagementPage() {
                 ) : skills.length === 0 ? (
                     <Card>
                         <CardContent>
-                            <Typography variant="body1" color="text.secondary" textAlign="center">
+                            <Typography
+                                variant="body1"
+                                sx={{
+                                    color: 'text.secondary',
+                                    textAlign: 'center'
+                                }}>
                                 No skills defined for this department yet.
                                 Add skills that advisers should rate themselves on, or load from a template.
                             </Typography>
@@ -682,7 +698,9 @@ export default function SkillsManagementPage() {
                         {Array.from(skillsByCategory.grouped.entries()).map(([category, categorySkills]) => (
                             <Card key={category}>
                                 <CardContent>
-                                    <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                                    <Typography variant="subtitle1" gutterBottom sx={{
+                                        fontWeight: 'bold'
+                                    }}>
                                         {category}
                                     </Typography>
                                     <Divider sx={{ mb: 2 }} />
@@ -707,7 +725,9 @@ export default function SkillsManagementPage() {
                                 <CardContent>
                                     {skillsByCategory.grouped.size > 0 && (
                                         <>
-                                            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                                            <Typography variant="subtitle1" gutterBottom sx={{
+                                                fontWeight: 'bold'
+                                            }}>
                                                 Uncategorized
                                             </Typography>
                                             <Divider sx={{ mb: 2 }} />
@@ -730,7 +750,6 @@ export default function SkillsManagementPage() {
                     </Stack>
                 )}
             </Stack>
-
             {/* Create/Edit Dialog */}
             <Dialog
                 open={dialogOpen}
@@ -785,10 +804,18 @@ export default function SkillsManagementPage() {
                             label="Active (visible to experts for rating)"
                         />
                         <Box>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Rating Scale Preview:
                             </Typography>
-                            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+                            <Stack
+                                direction="row"
+                                spacing={1}
+                                sx={{
+                                    flexWrap: 'wrap',
+                                    mt: 1
+                                }}>
                                 {Object.entries(SKILL_RATING_LABELS).map(([value, label]) => (
                                     <Chip
                                         key={value}
@@ -814,7 +841,6 @@ export default function SkillsManagementPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialogOpen}
@@ -827,7 +853,12 @@ export default function SkillsManagementPage() {
                         Are you sure you want to delete the skill{' '}
                         <strong>{skillToDelete?.name}</strong>?
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            mt: 1
+                        }}>
                         Experts who have rated this skill will retain their ratings, but the skill
                         will no longer appear in the rating form.
                     </Typography>
@@ -846,7 +877,6 @@ export default function SkillsManagementPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Reset Confirmation Dialog */}
             <Dialog
                 open={resetDialogOpen}
@@ -859,7 +889,12 @@ export default function SkillsManagementPage() {
                         Are you sure you want to reset all skills for{' '}
                         <strong>{selectedDepartment}</strong> to the default template?
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            mt: 1
+                        }}>
                         This will <strong>delete all existing skills</strong> for this department
                         and replace them with the default skill template.
                         Experts who have rated skills will retain their ratings.
@@ -904,7 +939,9 @@ function SkillListItem({ skill, onEdit, onDelete, onToggleActive }: SkillListIte
                 opacity: skill.isActive ? 1 : 0.7,
             }}
             secondaryAction={
-                <Stack direction="row" spacing={0.5} alignItems="center">
+                <Stack direction="row" spacing={0.5} sx={{
+                    alignItems: 'center'
+                }}>
                     <Tooltip title={skill.isActive ? 'Disable skill' : 'Enable skill'}>
                         <Switch
                             size="small"
@@ -927,7 +964,9 @@ function SkillListItem({ skill, onEdit, onDelete, onToggleActive }: SkillListIte
         >
             <ListItemText
                 primary={
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: 'center'
+                    }}>
                         <Typography
                             variant="body1"
                             sx={{

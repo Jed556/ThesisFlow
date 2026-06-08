@@ -39,13 +39,17 @@ export function UnauthorizedNotice({
             </Box>
 
             <Box sx={{ mb: 4 }}>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     {description}
                 </Typography>
             </Box>
 
             <Box sx={{ mt: 4 }}>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     If you believe this is an error, please contact your administrator.
                 </Typography>
             </Box>

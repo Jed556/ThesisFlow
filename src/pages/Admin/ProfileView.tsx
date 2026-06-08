@@ -172,7 +172,9 @@ export default function AdminProfileViewPage() {
     if (error || !profile) {
         return (
             <AnimatedPage variant="fade">
-                <Stack spacing={2} alignItems="flex-start">
+                <Stack spacing={2} sx={{
+                    alignItems: 'flex-start'
+                }}>
                     <Alert severity="warning">
                         {error || 'Unable to load profile details right now.'}
                     </Alert>

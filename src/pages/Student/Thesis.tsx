@@ -1126,9 +1126,10 @@ export default function ThesisPage() {
                                 </Typography>
                                 <Typography
                                     variant="body1"
-                                    color="text.secondary"
-                                    sx={{ mb: 2 }}
-                                >
+                                    sx={{
+                                        color: 'text.secondary',
+                                        mb: 2
+                                    }}>
                                     Follow these steps to complete your thesis from group formation
                                     to final submission.
                                 </Typography>
@@ -1200,9 +1201,10 @@ export default function ThesisPage() {
                                                     {isLocked ? (
                                                         <Typography
                                                             variant="body2"
-                                                            color="text.disabled"
-                                                            sx={{ fontStyle: 'italic' }}
-                                                        >
+                                                            sx={{
+                                                                color: 'text.disabled',
+                                                                fontStyle: 'italic'
+                                                            }}>
                                                             {formatPrerequisiteMessage(
                                                                 step,
                                                                 workflowSteps
@@ -1273,11 +1275,14 @@ export default function ThesisPage() {
                                 </Typography>
                                 <Stack
                                     direction="row"
-                                    alignItems="center"
-                                    justifyContent="space-between"
-                                    sx={{ mb: 0.5 }}
-                                >
-                                    <Typography variant="body2" color="text.secondary">
+                                    sx={{
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        mb: 0.5
+                                    }}>
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Progress
                                     </Typography>
                                     <Typography
@@ -1298,9 +1303,11 @@ export default function ThesisPage() {
                                 />
                                 <Typography
                                     variant="caption"
-                                    color="text.secondary"
-                                    sx={{ display: 'block', mt: 1 }}
-                                >
+                                    sx={{
+                                        color: 'text.secondary',
+                                        display: 'block',
+                                        mt: 1
+                                    }}>
                                     Start your thesis journey
                                 </Typography>
                             </Paper>
@@ -1317,11 +1324,15 @@ export default function ThesisPage() {
                             >
                                 <Stack
                                     direction="row"
-                                    alignItems="center"
-                                    justifyContent="space-between"
-                                    sx={{ mb: 1.5, flexShrink: 0 }}
-                                >
-                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                    sx={{
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        mb: 1.5,
+                                        flexShrink: 0
+                                    }}>
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: 'center'
+                                    }}>
                                         <EventIcon color="primary" fontSize="small" />
                                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
                                             Upcoming Events
@@ -1352,7 +1363,9 @@ export default function ThesisPage() {
                                     <CalendarMonthIcon
                                         sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
                                     />
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         No upcoming events
                                     </Typography>
                                     <Button
@@ -1427,7 +1440,12 @@ export default function ThesisPage() {
                             <Typography variant="h5" gutterBottom>
                                 Thesis Workflow
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: 'text.secondary',
+                                    mb: 2
+                                }}>
                                 Follow these steps to complete your thesis journey.
                             </Typography>
                         </Box>
@@ -1481,7 +1499,7 @@ export default function ThesisPage() {
                                                     opacity: stepMeta.accessible ? 1 : 0.5,
                                                 }}
                                             >
-                                                <Typography variant="body1" color={stepTitleColor}>
+                                                <Typography variant="body1" sx={{ fontWeight: 500 }} color={stepTitleColor}>
                                                     {step.title}
                                                 </Typography>
                                             </StepLabel>
@@ -1489,9 +1507,10 @@ export default function ThesisPage() {
                                                 {isLocked ? (
                                                     <Typography
                                                         variant="body2"
-                                                        color="text.disabled"
-                                                        sx={{ fontStyle: 'italic' }}
-                                                    >
+                                                        sx={{
+                                                            color: 'text.disabled',
+                                                            fontStyle: 'italic'
+                                                        }}>
                                                         {formatPrerequisiteMessage(step, workflowSteps)}
                                                     </Typography>
                                                 ) : (
@@ -1558,11 +1577,14 @@ export default function ThesisPage() {
                             </Typography>
                             <Stack
                                 direction="row"
-                                alignItems="center"
-                                justifyContent="space-between"
-                                sx={{ mb: 0.5 }}
-                            >
-                                <Typography variant="body2" color="text.secondary">
+                                sx={{
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    mb: 0.5
+                                }}>
+                                <Typography variant="body2" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Progress
                                 </Typography>
                                 <Typography
@@ -1591,9 +1613,11 @@ export default function ThesisPage() {
                             />
                             <Typography
                                 variant="caption"
-                                color="text.secondary"
-                                sx={{ display: 'block', mt: 1 }}
-                            >
+                                sx={{
+                                    color: 'text.secondary',
+                                    display: 'block',
+                                    mt: 1
+                                }}>
                                 {progress >= 100
                                     ? 'All chapters approved!'
                                     : `${Math.round(progress)}% of chapters completed`}
@@ -1604,11 +1628,15 @@ export default function ThesisPage() {
                         <Paper sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                             <Stack
                                 direction="row"
-                                alignItems="center"
-                                justifyContent="space-between"
-                                sx={{ mb: 1.5, flexShrink: 0 }}
-                            >
-                                <Stack direction="row" alignItems="center" spacing={1}>
+                                sx={{
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    mb: 1.5,
+                                    flexShrink: 0
+                                }}>
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <EventIcon color="primary" fontSize="small" />
                                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                                         Upcoming Events
@@ -1660,7 +1688,7 @@ export default function ThesisPage() {
                                                         slotProps={{
                                                             primary: {
                                                                 variant: 'body2',
-                                                                fontWeight: 500,
+                                                                sx: { fontWeight: 500 },
                                                                 noWrap: true,
                                                             },
                                                             secondary: { variant: 'caption' },
@@ -1685,7 +1713,9 @@ export default function ThesisPage() {
                                         <CalendarMonthIcon
                                             sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
                                         />
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             No upcoming events
                                         </Typography>
                                         <Button

@@ -897,16 +897,19 @@ export default function AdminGroupManagementPage() {
                     <Stack
                         direction={{ xs: 'column', lg: 'row' }}
                         spacing={2}
-                        alignItems={{ xs: 'stretch', lg: 'center' }}
-                        justifyContent="space-between"
-                    >
+                        sx={{
+                            alignItems: { xs: 'stretch', lg: 'center' },
+                            justifyContent: 'space-between'
+                        }}>
                         <Stack
                             direction={{ xs: 'column', md: 'row' }}
                             spacing={2}
-                            flexWrap="wrap"
                             useFlexGap
-                            sx={{ flex: 1, minWidth: 0 }}
-                        >
+                            sx={{
+                                flexWrap: 'wrap',
+                                flex: 1,
+                                minWidth: 0
+                            }}>
                             <Autocomplete
                                 options={departmentOptions}
                                 value={selectedDepartment}
@@ -945,7 +948,14 @@ export default function AdminGroupManagementPage() {
                             )}
                         </Stack>
 
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{
+                                flexWrap: 'wrap',
+                                justifyContent: 'flex-end'
+                            }}>
                             <Button
                                 variant="outlined"
                                 startIcon={<RefreshIcon />}
@@ -1000,7 +1010,9 @@ export default function AdminGroupManagementPage() {
                         <Typography variant="h6" gutterBottom>
                             {selectedDepartment || selectedCourse ? 'No groups found' : 'Select filters to view groups'}
                         </Typography>
-                        <Typography color="text.secondary">
+                        <Typography sx={{
+                            color: 'text.secondary'
+                        }}>
                             {selectedDepartment || selectedCourse
                                 ? 'No groups match the selected filters.'
                                 : 'Use the department and course filters above to load groups.'}

@@ -260,7 +260,9 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
         return (
             <Card variant="outlined">
                 <CardContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Select a chapter to view its submissions.
                     </Typography>
                 </CardContent>
@@ -276,25 +278,31 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                     Chapter {chapter.id} Submissions
                 </Typography>
                 {chapter.title && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {chapter.title}
                     </Typography>
                 )}
             </Box>
-
             {/* Loading indicator */}
             {isLoading && (
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} sx={{
+                    alignItems: 'center'
+                }}>
                     <CircularProgress size={16} />
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {loadingMessage ?? 'Loading submissions…'}
                     </Typography>
                 </Stack>
             )}
-
             {/* Empty state */}
             {!isLoading && versions.length === 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     {isStudent
                         ? isLinkMode
                             ? 'No submissions yet. Submit a document link to start.'
@@ -304,7 +312,6 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                             : 'No versions have been uploaded for this chapter.'}
                 </Typography>
             )}
-
             {/* Version cards using SubmissionCard */}
             {versions.map((version) => {
                 const isVersionActive = version.versionIndex === selectedVersionIndex;
@@ -385,7 +392,6 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                     </Box>
                 );
             })}
-
             {/* Link submission mode */}
             {isLinkMode && isStudent && onLinkSubmit && !uploadsLockedByStatus && (
                 <Stack spacing={1}>
@@ -397,8 +403,10 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                         value={linkValue}
                         onChange={(e) => onLinkChange?.(e.target.value)}
                         disabled={isUploading}
-                        InputProps={{
-                            startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                        slotProps={{
+                            input: {
+                                startAdornment: <LinkIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                            }
                         }}
                     />
                     <Button
@@ -408,7 +416,9 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                             isUploading ? (
                                 <CircularProgress size={16} />
                             ) : (
-                                <LinkIcon fontSize="small" />
+                                <LinkIcon sx={{
+                                    fontSize: 'small'
+                                }} />
                             )
                         }
                         disabled={isUploading || !linkValue.trim()}
@@ -418,14 +428,14 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                     </Button>
                 </Stack>
             )}
-
             {/* Status message when link submissions are locked */}
             {isLinkMode && isStudent && uploadsLockedByStatus && uploadHelperText && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     {uploadHelperText}
                 </Typography>
             )}
-
             {/* File upload mode */}
             {!isLinkMode && allowUploads && (
                 <Stack spacing={0.5}>
@@ -451,16 +461,22 @@ export const SubmissionsRail: React.FC<SubmissionsRailProps> = ({
                         />
                     </Button>
                     {uploadHelperText && (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {uploadHelperText}
                         </Typography>
                     )}
                 </Stack>
             )}
-
             {/* Upload disabled helper text for non-students */}
             {!isStudent && !currentExpertRole && (
-                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'text.secondary',
+                        fontStyle: 'italic'
+                    }}>
                     Only students can upload new versions.
                 </Typography>
             )}

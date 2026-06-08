@@ -149,7 +149,13 @@ function RecursiveAgendaItem({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            alignItems: 'center',
+                            flex: 1
+                        }}>
                         {hasSubAgendas && (
                             <IconButton size="small" onClick={onToggle}>
                                 {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -166,16 +172,17 @@ function RecursiveAgendaItem({
                         <Box sx={{ flex: 1 }}>
                             <Typography
                                 variant={depth === 0 ? 'subtitle1' : 'body2'}
-                                fontWeight={depth === 0 ? 600 : 400}
                                 sx={{
+                                    fontWeight: depth === 0 ? 600 : 400,
                                     textTransform: depth === 0 ? 'uppercase' : 'none',
-                                    letterSpacing: depth === 0 ? 0.5 : 'inherit',
-                                }}
-                            >
+                                    letterSpacing: depth === 0 ? 0.5 : 'inherit'
+                                }}>
                                 {agenda.title}
                             </Typography>
                             {hasSubAgendas && (
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     {agenda.subAgenda.length} {agenda.subAgenda.length === 1 ? 'sub-agendum' : 'sub-agenda'}
                                 </Typography>
                             )}
@@ -647,13 +654,17 @@ export default function AgendasManagementPage() {
             <AnimatedPage variant="slideUp">
                 {isSeeding ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 10, gap: 2 }}>
-                        <Typography variant="h6" color="text.secondary">
+                        <Typography variant="h6" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Pushing default agendas to database...
                         </Typography>
                         <Box sx={{ width: '100%', maxWidth: 400 }}>
                             <LinearProgress />
                         </Box>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Setting up institutional and departmental research agendas
                         </Typography>
                     </Box>
@@ -687,7 +698,9 @@ export default function AgendasManagementPage() {
                     alignItems: { xs: 'stretch', sm: 'center' },
                     gap: 2,
                 }}>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Stack direction="row" spacing={1} sx={{
+                        flexWrap: 'wrap'
+                    }}>
                         {ENABLE_AGENDA_IMPORT_EXPORT && (
                             <>
                                 <Button
@@ -736,7 +749,9 @@ export default function AgendasManagementPage() {
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
                             }}>
-                                <Stack direction="row" spacing={1} alignItems="center">
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <SchoolIcon color="primary" />
                                     <Typography variant="h6">
                                         {agendas.institutionalAgenda.title}
@@ -780,9 +795,11 @@ export default function AgendasManagementPage() {
                             {agendas.institutionalAgenda.agenda.length === 0 && (
                                 <Typography
                                     variant="body2"
-                                    color="text.secondary"
-                                    sx={{ fontStyle: 'italic', py: 1 }}
-                                >
+                                    sx={{
+                                        color: 'text.secondary',
+                                        fontStyle: 'italic',
+                                        py: 1
+                                    }}>
                                     No agendas added yet
                                 </Typography>
                             )}
@@ -794,7 +811,9 @@ export default function AgendasManagementPage() {
                 <Card sx={{ borderRadius: 3 }}>
                     <CardContent>
                         <Stack spacing={2}>
-                            <Stack direction="row" spacing={1} alignItems="center">
+                            <Stack direction="row" spacing={1} sx={{
+                                alignItems: 'center'
+                            }}>
                                 <BusinessIcon color="secondary" />
                                 <Typography variant="h6">
                                     Departmental Research Agendas
@@ -833,7 +852,9 @@ export default function AgendasManagementPage() {
                                                     alignItems: 'center',
                                                     mb: 1,
                                                 }}>
-                                                    <Stack direction="row" spacing={1} alignItems="center">
+                                                    <Stack direction="row" spacing={1} sx={{
+                                                        alignItems: 'center'
+                                                    }}>
                                                         <IconButton
                                                             size="small"
                                                             onClick={() => toggleDepartment(dept.department)}
@@ -842,7 +863,9 @@ export default function AgendasManagementPage() {
                                                                 ? <ExpandLessIcon />
                                                                 : <ExpandMoreIcon />}
                                                         </IconButton>
-                                                        <Typography variant="subtitle1" fontWeight={500}>
+                                                        <Typography variant="subtitle1" sx={{
+                                                            fontWeight: 500
+                                                        }}>
                                                             {dept.department}
                                                         </Typography>
                                                         <Chip
@@ -893,9 +916,11 @@ export default function AgendasManagementPage() {
                                                     {dept.agenda.length === 0 && (
                                                         <Typography
                                                             variant="body2"
-                                                            color="text.secondary"
-                                                            sx={{ fontStyle: 'italic', py: 1 }}
-                                                        >
+                                                            sx={{
+                                                                color: 'text.secondary',
+                                                                fontStyle: 'italic',
+                                                                py: 1
+                                                            }}>
                                                             No agendas added yet
                                                         </Typography>
                                                     )}
@@ -908,7 +933,6 @@ export default function AgendasManagementPage() {
                     </CardContent>
                 </Card>
             </Stack>
-
             {/* Agenda Dialog */}
             <Dialog
                 open={agendaDialogOpen}
@@ -961,7 +985,6 @@ export default function AgendasManagementPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialogOpen}

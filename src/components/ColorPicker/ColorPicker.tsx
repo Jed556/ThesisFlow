@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, TextField, Typography, Paper, Stack, Tooltip, IconButton, InputAdornment } from '@mui/material';
 import { themeFromSourceColor, argbFromHex } from '@material/material-color-utilities';
-import { Shuffle, ContentCopy } from '@mui/icons-material';
+import { Shuffle, ContentCopy, Clear, ColorLens } from '@mui/icons-material';
 import { isValidHex, normalizeHex } from '../../utils/colorUtils';
 import { ColorPickerInput } from './ColorPickerInput';
 import { MaterialThemeSection } from './MaterialThemeSection';
@@ -135,17 +135,26 @@ export function ColorPicker({ value, onChange, onSelect }: ColorPickerProps) {
         <Box sx={{ width: '100%', maxWidth: 800 }}>
             {/* Header with large color preview and input */}
             <Paper elevation={0} sx={{ p: 3, mb: 2, bgcolor: 'background.default' }}>
-                <Typography variant="h6" gutterBottom fontWeight={600}>
+                <Typography variant="h6" gutterBottom sx={{
+                    fontWeight: 600
+                }}>
                     Source Color
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'text.secondary',
+                        mb: 3
+                    }}>
                     Pick a color to generate your Material 3 theme
                 </Typography>
 
                 <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={3}
-                    alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+                    sx={{
+                        alignItems: { xs: 'stretch', sm: 'flex-start' }
+                    }}
                 >
                     <ColorPickerInput
                         value={hexInput}
@@ -163,49 +172,58 @@ export function ColorPicker({ value, onChange, onSelect }: ColorPickerProps) {
                             error={!isValidHex(hexInput)}
                             helperText={!isValidHex(hexInput) ? 'Invalid hex color' : 'Use the picker or type a hex value'}
                             placeholder="#1976D2"
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Box
-                                            sx={{
-                                                width: 24,
-                                                height: 24,
-                                                bgcolor: hexInput,
-                                                border: '1px solid',
-                                                borderColor: 'divider',
-                                                borderRadius: 0.5,
-                                            }}
-                                        />
-                                    </InputAdornment>
-                                ),
-                                endAdornment: (
-                                    <InputAdornment position="end">
-                                        <Tooltip title={copied ? 'Copied!' : 'Copy hex'}>
+                            slotProps={{
+                                input: {
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <Box
+                                                sx={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    bgcolor: hexInput,
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    borderRadius: 0.5,
+                                                }}
+                                            />
+                                        </InputAdornment>
+                                    ),
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <Tooltip title={copied ? 'Copied!' : 'Copy hex'}>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={handleCopyHex}
+                                                    edge="end"
+                                                >
+                                                    <ContentCopy fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Random color">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={handleShuffle}
+                                                    edge="end"
+                                                >
+                                                    <Shuffle fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
                                             <IconButton
-                                                size="small"
-                                                onClick={handleCopyHex}
+                                                aria-label="clear color"
+                                                onClick={() => onChange?.('')}
                                                 edge="end"
-                                            >
-                                                <ContentCopy fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Random color">
-                                            <IconButton
                                                 size="small"
-                                                onClick={handleShuffle}
-                                                edge="end"
                                             >
-                                                <Shuffle fontSize="small" />
+                                                <Clear fontSize="small" />
                                             </IconButton>
-                                        </Tooltip>
-                                    </InputAdornment>
-                                ),
+                                        </InputAdornment>
+                                    )
+                                }
                             }}
                         />
                     </Box>
                 </Stack>
             </Paper>
-
             {/* Material 3 Theme Preview */}
             {materialTheme && (
                 <MaterialThemeSection theme={materialTheme} onSelect={handleColorSelect} />

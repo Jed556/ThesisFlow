@@ -179,7 +179,9 @@ export function AuditList({
                             bgcolor: 'background.paper',
                         }}
                     >
-                        <Stack direction="row" spacing={2} alignItems="flex-start">
+                        <Stack direction="row" spacing={2} sx={{
+                            alignItems: 'flex-start'
+                        }}>
                             {showAvatars && (
                                 <Skeleton variant="circular" width={40} height={40} />
                             )}
@@ -245,23 +247,28 @@ export function AuditList({
                                     primary={
                                         <Stack
                                             direction="row"
-                                            justifyContent="space-between"
-                                            alignItems="flex-start"
                                             spacing={2}
-                                        >
+                                            sx={{
+                                                justifyContent: 'space-between',
+                                                alignItems: 'flex-start'
+                                            }}>
                                             <Stack spacing={0.5} sx={{ flex: 1 }}>
                                                 <Stack
                                                     direction={{ xs: 'column', sm: 'row' }}
                                                     spacing={1}
-                                                    alignItems={{
-                                                        xs: 'flex-start',
-                                                        sm: 'center',
+                                                    sx={{
+                                                        alignItems: {
+                                                            xs: 'flex-start',
+                                                            sm: 'center',
+                                                        }
                                                     }}
                                                 >
                                                     <Typography
                                                         variant={compact ? 'body2' : 'subtitle1'}
                                                         component="span"
-                                                        fontWeight="medium"
+                                                        sx={{
+                                                            fontWeight: 'medium'
+                                                        }}
                                                     >
                                                         {audit.name}
                                                     </Typography>
@@ -276,22 +283,26 @@ export function AuditList({
                                                 {!compact && (
                                                     <Typography
                                                         variant="body2"
-                                                        color="text.primary"
-                                                        sx={{ mt: 0.5 }}
-                                                    >
+                                                        sx={{
+                                                            color: 'text.primary',
+                                                            mt: 0.5
+                                                        }}>
                                                         {audit.description}
                                                     </Typography>
                                                 )}
                                                 <Stack
                                                     direction="row"
                                                     spacing={2}
-                                                    alignItems="center"
-                                                    flexWrap="wrap"
-                                                    sx={{ mt: 0.5 }}
-                                                >
+                                                    sx={{
+                                                        alignItems: 'center',
+                                                        flexWrap: 'wrap',
+                                                        mt: 0.5
+                                                    }}>
                                                     <Typography
                                                         variant="caption"
-                                                        color="text.secondary"
+                                                        sx={{
+                                                            color: 'text.secondary'
+                                                        }}
                                                     >
                                                         by{' '}
                                                         <strong>
@@ -304,7 +315,9 @@ export function AuditList({
                                                     {showGroupName && audit.locationType === 'group' && (
                                                         <Typography
                                                             variant="caption"
-                                                            color="text.secondary"
+                                                            sx={{
+                                                                color: 'text.secondary'
+                                                            }}
                                                         >
                                                             in{' '}
                                                             <strong>
@@ -315,7 +328,9 @@ export function AuditList({
                                                     <Tooltip title={formatTimestamp(audit.timestamp)}>
                                                         <Typography
                                                             variant="caption"
-                                                            color="text.secondary"
+                                                            sx={{
+                                                                color: 'text.secondary'
+                                                            }}
                                                         >
                                                             {formatRelativeTime(audit.timestamp)}
                                                         </Typography>
@@ -351,10 +366,14 @@ export function AuditList({
                     ))}
                 </AnimatedList>
             </List>
-
             {/* Pagination */}
             {totalPages > 1 && (
-                <Stack direction="row" justifyContent="center" sx={{ mt: 3 }}>
+                <Stack
+                    direction="row"
+                    sx={{
+                        justifyContent: 'center',
+                        mt: 3
+                    }}>
                     <Pagination
                         count={totalPages}
                         page={page}

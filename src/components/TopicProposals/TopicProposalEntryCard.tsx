@@ -55,9 +55,12 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                         </Typography>
                         <Box sx={{ mb: 2 }}>
                             <Typography variant="subtitle2">Brief Description</Typography>
-                            <Typography variant="body2" color="text.secondary"
+                            <Typography
+                                variant="body2"
                                 sx={{
-                                    wordBreak: 'break-word', overflowWrap: 'break-word',
+                                    color: 'text.secondary',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'break-word',
                                     whiteSpace: 'pre-wrap'
                                 }}>
                                 {entry.description}
@@ -67,8 +70,16 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                     <Chip label={statusChip.label} color={statusChip.color} size="small" />
                 </Box>
 
-                <Stack direction="row" spacing={.5} alignItems="center" sx={{ mb: 2 }}>
-                    <Typography variant="caption" color="text.secondary">
+                <Stack
+                    direction="row"
+                    spacing={.5}
+                    sx={{
+                        alignItems: 'center',
+                        mb: 2
+                    }}>
+                    <Typography variant="caption" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Proposed by
                     </Typography>
                     <Avatar
@@ -84,9 +95,12 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                 {entry.problemStatement && (
                     <Box sx={{ mb: 1.5 }}>
                         <Typography variant="subtitle2">Problem Statement</Typography>
-                        <Typography variant="body2" color="text.secondary"
+                        <Typography
+                            variant="body2"
                             sx={{
-                                wordBreak: 'break-word', overflowWrap: 'break-word',
+                                color: 'text.secondary',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
                                 whiteSpace: 'pre-wrap'
                             }}>
                             {entry.problemStatement}
@@ -97,9 +111,12 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                 {entry.expectedOutcome && (
                     <Box sx={{ mb: 1.5 }}>
                         <Typography variant="subtitle2">Expected Outcome</Typography>
-                        <Typography variant="body2" color="text.secondary"
+                        <Typography
+                            variant="body2"
                             sx={{
-                                wordBreak: 'break-word', overflowWrap: 'break-word',
+                                color: 'text.secondary',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
                                 whiteSpace: 'pre-wrap'
                             }}>
                             {entry.expectedOutcome}
@@ -108,7 +125,13 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                 )}
 
                 {entry.keywords && entry.keywords.length > 0 && (
-                    <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            flexWrap: 'wrap',
+                            mb: 2
+                        }}>
                         {entry.keywords.map((keyword) => (
                             <Chip key={keyword} label={keyword} size="small" variant="outlined" />
                         ))}
@@ -127,7 +150,9 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                         </Typography>
                         <Stack spacing={1}>
                             {agendaLabel && (
-                                <Stack direction="row" spacing={1} alignItems="center">
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <CategoryIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                                     <Typography variant="body2" sx={{ flex: 1 }}>
                                         {agendaLabel}
@@ -143,13 +168,17 @@ export default function TopicProposalEntryCard(props: TopicProposalEntryCardProp
                                 </Stack>
                             )}
                             {entry.ESG && (
-                                <Stack direction="row" spacing={1} alignItems="center">
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <EcoIcon sx={{ fontSize: 16, color: 'success.main' }} />
                                     <Typography variant="body2">ESG: {entry.ESG}</Typography>
                                 </Stack>
                             )}
                             {entry.SDG && (
-                                <Stack direction="row" spacing={1} alignItems="center">
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <PublicIcon sx={{ fontSize: 16, color: 'info.main' }} />
                                     <Typography variant="body2" sx={{
                                         overflow: 'hidden', textOverflow: 'ellipsis',

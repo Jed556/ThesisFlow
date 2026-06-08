@@ -42,7 +42,9 @@ const ReplyPreview = ({ message, participant }: { message: ChatMessage; particip
         <Typography variant="caption" sx={{ fontWeight: 600 }}>
             Replying to {participant?.displayName ?? message.senderName ?? 'participant'}
         </Typography>
-        <Typography variant="body2" color="text.secondary" noWrap>
+        <Typography variant="body2" noWrap sx={{
+            color: 'text.secondary'
+        }}>
             {message.content}
         </Typography>
     </Paper>
@@ -58,7 +60,13 @@ const AttachmentList = ({
     }
 
     return (
-        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+        <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+                flexWrap: 'wrap',
+                mt: 1
+            }}>
             {attachments.map((attachment) => {
                 const parsedSize = Number(attachment.size);
                 const sizeLabel = Number.isFinite(parsedSize)
@@ -148,9 +156,17 @@ export default function MessageBubble({
                     py: 2,
                 }}
             >
-                <Stack direction="row" alignItems="flex-start" spacing={1} justifyContent="space-between">
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between'
+                    }}>
                     <Box>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: 'center'
+                        }}>
                             <Typography variant="subtitle2">
                                 {participant?.displayName || message.senderName || 'Unknown user'}
                             </Typography>
@@ -161,7 +177,9 @@ export default function MessageBubble({
                                 <Chip label={`V${Number(message.metadata.version) + 1}`} size="small" color="info" />
                             )}
                         </Stack>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {formatTimestamp(message.timestamp)}
                             {message.isEdited ? ' • Edited' : ''}
                         </Typography>

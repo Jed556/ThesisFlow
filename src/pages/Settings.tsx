@@ -22,6 +22,7 @@ import { useTheme as useCustomTheme } from '../contexts/ThemeContext';
 import { getError } from '../../utils/errorUtils';
 import { ProfileHeader } from '../components/Profile';
 import { createUserAuditEntry } from '../utils/firebase/firestore/userAudits';
+import { useSegmentViewed } from '../hooks';
 import type { NavigationItem } from '../types/navigation';
 import type { UserProfile, UserPreferences, CalendarNotificationTiming } from '../types/profile';
 import { MAX_CALENDAR_NOTIFICATIONS, DEFAULT_CALENDAR_NOTIFICATIONS } from '../types/profile';
@@ -64,7 +65,9 @@ function NotificationTimingRow({
     canDelete,
 }: NotificationTimingRowProps) {
     return (
-        <Stack direction="row" alignItems="center" spacing={2}>
+        <Stack direction="row" spacing={2} sx={{
+            alignItems: 'center'
+        }}>
             <FormControlLabel
                 control={
                     <Switch
@@ -101,7 +104,9 @@ function NotificationTimingRow({
                     <MenuItem value="days">Days</MenuItem>
                 </Select>
             </FormControl>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+                color: 'text.secondary'
+            }}>
                 before event
             </Typography>
             <Tooltip title={canDelete ? 'Remove reminder' : 'At least one reminder required'}>
@@ -132,6 +137,8 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    useSegmentViewed({ segment: 'settings' });
 
     // Form state -- use a shallow partial of UserProfile, with nested fields optional
     type UserProfileForm = Partial<UserProfile> & {
@@ -805,7 +812,13 @@ export default function SettingsPage() {
                     <Stack spacing={3}>
                         {/* Theme Color */}
                         <Box>
-                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                            <Stack
+                                direction="row"
+                                spacing={1}
+                                sx={{
+                                    alignItems: 'center',
+                                    mb: 1
+                                }}>
                                 <Palette fontSize="small" color="action" />
                                 <Typography variant="subtitle2">
                                     Theme Color
@@ -820,10 +833,17 @@ export default function SettingsPage() {
                                     />
                                 )}
                             </Stack>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: 'text.secondary',
+                                    mb: 2
+                                }}>
                                 Pick a seed color to generate a Material 3 theme palette for your entire interface
                             </Typography>
-                            <Stack direction="row" spacing={2} alignItems="center">
+                            <Stack direction="row" spacing={2} sx={{
+                                alignItems: 'center'
+                            }}>
                                 <Box
                                     onClick={() => setColorPickerOpen(true)}
                                     sx={{
@@ -844,10 +864,14 @@ export default function SettingsPage() {
                                     }}
                                 />
                                 <Box sx={{ flex: 1 }}>
-                                    <Typography variant="body2" fontWeight={600}>
+                                    <Typography variant="body2" sx={{
+                                        fontWeight: 600
+                                    }}>
                                         {(formData.preferences?.themeColor ?? '').toUpperCase()}
                                     </Typography>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {isActiveThemeColor
                                             ? 'Currently applied to your interface'
                                             : 'Click the color box to change'}
@@ -879,7 +903,13 @@ export default function SettingsPage() {
 
                                 return (
                                     <>
-                                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            sx={{
+                                                alignItems: 'center',
+                                                mb: 1
+                                            }}>
                                             <NotificationsIcon fontSize="small" color="action" />
                                             <Typography variant="subtitle2">
                                                 Calendar Event Notifications
@@ -891,11 +921,15 @@ export default function SettingsPage() {
                                                 color="primary"
                                             />
                                         </Stack>
-                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: 'text.secondary',
+                                                mb: 2
+                                            }}>
                                             Configure when to receive notifications before calendar events
                                             (up to {MAX_CALENDAR_NOTIFICATIONS} reminders)
                                         </Typography>
-
                                         <Stack spacing={2}>
                                             {/* Dynamic Notification Rows */}
                                             {notifications.map((timing, index) => (
@@ -912,7 +946,9 @@ export default function SettingsPage() {
                                             ))}
 
                                             {/* Add Reminder Button */}
-                                            <Stack direction="row" spacing={2} alignItems="center">
+                                            <Stack direction="row" spacing={2} sx={{
+                                                alignItems: 'center'
+                                            }}>
                                                 <Button
                                                     variant="outlined"
                                                     startIcon={<AddIcon />}
@@ -950,7 +986,9 @@ export default function SettingsPage() {
                             label={(
                                 <Box>
                                     <Typography variant="body2">Reduce Animations</Typography>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Disable animations for better performance or accessibility
                                     </Typography>
                                 </Box>

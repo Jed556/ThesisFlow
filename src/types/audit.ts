@@ -91,6 +91,7 @@ export type AuditAction =
     | 'submission_approved'
     | 'submission_rejected'
     | 'submission_revision_requested'
+    | 'link_submitted'
     // Proposal actions
     | 'proposal_created'
     | 'proposal_updated'
@@ -199,6 +200,8 @@ export interface BaseAuditEntry {
      * This is set when the user visits the page associated with this audit's category.
      */
     pageViewed?: boolean;
+    /** The actual Firestore document path (populated when querying) */
+    docPath?: string;
 }
 
 /**

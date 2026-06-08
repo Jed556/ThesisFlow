@@ -317,13 +317,17 @@ export default function GroupManageDialog({
                                         <Typography sx={{ mb: 1 }}>
                                             <strong>Members:</strong>
                                         </Typography>
-                                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                        <Stack direction="row" spacing={1} useFlexGap sx={{
+                                            flexWrap: 'wrap'
+                                        }}>
                                             {memberChipData.length > 0 ? (
                                                 memberChipData.map((member) => (
                                                     <Chip key={member.email} label={member.label} sx={{ mb: 1 }} />
                                                 ))
                                             ) : (
-                                                <Typography color="text.secondary">No members selected</Typography>
+                                                <Typography sx={{
+                                                    color: 'text.secondary'
+                                                }}>No members selected</Typography>
                                             )}
                                         </Stack>
                                     </Box>

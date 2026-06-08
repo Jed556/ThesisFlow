@@ -277,7 +277,13 @@ export default function ChapterViewPage() {
         return (
             <AnimatedPage variant="fade">
                 <Box sx={{ py: 4, px: 3 }}>
-                    <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+                    <Stack
+                        direction="row"
+                        spacing={2}
+                        sx={{
+                            alignItems: 'center',
+                            mb: 3
+                        }}>
                         <IconButton onClick={handleBack} size="large">
                             <ArrowBackIcon />
                         </IconButton>
@@ -304,13 +310,21 @@ export default function ChapterViewPage() {
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ py: 4, px: 3 }}>
-                <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+                <Stack
+                    direction="row"
+                    spacing={2}
+                    sx={{
+                        alignItems: 'center',
+                        mb: 3
+                    }}>
                     <IconButton onClick={handleBack} size="large">
                         <ArrowBackIcon />
                     </IconButton>
                     <Box sx={{ flexGrow: 1 }}>
                         <Typography variant="h4">{config.course}</Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Department: {config.department}
                         </Typography>
                     </Box>
@@ -358,16 +372,29 @@ export default function ChapterViewPage() {
 
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Stack spacing={1.5}>
-                        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Stack
+                            direction="row"
+                            spacing={2}
+                            useFlexGap
+                            sx={{
+                                alignItems: 'center',
+                                flexWrap: 'wrap'
+                            }}>
                             <Chip label={`${chapterCount} Required Chapters`} color="primary" />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Created {createdAtLabel}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 • Updated {updatedAtLabel}
                             </Typography>
                         </Stack>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {isEditing
                                 ? 'Saving applies these chapter changes to every thesis in this course.'
                                 : 'These chapter requirements stay in sync with all theses for this course.'}
@@ -383,7 +410,9 @@ export default function ChapterViewPage() {
 
                 {chaptersToDisplay.length === 0 ? (
                     <Paper variant="outlined" sx={{ p: 3 }}>
-                        <Typography color="text.secondary">
+                        <Typography sx={{
+                            color: 'text.secondary'
+                        }}>
                             No chapters configured for this course.
                         </Typography>
                     </Paper>
@@ -394,8 +423,12 @@ export default function ChapterViewPage() {
                             return (
                                 <Paper key={`chapter-${chapter.id}-${index}`} variant="outlined" sx={{ p: 3 }}>
                                     <Stack spacing={2}>
-                                        <Stack direction="row" alignItems="center" spacing={1}>
-                                            <Typography variant="subtitle2" color="text.secondary">
+                                        <Stack direction="row" spacing={1} sx={{
+                                            alignItems: 'center'
+                                        }}>
+                                            <Typography variant="subtitle2" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 Chapter {chapter.id}
                                             </Typography>
                                             <Box sx={{ flexGrow: 1 }} />
@@ -490,7 +523,9 @@ export default function ChapterViewPage() {
                                         ) : (
                                             <Stack spacing={1}>
                                                 <Typography variant="h6">{chapter.title}</Typography>
-                                                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                                                <Stack direction="row" spacing={0.5} useFlexGap sx={{
+                                                    flexWrap: 'wrap'
+                                                }}>
                                                     {stageValues.map((stage) => (
                                                         <Chip
                                                             key={`${chapter.id}-view-${stage}`}
@@ -501,7 +536,9 @@ export default function ChapterViewPage() {
                                                         />
                                                     ))}
                                                 </Stack>
-                                                <Typography color="text.secondary">
+                                                <Typography sx={{
+                                                    color: 'text.secondary'
+                                                }}>
                                                     {chapter.description || 'No additional guidance provided.'}
                                                 </Typography>
                                             </Stack>
@@ -542,7 +579,13 @@ export function ChapterViewSkeleton({ onBack }: ChapterViewSkeletonProps) {
     return (
         <AnimatedPage variant="fade">
             <Box sx={{ py: 4, px: 3 }}>
-                <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+                <Stack
+                    direction="row"
+                    spacing={2}
+                    sx={{
+                        alignItems: 'center',
+                        mb: 3
+                    }}>
                     <IconButton onClick={onBack} size="large">
                         <ArrowBackIcon />
                     </IconButton>

@@ -17,7 +17,7 @@ import { firebaseAuth } from '../../../utils/firebase/firebaseConfig';
 import { getRoleColor } from '../../../utils/roleUtils';
 
 export const metadata: NavigationItem = {
-    group: 'management',
+    group: '-',
     index: 6,
     title: 'Expert Slots',
     segment: 'slot-increase',
@@ -141,21 +141,23 @@ export default function ExpertSlotsPage() {
                 <Typography variant="h4" gutterBottom>
                     Expert Slot Requests
                 </Typography>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Review and approve or reject expert slot increase requests.
                     When approved, the expert&apos;s maximum slot limit will be updated.
                 </Typography>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {pendingRequests.length === 0 ? (
                 <Paper sx={{ p: 3 }}>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         No pending slot requests at this time.
                     </Typography>
                 </Paper>
@@ -172,7 +174,6 @@ export default function ExpertSlotsPage() {
                     ))}
                 </AnimatedList>
             )}
-
             {/* Reject Dialog */}
             <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)}>
                 <DialogTitle>Reject Slot Request</DialogTitle>
@@ -264,11 +265,14 @@ function SlotRequestCard({ request, onApprove, onReject, isBusy }: SlotRequestCa
             <CardContent>
                 <Stack
                     direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    sx={{ mb: 2 }}
-                >
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    sx={{
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 2
+                    }}>
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: 'center'
+                    }}>
                         {profileLoading ? (
                             <Skeleton variant="circular" width={32} height={32} />
                         ) : expertProfile ? (
@@ -324,7 +328,9 @@ function SlotRequestCard({ request, onApprove, onReject, isBusy }: SlotRequestCa
                         <Typography variant="subtitle2" gutterBottom>
                             Reason for Request
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {request.reason}
                         </Typography>
                     </Box>

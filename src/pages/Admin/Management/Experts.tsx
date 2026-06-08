@@ -44,7 +44,7 @@ import type { NavigationItem } from '../../../types/navigation';
 // ============================================================================
 
 export const metadata: NavigationItem = {
-    group: 'management',
+    group: '-',
     index: 1,
     title: 'Experts',
     segment: 'expert-management',
@@ -90,18 +90,26 @@ function SlotRequestCard({ request, expertProfile, onApprove, onReject, busy }: 
         <Card variant="outlined" sx={{ mb: 2 }}>
             <CardContent>
                 <Stack spacing={2}>
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{
+                        alignItems: 'center'
+                    }}>
                         <Avatar src={expertProfile?.avatar} sx={{ bgcolor: 'primary.main' }}>
                             {expertProfile
                                 ? getInitialsFromFullName(formatProfileLabel(expertProfile))
                                 : '?'
                             }
                         </Avatar>
-                        <Box flex={1}>
-                            <Typography variant="subtitle1" fontWeight="medium">
+                        <Box sx={{
+                            flex: 1
+                        }}>
+                            <Typography variant="subtitle1" sx={{
+                                fontWeight: 'medium'
+                            }}>
                                 {expertName}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {request.expertRole} • {request.department ?? 'No department'}
                             </Typography>
                         </Box>
@@ -117,7 +125,9 @@ function SlotRequestCard({ request, expertProfile, onApprove, onReject, busy }: 
                     </Stack>
 
                     <Box>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Requested Slots: {request.currentSlots} → {request.requestedSlots}
                         </Typography>
                         {request.reason && (
@@ -137,7 +147,9 @@ function SlotRequestCard({ request, expertProfile, onApprove, onReject, busy }: 
                                 onChange={(e) => setNote(e.target.value)}
                                 disabled={busy}
                             />
-                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <Stack direction="row" spacing={1} sx={{
+                                justifyContent: 'flex-end'
+                            }}>
                                 <Button
                                     color="error"
                                     variant="outlined"
@@ -159,7 +171,9 @@ function SlotRequestCard({ request, expertProfile, onApprove, onReject, busy }: 
                     )}
 
                     {request.responseNote && request.status !== 'pending' && (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             <strong>Admin Note:</strong> {request.responseNote}
                         </Typography>
                     )}
@@ -248,8 +262,15 @@ function EditExpertDialog({ open, expert, onClose, onSave }: EditExpertDialogPro
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Stack direction="row" spacing={2} alignItems="center">
+                <Stack
+                    direction="row"
+                    sx={{
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                    <Stack direction="row" spacing={2} sx={{
+                        alignItems: 'center'
+                    }}>
                         <TuneIcon color="primary" />
                         <Typography variant="h6">Edit Expert Settings</Typography>
                     </Stack>
@@ -258,19 +279,24 @@ function EditExpertDialog({ open, expert, onClose, onSave }: EditExpertDialogPro
                     </IconButton>
                 </Stack>
             </DialogTitle>
-
             <DialogContent dividers>
                 <Stack spacing={3}>
                     {/* Expert Info */}
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{
+                        alignItems: 'center'
+                    }}>
                         <Avatar src={expert.avatar} sx={{ width: 48, height: 48 }}>
                             {getInitialsFromFullName(fullName)}
                         </Avatar>
                         <Box>
-                            <Typography variant="subtitle1" fontWeight="bold">
+                            <Typography variant="subtitle1" sx={{
+                                fontWeight: 'bold'
+                            }}>
                                 {fullName}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {expert.role} • {expert.department ?? 'No department'}
                             </Typography>
                         </Box>
@@ -324,7 +350,9 @@ function EditExpertDialog({ open, expert, onClose, onSave }: EditExpertDialogPro
                         onChange={(_, expanded) => setSkillsExpanded(expanded)}
                     >
                         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Stack direction="row" spacing={1} alignItems="center">
+                            <Stack direction="row" spacing={1} sx={{
+                                alignItems: 'center'
+                            }}>
                                 <Typography variant="subtitle2">
                                     Skill Ratings
                                 </Typography>
@@ -361,7 +389,6 @@ function EditExpertDialog({ open, expert, onClose, onSave }: EditExpertDialogPro
                     </Accordion>
                 </Stack>
             </DialogContent>
-
             <DialogActions>
                 <Button onClick={onClose} disabled={saving}>
                     Cancel
@@ -454,7 +481,9 @@ function StudentCard({ student, onViewProfile }: StudentCardProps) {
         >
             <CardContent sx={{ flexGrow: 1 }}>
                 <Stack spacing={2}>
-                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Stack direction="row" spacing={2} sx={{
+                        alignItems: 'flex-start'
+                    }}>
                         <Avatar
                             src={student.avatar}
                             sx={{ width: 56, height: 56, bgcolor: 'secondary.main' }}
@@ -464,13 +493,21 @@ function StudentCard({ student, onViewProfile }: StudentCardProps) {
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography
                                 variant="subtitle1"
-                                fontWeight="bold"
                                 noWrap
                                 title={fullName}
+                                sx={{
+                                    fontWeight: 'bold'
+                                }}
                             >
                                 {fullName}
                             </Typography>
-                            <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                            <Stack
+                                direction="row"
+                                spacing={0.5}
+                                sx={{
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap'
+                                }}>
                                 <Chip
                                     label="Student"
                                     size="small"
@@ -485,20 +522,23 @@ function StudentCard({ student, onViewProfile }: StudentCardProps) {
                                     />
                                 )}
                             </Stack>
-                            <Typography variant="caption" color="text.secondary" noWrap>
+                            <Typography variant="caption" noWrap sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {student.email}
                             </Typography>
                         </Box>
                     </Stack>
 
                     {student.course && (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Course: {student.course}
                         </Typography>
                     )}
                 </Stack>
             </CardContent>
-
             <Box sx={{ p: 1.5, pt: 0, display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                 <Button
                     size="small"
@@ -976,7 +1016,9 @@ export default function ExpertsPage() {
                             />
                             <Tab
                                 label={
-                                    <Stack direction="row" spacing={1} alignItems="center">
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: 'center'
+                                    }}>
                                         <span>Slot Requests</span>
                                         {pendingRequestCount > 0 && (
                                             <Badge badgeContent={pendingRequestCount} color="warning" />
@@ -1012,7 +1054,9 @@ export default function ExpertsPage() {
 
                     {/* Filters - show for expert and student tabs */}
                     {selectedTab !== TAB_SLOT_REQUESTS && (
-                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={3}>
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{
+                            mb: 3
+                        }}>
                             <TextField
                                 size="small"
                                 placeholder="Search by name or email..."
@@ -1157,7 +1201,6 @@ export default function ExpertsPage() {
                     )}
                 </Box>
             </GrowTransition>
-
             {/* Edit Expert Dialog */}
             <EditExpertDialog
                 open={!!editingExpert}
@@ -1165,7 +1208,6 @@ export default function ExpertsPage() {
                 onClose={() => setEditingExpert(null)}
                 onSave={handleSaveExpert}
             />
-
             {/* Profile View Dialog */}
             <ProfileViewDialog
                 open={!!viewingProfile}
@@ -1175,7 +1217,6 @@ export default function ExpertsPage() {
                 onEditSlots={handleEditExpert}
                 isExpert={isViewingExpert}
             />
-
             {/* Info Dialog */}
             <Dialog
                 open={infoDialogOpen}
@@ -1186,26 +1227,34 @@ export default function ExpertsPage() {
                 <DialogTitle>User Management Guide</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             This page allows you to manage all users in the system, including experts and students.
                         </Typography>
                         <Divider />
                         <Box>
                             <Typography variant="subtitle2" gutterBottom>Expert Tabs (Advisers, Editors, Statisticians)</Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 View and manage expert profiles. Click on a card to view the full profile,
                                 and use the &quot;Edit Slots&quot; button to adjust slot allocations and skill ratings.
                             </Typography>
                         </Box>
                         <Box>
                             <Typography variant="subtitle2" gutterBottom>Students Tab</Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Browse all student profiles. Click on a student card to view their detailed profile.
                             </Typography>
                         </Box>
                         <Box>
                             <Typography variant="subtitle2" gutterBottom>Slot Requests</Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Review and respond to slot increase requests from experts.
                                 Approve or reject requests with optional notes.
                             </Typography>

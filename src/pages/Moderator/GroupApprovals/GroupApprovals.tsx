@@ -310,14 +310,25 @@ export default function ModeratorGroupApprovalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Review and manage group requests for the sections assigned to you. Only groups within your
                         courses appear here.
                     </Typography>
                 </Box>
 
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                    <Typography variant="body2" color="text.secondary">
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    useFlexGap
+                    sx={{
+                        alignItems: 'center',
+                        flexWrap: 'wrap'
+                    }}>
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Courses:
                     </Typography>
                     {moderatorSections.length === 0 ? (
@@ -370,7 +381,9 @@ export default function ModeratorGroupApprovalsPage() {
 
                 {moderatorSections.length > 0 && !groupsLoading && filteredGroups.length === 0 && (
                     <Paper sx={{ p: 3 }}>
-                        <Typography variant="body1" color="text.secondary">
+                        <Typography variant="body1" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {statusFilter === 'all'
                                 ? 'No groups found for your sections.'
                                 : statusFilter === 'review'
@@ -395,7 +408,6 @@ export default function ModeratorGroupApprovalsPage() {
                     </AnimatedList>
                 )}
             </Stack>
-
             <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)}>
                 <DialogTitle>Reject group request</DialogTitle>
                 <DialogContent>
@@ -497,10 +509,18 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
     return (
         <Card sx={{ mb: 2 }}>
             <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Stack
+                    direction="row"
+                    sx={{
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 2
+                    }}>
                     <Box>
                         <Typography variant="h6">{group.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {group.course ?? 'Unassigned course'} • {group.department ?? 'No department'}
                         </Typography>
                     </Box>
@@ -508,7 +528,12 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                 </Stack>
 
                 {group.description && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            mb: 2
+                        }}>
                         {group.description}
                     </Typography>
                 )}
@@ -554,7 +579,9 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
                             Members ({group.members.members.length})
                         </Typography>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={1} useFlexGap sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             {group.members.members.map((uid) => {
                                 const profile = memberProfiles.get(uid);
                                 return (

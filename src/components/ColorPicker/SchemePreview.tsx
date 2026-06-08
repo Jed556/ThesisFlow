@@ -17,7 +17,7 @@ export function SchemePreview({ label, scheme, onSelect }: SchemePreviewProps) {
     const background = scheme.background ?? surface;
     const onBackground = scheme.onBackground ?? getTextColor(background);
 
-    const sampleCards: Array<{ label: string; background?: string; foreground?: string; border?: string }> = [
+    const sampleCards: { label: string; background?: string; foreground?: string; border?: string }[] = [
         { label: 'Primary', background: scheme.primary, foreground: scheme.onPrimary },
         { label: 'Primary Container', background: scheme.primaryContainer, foreground: scheme.onPrimaryContainer },
         { label: 'Secondary', background: scheme.secondary, foreground: scheme.onSecondary },
@@ -30,7 +30,7 @@ export function SchemePreview({ label, scheme, onSelect }: SchemePreviewProps) {
         },
     ];
 
-    const filteredCards = sampleCards.reduce<Array<{ label: string; background: string; foreground: string; border?: string }>>(
+    const filteredCards = sampleCards.reduce<{ label: string; background: string; foreground: string; border?: string }[]>(
         (acc, card) => {
             if (card.background && card.foreground) {
                 acc.push({
@@ -51,7 +51,9 @@ export function SchemePreview({ label, scheme, onSelect }: SchemePreviewProps) {
             sx={{ flex: 1, minWidth: 260, borderRadius: 2, overflow: 'hidden', borderColor: outline }}
         >
             <Box sx={{ p: 2, bgcolor: background, color: onBackground }}>
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                    fontWeight: 600
+                }}>
                     {label} scheme
                 </Typography>
                 <Typography variant="caption" sx={{ opacity: 0.8 }}>
@@ -78,7 +80,9 @@ export function SchemePreview({ label, scheme, onSelect }: SchemePreviewProps) {
                             },
                         }}
                     >
-                        <Typography variant="body2" fontWeight={600}>
+                        <Typography variant="body2" sx={{
+                            fontWeight: 600
+                        }}>
                             {card.label}
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.85 }}>

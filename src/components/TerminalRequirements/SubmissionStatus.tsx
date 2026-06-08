@@ -81,7 +81,9 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
         return (
             <Stack spacing={1}>
                 <Typography variant="subtitle2">{title}</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     Submit all requirements to start the approval workflow.
                 </Typography>
             </Stack>
@@ -94,7 +96,9 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
         return (
             <Stack spacing={1}>
                 <Typography variant="subtitle2">{title}</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     Awaiting internal verification. No expert approvals are configured for this stage.
                 </Typography>
             </Stack>
@@ -104,7 +108,9 @@ export function SubmissionStatus({ submission, title = 'Approval status', highli
     return (
         <Stack spacing={1.5}>
             <Typography variant="subtitle2">{title}</Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{
+                flexWrap: 'wrap'
+            }}>
                 {orderedRoles.map((role) => {
                     const approval = submission.approvals[role];
                     const assignedApprovers = submission.assignedApprovers?.[role];

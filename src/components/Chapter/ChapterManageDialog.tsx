@@ -191,10 +191,18 @@ export default function ChapterManageDialog({
                     </Stack>
 
                     <Box>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                        <Stack
+                            direction="row"
+                            sx={{
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                mb: 1
+                            }}>
                             <Box>
                                 <Typography variant="subtitle1">Chapters</Typography>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Add, reorder, or edit chapter requirements. Stage selection now supports multiples.
                                 </Typography>
                             </Box>
@@ -210,7 +218,9 @@ export default function ChapterManageDialog({
                         <Stack spacing={2}>
                             {formData.chapters.length === 0 ? (
                                 <Paper variant="outlined" sx={{ p: 2 }}>
-                                    <Typography color="text.secondary">
+                                    <Typography sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         No chapters configured yet. Use “Add Chapter” to get started.
                                     </Typography>
                                 </Paper>
@@ -220,7 +230,13 @@ export default function ChapterManageDialog({
                                     return (
                                         <Paper key={chapter.id} variant="outlined" sx={{ p: 2 }}>
                                             <Stack spacing={1.5}>
-                                                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                                                <Stack
+                                                    direction="row"
+                                                    spacing={1}
+                                                    sx={{
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between'
+                                                    }}>
                                                     <Typography variant="subtitle2">Chapter {chapter.id}</Typography>
                                                     <Stack direction="row" spacing={1}>
                                                         <IconButton

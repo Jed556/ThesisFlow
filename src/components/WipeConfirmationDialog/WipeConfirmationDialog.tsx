@@ -211,12 +211,13 @@ export function WipeConfirmationDialog({
                     Confirm Destructive Action
                 </Typography>
             </DialogTitle>
-
             <DialogContent>
                 <Stack spacing={3} sx={{ mt: 1 }}>
                     {/* Action details */}
                     <Alert severity="error" icon={<DeleteIcon />}>
-                        <Typography variant="subtitle2" fontWeight={600}>
+                        <Typography variant="subtitle2" sx={{
+                            fontWeight: 600
+                        }}>
                             {action.label}
                         </Typography>
                         <Typography variant="body2">
@@ -293,7 +294,9 @@ export function WipeConfirmationDialog({
 
                     {/* Scope preview */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Target:
                         </Typography>
                         <Chip
@@ -335,7 +338,6 @@ export function WipeConfirmationDialog({
                     </Alert>
                 </Stack>
             </DialogContent>
-
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Button
                     onClick={onClose}

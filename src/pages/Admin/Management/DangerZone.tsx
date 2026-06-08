@@ -279,8 +279,12 @@ export default function DangerZonePage() {
     return (
         <AnimatedPage variant="fade">
             <Box>
-                <Box mb={4}>
-                    <Typography color="text.secondary">
+                <Box sx={{
+                    mb: 4
+                }}>
+                    <Typography sx={{
+                        color: 'text.secondary'
+                    }}>
                         These destructive actions permanently remove data. Use only in development or with extreme caution.
                         You can filter deletions by department or course to limit the scope.
                     </Typography>
@@ -304,11 +308,18 @@ export default function DangerZonePage() {
                                         <Box sx={{ color: 'warning.main' }}>
                                             {action.icon}
                                         </Box>
-                                        <Typography variant="h6" color="warning.main" fontWeight={600}>
+                                        <Typography
+                                            variant="h6"
+                                            sx={{
+                                                color: 'warning.main',
+                                                fontWeight: 600
+                                            }}>
                                             {action.label}
                                         </Typography>
                                     </Box>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {action.description}
                                     </Typography>
                                 </CardContent>
@@ -328,7 +339,6 @@ export default function DangerZonePage() {
                     ))}
                 </Grid>
             </Box>
-
             {/* Confirmation Dialog */}
             <WipeConfirmationDialog
                 open={dialogOpen}

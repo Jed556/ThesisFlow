@@ -32,7 +32,9 @@ export default function ChapterCard({ config, onClick }: ChapterCardProps) {
                 <CardContent>
                     <Stack spacing={1.5}>
                         <Box>
-                            <Typography variant="overline" color="text.secondary">
+                            <Typography variant="overline" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Department
                             </Typography>
                             <Typography variant="h6" noWrap>
@@ -41,7 +43,9 @@ export default function ChapterCard({ config, onClick }: ChapterCardProps) {
                         </Box>
 
                         <Box>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Course
                             </Typography>
                             <Typography variant="body1" noWrap>
@@ -50,7 +54,9 @@ export default function ChapterCard({ config, onClick }: ChapterCardProps) {
                         </Box>
 
                         <Box>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Required Chapters
                             </Typography>
                             <Typography variant="body1">
@@ -58,7 +64,9 @@ export default function ChapterCard({ config, onClick }: ChapterCardProps) {
                             </Typography>
                         </Box>
 
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={1} useFlexGap sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             {previewChapters.map((chapter) => (
                                 <Chip
                                     key={chapter.id}
@@ -95,7 +103,9 @@ export function ChapterCardSkeleton() {
                         <Skeleton variant="text" width="60%" height={28} />
                         <Skeleton variant="text" width="40%" />
                         <Skeleton variant="text" width="30%" />
-                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Stack direction="row" spacing={1} sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             <Skeleton variant="rectangular" width={80} height={28} />
                             <Skeleton variant="rectangular" width={100} height={28} />
                             <Skeleton variant="rectangular" width={60} height={28} />

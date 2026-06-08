@@ -78,7 +78,12 @@ export function RequirementDialog({
             <DialogTitle>
                 {dialogTitle}
                 {isAddMode && stageLabel && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            mt: 0.5
+                        }}>
                         This requirement will be added to the {stageLabel} stage.
                     </Typography>
                 )}
@@ -105,7 +110,9 @@ export function RequirementDialog({
                     />
                     {isAddMode && (
                         <>
-                            <Stack direction="row" alignItems="center" spacing={1}>
+                            <Stack direction="row" spacing={1} sx={{
+                                alignItems: 'center'
+                            }}>
                                 <Switch
                                     checked={required}
                                     onChange={(_, checked) => setRequired(checked)}

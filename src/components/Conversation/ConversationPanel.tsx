@@ -122,8 +122,15 @@ export default function ConversationPanel({
     const renderMessages = () => {
         if (sortedMessages.length === 0) {
             return (
-                <Stack alignItems="center" justifyContent="center" sx={{ py: 6 }}>
-                    <Typography variant="body2" color="text.secondary">
+                <Stack
+                    sx={{
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        py: 6
+                    }}>
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {emptyStateMessage}
                     </Typography>
                 </Stack>

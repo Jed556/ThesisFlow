@@ -343,21 +343,23 @@ export default function AdviserThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Monitor thesis activity, select a group, and leave feedback for each chapter version.
                 </Typography>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {noAssignments ? (
                 <Card>
                     <CardContent>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             No advisee selected. Assign yourself to a thesis to view its workspace.
                         </Typography>
                     </CardContent>

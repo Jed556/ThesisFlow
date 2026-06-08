@@ -55,7 +55,13 @@ function SettingsSection({ icon, title, description, children }: SettingsSection
     return (
         <Card variant="outlined" sx={{ mb: 3 }}>
             <CardContent>
-                <Stack direction="row" spacing={2} alignItems="flex-start" mb={2}>
+                <Stack
+                    direction="row"
+                    spacing={2}
+                    sx={{
+                        alignItems: 'flex-start',
+                        mb: 2
+                    }}>
                     <Box
                         sx={(theme) => ({
                             p: 1,
@@ -70,7 +76,9 @@ function SettingsSection({ icon, title, description, children }: SettingsSection
                         <Typography variant="h6" gutterBottom>
                             {title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {description}
                         </Typography>
                     </Box>
@@ -108,7 +116,9 @@ function SubmissionModeToggle({
 
     return (
         <Stack spacing={2}>
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{
+                alignItems: 'center'
+            }}>
                 <Chip
                     icon={<FileUploadIcon />}
                     label={fileLabel}
@@ -134,7 +144,9 @@ function SubmissionModeToggle({
                     sx={{ minWidth: 140 }}
                 />
             </Stack>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+                color: 'text.secondary'
+            }}>
                 {isLinkMode ? linkDescription : fileDescription}
             </Typography>
         </Stack>
@@ -150,7 +162,13 @@ function SettingsSkeleton() {
             {[1, 2, 3].map((i) => (
                 <Card key={i} variant="outlined">
                     <CardContent>
-                        <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+                        <Stack
+                            direction="row"
+                            spacing={2}
+                            sx={{
+                                alignItems: 'center',
+                                mb: 2
+                            }}>
                             <Skeleton variant="rounded" width={48} height={48} />
                             <Box sx={{ flex: 1 }}>
                                 <Skeleton variant="text" width="40%" height={32} />
@@ -331,18 +349,27 @@ export default function AdminSettingsPage() {
     return (
         <AnimatedPage>
             <Paper sx={{ p: 3, mb: 3 }}>
-                <Stack direction="row" spacing={2} alignItems="center" mb={1}>
+                <Stack
+                    direction="row"
+                    spacing={2}
+                    sx={{
+                        alignItems: 'center',
+                        mb: 1
+                    }}>
                     <SettingsIcon color="primary" />
-                    <Typography variant="h5" fontWeight={600}>
+                    <Typography variant="h5" sx={{
+                        fontWeight: 600
+                    }}>
                         System Settings
                     </Typography>
                 </Stack>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     Configure global application settings for submissions and chat features.
                     Changes are applied immediately across all users.
                 </Typography>
             </Paper>
-
             {loading ? (
                 <SettingsSkeleton />
             ) : (
@@ -481,13 +508,17 @@ export default function AdminSettingsPage() {
                                     />
                                 }
                                 label={
-                                    <Stack direction="row" spacing={1} alignItems="center">
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: 'center'
+                                    }}>
                                         <AttachmentIcon fontSize="small" />
                                         <Typography>Enable Chat Attachments</Typography>
                                     </Stack>
                                 }
                             />
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {currentSettings.chat.attachmentsEnabled
                                     ? 'Users can attach files in chat conversations. Files are stored in Firebase Storage.'
                                     : 'File attachments are disabled in chat. Users can only send text messages.'}
@@ -504,7 +535,9 @@ export default function AdminSettingsPage() {
 
                     {/* Last Updated Info */}
                     {settings?.updatedAt && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Last updated: {new Date(settings.updatedAt).toLocaleString()}
                             {settings.updatedBy && ` by ${settings.updatedBy}`}
                         </Typography>

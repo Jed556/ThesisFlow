@@ -224,7 +224,9 @@ export function SlotRequestDialog({
                             </Alert>
                         )}
 
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Your current maximum slot limit is{' '}
                             <strong>{effectiveMaxSlots}</strong>.
                             Specify the total number of slots you need (not additional).
@@ -234,7 +236,9 @@ export function SlotRequestDialog({
                             <Typography variant="subtitle2" gutterBottom>
                                 Current Max Slots
                             </Typography>
-                            <Typography variant="h5" color="text.secondary">
+                            <Typography variant="h5" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {effectiveMaxSlots}
                             </Typography>
                         </Box>
@@ -295,7 +299,9 @@ export function SlotRequestDialog({
                                     ) : undefined
                                 }
                             >
-                                <Typography variant="body2" fontWeight="medium">
+                                <Typography variant="body2" sx={{
+                                    fontWeight: 'medium'
+                                }}>
                                     Skill Rating Required
                                 </Typography>
                                 <Typography variant="body2">
@@ -304,7 +310,9 @@ export function SlotRequestDialog({
                                     requesting additional slots.
                                 </Typography>
                                 {skillValidation.unratedSkillNames.length > 0 && (
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Missing: {skillValidation.unratedSkillNames.slice(0, 3).join(', ')}
                                         {skillValidation.unratedSkillNames.length > 3 &&
                                             ` (+${skillValidation.unratedSkillNames.length - 3} more)`}

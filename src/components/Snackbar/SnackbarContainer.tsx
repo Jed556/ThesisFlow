@@ -311,7 +311,9 @@ function NotificationItem({
             {/* Main content container */}
             <Box sx={{ p: 2, pb: showProgress ? 2.5 : 2 }}>
                 {/* Header row: Icon + Title + Close */}
-                <Stack direction="row" alignItems="flex-start" spacing={1.5}>
+                <Stack direction="row" spacing={1.5} sx={{
+                    alignItems: 'flex-start'
+                }}>
                     {/* Icon container */}
                     <Box
                         sx={{
@@ -384,9 +386,10 @@ function NotificationItem({
                             <Stack
                                 direction="row"
                                 spacing={1}
-                                justifyContent={showCancel ? 'flex-end' : 'flex-start'}
-                                sx={{ mt: 1.5 }}
-                            >
+                                sx={{
+                                    justifyContent: showCancel ? 'flex-end' : 'flex-start',
+                                    mt: 1.5
+                                }}>
                                 {/* Regular action buttons */}
                                 {actions?.map((action, actionIndex) => (
                                     <ActionButton
@@ -440,7 +443,6 @@ function NotificationItem({
                     )}
                 </Stack>
             </Box>
-
             {/* Bottom progress bar - job progress for active jobs, timer for regular notifications */}
             {isActiveJob && typeof jobProgress === 'number' ? (
                 <JobProgressBar

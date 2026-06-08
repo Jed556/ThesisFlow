@@ -136,7 +136,9 @@ export default function MessageComposer({
                         <Typography variant="caption" sx={{ fontWeight: 600 }}>
                             {editingMessage ? 'Editing message' : `Replying to ${replyTo?.senderName ?? replyTo?.senderId}`}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" noWrap>
+                        <Typography variant="body2" noWrap sx={{
+                            color: 'text.secondary'
+                        }}>
                             {editingMessage?.content ?? replyTo?.content}
                         </Typography>
                     </Box>
@@ -155,7 +157,6 @@ export default function MessageComposer({
                     </IconButton>
                 </Paper>
             )}
-
             <OutlinedInput
                 fullWidth
                 value={message}
@@ -210,9 +211,14 @@ export default function MessageComposer({
                     </InputAdornment>
                 )}
             />
-
             {previews.length > 0 && (
-                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.5 }}>
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        flexWrap: 'wrap',
+                        mt: 1.5
+                    }}>
                     {previews.map((preview) => (
                         <Chip
                             key={preview.id}
@@ -222,7 +228,6 @@ export default function MessageComposer({
                     ))}
                 </Stack>
             )}
-
         </Box>
     );
 }

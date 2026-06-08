@@ -155,9 +155,10 @@ export function NewCalendarDialog({
                                                 </Typography>
                                                 <Typography
                                                     variant="caption"
-                                                    color="text.secondary"
-                                                    sx={{ display: 'block' }}
-                                                >
+                                                    sx={{
+                                                        color: 'text.secondary',
+                                                        display: 'block'
+                                                    }}>
                                                     {option.email}
                                                 </Typography>
                                             </Box>

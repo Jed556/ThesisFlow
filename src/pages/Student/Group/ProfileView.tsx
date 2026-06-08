@@ -131,7 +131,12 @@ export default function GroupMemberProfileViewPage() {
     );
 
     const renderErrorState = (message: string) => (
-        <Stack spacing={2} alignItems="flex-start" sx={{ p: 3 }}>
+        <Stack
+            spacing={2}
+            sx={{
+                alignItems: 'flex-start',
+                p: 3
+            }}>
             <Alert severity="error">{message}</Alert>
             <Button variant="contained" onClick={handleBackToGroup}>
                 Back to My Group

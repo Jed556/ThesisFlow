@@ -40,7 +40,12 @@ export interface StudentGroupCardProps {
 function renderEmptyState() {
     return (
         <Box sx={{ p: 0, mb: 0 }}>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+                variant="body1"
+                sx={{
+                    color: 'text.secondary',
+                    mb: 2
+                }}>
                 You are not part of any group yet. Create a new group or join an existing one.
             </Typography>
         </Box>
@@ -94,13 +99,17 @@ export default function StudentGroupCard({
                         width: '100%',
                     }}
                 >
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{
+                        alignItems: 'center'
+                    }}>
                         <Avatar uid={uid} size={48} tooltip="full" editable={false} />
                         <Box>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                                 {displayName}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {roleLabel}
                             </Typography>
                         </Box>
@@ -180,9 +189,17 @@ export default function StudentGroupCard({
 
     return (
         <Box sx={{ p: 0, mb: 0 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Stack
+                direction="row"
+                sx={{
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 2
+                }}>
                 <Box>
-                    <Typography variant="overline" color="text.secondary">
+                    <Typography variant="overline" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Thesis Group
                     </Typography>
                     <Typography variant="h5">{group.name}</Typography>
@@ -200,25 +217,25 @@ export default function StudentGroupCard({
                     {isLeader && <Chip label="LEADER" color="primary" size="small" />}
                 </Stack>
             </Stack>
-
             {group.description && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'text.secondary',
+                        mb: 2
+                    }}>
                     {group.description}
                 </Typography>
             )}
-
             {group.status === 'rejected' && group.rejectionReason && (
                 <Alert severity="error" sx={{ mb: 2 }}>
                     <strong>Rejection Reason:</strong> {group.rejectionReason}
                 </Alert>
             )}
-
             <Divider sx={{ my: 3 }} />
-
             {renderRoleSection('Researchers', researcherEntries)}
             {renderRoleSection('Experts', expertEntries)}
             {renderRoleSection('Panelists', panelEntries)}
-
             {isLeader && (
                 <>
                     {invites.length > 0 && (
@@ -241,7 +258,9 @@ export default function StudentGroupCard({
                             </Typography>
                             <Stack spacing={1} sx={{ mb: 2 }}>
                                 {requests.map((uid) => (
-                                    <Stack key={uid} direction="row" spacing={1} alignItems="center">
+                                    <Stack key={uid} direction="row" spacing={1} sx={{
+                                        alignItems: 'center'
+                                    }}>
                                         <Avatar
                                             uid={uid}
                                             initials={[Name.FIRST]}

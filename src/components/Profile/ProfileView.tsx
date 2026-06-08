@@ -161,7 +161,9 @@ export default function ProfileView({
         }
 
         return (
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{
+                alignItems: 'center'
+            }}>
                 {headerActions}
                 {primaryAction ? (
                     <Button
@@ -198,7 +200,6 @@ export default function ProfileView({
                     </Fab>
                 </Tooltip>
             ) : null}
-
             <Stack spacing={3}>
                 <Paper variant="outlined" sx={{ overflow: 'hidden', position: 'relative' }}>
                     <ProfileHeader
@@ -212,7 +213,9 @@ export default function ProfileView({
                         backButton={backAction}
                         showBackButton={Boolean(backAction) && !floatingBackButton}
                         metaChildren={(
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Stack direction="row" spacing={1} useFlexGap sx={{
+                                flexWrap: 'wrap'
+                            }}>
                                 <Chip label={roleLabel} color="primary" size="small" />
                                 {profile.department && (
                                     <Chip label={profile.department} variant="outlined" size="small" />
@@ -242,11 +245,20 @@ export default function ProfileView({
                                                         : ratingValue.toFixed(1);
                                                     return (
                                                         <Stack key={`${skill.name}-${ratingLabel}`} spacing={0.75}>
-                                                            <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                                                <Typography variant="body2" fontWeight={600}>
+                                                            <Stack
+                                                                direction="row"
+                                                                sx={{
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center'
+                                                                }}>
+                                                                <Typography variant="body2" sx={{
+                                                                    fontWeight: 600
+                                                                }}>
                                                                     {skill.name}
                                                                 </Typography>
-                                                                <Typography variant="caption" color="text.secondary">
+                                                                <Typography variant="caption" sx={{
+                                                                    color: 'text.secondary'
+                                                                }}>
                                                                     {ratingLabel}/10
                                                                 </Typography>
                                                             </Stack>
@@ -260,13 +272,17 @@ export default function ProfileView({
                                                 })}
                                             </Stack>
                                         ) : skills && skills.length > 0 ? (
-                                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                            <Stack direction="row" spacing={1} useFlexGap sx={{
+                                                flexWrap: 'wrap'
+                                            }}>
                                                 {skills.map((skill) => (
                                                     <Chip key={skill} label={skill} variant="outlined" color="primary" size="small" />
                                                 ))}
                                             </Stack>
                                         ) : (
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 No expertise data available yet.
                                             </Typography>
                                         )}
@@ -284,7 +300,9 @@ export default function ProfileView({
                                                 <ListItem key={`${item.text}-${idx}`} sx={{ p: 0 }}>
                                                     <ListItemText
                                                         primary={(
-                                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                            <Stack direction="row" spacing={1} sx={{
+                                                                alignItems: 'center'
+                                                            }}>
                                                                 {item.icon}
                                                                 {item.href ? (
                                                                     <Typography
@@ -347,16 +365,22 @@ export default function ProfileView({
                                                             </ListItemAvatar>
                                                             <ListItemText
                                                                 primary={(
-                                                                    <Typography variant="subtitle1" fontWeight={600}>
+                                                                    <Typography variant="subtitle1" sx={{
+                                                                        fontWeight: 600
+                                                                    }}>
                                                                         {title}
                                                                     </Typography>
                                                                 )}
                                                                 secondary={(
                                                                     <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                                                                        <Typography variant="body2" color="text.secondary">
+                                                                        <Typography variant="body2" sx={{
+                                                                            color: 'text.secondary'
+                                                                        }}>
                                                                             Status: {groupItem.status}
                                                                         </Typography>
-                                                                        <Typography variant="body2" color="text.secondary">
+                                                                        <Typography variant="body2" sx={{
+                                                                            color: 'text.secondary'
+                                                                        }}>
                                                                             Updated: {groupItem.updatedAt
                                                                                 ? new Date(groupItem.updatedAt).toLocaleDateString()
                                                                                 : 'TBD'}
@@ -369,7 +393,9 @@ export default function ProfileView({
                                                 })}
                                             </List>
                                         ) : (
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 {assignmentsEmptyMessage}
                                             </Typography>
                                         )}
@@ -397,7 +423,9 @@ export default function ProfileView({
                                                         key={`${entry.year}-${entry.title}`}
                                                         direction="row"
                                                         spacing={2}
-                                                        alignItems="flex-start"
+                                                        sx={{
+                                                            alignItems: 'flex-start'
+                                                        }}
                                                     >
                                                         <Box
                                                             sx={{
@@ -410,13 +438,19 @@ export default function ProfileView({
                                                             }}
                                                         />
                                                         <Box sx={{ flex: 1 }}>
-                                                            <Typography variant="caption" color="text.secondary">
+                                                            <Typography variant="caption" sx={{
+                                                                color: 'text.secondary'
+                                                            }}>
                                                                 {entry.year}
                                                             </Typography>
-                                                            <Typography variant="subtitle1" fontWeight={600}>
+                                                            <Typography variant="subtitle1" sx={{
+                                                                fontWeight: 600
+                                                            }}>
                                                                 {entry.title}
                                                             </Typography>
-                                                            <Typography variant="body2" color="text.secondary">
+                                                            <Typography variant="body2" sx={{
+                                                                color: 'text.secondary'
+                                                            }}>
                                                                 {entry.role} · {entry.outcome}
                                                             </Typography>
                                                         </Box>
@@ -424,7 +458,9 @@ export default function ProfileView({
                                                 ))}
                                             </Stack>
                                         ) : (
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 {timelineEmptyMessage}
                                             </Typography>
                                         )}

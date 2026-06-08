@@ -179,10 +179,14 @@ export function GroupFilter({
                 sx={combinedSx}
                 renderOption={(props, option) => (
                     <li {...props} key={option.id}>
-                        <Stack direction="row" alignItems="center" spacing={1}>
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: 'center'
+                        }}>
                             <span>{formatGroupLabel(option)}</span>
                             {showDepartment && option.department && (
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     ({option.department})
                                 </Typography>
                             )}
@@ -239,9 +243,10 @@ export function GroupFilter({
                             {showDepartment && group.department && (
                                 <Typography
                                     variant="caption"
-                                    color="text.secondary"
-                                    sx={{ ml: 1 }}
-                                >
+                                    sx={{
+                                        color: 'text.secondary',
+                                        ml: 1
+                                    }}>
                                     ({group.department})
                                 </Typography>
                             )}

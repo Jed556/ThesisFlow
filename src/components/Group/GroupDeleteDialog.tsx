@@ -51,7 +51,9 @@ export default function GroupDeleteDialog({
                     <Typography>
                         This action cannot be undone. To confirm, type the group name below:
                     </Typography>
-                    <Typography variant="subtitle1" color="text.primary">
+                    <Typography variant="subtitle1" sx={{
+                        color: 'text.primary'
+                    }}>
                         {normalizedGroupName || 'Unnamed group'}
                     </Typography>
                     <TextField

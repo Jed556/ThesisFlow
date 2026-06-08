@@ -40,10 +40,14 @@ export const UnsupportedViewer: React.FC<UnsupportedViewerProps> = ({ file, onDo
                 textAlign: 'center',
             }}
         >
-            <Typography variant="h6" color="text.secondary">
+            <Typography variant="h6" sx={{
+                color: 'text.secondary'
+            }}>
                 Preview not available
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+                color: 'text.secondary'
+            }}>
                 This file type cannot be previewed in the browser.
             </Typography>
             <IconButton
@@ -53,7 +57,9 @@ export const UnsupportedViewer: React.FC<UnsupportedViewerProps> = ({ file, onDo
             >
                 <DownloadIcon />
             </IconButton>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+                color: 'text.secondary'
+            }}>
                 Click to download {file.name}
             </Typography>
         </Box>

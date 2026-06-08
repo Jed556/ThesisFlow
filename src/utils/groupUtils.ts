@@ -118,7 +118,7 @@ export async function generateNextGroupId(
     const abbreviation = getCourseAbbreviation(course);
 
     // Get existing groups if not provided
-    const groups = existingGroups ?? await getGroupsByCourse(course);
+    const groups = existingGroups ?? (await getGroupsByCourse(course));
 
     // Find the highest existing number for this abbreviation pattern
     // Check both group.id and group.name for backward compatibility

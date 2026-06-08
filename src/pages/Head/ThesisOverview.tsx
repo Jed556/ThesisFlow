@@ -297,21 +297,23 @@ export default function HeadThesisOverviewPage() {
                 <Typography variant="h4" gutterBottom>
                     Department workspace
                 </Typography>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Review thesis progress across your courses. Select a course and group to drill into versioned feedback.
                 </Typography>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {noDepartments ? (
                 <Card>
                     <CardContent>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             No department assignments detected for your profile yet.
                         </Typography>
                     </CardContent>

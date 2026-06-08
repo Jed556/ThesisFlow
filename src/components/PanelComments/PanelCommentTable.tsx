@@ -316,16 +316,22 @@ export function PanelCommentTable({
                 const busy = busyEntryIds?.has(entry.id);
                 return (
                     <Stack spacing={0.25}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Panel · {formatTimestamp(entry.updatedAt ?? entry.createdAt)}
                         </Typography>
                         {showStudentColumns && entry.studentUpdatedAt && (
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Student · {formatTimestamp(entry.studentUpdatedAt)}
                             </Typography>
                         )}
                         {busy && (
-                            <Typography variant="caption" color="primary.main">Saving…</Typography>
+                            <Typography variant="caption" sx={{
+                                color: 'primary.main'
+                            }}>Saving…</Typography>
                         )}
                     </Stack>
                 );
@@ -420,11 +426,17 @@ export function PanelCommentTable({
             {/* Header with title and add button */}
             <Stack
                 direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}
-            >
-                <Stack direction="row" spacing={1} alignItems="center">
+                sx={{
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    px: 2,
+                    py: 1.5,
+                    borderBottom: 1,
+                    borderColor: 'divider'
+                }}>
+                <Stack direction="row" spacing={1} sx={{
+                    alignItems: 'center'
+                }}>
                     <Typography variant="h6">{title}</Typography>
                     {variant === 'panel' && released && (
                         <Chip label="Released" color="success" size="small" />
@@ -442,7 +454,6 @@ export function PanelCommentTable({
                     </Button>
                 )}
             </Stack>
-
             {/* DataGrid */}
             <Box sx={{ width: '100%' }}>
                 {!loading && entries.length === 0 ? (

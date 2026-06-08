@@ -178,7 +178,9 @@ export default function FileCard({
     const hasInlineChips = Boolean(statusChip) || Boolean(versionChip) || Boolean(draftChip);
 
     const content = (
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} sx={{
+            alignItems: 'center'
+        }}>
             <Avatar
                 variant="rounded"
                 sx={{
@@ -191,10 +193,22 @@ export default function FileCard({
                 {iconNode}
             </Avatar>
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        alignItems: 'center',
+                        flexWrap: 'wrap'
+                    }}>
                     <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0 }}>{effectiveTitle}</Typography>
                     {hasInlineChips && (
-                        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                        <Stack
+                            direction="row"
+                            spacing={0.5}
+                            sx={{
+                                alignItems: 'center',
+                                flexWrap: 'wrap'
+                            }}>
                             {versionChip}
                             {draftChip}
                             {statusChip}
@@ -202,17 +216,23 @@ export default function FileCard({
                     )}
                 </Stack>
                 {sizeLabel && (
-                    <Typography variant="body2" color="text.secondary" noWrap>
+                    <Typography variant="body2" noWrap sx={{
+                        color: 'text.secondary'
+                    }}>
                         {sizeLabel}
                     </Typography>
                 )}
                 {metaLabel && (
-                    <Typography variant="caption" color="text.secondary" noWrap>
+                    <Typography variant="caption" noWrap sx={{
+                        color: 'text.secondary'
+                    }}>
                         {metaLabel}
                     </Typography>
                 )}
             </Box>
-            <Stack direction="row" spacing={0.5} alignItems="center">
+            <Stack direction="row" spacing={0.5} sx={{
+                alignItems: 'center'
+            }}>
                 {showDownloadButton && (
                     <Tooltip title={downloadDisabled ? 'Download not available' : 'Download file'}>
                         <span>
