@@ -278,7 +278,9 @@ export default function ExpertGroupsPage() {
                     ))}
                 </Stack>
             ) : pendingRequests.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     No pending group requests at the moment.
                 </Typography>
             ) : (
@@ -335,7 +337,9 @@ export default function ExpertGroupsPage() {
                     ))}
                 </Stack>
             ) : groups.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     No groups assigned yet. Approved groups will appear here.
                 </Typography>
             ) : (
@@ -346,14 +350,17 @@ export default function ExpertGroupsPage() {
                                 <Stack
                                     direction={{ xs: 'column', sm: 'row' }}
                                     spacing={2}
-                                    justifyContent="space-between"
-                                    alignItems={{ sm: 'center' }}
-                                >
+                                    sx={{
+                                        justifyContent: 'space-between',
+                                        alignItems: { sm: 'center' }
+                                    }}>
                                     <Box>
                                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                                             {group.name}
                                         </Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             {formatMemberList(group)}
                                         </Typography>
                                     </Box>
@@ -392,20 +399,22 @@ export default function ExpertGroupsPage() {
                     {error}
                 </Alert>
             )}
-
             <Box sx={{ mb: 3 }}>
                 {/* <Typography variant="h4" gutterBottom>
                     
                 </Typography> */}
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Review incoming requests and keep your workload balanced.
                 </Typography>
             </Box>
-
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
                 <Card sx={{ flex: 1 }}>
                     <CardContent>
-                        <Typography variant="subtitle2" color="text.secondary">
+                        <Typography variant="subtitle2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Active groups
                         </Typography>
                         <Typography variant="h5">{activeAssignments}</Typography>
@@ -413,7 +422,9 @@ export default function ExpertGroupsPage() {
                 </Card>
                 <Card sx={{ flex: 1 }}>
                     <CardContent>
-                        <Typography variant="subtitle2" color="text.secondary">
+                        <Typography variant="subtitle2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Pending requests
                         </Typography>
                         <Typography variant="h5">{pendingRequests.length}</Typography>
@@ -421,9 +432,17 @@ export default function ExpertGroupsPage() {
                 </Card>
                 <Card sx={{ flex: 1 }}>
                     <CardContent>
-                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start'
+                            }}>
                             <Box>
-                                <Typography variant="subtitle2" color="text.secondary">
+                                <Typography variant="subtitle2" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Slots (Max: {maxSlotsValue})
                                 </Typography>
                                 {!editingLimit ? (
@@ -433,7 +452,13 @@ export default function ExpertGroupsPage() {
                                         </Typography>
                                     </>
                                 ) : (
-                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} mt={1} alignItems={{ sm: 'center' }}>
+                                    <Stack
+                                        direction={{ xs: 'column', sm: 'row' }}
+                                        spacing={1}
+                                        sx={{
+                                            alignItems: { sm: 'center' },
+                                            mt: 1
+                                        }}>
                                         <TextField
                                             type="number"
                                             size="small"
@@ -501,7 +526,6 @@ export default function ExpertGroupsPage() {
                     </CardContent>
                 </Card>
             </Stack>
-
             {renderRequests()}
             {renderHandledGroups()}
         </AnimatedPage>

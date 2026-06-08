@@ -378,21 +378,23 @@ export default function StatisticianThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Review quantitative notes, select a group, and annotate each submission version.
                 </Typography>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {noAssignments ? (
                 <Card>
                     <CardContent>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             No statistician assignments found. Once assigned to a thesis, it will appear here.
                         </Typography>
                     </CardContent>

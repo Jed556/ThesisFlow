@@ -480,17 +480,17 @@ export default function StudentThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Stack spacing={2} sx={{ mb: 3 }}>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Upload new chapter versions and review expert feedback organized per submission.
                 </Typography>
             </Stack>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {isLoading ? (
                 <Stack spacing={2}>
                     <Skeleton variant="text" width="50%" height={32} />

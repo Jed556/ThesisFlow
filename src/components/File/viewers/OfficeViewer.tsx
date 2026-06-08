@@ -53,9 +53,13 @@ export const OfficeViewer: React.FC<OfficeViewerProps> = ({ url, height = '100%'
                         zIndex: 1,
                     }}
                 >
-                    <Stack spacing={2} alignItems="center">
+                    <Stack spacing={2} sx={{
+                        alignItems: 'center'
+                    }}>
                         <CircularProgress />
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Loading document...
                         </Typography>
                     </Stack>

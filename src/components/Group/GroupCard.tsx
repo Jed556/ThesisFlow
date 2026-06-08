@@ -60,7 +60,13 @@ export default function GroupCard({ group, thesis, usersByUid, onClick, footer, 
             >
                 <CardContent>
                     <Stack spacing={1.5}>
-                        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
                             <Typography variant="h6" sx={{ pr: 1 }} noWrap>
                                 {group.name}
                             </Typography>
@@ -72,34 +78,48 @@ export default function GroupCard({ group, thesis, usersByUid, onClick, footer, 
                             />
                         </Stack>
 
-                        <Typography variant="body2" color="text.secondary" noWrap>
+                        <Typography variant="body2" noWrap sx={{
+                            color: 'text.secondary'
+                        }}>
                             {thesis?.title || 'No thesis title yet'}
                         </Typography>
 
-                        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={2} useFlexGap sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             <Box>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Department
                                 </Typography>
                                 <Typography variant="body2">{group.department || '—'}</Typography>
                             </Box>
                             <Box>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Course
                                 </Typography>
                                 <Typography variant="body2">{group.course || '—'}</Typography>
                             </Box>
                         </Stack>
 
-                        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={2} useFlexGap sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             <Box>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Leader
                                 </Typography>
                                 <Typography variant="body2">{getUserDisplayName(leaderProfile)}</Typography>
                             </Box>
                             <Box>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Members
                                 </Typography>
                                 <Typography variant="body2">{memberCount}</Typography>
@@ -134,14 +154,22 @@ export function GroupCardSkeleton() {
             <CardActionArea sx={{ flexGrow: 1 }}>
                 <CardContent>
                     <Stack spacing={1.5}>
-                        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
                             <Skeleton variant="text" width="60%" />
                             <Skeleton variant="rectangular" width={56} height={20} />
                         </Stack>
 
                         <Skeleton variant="text" width="80%" />
 
-                        <Stack direction="row" spacing={2} flexWrap="wrap">
+                        <Stack direction="row" spacing={2} sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             <Stack>
                                 <Skeleton variant="text" width={100} />
                                 <Skeleton variant="text" width={80} />

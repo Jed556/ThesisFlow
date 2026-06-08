@@ -26,7 +26,9 @@ export default function NotFoundPage() {
                     <Typography variant="h4" component="h2" gutterBottom>
                         Page Not Found
                     </Typography>
-                    <Typography variant="body1" color="text.secondary" component={'p'}>
+                    <Typography variant="body1" component={'p'} sx={{
+                        color: 'text.secondary'
+                    }}>
                         Oops! The page you're looking for doesn't exist. It might have been moved, deleted, or you entered the wrong URL.
                     </Typography>
                 </Box>
@@ -57,7 +59,9 @@ export default function NotFoundPage() {
                 </Box>
 
                 <Box sx={{ mt: 4 }}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         If you think this is a mistake, please contact support.
                     </Typography>
                 </Box>

@@ -439,8 +439,12 @@ export default function ExpertProfileViewPage() {
                         { label: 'Open Slots', value: openSlotsDisplay },
                         { label: 'Compatibility', value: compatibility != null ? `${compatibility}%` : '—' },
                     ].map((stat) => (
-                        <Stack key={stat.label} spacing={0.5} minWidth={140}>
-                            <Typography variant="caption" color="text.secondary">
+                        <Stack key={stat.label} spacing={0.5} sx={{
+                            minWidth: 140
+                        }}>
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {stat.label}
                             </Typography>
                             <Typography variant="h6">{stat.value}</Typography>
@@ -454,7 +458,13 @@ export default function ExpertProfileViewPage() {
     const handledGroupsCard = profile ? (
         <Card variant="outlined">
             <CardContent>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                <Stack
+                    direction="row"
+                    sx={{
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        mb: 2
+                    }}>
                     <Typography variant="h6">Handled groups</Typography>
                     <Chip label={`${groups.length} total`} size="small" />
                 </Stack>
@@ -465,7 +475,9 @@ export default function ExpertProfileViewPage() {
                         ))}
                     </Stack>
                 ) : sortedGroups.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         No groups are currently assigned to this {roleLabel.toLowerCase()}.
                     </Typography>
                 ) : (
@@ -581,7 +593,9 @@ export default function ExpertProfileViewPage() {
     if (error || !profile || !expertRole) {
         return (
             <AnimatedPage variant="fade">
-                <Stack spacing={2} alignItems="flex-start">
+                <Stack spacing={2} sx={{
+                    alignItems: 'flex-start'
+                }}>
                     <Alert severity="warning" sx={{ maxWidth: 480 }}>
                         {error || 'Expert profile not available.'}
                     </Alert>
@@ -614,7 +628,6 @@ export default function ExpertProfileViewPage() {
                     </Stack>
                 )}
             />
-
             <Dialog
                 open={requestDialogOpen}
                 onClose={handleCloseRequestDialog}
@@ -648,7 +661,9 @@ export default function ExpertProfileViewPage() {
                                         control={<Radio />}
                                         label={(<Stack spacing={0.25}>
                                             <Typography variant="subtitle2">{group.name}</Typography>
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 {(group.course ?? 'Course TBD')} · {group.status.toUpperCase()}
                                             </Typography>
                                         </Stack>)}

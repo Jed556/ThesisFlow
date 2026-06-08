@@ -92,9 +92,10 @@ export default function ProfileHeader({
                 onBannerChange={onBannerChange}
                 uploading={bannerUploading}
             />
-
             <Box sx={{ p: { xs: 2, md: 3 }, position: 'relative' }}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={stackAlign}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{
+                    alignItems: stackAlign
+                }}>
                     <Avatar
                         uid={profile.uid}
                         size={avatarSize}
@@ -112,16 +113,22 @@ export default function ProfileHeader({
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         {showMeta && (
                             <Stack spacing={0.5}>
-                                <Typography variant="h4" component="h1" fontWeight={700} noWrap>
+                                <Typography variant="h4" component="h1" noWrap sx={{
+                                    fontWeight: 700
+                                }}>
                                     {displayName}
                                 </Typography>
                                 {profile.email && (
-                                    <Typography variant="body1" color="text.secondary" noWrap>
+                                    <Typography variant="body1" noWrap sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {profile.email}
                                     </Typography>
                                 )}
                                 {headerCaption && (
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {headerCaption}
                                     </Typography>
                                 )}

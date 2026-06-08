@@ -754,7 +754,9 @@ export default function StudentPanelCommentsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Track every remark from your proposal and defense hearings, then document the page and status once addressed.
                     </Typography>
                 </Box>
@@ -765,10 +767,14 @@ export default function StudentPanelCommentsPage() {
                 {stageAccessible && (
                     <Paper variant="outlined" sx={{ p: 2 }}>
                         <Stack spacing={2}>
-                            <Typography variant="subtitle1" fontWeight="medium">
+                            <Typography variant="subtitle1" sx={{
+                                fontWeight: 'medium'
+                            }}>
                                 Manuscript for Panel Review
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {isLinkMode
                                     ? 'Provide a link to your manuscript (Google Docs, Drive, etc.) for the panel to review.'
                                     : 'Upload your revised manuscript for the panel to review. You must upload a file before requesting a review.'
@@ -779,7 +785,7 @@ export default function StudentPanelCommentsPage() {
                                 <Skeleton variant="rectangular" height={56} />
                             ) : isLinkMode ? (
                                 /* Link Mode UI */
-                                <Stack spacing={2}>
+                                (<Stack spacing={2}>
                                     <TextField
                                         label="Manuscript Link"
                                         placeholder={systemSettings?.panelComments?.linkPlaceholder
@@ -796,15 +802,19 @@ export default function StudentPanelCommentsPage() {
                                             : 'Paste a link to your Google Docs, Drive, or other document.'
                                         }
                                     />
-
                                     {/* Show revision required alert */}
                                     {hasRevisionRequired && manuscript?.reviewRequested && (
                                         <Alert severity="warning">
                                             The panel has requested revisions. You may update your link and request another review.
                                         </Alert>
                                     )}
-
-                                    <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                                    <Stack
+                                        direction="row"
+                                        spacing={2}
+                                        sx={{
+                                            alignItems: 'center',
+                                            flexWrap: 'wrap'
+                                        }}>
                                         {/* Save link button - show when link changed or no manuscript */}
                                         {(!manuscript || manuscript.link !== linkInput.trim() ||
                                             (hasRevisionRequired && manuscript.reviewRequested)) && (
@@ -844,16 +854,18 @@ export default function StudentPanelCommentsPage() {
                                         )}
 
                                         {manuscript?.reviewRequested && !hasRevisionRequired && (
-                                            <Typography variant="body2" color="success.main">
+                                            <Typography variant="body2" sx={{
+                                                color: 'success.main'
+                                            }}>
                                                 ✓ Review requested on{' '}
                                                 {new Date(manuscript.reviewRequestedAt || '').toLocaleDateString()}
                                             </Typography>
                                         )}
                                     </Stack>
-                                </Stack>
+                                </Stack>)
                             ) : manuscript ? (
                                 /* File Mode - Has existing manuscript */
-                                <Stack spacing={2}>
+                                (<Stack spacing={2}>
                                     <FileCard
                                         file={{
                                             name: manuscript.fileName ?? 'Manuscript',
@@ -878,7 +890,6 @@ export default function StudentPanelCommentsPage() {
                                         showDeleteButton={!manuscript.reviewRequested || hasRevisionRequired}
                                         disabled={uploadingManuscript}
                                     />
-
                                     {/* Show revision required alert */}
                                     {hasRevisionRequired && manuscript.reviewRequested && (
                                         <Alert severity="warning">
@@ -886,8 +897,9 @@ export default function StudentPanelCommentsPage() {
                                             manuscript and request another review.
                                         </Alert>
                                     )}
-
-                                    <Stack direction="row" spacing={2} alignItems="center">
+                                    <Stack direction="row" spacing={2} sx={{
+                                        alignItems: 'center'
+                                    }}>
                                         {/* Allow re-uploading when revision is required */}
                                         {hasRevisionRequired && manuscript.reviewRequested && (
                                             <>
@@ -927,16 +939,20 @@ export default function StudentPanelCommentsPage() {
                                                     : 'Request Panel Review'}
                                         </Button>
                                         {manuscript.reviewRequested && !hasRevisionRequired && (
-                                            <Typography variant="body2" color="success.main">
+                                            <Typography variant="body2" sx={{
+                                                color: 'success.main'
+                                            }}>
                                                 ✓ Review requested on{' '}
                                                 {new Date(manuscript.reviewRequestedAt || '').toLocaleDateString()}
                                             </Typography>
                                         )}
                                     </Stack>
-                                </Stack>
+                                </Stack>)
                             ) : (
                                 /* File Mode - No manuscript yet */
-                                <Stack direction="row" spacing={2} alignItems="center">
+                                (<Stack direction="row" spacing={2} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -953,17 +969,21 @@ export default function StudentPanelCommentsPage() {
                                     >
                                         {uploadingManuscript ? 'Uploading...' : 'Upload Manuscript'}
                                     </Button>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         PDF or DOCX, max 50MB
                                     </Typography>
-                                </Stack>
+                                </Stack>)
                             )}
                         </Stack>
                     </Paper>
                 )}
 
                 <Stack spacing={1.5}>
-                    <Typography variant="subtitle2" color="text.secondary">
+                    <Typography variant="subtitle2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Panel sheets
                     </Typography>
                     {panelistsLoading ? (
@@ -1023,7 +1043,6 @@ export default function StudentPanelCommentsPage() {
                     </Stack>
                 )}
             </Stack>
-
             {/* File Viewer Dialog - Only show for file type manuscripts */}
             {manuscript?.type !== 'link' && (
                 <Dialog

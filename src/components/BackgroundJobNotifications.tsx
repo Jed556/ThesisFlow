@@ -156,14 +156,18 @@ function JobNotification({ job, onDismiss, show }: JobNotificationProps) {
                             value={job.progress}
                             sx={{ mt: 1, mb: 0.5 }}
                         />
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {`${job.progress}%${progressMessage ? ` - ${progressMessage}` : ''}`}
                         </Typography>
                     </>
                 )}
 
                 {job.status === 'completed' && completedMessage !== '' && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {completedMessage}
                     </Typography>
                 )}

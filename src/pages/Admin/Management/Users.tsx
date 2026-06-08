@@ -136,7 +136,9 @@ export default function AdminUsersPage() {
                     <Typography variant="h5" component="h1">
                         Loading user management
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Please wait while we confirm your access level.
                     </Typography>
                 </Box>
@@ -1051,7 +1053,9 @@ export default function AdminUsersPage() {
                                         onChange={handleAvatarChange}
                                     />
                                 </Button>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     Recommended: Square image, max 10MB
                                 </Typography>
                             </Box>
@@ -1180,7 +1184,9 @@ export default function AdminUsersPage() {
                                     sx={{ mt: 2 }}
                                 >
                                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                        <Stack direction="row" spacing={1} alignItems="center">
+                                        <Stack direction="row" spacing={1} sx={{
+                                            alignItems: 'center'
+                                        }}>
                                             <SkillIcon color="primary" fontSize="small" />
                                             <Typography>
                                                 Skill Ratings
@@ -1203,13 +1209,17 @@ export default function AdminUsersPage() {
                                                 ))}
                                             </Stack>
                                         ) : departmentSkills.length === 0 ? (
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 No skills defined for this department. Skills can be configured in the
                                                 Skills Management page.
                                             </Typography>
                                         ) : (
                                             <Stack spacing={2}>
-                                                <Typography variant="body2" color="text.secondary">
+                                                <Typography variant="body2" sx={{
+                                                    color: 'text.secondary'
+                                                }}>
                                                     Rate expertise level for each skill. Experts must rate all skills
                                                     before requesting thesis slots.
                                                 </Typography>
@@ -1222,24 +1232,31 @@ export default function AdminUsersPage() {
                                                         <Box key={skill.id}>
                                                             <Stack
                                                                 direction="row"
-                                                                justifyContent="space-between"
-                                                                alignItems="center"
                                                                 spacing={2}
-                                                            >
+                                                                sx={{
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center'
+                                                                }}>
                                                                 <Box sx={{ flex: 1 }}>
-                                                                    <Typography variant="body2" fontWeight="medium">
+                                                                    <Typography variant="body2" sx={{
+                                                                        fontWeight: 'medium'
+                                                                    }}>
                                                                         {skill.name}
                                                                     </Typography>
                                                                     {skill.description && (
                                                                         <Typography
                                                                             variant="caption"
-                                                                            color="text.secondary"
+                                                                            sx={{
+                                                                                color: 'text.secondary'
+                                                                            }}
                                                                         >
                                                                             {skill.description}
                                                                         </Typography>
                                                                     )}
                                                                 </Box>
-                                                                <Stack alignItems="center" spacing={0.5}>
+                                                                <Stack spacing={0.5} sx={{
+                                                                    alignItems: 'center'
+                                                                }}>
                                                                     <Rating
                                                                         value={currentRating?.rating ?? 0}
                                                                         onChange={(_, value) =>
@@ -1252,7 +1269,9 @@ export default function AdminUsersPage() {
                                                                         max={5}
                                                                         size="small"
                                                                     />
-                                                                    <Typography variant="caption" color="text.secondary">
+                                                                    <Typography variant="caption" sx={{
+                                                                        color: 'text.secondary'
+                                                                    }}>
                                                                         {SKILL_RATING_LABELS[currentRating?.rating ?? 0]}
                                                                     </Typography>
                                                                 </Stack>

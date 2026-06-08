@@ -89,7 +89,14 @@ function RecentAuditsSkeleton({
         <List disablePadding>
             {Array.from({ length: count }).map((_, index) => (
                 <ListItem key={index} disablePadding sx={{ py: 0.5 }}>
-                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%', px: 1 }}>
+                    <Stack
+                        direction="row"
+                        spacing={1.5}
+                        sx={{
+                            alignItems: 'center',
+                            width: '100%',
+                            px: 1
+                        }}>
                         {showAvatars && (
                             <Skeleton variant="circular" width={32} height={32} />
                         )}
@@ -122,7 +129,9 @@ function RecentAuditsEmpty({ message }: { message: string }): React.ReactElement
             <NotificationsIcon
                 sx={{ fontSize: 40, color: 'action.disabled', mb: 1 }}
             />
-            <Typography variant="body2" color="text.secondary" align="center">
+            <Typography variant="body2" align="center" sx={{
+                color: 'text.secondary'
+            }}>
                 {message}
             </Typography>
         </Box>
@@ -219,11 +228,14 @@ export function RecentAudits({
             {/* Header */}
             <Stack
                 direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ mb: 1.5 }}
-            >
-                <Stack direction="row" alignItems="center" spacing={1}>
+                sx={{
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 1.5
+                }}>
+                <Stack direction="row" spacing={1} sx={{
+                    alignItems: 'center'
+                }}>
                     <NotificationsIcon color="primary" fontSize="small" />
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {title}
@@ -238,7 +250,6 @@ export function RecentAudits({
                     </Button>
                 )}
             </Stack>
-
             {/* Content */}
             {loading ? (
                 <RecentAuditsSkeleton count={maxItems} showAvatars={showAvatars} />
@@ -282,10 +293,11 @@ export function RecentAudits({
                                     primary={
                                         <Stack
                                             direction="row"
-                                            alignItems="center"
                                             spacing={1}
-                                            sx={{ flexWrap: 'wrap' }}
-                                        >
+                                            sx={{
+                                                alignItems: 'center',
+                                                flexWrap: 'wrap'
+                                            }}>
                                             <Typography
                                                 variant="body2"
                                                 sx={{
@@ -323,27 +335,31 @@ export function RecentAudits({
                                     secondary={
                                         <Stack
                                             direction="row"
-                                            alignItems="center"
                                             spacing={0.5}
-                                            sx={{ mt: 0.25 }}
-                                        >
+                                            sx={{
+                                                alignItems: 'center',
+                                                mt: 0.25
+                                            }}>
                                             <Typography
                                                 variant="caption"
-                                                color="text.secondary"
                                                 sx={{
+                                                    color: 'text.secondary',
                                                     overflow: 'hidden',
                                                     textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap',
-                                                }}
-                                            >
+                                                    whiteSpace: 'nowrap'
+                                                }}>
                                                 {getUserDisplayName(audit.userId, userProfiles)}
                                             </Typography>
-                                            <Typography variant="caption" color="text.disabled">
+                                            <Typography variant="caption" sx={{
+                                                color: 'text.disabled'
+                                            }}>
                                                 •
                                             </Typography>
                                             <Typography
                                                 variant="caption"
-                                                color="text.disabled"
+                                                sx={{
+                                                    color: 'text.disabled'
+                                                }}
                                             >
                                                 {formatRelativeTime(audit.timestamp)}
                                             </Typography>

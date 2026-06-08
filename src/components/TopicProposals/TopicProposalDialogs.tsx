@@ -325,7 +325,9 @@ export function TopicProposalApprovalDialog(props: TopicProposalApprovalDialogPr
             <DialogContent>
                 <Stack spacing={3} sx={{ mt: 1 }}>
                     <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        <Typography variant="subtitle2" gutterBottom sx={{
+                            color: 'text.secondary'
+                        }}>
                             Topic Title
                         </Typography>
                         {proposal.title ? (
@@ -335,14 +337,17 @@ export function TopicProposalApprovalDialog(props: TopicProposalApprovalDialogPr
                         )}
                         <Typography
                             variant="subtitle2"
-                            color="text.secondary"
-                            sx={{ mt: 1 }}
                             gutterBottom
-                        >
+                            sx={{
+                                color: 'text.secondary',
+                                mt: 1
+                            }}>
                             Description
                         </Typography>
                         {proposal.description ? (
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {proposal.description}
                             </Typography>
                         ) : (
@@ -350,11 +355,15 @@ export function TopicProposalApprovalDialog(props: TopicProposalApprovalDialogPr
                         )}
                     </Box>
 
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {getDescriptionText()}
                     </Typography>
 
-                    <Typography variant="subtitle1" fontWeight="medium">
+                    <Typography variant="subtitle1" sx={{
+                        fontWeight: 'medium'
+                    }}>
                         Research Agenda Classification
                     </Typography>
 
@@ -400,7 +409,9 @@ export function TopicProposalApprovalDialog(props: TopicProposalApprovalDialogPr
                         <>{renderAgendaSelectors()}</>
                     )}
 
-                    <Typography variant="subtitle1" fontWeight="medium">
+                    <Typography variant="subtitle1" sx={{
+                        fontWeight: 'medium'
+                    }}>
                         Sustainability Classification
                     </Typography>
 
@@ -569,11 +580,21 @@ export function TopicProposalDecisionDialog({
             </DialogTitle>
             <DialogContent>
                 {proposalTitle && (
-                    <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            fontWeight: 'medium',
+                            mb: 1
+                        }}>
                         Topic: {proposalTitle}
                     </Typography>
                 )}
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'text.secondary',
+                        mb: 2
+                    }}>
                     {isApproval
                         ? 'Provide feedback and guidance for the student group.'
                         : 'Explain why this topic is being rejected to help the group improve.'}

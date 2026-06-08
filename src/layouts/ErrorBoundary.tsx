@@ -34,7 +34,9 @@ export default function ErrorBoundary() {
                     <Typography variant="h3" component="h1" gutterBottom color="error">
                         Oops! Something went wrong
                     </Typography>
-                    <Typography variant="h5" component="h2" gutterBottom color="text.secondary">
+                    <Typography variant="h5" component="h2" gutterBottom sx={{
+                        color: 'text.secondary'
+                    }}>
                         {errorStatus}
                     </Typography>
                 </Box>
@@ -43,7 +45,15 @@ export default function ErrorBoundary() {
                     <Typography variant="body1" paragraph>
                         We're sorry for the inconvenience. The page you're looking for might not exist or there was an unexpected error.
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', bgcolor: 'background.paper', p: 2, borderRadius: 1 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            fontFamily: 'monospace',
+                            bgcolor: 'background.paper',
+                            p: 2,
+                            borderRadius: 1
+                        }}>
                         {errorMessage}
                     </Typography>
                 </Box>
@@ -70,7 +80,9 @@ export default function ErrorBoundary() {
                 </Box>
 
                 <Box sx={{ mt: 4 }}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         If this problem persists, please contact support.
                     </Typography>
                 </Box>

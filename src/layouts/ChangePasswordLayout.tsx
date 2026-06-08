@@ -211,7 +211,9 @@ export default function ChangePasswordLayout({
                     }}
                 >
                     <CardContent sx={{ p: 4 }}>
-                        <Stack spacing={3} alignItems="center">
+                        <Stack spacing={3} sx={{
+                            alignItems: 'center'
+                        }}>
                             {/* Logo */}
                             <Box sx={{ mb: 1 }}>
                                 <BrandingLogo sx={{ width: 48, height: 48 }} />
@@ -232,11 +234,20 @@ export default function ChangePasswordLayout({
                             </Box>
 
                             {/* Title and Description */}
-                            <Stack spacing={1} alignItems="center" textAlign="center">
-                                <Typography variant="h5" fontWeight="bold">
+                            <Stack
+                                spacing={1}
+                                sx={{
+                                    alignItems: 'center',
+                                    textAlign: 'center'
+                                }}>
+                                <Typography variant="h5" sx={{
+                                    fontWeight: 'bold'
+                                }}>
                                     {title}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: 'text.secondary'
+                                }}>
                                     {description}
                                 </Typography>
                             </Stack>
@@ -317,9 +328,11 @@ export default function ChangePasswordLayout({
                                     <Box sx={{ pl: 1 }}>
                                         <Typography
                                             variant="caption"
-                                            color="text.secondary"
-                                            sx={{ mb: 0.5, display: 'block' }}
-                                        >
+                                            sx={{
+                                                color: 'text.secondary',
+                                                mb: 0.5,
+                                                display: 'block'
+                                            }}>
                                             Password requirements:
                                         </Typography>
                                         <Stack spacing={0.5}>
@@ -330,7 +343,9 @@ export default function ChangePasswordLayout({
                                                         key={req.id}
                                                         direction="row"
                                                         spacing={1}
-                                                        alignItems="center"
+                                                        sx={{
+                                                            alignItems: 'center'
+                                                        }}
                                                     >
                                                         <CheckIcon
                                                             sx={{
@@ -411,9 +426,11 @@ export default function ChangePasswordLayout({
                 {/* Footer */}
                 <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ mt: 3, textAlign: 'center' }}
-                >
+                    sx={{
+                        color: 'text.secondary',
+                        mt: 3,
+                        textAlign: 'center'
+                    }}>
                     ThesisFlow - Research Management System
                 </Typography>
             </Box>

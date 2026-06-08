@@ -162,9 +162,10 @@ export function SelectFilter<T extends string = string>({
                         {option.description && (
                             <Typography
                                 variant="caption"
-                                color="text.secondary"
-                                sx={{ ml: 1 }}
-                            >
+                                sx={{
+                                    color: 'text.secondary',
+                                    ml: 1
+                                }}>
                                 ({option.description})
                             </Typography>
                         )}

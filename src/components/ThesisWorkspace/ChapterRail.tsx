@@ -319,7 +319,9 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
         return (
             <Card variant="outlined">
                 <CardContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         No chapters available for this stage.
                     </Typography>
                 </CardContent>
@@ -351,12 +353,16 @@ export const ChapterRail: React.FC<ChapterRailProps> = ({
                         onClick={() => onSelectChapter(chapter.id)}
                     >
                         <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                            <Stack direction="row" spacing={2} alignItems="center">
+                            <Stack direction="row" spacing={2} sx={{
+                                alignItems: 'center'
+                            }}>
                                 <Box sx={{ flexGrow: 1 }}>
                                     <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                                         {formatChapterLabel(chapter)}
                                     </Typography>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {versionCount} version{versionCount !== 1 ? 's' : ''}
                                     </Typography>
                                 </Box>

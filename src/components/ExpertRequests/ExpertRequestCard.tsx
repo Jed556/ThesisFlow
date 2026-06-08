@@ -61,24 +61,36 @@ export function ExpertRequestCard({
     }, [handleOpenGroup]);
     const footer = (
         <Stack spacing={0.5}>
-            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+            <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
                 <Typography variant="body2">
                     Requested by <strong>{leaderName}</strong> on {requestedDate}
                 </Typography>
                 <Chip label={statusMeta.label} color={statusMeta.color} size="small" />
             </Stack>
             {request.message && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     “{request.message}”
                 </Typography>
             )}
             {respondedDate && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     Responded on {respondedDate}
                 </Typography>
             )}
             {request.responseNote && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     Note: {request.responseNote}
                 </Typography>
             )}

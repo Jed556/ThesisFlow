@@ -53,8 +53,10 @@ function RatingScaleLegend({ compact = false }: RatingScaleLegendProps) {
         >
             <Typography
                 variant={compact ? 'body2' : 'subtitle2'}
-                fontWeight="medium"
                 gutterBottom
+                sx={{
+                    fontWeight: 'medium'
+                }}
             >
                 Rating Scale (1-10):
             </Typography>
@@ -72,9 +74,10 @@ function RatingScaleLegend({ compact = false }: RatingScaleLegendProps) {
                         key={rating}
                         component="li"
                         variant={compact ? 'caption' : 'body2'}
-                        color="text.secondary"
-                        sx={{ mb: 0.25 }}
-                    >
+                        sx={{
+                            color: 'text.secondary',
+                            mb: 0.25
+                        }}>
                         {rating} – {label}
                     </Typography>
                 ))}
@@ -123,10 +126,14 @@ function SkillRatingItem({
                 <Stack spacing={1}>
                     {/* Skill Name and Description */}
                     <Box>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: 'center'
+                        }}>
                             <Typography
                                 variant={compact ? 'body2' : 'subtitle1'}
-                                fontWeight="medium"
+                                sx={{
+                                    fontWeight: 'medium'
+                                }}
                             >
                                 {skill.name}
                             </Typography>
@@ -143,9 +150,11 @@ function SkillRatingItem({
                         {skill.description && (
                             <Typography
                                 variant="caption"
-                                color="text.secondary"
-                                sx={{ display: 'block', mt: 0.5 }}
-                            >
+                                sx={{
+                                    color: 'text.secondary',
+                                    display: 'block',
+                                    mt: 0.5
+                                }}>
                                 ({skill.description})
                             </Typography>
                         )}
@@ -156,10 +165,11 @@ function SkillRatingItem({
                         <Stack
                             direction="row"
                             spacing={0}
-                            justifyContent="space-between"
-                            alignItems="center"
-                            sx={{ mt: 1 }}
-                        >
+                            sx={{
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                mt: 1
+                            }}>
                             {/* Rating Numbers Header */}
                             {ratings.map((rating) => (
                                 <Box
@@ -172,9 +182,10 @@ function SkillRatingItem({
                                 >
                                     <Typography
                                         variant="caption"
-                                        color="text.secondary"
-                                        sx={{ fontWeight: currentRating === rating ? 'bold' : 'normal' }}
-                                    >
+                                        sx={{
+                                            color: 'text.secondary',
+                                            fontWeight: currentRating === rating ? 'bold' : 'normal'
+                                        }}>
                                         {rating}
                                     </Typography>
                                 </Box>
@@ -221,9 +232,10 @@ function SkillRatingItem({
                         <Typography
                             variant="caption"
                             color="primary"
-                            textAlign="center"
-                            sx={{ fontStyle: 'italic' }}
-                        >
+                            sx={{
+                                textAlign: 'center',
+                                fontStyle: 'italic'
+                            }}>
                             {SKILL_RATING_LABELS[currentRating] ?? `Rating: ${currentRating}`}
                         </Typography>
                     )}
@@ -319,13 +331,13 @@ export function SkillRatingForm({
             >
                 <Typography
                     variant={compact ? 'subtitle1' : 'h6'}
-                    fontWeight="bold"
-                    textTransform="uppercase"
-                >
+                    sx={{
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase'
+                    }}>
                     {department}
                 </Typography>
             </Box>
-
             {/* Content */}
             <Box
                 sx={{
@@ -338,10 +350,17 @@ export function SkillRatingForm({
                 }}
             >
                 {/* Section Title */}
-                <Typography variant="subtitle2" fontWeight="medium" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                    fontWeight: 'medium'
+                }}>
                     II. Expertise & Research Interests
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'text.secondary',
+                        mb: 2
+                    }}>
                     Please rate your level of expertise in the following areas on a scale of 1
                     (Novice) to 10 (Expert).
                 </Typography>
@@ -362,9 +381,11 @@ export function SkillRatingForm({
                     <Box key={category} sx={{ mb: 3 }}>
                         <Typography
                             variant="overline"
-                            color="text.secondary"
-                            sx={{ display: 'block', mb: 1 }}
-                        >
+                            sx={{
+                                color: 'text.secondary',
+                                display: 'block',
+                                mb: 1
+                            }}>
                             {category}
                         </Typography>
                         {categorySkills.map((skill) => (
@@ -388,9 +409,11 @@ export function SkillRatingForm({
                         {skillsByCategory.grouped.size > 0 && (
                             <Typography
                                 variant="overline"
-                                color="text.secondary"
-                                sx={{ display: 'block', mb: 1 }}
-                            >
+                                sx={{
+                                    color: 'text.secondary',
+                                    display: 'block',
+                                    mb: 1
+                                }}>
                                 Other Skills
                             </Typography>
                         )}
@@ -411,7 +434,9 @@ export function SkillRatingForm({
 
                 {/* Footer Note */}
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                    color: 'text.secondary'
+                }}>
                     Note: Evaluation results will be kept confidential
                 </Typography>
             </Box>

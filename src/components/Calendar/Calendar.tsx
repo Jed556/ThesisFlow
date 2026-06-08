@@ -372,7 +372,7 @@ export default function Calendar({
                     {/* Weeks */}
                     {loading ? (
                         // Show skeleton day cells while loading
-                        Array.from({ length: 35 }).map((_, i) => (
+                        (Array.from({ length: 35 }).map((_, i) => (
                             <Box key={i}
                                 sx={{
                                     p: calendarGridPadding, display: 'flex', flexDirection: 'column',
@@ -385,10 +385,10 @@ export default function Calendar({
                                     sx={{ borderRadius: '50%' }}
                                 />
                             </Box>
-                        ))
+                        )))
                     ) : (
                         // Show actual calendar days when loaded
-                        matrix.map((week, wi) => {
+                        (matrix.map((week, wi) => {
                             // For each week we render segments as grid-spanning background elements
                             // followed by the 7 day cells. Each segment is placed on grid row (wi + 2)
                             // because header occupies row 1.
@@ -534,7 +534,7 @@ export default function Calendar({
                                     })}
                                 </React.Fragment>
                             );
-                        })
+                        }))
                     )}
                 </Box>
             </Paper>

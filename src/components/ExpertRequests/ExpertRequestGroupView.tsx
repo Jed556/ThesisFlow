@@ -116,9 +116,16 @@ export default function ExpertRequestGroupView({ groupId, role, roleLabel, hint 
     if (!session || session.loading) {
         return (
             <AnimatedPage variant="fade">
-                <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
+                <Stack
+                    spacing={2}
+                    sx={{
+                        alignItems: 'center',
+                        py: 4
+                    }}>
                     <CircularProgress />
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Loading group details…
                     </Typography>
                 </Stack>
@@ -165,7 +172,9 @@ export default function ExpertRequestGroupView({ groupId, role, roleLabel, hint 
                 {requestLoading && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <CircularProgress size={20} />
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Loading pending request…
                         </Typography>
                     </Box>

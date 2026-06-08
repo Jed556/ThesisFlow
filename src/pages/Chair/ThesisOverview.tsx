@@ -424,12 +424,24 @@ export default function ChairThesisOverviewPage() {
             <AnimatedPage variant="slideUp">
                 <Card>
                     <CardContent>
-                        <Stack spacing={2} alignItems="center" justifyContent="center" sx={{ minHeight: 240 }}>
+                        <Stack
+                            spacing={2}
+                            sx={{
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minHeight: 240
+                            }}>
                             <SchoolIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
-                            <Typography variant="h6" color="text.secondary">
+                            <Typography variant="h6" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 No Courses Assigned
                             </Typography>
-                            <Typography color="text.secondary" textAlign="center">
+                            <Typography
+                                sx={{
+                                    color: 'text.secondary',
+                                    textAlign: 'center'
+                                }}>
                                 You haven&apos;t been assigned to any courses yet. Contact an administrator to
                                 update your profile with course assignments.
                             </Typography>
@@ -446,7 +458,9 @@ export default function ChairThesisOverviewPage() {
                 {error && <Alert severity="error">{error}</Alert>}
 
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Monitor thesis progress for groups in your assigned courses. You can view submissions,
                         leave comments, and track group progress.
                     </Typography>

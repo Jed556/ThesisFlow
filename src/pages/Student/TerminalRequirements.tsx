@@ -998,7 +998,9 @@ export default function TerminalRequirementsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {isLinkMode
                             ? 'Add links to your signed forms and supporting documents ' +
                             'for each stage after your chapters are approved.'
@@ -1036,7 +1038,9 @@ export default function TerminalRequirementsPage() {
                                         <Typography variant="h6" gutterBottom>
                                             {stageTitle} requirement checklist
                                         </Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             Submitted {stageProgress.submittedCount} of {stageProgress.total || 0} requirement(s)
                                         </Typography>
                                         <LinearProgress
@@ -1047,9 +1051,10 @@ export default function TerminalRequirementsPage() {
                                         <Stack
                                             direction={{ xs: 'column', sm: 'row' }}
                                             spacing={1.5}
-                                            alignItems={{ sm: 'center' }}
-                                            sx={{ mt: 2 }}
-                                        >
+                                            sx={{
+                                                alignItems: { sm: 'center' },
+                                                mt: 2
+                                            }}>
                                             <Button
                                                 variant="contained"
                                                 startIcon={<TaskAltIcon />}
@@ -1059,7 +1064,9 @@ export default function TerminalRequirementsPage() {
                                                 {submitLoading ? 'Submitting…' : submitButtonLabel}
                                             </Button>
                                             {!readyForSubmission && allowFileActions && (
-                                                <Typography variant="caption" color="text.secondary">
+                                                <Typography variant="caption" sx={{
+                                                    color: 'text.secondary'
+                                                }}>
                                                     {isLinkMode
                                                         ? 'Add links and mark each requirement as submitted.'
                                                         : 'Upload files for every requirement to enable submission.'
@@ -1133,7 +1140,6 @@ export default function TerminalRequirementsPage() {
                     </>
                 )}
             </Stack>
-
             {/* File Viewer Dialog */}
             <Dialog
                 open={Boolean(viewingFile)}

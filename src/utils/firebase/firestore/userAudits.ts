@@ -85,7 +85,7 @@ function buildUserAuditDocumentPath(ctx: UserAuditContext, auditId: string): str
  * Convert Firestore document data to UserAuditEntry
  */
 function docToUserAuditEntry(
-    docSnap: { id: string; data: () => Record<string, unknown> | undefined }
+    docSnap: { id: string; ref?: { path: string }; data: () => Record<string, unknown> | undefined }
 ): UserAuditEntry | null {
     const data = docSnap.data();
     if (!data) return null;
@@ -110,6 +110,8 @@ function docToUserAuditEntry(
         showSnackbar: data.showSnackbar as boolean | undefined,
         snackbarShown: (data.snackbarShown as boolean) ?? false,
         read: (data.read as boolean) ?? false,
+        pageViewed: (data.pageViewed as boolean) ?? false,
+        docPath: docSnap.ref?.path,
     };
 }
 
@@ -478,8 +480,8 @@ export async function markUserAuditsBySegmentAsPageViewed(
     // Import dynamically to avoid circular dependencies
     const { getSegmentForAuditEntry } = await import('../../navigationMappingUtils');
 
-    // Get all entries that haven't been page-viewed yet
-    const entries = await getUserAuditEntries(ctx, {});
+    // Get all entries for the user across all levels that haven't been page-viewed yet
+    const entries = await getAllUserAuditEntries(ctx.targetUserId, {});
     const unviewedEntries = entries.filter(entry => entry.pageViewed !== true);
 
     if (unviewedEntries.length === 0) return 0;
@@ -500,8 +502,8 @@ export async function markUserAuditsBySegmentAsPageViewed(
     // Batch update all matching entries
     const batch = writeBatch(firebaseFirestore);
     for (const entry of segmentEntries) {
-        const docPath = buildUserAuditDocumentPath(ctx, entry.id);
-        const docRef = doc(firebaseFirestore, docPath);
+        if (!entry.docPath) continue; // Safety check
+        const docRef = doc(firebaseFirestore, entry.docPath);
         batch.update(docRef, { pageViewed: true });
     }
     await batch.commit();

@@ -295,21 +295,23 @@ export default function AdminThesisOverviewPage() {
                 <Typography variant="h4" gutterBottom>
                     Administrative workspace
                 </Typography>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Drill into any department, course, and group to audit thesis progress and commentary.
                 </Typography>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {noGroups ? (
                 <Card>
                     <CardContent>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             No thesis groups found in the system.
                         </Typography>
                     </CardContent>

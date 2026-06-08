@@ -365,7 +365,9 @@ export default function HeadTopicProposalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Review every group in your departments. Finalize only the topics that were approved by moderators.
                     </Typography>
                 </Box>
@@ -375,9 +377,10 @@ export default function HeadTopicProposalsPage() {
                         <Stack
                             direction={{ xs: 'column', sm: 'row' }}
                             spacing={2}
-                            alignItems="center"
-                            justifyContent="space-between"
-                        >
+                            sx={{
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
                             <Box>
                                 <Typography variant="subtitle1">Awaiting head decision</Typography>
                                 <Typography variant="h4">{pendingCount}</Typography>
@@ -420,13 +423,16 @@ export default function HeadTopicProposalsPage() {
                             <CardContent>
                                 <Stack
                                     direction={{ xs: 'column', sm: 'row' }}
-                                    justifyContent="space-between"
                                     spacing={1}
-                                    sx={{ mb: 2 }}
-                                >
+                                    sx={{
+                                        justifyContent: 'space-between',
+                                        mb: 2
+                                    }}>
                                     <Box>
                                         <Typography variant="h6">{group.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             {group.department ?? 'No department listed'} • {group.course ?? 'No course listed'}
                                         </Typography>
                                     </Box>
@@ -448,7 +454,9 @@ export default function HeadTopicProposalsPage() {
                                 )}
 
                                 {record && entries.length > 0 && (
-                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
+                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap sx={{
+                                        flexWrap: 'wrap'
+                                    }}>
                                         {entries.map((entry) => {
                                             const actionable = entry.status === 'head_review';
                                             const restriction = describeHeadRestriction(entry.status);
@@ -501,7 +509,6 @@ export default function HeadTopicProposalsPage() {
                     );
                 })}
             </Stack>
-
             {/* Head Approval Dialog with agenda, ESG, SDG selection */}
             <HeadApprovalDialog
                 open={Boolean(approvalDialog)}
@@ -510,7 +517,6 @@ export default function HeadTopicProposalsPage() {
                 onClose={() => setApprovalDialog(null)}
                 onConfirm={handleConfirmApproval}
             />
-
             {/* Head Rejection Dialog using centralized component */}
             <TopicProposalDecisionDialog
                 open={Boolean(rejectionDialog)}

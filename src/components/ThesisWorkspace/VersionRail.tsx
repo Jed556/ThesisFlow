@@ -44,7 +44,9 @@ export const VersionRail: React.FC<VersionRailProps> = ({
         return (
             <Card variant="outlined">
                 <CardContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         {enableUploads
                             ? 'No uploads yet. Submit a document to start tracking versions.'
                             : 'No uploaded versions yet.'}

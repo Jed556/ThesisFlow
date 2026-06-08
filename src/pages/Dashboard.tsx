@@ -5,6 +5,8 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { PieChart } from '@mui/x-charts/PieChart';
+import { BarChart } from '@mui/x-charts/BarChart';
+import { LineChart } from '@mui/x-charts/LineChart';
 import { useSession } from '@toolpad/core';
 import { Dashboard as DashboardIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon } from '@mui/icons-material';
 import { AnimatedPage } from '../components/Animate';
@@ -63,6 +65,32 @@ interface SnapshotMetric {
 
 const FILTER_ALL = 'all';
 
+const SDG_COLORS: Record<string, string> = {
+    'No Poverty': '#E5243B',
+    'Zero Hunger': '#DDA63A',
+    'Good Health and Well-being': '#4C9F38',
+    'Quality Education': '#C5192D',
+    'Gender Equality': '#FF3A21',
+    'Clean Water and Sanitation': '#26BDE2',
+    'Affordable and Clean Energy': '#FCC30B',
+    'Decent Work and Economic Growth': '#A21942',
+    'Industry, Innovation and Infrastructure': '#FD6925',
+    'Reduced Inequalities': '#DD1367',
+    'Sustainable Cities and Communities': '#FD9D24',
+    'Responsible Consumption and Production': '#BF8B2E',
+    'Climate Action': '#3F7E44',
+    'Life Below Water': '#0A97D9',
+    'Life on Land': '#56C02B',
+    'Peace, Justice and Strong Institutions': '#00689D',
+    'Partnerships for the Goals': '#19486A',
+};
+
+const ESG_COLORS: Record<string, string> = {
+    Environment: '#00AD53',
+    Social: '#F78F2D',
+    Governance: '#009BD8',
+};
+
 /**
  * Dashboard page component displaying thesis statistics and filters.
  */
@@ -89,6 +117,9 @@ function DashboardPage(): React.ReactElement {
     const [stageFilter, _setStageFilter] = React.useState<string>(FILTER_ALL);
     const [sdgFilter, setSdgFilter] = React.useState<string>(FILTER_ALL);
     const [esgFilter, setEsgFilter] = React.useState<string>(FILTER_ALL);
+
+    // Trend chart state
+    const [trendGrouping, setTrendGrouping] = React.useState<'monthly' | 'yearly'>('monthly');
 
     // Agenda filter states
     const [agendaType, setAgendaType] = React.useState<AgendaType>('institutional');
@@ -538,6 +569,87 @@ function DashboardPage(): React.ReactElement {
         ];
     }, [primaryColor, stats.totalTheses, stats.stageStats]);
 
+    const sdgData = React.useMemo(() => {
+        const counts = new Map<string, number>();
+        filteredTheses.forEach((t) => {
+            if (t.SDG) {
+                counts.set(t.SDG, (counts.get(t.SDG) ?? 0) + 1);
+            }
+        });
+        return Array.from(counts.entries())
+            .map(([label, value]) => ({
+                id: label,
+                label,
+                value,
+                color: SDG_COLORS[label] || primaryColor,
+            }))
+            .sort((a, b) => b.value - a.value); // Sort by count descending
+    }, [filteredTheses, primaryColor]);
+
+    const esgData = React.useMemo(() => {
+        const counts = new Map<string, number>();
+        filteredTheses.forEach((t) => {
+            if (t.ESG) {
+                counts.set(t.ESG, (counts.get(t.ESG) ?? 0) + 1);
+            }
+        });
+        return Array.from(counts.entries())
+            .map(([label, value]) => ({
+                id: label,
+                label,
+                value,
+                color: ESG_COLORS[label] || secondaryColor,
+            }))
+            .sort((a, b) => b.value - a.value);
+    }, [filteredTheses, secondaryColor]);
+
+    const agendaData = React.useMemo(() => {
+        const counts = new Map<string, number>();
+        filteredTheses.forEach((t) => {
+            const agendaVal = t.agenda?.agendaPath?.[0] || t.agenda?.type || 'No Agenda';
+            counts.set(agendaVal, (counts.get(agendaVal) ?? 0) + 1);
+        });
+        const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+        const colors = generateChartColors(entries.length);
+        return entries.map(([label, value], index) => ({
+            id: label,
+            label,
+            value,
+            color: colors[index],
+        }));
+    }, [filteredTheses, generateChartColors]);
+
+    const trendData = React.useMemo(() => {
+        const counts = new Map<string, number>();
+
+        // Sort theses chronologically
+        const sortedTheses = [...filteredTheses].sort((a, b) => {
+            const dateA = new Date(a.submissionDate || a.lastUpdated).getTime();
+            const dateB = new Date(b.submissionDate || b.lastUpdated).getTime();
+            return dateA - dateB;
+        });
+
+        sortedTheses.forEach((t) => {
+            const dateObj = new Date(t.submissionDate || t.lastUpdated);
+            if (isNaN(dateObj.getTime())) return; // skip invalid dates
+
+            let key = '';
+            if (trendGrouping === 'yearly') {
+                key = dateObj.getFullYear().toString();
+            } else {
+                // Monthly grouping: e.g., "Jan 2026"
+                const monthName = dateObj.toLocaleString('default', { month: 'short' });
+                key = `${monthName} ${dateObj.getFullYear()}`;
+            }
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+        });
+
+        return Array.from(counts.entries()).map(([label, value]) => ({
+            label,
+            value,
+        }));
+    }, [filteredTheses, trendGrouping]);
+
     const greetingName = React.useMemo(() => {
         if (profile?.name?.first) {
             return profile.name.first;
@@ -606,10 +718,14 @@ function DashboardPage(): React.ReactElement {
             <Stack spacing={3}>
                 {/* Header */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Typography variant="h3" fontWeight={600}>
+                    <Typography variant="h3" sx={{
+                        fontWeight: 600
+                    }}>
                         Hello {greetingName}!
                     </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Stack direction="row" spacing={1} sx={{
+                        flexWrap: 'wrap'
+                    }}>
                         <Chip label={roleDisplay} color="primary" size="small" />
                         {departmentDisplay && (
                             <Chip
@@ -630,40 +746,29 @@ function DashboardPage(): React.ReactElement {
                 </Box>
 
                 {/* Snapshot Metrics */}
-                <Card sx={{ borderRadius: 3 }}>
-                    <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                            Program Snapshot
-                        </Typography>
-                        <Grid container spacing={2}>
-                            {snapshotMetrics.map((metric) => (
-                                <Grid size={{ xs: 6, sm: 4, md: 2.4 }} key={metric.label}>
-                                    <Box sx={{
-                                        p: 2,
-                                        borderRadius: 2,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        textAlign: 'center',
-                                    }}>
-                                        <Typography
-                                            variant="body2"
-                                            color="text.secondary"
-                                            noWrap
-                                        >
-                                            {metric.label}
-                                        </Typography>
-                                        <Typography
-                                            variant="h4"
-                                            sx={{ color: metric.color }}
-                                        >
-                                            {metric.value}
-                                        </Typography>
-                                    </Box>
-                                </Grid>
-                            ))}
+                <Grid container spacing={2}>
+                    {snapshotMetrics.map((metric) => (
+                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }} key={metric.label}>
+                            <Card sx={{ borderRadius: 3, height: '100%' }}>
+                                <CardContent sx={{ textAlign: 'center', py: 3, '&:last-child': { pb: 3 } }}>
+                                    <Typography
+                                        variant="body2"
+                                        noWrap
+                                        sx={{ color: 'text.secondary', mb: 1 }}
+                                    >
+                                        {metric.label}
+                                    </Typography>
+                                    <Typography
+                                        variant="h4"
+                                        sx={{ color: metric.color }}
+                                    >
+                                        {metric.value}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
                         </Grid>
-                    </CardContent>
-                </Card>
+                    ))}
+                </Grid>
 
                 {/* Filters */}
                 <Card sx={{ borderRadius: 3 }}>
@@ -911,64 +1016,190 @@ function DashboardPage(): React.ReactElement {
                     </CardContent>
                 </Card>
 
-                {/* Pie Chart */}
-                <Card sx={{ borderRadius: 3 }}>
-                    <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                            {chartTitle}
-                        </Typography>
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mb: 2 }}
-                        >
-                            Filtered Total: {stats.totalTheses} theses
-                        </Typography>
-                        {dynamicChartData.some((item) => item.value > 0) ? (
-                            <Box sx={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                overflowX: 'auto',
-                            }}>
-                                <PieChart
-                                    series={[{
-                                        data: dynamicChartData,
-                                        highlightScope: {
-                                            fade: 'global',
-                                            highlight: 'item',
-                                        },
-                                        faded: {
-                                            innerRadius: 30,
-                                            additionalRadius: -30,
-                                            color: 'grey',
-                                        },
-                                    }]}
-                                    width={500}
-                                    height={300}
-                                    slotProps={{
-                                        legend: {
-                                            position: {
-                                                vertical: 'middle',
-                                                horizontal: 'end',
-                                            },
-                                        },
-                                    }}
-                                />
-                            </Box>
-                        ) : (
-                            <Box sx={{
-                                minHeight: 300,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    No data available for current filters
+                {/* Hero Section: Main Chart & Trends */}
+                <Grid container spacing={3}>
+                    {/* Main Distribution Chart (Left, 40%) */}
+                    <Grid size={{ xs: 12, md: 5 }}>
+                        <Card sx={{ borderRadius: 3, height: '100%' }}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    {chartTitle}
                                 </Typography>
-                            </Box>
-                        )}
-                    </CardContent>
-                </Card>
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                                    Filtered Total: {stats.totalTheses} theses
+                                </Typography>
+                                {dynamicChartData.some((item) => item.value > 0) ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', overflowX: 'auto' }}>
+                                        <PieChart
+                                            series={[{
+                                                data: dynamicChartData,
+                                                highlightScope: { fade: 'global', highlight: 'item' },
+                                                faded: { innerRadius: 30, additionalRadius: -30, color: 'grey' },
+                                            }]}
+                                            width={400}
+                                            height={300}
+                                            slotProps={{ legend: { direction: 'row', position: { vertical: 'bottom', horizontal: 'middle' }, padding: -5 } }}
+                                        />
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>No data available for current filters</Typography>
+                                    </Box>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+
+                    {/* Trend Chart (Right, 60%) */}
+                    <Grid size={{ xs: 12, md: 7 }}>
+                        <Card sx={{ borderRadius: 3, height: '100%' }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                    <Box>
+                                        <Typography variant="h6" gutterBottom>
+                                            Submission Trends
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                            Theses {trendGrouping === 'monthly' ? 'per Month' : 'per Year'}
+                                        </Typography>
+                                    </Box>
+                                    <ToggleButtonGroup
+                                        value={trendGrouping}
+                                        exclusive
+                                        onChange={(_, newVal) => { if (newVal) setTrendGrouping(newVal); }}
+                                        size="small"
+                                    >
+                                        <ToggleButton value="monthly">Monthly</ToggleButton>
+                                        <ToggleButton value="yearly">Yearly</ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Box>
+                                {trendData.length > 0 ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', overflowX: 'auto', mt: 2 }}>
+                                        <LineChart
+                                            xAxis={[{ 
+                                                scaleType: 'point', 
+                                                data: trendData.map(d => d.label) 
+                                            }]}
+                                            series={[{ 
+                                                data: trendData.map(d => d.value),
+                                                color: primaryColor,
+                                                area: true,
+                                                showMark: true,
+                                            }]}
+                                            height={250}
+                                            margin={{ left: 40, right: 20, top: 20, bottom: 30 }}
+                                        />
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ minHeight: 250, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>No data available</Typography>
+                                    </Box>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
+
+                {/* Categorical Breakdowns */}
+                <Grid container spacing={3}>
+                    {/* SDG Bar Chart */}
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Card sx={{ borderRadius: 3, height: '100%' }}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    SDG Alignment
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                                    Sustainable Development Goals
+                                </Typography>
+                                {sdgData.length > 0 ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', overflowX: 'auto' }}>
+                                        <BarChart
+                                            dataset={sdgData}
+                                            yAxis={[{ scaleType: 'band', dataKey: 'label' }]}
+                                            series={[{ dataKey: 'value' }]}
+                                            colors={sdgData.map(d => d.color)}
+                                            layout="horizontal"
+                                            width={500}
+                                            height={300}
+                                            margin={{ left: 150 }}
+                                        />
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>No data available</Typography>
+                                    </Box>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+
+                    {/* ESG Distribution Chart */}
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Card sx={{ borderRadius: 3, height: '100%' }}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    ESG Breakdown
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                                    Environmental, Social, and Governance
+                                </Typography>
+                                {esgData.length > 0 ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', overflowX: 'auto' }}>
+                                        <PieChart
+                                            series={[{
+                                                data: esgData,
+                                                innerRadius: 60,
+                                                highlightScope: { fade: 'global', highlight: 'item' },
+                                                faded: { innerRadius: 30, additionalRadius: -30, color: 'grey' },
+                                            }]}
+                                            width={500}
+                                            height={300}
+                                            slotProps={{ legend: { hidden: true } }}
+                                        />
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>No data available</Typography>
+                                    </Box>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
+
+                {/* Agendas (Full Width) */}
+                <Grid container spacing={3}>
+                    <Grid size={12}>
+                        <Card sx={{ borderRadius: 3 }}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Research Agendas
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                                    By Root Agenda Category
+                                </Typography>
+                                {agendaData.length > 0 ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', overflowX: 'auto' }}>
+                                        <BarChart
+                                            dataset={agendaData}
+                                            yAxis={[{ scaleType: 'band', dataKey: 'label' }]}
+                                            series={[{ dataKey: 'value', color: secondaryColor }]}
+                                            layout="horizontal"
+                                            width={1000}
+                                            height={300}
+                                            margin={{ left: 250 }}
+                                        />
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>No data available</Typography>
+                                    </Box>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
             </Stack>
         </AnimatedPage>
     );

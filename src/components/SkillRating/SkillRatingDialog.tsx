@@ -131,14 +131,17 @@ export function SkillRatingDialog({
             <DialogTitle>
                 <Stack
                     direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                >
+                    sx={{
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
                     <Stack>
                         <Typography variant="h6" component="span">
                             Rate Your Skills
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             {department} • {ratedCount}/{totalCount} rated
                         </Typography>
                     </Stack>

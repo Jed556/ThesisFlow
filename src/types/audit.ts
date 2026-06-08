@@ -199,6 +199,8 @@ export interface BaseAuditEntry {
      * This is set when the user visits the page associated with this audit's category.
      */
     pageViewed?: boolean;
+    /** The actual Firestore document path (populated when querying) */
+    docPath?: string;
 }
 
 /**

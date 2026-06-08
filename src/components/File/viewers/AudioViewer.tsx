@@ -29,7 +29,9 @@ export const AudioViewer: React.FC<AudioViewerProps> = ({ url, fileName }) => {
             }}
         >
             {fileName && (
-                <Typography variant="h6" color="text.secondary">
+                <Typography variant="h6" sx={{
+                    color: 'text.secondary'
+                }}>
                     {fileName}
                 </Typography>
             )}

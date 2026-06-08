@@ -182,17 +182,23 @@ export default function TestPage() {
             <Typography variant="h4" gutterBottom>
                 Component Test Page
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+            <Typography
+                variant="body2"
+                sx={{
+                    color: 'text.secondary',
+                    mb: 4
+                }}>
                 Testing various MUI components and interactions
             </Typography>
-
             <Stack spacing={4}>
                 {/* Buttons Section */}
                 <Paper sx={{ p: 3 }}>
                     <Typography variant="h6" gutterBottom>
                         Buttons
                     </Typography>
-                    <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                    <Stack direction="row" spacing={2} useFlexGap sx={{
+                        flexWrap: 'wrap'
+                    }}>
                         <Button variant="contained" color="primary">
                             Contained
                         </Button>
@@ -276,7 +282,9 @@ export default function TestPage() {
                     <Typography variant="h6" gutterBottom>
                         Color Picker
                     </Typography>
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{
+                        alignItems: 'center'
+                    }}>
                         <Button
                             variant="contained"
                             startIcon={<ColorizeIcon />}
@@ -317,7 +325,9 @@ export default function TestPage() {
                     <Typography variant="h6" gutterBottom>
                         Notifications
                     </Typography>
-                    <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                    <Stack direction="row" spacing={2} useFlexGap sx={{
+                        flexWrap: 'wrap'
+                    }}>
                         <Button
                             variant="outlined"
                             color="success"
@@ -471,7 +481,9 @@ export default function TestPage() {
                     <Typography variant="h6" gutterBottom>
                         Chips
                     </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{
+                        flexWrap: 'wrap'
+                    }}>
                         <Chip label="Default" />
                         <Chip label="Primary" color="primary" />
                         <Chip label="Secondary" color="secondary" />
@@ -504,7 +516,12 @@ export default function TestPage() {
                     <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <EmailIcon /> Email Testing (SMTP)
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            mb: 2
+                        }}>
                         Send test emails using Ethereal (fake SMTP) or your own SMTP credentials.
                     </Typography>
 
@@ -518,7 +535,9 @@ export default function TestPage() {
                                 />
                             }
                             label={
-                                <Stack direction="row" spacing={1} alignItems="center">
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <Typography>
                                         {useEthereal ? 'Using Ethereal (Test Mode)' : 'Using Custom SMTP'}
                                     </Typography>
@@ -639,7 +658,9 @@ export default function TestPage() {
                             required
                         />
 
-                        <Stack direction="row" spacing={2} alignItems="center">
+                        <Stack direction="row" spacing={2} sx={{
+                            alignItems: 'center'
+                        }}>
                             <Button
                                 variant="contained"
                                 color="primary"
@@ -671,7 +692,12 @@ export default function TestPage() {
                             >
                                 <Typography variant="body2">{emailResult.message}</Typography>
                                 {emailResult.messageId && (
-                                    <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            display: 'block',
+                                            mt: 0.5
+                                        }}>
                                         Message ID: {emailResult.messageId}
                                     </Typography>
                                 )}

@@ -126,8 +126,13 @@ export async function getEventsFromCalendars(
     const allEvents: EventRecord[] = [];
 
     for (const calendar of calendars) {
-        const events = await getCalendarEvents(calendar.level, calendar.pathContext);
-        allEvents.push(...events);
+        try {
+            const events = await getCalendarEvents(calendar.level, calendar.pathContext);
+            allEvents.push(...events);
+        } catch (error) {
+            console.error(`Failed to fetch events for calendar: ${calendar.level}`, calendar.pathContext, error);
+            throw new Error(`Failed to fetch events for calendar: ${calendar.level}. See console for details.`);
+        }
     }
 
     return allEvents;

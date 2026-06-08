@@ -127,7 +127,9 @@ export function AuditFilters({
                 <Stack
                     direction={{ xs: 'column', md: 'row' }}
                     spacing={2}
-                    alignItems={{ xs: 'stretch', md: 'center' }}
+                    sx={{
+                        alignItems: { xs: 'stretch', md: 'center' }
+                    }}
                 >
                     {/* Scope Selector */}
                     {showScopeSelector && availableScopes.length > 1 && (
@@ -141,7 +143,9 @@ export function AuditFilters({
                             >
                                 {availableScopes.map((s) => (
                                     <MenuItem key={s} value={s}>
-                                        <Stack direction="row" spacing={1} alignItems="center">
+                                        <Stack direction="row" spacing={1} sx={{
+                                            alignItems: 'center'
+                                        }}>
                                             {getScopeIcon(s)}
                                             <span>{getScopeLabel(s)}</span>
                                         </Stack>
@@ -225,9 +229,10 @@ export function AuditFilters({
                                                 !selectedDepartment && (
                                                     <Typography
                                                         variant="caption"
-                                                        color="text.secondary"
-                                                        sx={{ ml: 1 }}
-                                                    >
+                                                        sx={{
+                                                            color: 'text.secondary',
+                                                            ml: 1
+                                                        }}>
                                                         ({group.department})
                                                     </Typography>
                                                 )}
@@ -239,14 +244,15 @@ export function AuditFilters({
                     )}
                 </Stack>
             </Paper>
-
             {/* Category, Date, and Search Filters */}
             {(showCategoryFilter || showDateFilter || showSearch) && (
                 <Paper sx={{ p: 2 }}>
                     <Stack
                         direction={{ xs: 'column', md: 'row' }}
                         spacing={2}
-                        alignItems={{ xs: 'stretch', md: 'center' }}
+                        sx={{
+                            alignItems: { xs: 'stretch', md: 'center' }
+                        }}
                     >
                         {/* Category Filter */}
                         {showCategoryFilter && (

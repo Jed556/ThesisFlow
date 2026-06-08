@@ -135,7 +135,9 @@ export default function ProfileCard({
     const cardContent = (
         <CardContent>
             {/* Header with avatar and name */}
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{
+                alignItems: 'center'
+            }}>
                 <Avatar uid={profile.uid} size={48} tooltip="full" sx={{ flexShrink: 0 }} editable={false} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="h6" component="div" noWrap>
@@ -144,19 +146,24 @@ export default function ProfileCard({
                     {showEmail && profile.email && (
                         <Typography
                             variant="body2"
-                            color="text.secondary"
                             sx={{
+                                color: 'text.secondary',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 0.5,
-                                mt: 0.25,
-                            }}
-                        >
+                                mt: 0.25
+                            }}>
                             {profile.email}
                         </Typography>
                     )}
                     {showDepartment && (
-                        <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.25 }}>
+                        <Typography
+                            variant="body2"
+                            noWrap
+                            sx={{
+                                color: 'text.secondary',
+                                mt: 0.25
+                            }}>
                             {profile.department ?? 'Department TBD'}
                         </Typography>
                     )}
@@ -165,7 +172,14 @@ export default function ProfileCard({
 
             {/* Top chips (compact info) */}
             {chips && chips.length > 0 && (
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    useFlexGap
+                    sx={{
+                        flexWrap: 'wrap',
+                        mt: 1
+                    }}>
                     {chips.map((c, idx) => (
                         typeof c === 'string' ? (
                             <Chip key={`${c}-${idx}`} label={c} size="small" variant="outlined" />
@@ -181,10 +195,14 @@ export default function ProfileCard({
                 <Box sx={{ mt: 1.5 }}>
                     <Divider sx={{ mb: 1.5 }} />
                     <Stack spacing={0.5}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Role
                         </Typography>
-                        <Typography variant="subtitle1" fontWeight={600}>
+                        <Typography variant="subtitle1" sx={{
+                            fontWeight: 600
+                        }}>
                             {roleLabel}
                         </Typography>
                     </Stack>
@@ -195,11 +213,12 @@ export default function ProfileCard({
             {showSkills && skills.length > 0 && (
                 <Stack
                     direction="row"
-                    flexWrap="wrap"
                     spacing={1}
                     useFlexGap
-                    sx={{ mt: 2 }}
-                >
+                    sx={{
+                        flexWrap: 'wrap',
+                        mt: 2
+                    }}>
                     {skills.map((skill, index) => (
                         <Chip
                             key={`${skill}-${index}`}
@@ -217,10 +236,14 @@ export default function ProfileCard({
 
             {/* Stats section */}
             {stats.length > 0 && (
-                <Stack direction="row" spacing={2} flexWrap="wrap">
+                <Stack direction="row" spacing={2} sx={{
+                    flexWrap: 'wrap'
+                }}>
                     {stats.map((stat, index) => (
                         <Stack key={`${stat.label}-${index}`} spacing={0.5}>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {stat.label}
                             </Typography>
                             <Box
@@ -233,9 +256,9 @@ export default function ProfileCard({
                                 {stat.icon}
                                 <Typography
                                     variant="subtitle1"
-                                    fontWeight={600}
-                                    sx={stat.color ? { color: stat.color } : undefined}
-                                >
+                                    sx={[{
+                                        fontWeight: 600
+                                    }, stat.color ? { color: stat.color } : undefined]}>
                                     {stat.value}
                                 </Typography>
                             </Box>

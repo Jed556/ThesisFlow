@@ -84,11 +84,12 @@ export const EventsRail: React.FC<EventsRailProps> = ({
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     {title}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: 'text.secondary'
+                }}>
                     {subtitle}
                 </Typography>
             </Box>
-
             {/* Scrollable Body */}
             <Box
                 sx={{
@@ -100,11 +101,15 @@ export const EventsRail: React.FC<EventsRailProps> = ({
                 }}
             >
                 {loading ? (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Loading events...
                     </Typography>
                 ) : !selectedDate && !selectedRange ? (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Select a date or range to see events.
                     </Typography>
                 ) : events.length > 0 ? (
@@ -124,7 +129,9 @@ export const EventsRail: React.FC<EventsRailProps> = ({
                         })}
                     </AnimatedList>
                 ) : (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: 'text.secondary'
+                    }}>
                         No events for this selection.
                     </Typography>
                 )}

@@ -635,11 +635,12 @@ export function AuditView({
             {!embedded && (
                 <Stack
                     direction={{ xs: 'column', sm: 'row' }}
-                    justifyContent="space-between"
-                    alignItems={{ xs: 'flex-start', sm: 'center' }}
                     spacing={2}
-                    sx={{ mb: 2 }}
-                >
+                    sx={{
+                        justifyContent: 'space-between',
+                        alignItems: { xs: 'flex-start', sm: 'center' },
+                        mb: 2
+                    }}>
                     <Typography variant="h6">{mergedDisplayConfig.title}</Typography>
                     <Stack direction="row" spacing={1}>
                         {headerActions}
@@ -658,7 +659,6 @@ export function AuditView({
                     </Stack>
                 </Stack>
             )}
-
             {/* Filters */}
             <Box sx={{ mb: embedded ? 2 : 3 }}>
                 <AuditFilters
@@ -691,14 +691,12 @@ export function AuditView({
                     }}
                 />
             </Box>
-
             {/* Alerts */}
             {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
                     {error}
                 </Alert>
             )}
-
             {selectedScope === 'group' &&
                 !selectedGroupId &&
                 !groupsLoading &&
@@ -707,7 +705,6 @@ export function AuditView({
                         Please select a group to view its audit history.
                     </Alert>
                 )}
-
             {userGroups.length === 0 &&
                 !groupsLoading &&
                 selectedScope === 'group' &&
@@ -716,18 +713,20 @@ export function AuditView({
                         You are not a member of any groups yet.
                     </Alert>
                 )}
-
             {/* Content */}
             <ContentWrapper {...contentWrapperProps}>
                 {embedded ? (
                     <Box>
                         <Stack
                             direction="row"
-                            justifyContent="space-between"
-                            alignItems="center"
-                            sx={{ mb: 2 }}
-                        >
-                            <Typography variant="subtitle1" fontWeight="medium">
+                            sx={{
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                mb: 2
+                            }}>
+                            <Typography variant="subtitle1" sx={{
+                                fontWeight: 'medium'
+                            }}>
                                 {listTitle}
                             </Typography>
                             <Chip
@@ -757,10 +756,11 @@ export function AuditView({
                     <CardContent>
                         <Stack
                             direction="row"
-                            justifyContent="space-between"
-                            alignItems="center"
-                            sx={{ mb: 2 }}
-                        >
+                            sx={{
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                mb: 2
+                            }}>
                             <Typography variant="h6">{listTitle}</Typography>
                             <Chip
                                 label={`${filteredAudits.length} entries`}

@@ -451,7 +451,6 @@ export default function AdviserEditorRecommendationsPage() {
                     {groupError}
                 </Alert>
             )}
-
             {/* Advisers Tab */}
             {activeTab === 0 && (
                 adviserTabLocked ? (
@@ -473,7 +472,9 @@ export default function AdviserEditorRecommendationsPage() {
                             <Grid size={{ xs: 12 }}>
                                 <Card variant="outlined">
                                     <CardContent>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             {studentGroup?.department
                                                 ? 'No advisers in your department are available right now.'
                                                 : 'No advisers found. Update the directory to see recommendations.'}
@@ -485,7 +486,6 @@ export default function AdviserEditorRecommendationsPage() {
                     </Grid>
                 )
             )}
-
             {/* Editors Tab */}
             {activeTab === 1 && (
                 editorTabLocked ? (
@@ -509,7 +509,9 @@ export default function AdviserEditorRecommendationsPage() {
                             <Grid size={{ xs: 12 }}>
                                 <Card variant="outlined">
                                     <CardContent>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             No editors found. Update the directory to see recommendations.
                                         </Typography>
                                     </CardContent>
@@ -519,7 +521,6 @@ export default function AdviserEditorRecommendationsPage() {
                     </Grid>
                 )
             )}
-
             {/* Statisticians Tab */}
             {activeTab === 2 && (
                 statisticianTabLocked ? (
@@ -541,7 +542,9 @@ export default function AdviserEditorRecommendationsPage() {
                             <Grid size={{ xs: 12 }}>
                                 <Card variant="outlined">
                                     <CardContent>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             No statisticians found. Update the directory to see recommendations.
                                         </Typography>
                                     </CardContent>
@@ -551,7 +554,6 @@ export default function AdviserEditorRecommendationsPage() {
                     </Grid>
                 )
             )}
-
             <Dialog
                 open={infoDialogOpen}
                 onClose={() => setInfoDialogOpen(false)}
@@ -570,7 +572,9 @@ export default function AdviserEditorRecommendationsPage() {
                             <ListItemText
                                 primary="Profile insights"
                                 secondary={(
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Tap into curated data about a expert's expertise, departmental affiliation,
                                         and current engagements.
                                     </Typography>

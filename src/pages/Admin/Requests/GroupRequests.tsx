@@ -166,20 +166,22 @@ export default function AdminGroupRequestsPage() {
                 <Typography variant="h4" gutterBottom>
                     Group Creation Requests
                 </Typography>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Review and approve or reject group creation requests from students.
                 </Typography>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {pendingGroups.length === 0 ? (
                 <Paper sx={{ p: 3 }}>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         No pending group requests at this time.
                     </Typography>
                 </Paper>
@@ -195,7 +197,6 @@ export default function AdminGroupRequestsPage() {
                     ))}
                 </AnimatedList>
             )}
-
             {/* Reject Dialog */}
             <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)}>
                 <DialogTitle>Reject Group Request</DialogTitle>
@@ -280,13 +281,24 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
     return (
         <Card sx={{ mb: 2 }}>
             <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Stack
+                    direction="row"
+                    sx={{
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 2
+                    }}>
                     <Typography variant="h6">{group.name}</Typography>
                     <Chip label="PENDING REVIEW" color="warning" size="small" />
                 </Stack>
 
                 {group.description && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            mb: 2
+                        }}>
                         {group.description}
                     </Typography>
                 )}
@@ -333,7 +345,9 @@ function GroupRequestCard({ group, onApprove, onReject }: GroupRequestCardProps)
                         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
                             Members ({group.members.members.length})
                         </Typography>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={1} useFlexGap sx={{
+                            flexWrap: 'wrap'
+                        }}>
                             {group.members.members.map((uid) => {
                                 const profile = memberProfiles.get(uid);
                                 return (

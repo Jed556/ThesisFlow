@@ -446,7 +446,9 @@ export default function AdminPanelCommentsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Monitor panel feedback for every group and control when students can view each stage.
                     </Typography>
                 </Box>
@@ -523,7 +525,9 @@ export default function AdminPanelCommentsPage() {
                             {/* Table Rail - Left sidebar with panelist tables */}
                             <Paper variant="outlined" sx={{ minWidth: 280, maxWidth: 320, flexShrink: 0 }}>
                                 <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                                    <Typography variant="subtitle2" color="text.secondary">
+                                    <Typography variant="subtitle2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Panel Member Tables
                                     </Typography>
                                 </Box>
@@ -554,7 +558,13 @@ export default function AdminPanelCommentsPage() {
                                                         <ListItemText
                                                             primary={panel.label}
                                                             secondary={
-                                                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                                                                <Stack
+                                                                    direction="row"
+                                                                    spacing={1}
+                                                                    sx={{
+                                                                        alignItems: 'center',
+                                                                        mt: 0.5
+                                                                    }}>
                                                                     <Chip
                                                                         size="small"
                                                                         label={isReleased ? 'Released' : isReady ? 'Ready' : 'Not released'}

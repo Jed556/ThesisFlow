@@ -682,13 +682,17 @@ export default function AdminTerminalRequirementsPage() {
         return (
             <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="flex-start">
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start'
+                        }}>
                         <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'hidden' }}>
                             <Typography
                                 variant="subtitle1"
-                                fontWeight={600}
                                 noWrap
-                                sx={{ cursor: 'default' }}
                                 onMouseEnter={(e) => {
                                     const el = e.currentTarget;
                                     if (el.scrollWidth > el.clientWidth) {
@@ -698,24 +702,34 @@ export default function AdminTerminalRequirementsPage() {
                                 onMouseLeave={(e) => {
                                     e.currentTarget.removeAttribute('title');
                                 }}
-                            >
+                                sx={{
+                                    fontWeight: 600,
+                                    cursor: 'default'
+                                }}>
                                 {displayTitle}
                             </Typography>
                             {entry.description && (
-                                <Typography variant="body2" color="text.secondary" sx={{
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden',
-                                }}>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        color: 'text.secondary',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden'
+                                    }}>
                                     {entry.description}
                                 </Typography>
                             )}
-                            <Typography variant="caption" color="text.disabled" noWrap>
+                            <Typography variant="caption" noWrap sx={{
+                                color: 'text.disabled'
+                            }}>
                                 ID: {entry.requirementId}
                             </Typography>
                         </Box>
-                        <Stack direction="row" spacing={0.5} flexShrink={0}>
+                        <Stack direction="row" spacing={0.5} sx={{
+                            flexShrink: 0
+                        }}>
                             <IconButton
                                 size="small"
                                 onClick={() => handleOpenEditDialog(entry)}
@@ -734,9 +748,15 @@ export default function AdminTerminalRequirementsPage() {
                         </Stack>
                     </Stack>
 
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
-                        <Stack direction="row" alignItems="center" spacing={0.5}>
-                            <Typography variant="caption" color="text.secondary">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{
+                        alignItems: { sm: 'center' }
+                    }}>
+                        <Stack direction="row" spacing={0.5} sx={{
+                            alignItems: 'center'
+                        }}>
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 {entry.required ? 'Required' : 'Optional'}
                             </Typography>
                             <Switch
@@ -747,7 +767,13 @@ export default function AdminTerminalRequirementsPage() {
                         </Stack>
                         <Box sx={{ flexGrow: 1 }} />
                         {(uploading || removing) && <CircularProgress size={20} />}
-                        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                                flexWrap: 'wrap',
+                                alignItems: 'center'
+                            }}>
                             {hasTemplate && (
                                 <>
                                     <Button
@@ -797,7 +823,9 @@ export default function AdminTerminalRequirementsPage() {
                     </Stack>
 
                     {uploadedAtLabel && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Uploaded on {uploadedAtLabel}
                         </Typography>
                     )}
@@ -824,7 +852,9 @@ export default function AdminTerminalRequirementsPage() {
                     }}
                 >
                     <CircularProgress />
-                    <Typography color="text.secondary">
+                    <Typography sx={{
+                        color: 'text.secondary'
+                    }}>
                         {isSeeding
                             ? 'Seeding default terminal requirements for courses...'
                             : 'Checking terminal requirement templates...'}
@@ -838,14 +868,18 @@ export default function AdminTerminalRequirementsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography color="text.secondary">
+                    <Typography sx={{
+                        color: 'text.secondary'
+                    }}>
                         Choose which forms are required per stage and attach the latest templates for your courses.
                     </Typography>
                 </Box>
 
                 <Card variant="outlined">
                     <CardContent>
-                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{
+                            alignItems: { md: 'center' }
+                        }}>
                             <Autocomplete
                                 freeSolo
                                 options={departments}
@@ -964,7 +998,6 @@ export default function AdminTerminalRequirementsPage() {
                     </Alert>
                 )}
             </Stack>
-
             {/* Add Requirement Dialog */}
             <RequirementDialog
                 open={addDialogOpen}
@@ -973,7 +1006,6 @@ export default function AdminTerminalRequirementsPage() {
                 mode="add"
                 stageLabel={activeStageLabel}
             />
-
             {/* Edit Requirement Dialog */}
             <RequirementDialog
                 open={editDialogOpen}

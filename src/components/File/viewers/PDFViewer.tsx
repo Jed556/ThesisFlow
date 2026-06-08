@@ -181,7 +181,6 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, height = '100%' }) =>
                     </span>
                 </Tooltip>
             </Paper>
-
             {/* PDF Content - Scrollable */}
             <Box
                 ref={scrollContainerRef}
@@ -200,9 +199,16 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, height = '100%' }) =>
                     }}
                 >
                     {isLoading && (
-                        <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
+                        <Stack
+                            spacing={2}
+                            sx={{
+                                alignItems: 'center',
+                                py: 4
+                            }}>
                             <CircularProgress />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Loading PDF...
                             </Typography>
                         </Stack>

@@ -19,7 +19,7 @@ service cloud.firestore {
          * This is more efficient than reading from Firestore on every request
          */
         function getUserRole() {
-            return request.auth.token.role;
+            return request.auth.token.get('role', '');
         }
 
         /**
@@ -145,14 +145,14 @@ service cloud.firestore {
          * Check if user belongs to a specific department (via custom claims)
          */
         function userInDepartment(department) {
-            return isAuthenticated() && request.auth.token.department == department;
+            return isAuthenticated() && request.auth.token.get('department', '') == department;
         }
 
         /**
          * Check if user belongs to a specific course (via custom claims)
          */
         function userInCourse(course) {
-            return isAuthenticated() && request.auth.token.course == course;
+            return isAuthenticated() && request.auth.token.get('course', '') == course;
         }
 
         // ====================================
@@ -558,7 +558,7 @@ service cloud.firestore {
                          */
                         function isGroupLeader() {
                             let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
-                            return group.data.members.leader == request.auth.uid;
+                            return group != null && group.data.get('members', {}).get('leader', null) == request.auth.uid;
                         }
 
                         /**
@@ -566,8 +566,9 @@ service cloud.firestore {
                          */
                         function isGroupMember() {
                             let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
-                            return request.auth.uid == group.data.members.leader || 
-                                   request.auth.uid in group.data.members.members;
+                            let membersObj = group != null ? group.data.get('members', {}) : {};
+                            return request.auth.uid == membersObj.get('leader', null) || 
+                                   request.auth.uid in membersObj.get('members', []);
                         }
 
                         /**
@@ -575,8 +576,7 @@ service cloud.firestore {
                          */
                         function isGroupAdviser() {
                             let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
-                            return group.data.members.adviser != null && 
-                                   request.auth.uid == group.data.members.adviser;
+                            return group != null && group.data.get('members', {}).get('adviser', null) == request.auth.uid;
                         }
 
                         /**
@@ -584,8 +584,7 @@ service cloud.firestore {
                          */
                         function isGroupEditor() {
                             let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
-                            return group.data.members.editor != null && 
-                                   request.auth.uid == group.data.members.editor;
+                            return group != null && group.data.get('members', {}).get('editor', null) == request.auth.uid;
                         }
 
                         /**
@@ -593,8 +592,7 @@ service cloud.firestore {
                          */
                         function isGroupStatistician() {
                             let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
-                            return group.data.members.statistician != null && 
-                                   request.auth.uid == group.data.members.statistician;
+                            return group != null && group.data.get('members', {}).get('statistician', null) == request.auth.uid;
                         }
 
                         /**
@@ -602,8 +600,8 @@ service cloud.firestore {
                          */
                         function isGroupPanel() {
                             let group = get(/databases/$(database)/documents/year/$(year)/departments/$(department)/courses/$(course)/groups/$(groupId));
-                            return group.data.members.panels != null && 
-                                   request.auth.uid in group.data.members.panels;
+                            let panels = group != null ? group.data.get('members', {}).get('panels', {}) : {};
+                            return request.auth.uid in panels;
                         }
 
                         /**

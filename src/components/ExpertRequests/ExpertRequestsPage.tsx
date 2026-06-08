@@ -493,7 +493,12 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
     return (
         <AnimatedPage variant="slideUp">
             <Box>
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                    variant="body1"
+                    sx={{
+                        color: 'text.secondary',
+                        mb: 2
+                    }}>
                     Review and respond to thesis groups requesting you as their {roleLabel.toLowerCase()}.
                 </Typography>
             </Box>
@@ -502,7 +507,6 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                     {error}
                 </Alert>
             )}
-
             {/* Two-column layout */}
             <Box
                 sx={{
@@ -524,7 +528,9 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                         </Paper>
                     ) : viewModels.length === 0 ? (
                         <Paper sx={{ p: 3 }}>
-                            <Typography variant="body1" color="text.secondary">
+                            <Typography variant="body1" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 No service requests yet. Groups with an approved topic can send you a request from your profile page.
                             </Typography>
                         </Paper>
@@ -541,7 +547,9 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                     return (
                                         <Card key={request.id} variant="outlined">
                                             <CardContent>
-                                                <Typography variant="body2" color="text.secondary">
+                                                <Typography variant="body2" sx={{
+                                                    color: 'text.secondary'
+                                                }}>
                                                     Group details are unavailable. Please ask the students to resend their request.
                                                 </Typography>
                                             </CardContent>
@@ -569,13 +577,17 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                     {/* Stats summary card */}
                     <Card>
                         <CardContent>
-                            <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                            <Typography variant="subtitle1" gutterBottom sx={{
+                                fontWeight: 'medium'
+                            }}>
                                 Overview
                             </Typography>
                             <Divider sx={{ mb: 2 }} />
                             <Stack spacing={1.5}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Pending
                                     </Typography>
                                     <Chip
@@ -586,7 +598,9 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                     />
                                 </Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Approved
                                     </Typography>
                                     <Chip
@@ -597,7 +611,9 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                     />
                                 </Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Rejected
                                     </Typography>
                                     <Chip
@@ -616,7 +632,9 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                         <CardContent>
                             {editingCapacity ? (
                                 <>
-                                    <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                                    <Typography variant="subtitle1" gutterBottom sx={{
+                                        fontWeight: 'medium'
+                                    }}>
                                         Update Accepted Groups
                                     </Typography>
                                     <TextField
@@ -640,13 +658,17 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                 </>
                             ) : (
                                 <>
-                                    <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                                    <Typography variant="subtitle1" gutterBottom sx={{
+                                        fontWeight: 'medium'
+                                    }}>
                                         Accepted Groups
                                     </Typography>
                                     <Typography variant="h4" sx={{ mb: 0.5 }}>
                                         {assignmentsLoading ? '…' : slotsSummary}
                                     </Typography>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {normalizedCapacity === 0
                                             ? 'Not accepting requests'
                                             : openSlots > 0
@@ -713,11 +735,14 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                             <CardContent>
                                 <Stack
                                     direction="row"
-                                    justifyContent="space-between"
-                                    alignItems="center"
-                                    sx={{ mb: 2 }}
-                                >
-                                    <Typography variant="subtitle1" fontWeight="medium">
+                                    sx={{
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        mb: 2
+                                    }}>
+                                    <Typography variant="subtitle1" sx={{
+                                        fontWeight: 'medium'
+                                    }}>
                                         Your Skills
                                     </Typography>
                                     {departmentSkills.length > 0 && (
@@ -740,7 +765,9 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                         <Skeleton variant="text" width="90%" height={24} />
                                     </Stack>
                                 ) : departmentSkills.length === 0 ? (
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         No skill templates defined for your department yet.
                                     </Typography>
                                 ) : (
@@ -756,10 +783,11 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                                 <Box key={skill.id}>
                                                     <Stack
                                                         direction="row"
-                                                        justifyContent="space-between"
-                                                        alignItems="center"
-                                                        sx={{ mb: 0.5 }}
-                                                    >
+                                                        sx={{
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            mb: 0.5
+                                                        }}>
                                                         <Typography
                                                             variant="body2"
                                                             noWrap
@@ -769,8 +797,10 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                                         </Typography>
                                                         <Typography
                                                             variant="body2"
-                                                            fontWeight="medium"
                                                             color={hasValidRating ? 'text.primary' : 'text.disabled'}
+                                                            sx={{
+                                                                fontWeight: 'medium'
+                                                            }}
                                                         >
                                                             {hasValidRating ? `${displayRating}/10` : `${displayRating}/10`}
                                                         </Typography>
@@ -788,7 +818,9 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                                             );
                                         })}
                                         {departmentSkills.length > 5 && (
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" sx={{
+                                                color: 'text.secondary'
+                                            }}>
                                                 +{departmentSkills.length - 5} more skills
                                             </Typography>
                                         )}
@@ -811,7 +843,6 @@ export default function ExpertRequestsPage({ role, roleLabel, allowedRoles }: Ex
                     )}
                 </Stack>
             </Box>
-
             {/* Skill Rating Dialog */}
             <SkillRatingDialog
                 open={skillDialogOpen}

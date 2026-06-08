@@ -396,7 +396,9 @@ export default function ModeratorTopicProposalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Monitor every group in the sections you moderate. You can view drafts at any time,
                         but only proposals that were formally submitted can be approved or rejected.
                     </Typography>
@@ -407,9 +409,10 @@ export default function ModeratorTopicProposalsPage() {
                         <Stack
                             direction={{ xs: 'column', sm: 'row' }}
                             spacing={2}
-                            alignItems="center"
-                            justifyContent="space-between"
-                        >
+                            sx={{
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
                             <Box>
                                 <Typography variant="subtitle1">Pending proposals</Typography>
                                 <Typography variant="h4">{pendingCount}</Typography>
@@ -454,13 +457,16 @@ export default function ModeratorTopicProposalsPage() {
                             <CardContent>
                                 <Stack
                                     direction={{ xs: 'column', sm: 'row' }}
-                                    justifyContent="space-between"
                                     spacing={1}
-                                    sx={{ mb: 2 }}
-                                >
+                                    sx={{
+                                        justifyContent: 'space-between',
+                                        mb: 2
+                                    }}>
                                     <Box>
                                         <Typography variant="h6">{group.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             {group.course ?? 'Unassigned section'} • {group.department ?? 'No department listed'}
                                         </Typography>
                                     </Box>
@@ -483,7 +489,9 @@ export default function ModeratorTopicProposalsPage() {
                                 )}
 
                                 {record && entries.length > 0 && (
-                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
+                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap sx={{
+                                        flexWrap: 'wrap'
+                                    }}>
                                         {entries.map((entry) => {
                                             const statusButton = getModeratorStatusButtonConfig(
                                                 entry.status ?? 'draft'
@@ -552,7 +560,6 @@ export default function ModeratorTopicProposalsPage() {
                     );
                 })}
             </Stack>
-
             {/* Moderator approval dialog with agenda/ESG/SDG classification */}
             <ModeratorApprovalDialog
                 open={Boolean(approvalDialog)}
@@ -561,7 +568,6 @@ export default function ModeratorTopicProposalsPage() {
                 onClose={() => setApprovalDialog(null)}
                 onConfirm={handleConfirmApproval}
             />
-
             {/* Rejection dialog (simple notes only) */}
             <TopicProposalDecisionDialog
                 open={Boolean(decisionDialog)}

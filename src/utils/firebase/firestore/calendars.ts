@@ -400,7 +400,7 @@ export async function getUserCalendarsHierarchical(
     uid: string,
     userRole: UserRole,
     userContext: { year?: string; department?: string; course?: string },
-    groupIds?: string[],
+    userGroups?: { id: string; department?: string; course?: string }[],
     allUsers?: { department?: string; course?: string }[],
     allGroups?: { id: string; department?: string; course?: string }[]
 ): Promise<Calendar[]> {
@@ -408,8 +408,18 @@ export async function getUserCalendarsHierarchical(
     const year = userContext.year || DEFAULT_YEAR;
     const isAdminOrDev = userRole === 'admin' || userRole === 'developer';
 
+    // Helper function to safely fetch a calendar
+    const safeGetCalendar = async (level: CalendarLevel, context: any) => {
+        try {
+            return await getHierarchicalCalendar(level, context);
+        } catch (error) {
+            console.error(`Error fetching ${level} calendar:`, error);
+            return null;
+        }
+    };
+
     // 1. Always get global calendar if it exists (visible to ALL users)
-    const globalCal = await getHierarchicalCalendar('global', { year });
+    const globalCal = await safeGetCalendar('global', { year });
     if (globalCal) calendars.push(globalCal);
 
     if (isAdminOrDev && allUsers && allGroups) {
@@ -433,20 +443,20 @@ export async function getUserCalendarsHierarchical(
 
         // 2. Get ALL department calendars
         for (const department of departmentsSet) {
-            const deptCal = await getHierarchicalCalendar('department', { year, department });
+            const deptCal = await safeGetCalendar('department', { year, department });
             if (deptCal) calendars.push(deptCal);
         }
 
         // 3. Get ALL course calendars
         for (const { department, course } of coursePairsMap.values()) {
-            const courseCal = await getHierarchicalCalendar('course', { year, department, course });
+            const courseCal = await safeGetCalendar('course', { year, department, course });
             if (courseCal) calendars.push(courseCal);
         }
 
         // 4. Get ALL group calendars
         for (const group of allGroups) {
             if (!group.department || !group.course) continue;
-            const groupCal = await getHierarchicalCalendar('group', {
+            const groupCal = await safeGetCalendar('group', {
                 year,
                 department: group.department,
                 course: group.course,
@@ -456,7 +466,7 @@ export async function getUserCalendarsHierarchical(
         }
 
         // 5. Get ONLY the admin's own personal calendar (not others')
-        const personalCal = await getHierarchicalCalendar('personal', {
+        const personalCal = await safeGetCalendar('personal', {
             year,
             department: userContext.department,
             course: userContext.course,
@@ -470,7 +480,7 @@ export async function getUserCalendarsHierarchical(
         // 2. Get department calendar if user has department context
         // (visible to all users in the department, including those in courses)
         if (userContext.department) {
-            const deptCal = await getHierarchicalCalendar('department', {
+            const deptCal = await safeGetCalendar('department', {
                 year,
                 department: userContext.department,
             });
@@ -480,7 +490,7 @@ export async function getUserCalendarsHierarchical(
         // 3. Get course calendar if user has course context
         // (visible to all users in that course)
         if (userContext.department && userContext.course) {
-            const courseCal = await getHierarchicalCalendar('course', {
+            const courseCal = await safeGetCalendar('course', {
                 year,
                 department: userContext.department,
                 course: userContext.course,
@@ -490,20 +500,20 @@ export async function getUserCalendarsHierarchical(
 
         // 4. Get group calendars for groups the user belongs to
         // (visible only to group members)
-        if (groupIds?.length && userContext.department && userContext.course) {
-            for (const groupId of groupIds) {
-                const groupCal = await getHierarchicalCalendar('group', {
+        if (userGroups?.length) {
+            for (const group of userGroups) {
+                const groupCal = await safeGetCalendar('group', {
                     year,
-                    department: userContext.department,
-                    course: userContext.course,
-                    groupId,
+                    department: group.department || userContext.department,
+                    course: group.course || userContext.course,
+                    groupId: group.id,
                 });
                 if (groupCal) calendars.push(groupCal);
             }
         }
 
         // 5. Get user's own personal calendar (visible only to the owner)
-        const personalCal = await getHierarchicalCalendar('personal', {
+        const personalCal = await safeGetCalendar('personal', {
             year,
             department: userContext.department,
             course: userContext.course,

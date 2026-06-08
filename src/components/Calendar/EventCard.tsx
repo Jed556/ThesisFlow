@@ -87,7 +87,12 @@ export default function EventCard({
                     <Skeleton variant="text" width="90%" height={20} sx={{ mb: 2 }} />
                 ) : (
                     event.description
-                    && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{event.description}</Typography>
+                    && <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'text.secondary',
+                            mb: 2
+                        }}>{event.description}</Typography>
                 )}
 
                 <Stack spacing={1.5} sx={{ mb: 2 }}>
@@ -156,7 +161,9 @@ export default function EventCard({
                                     backgroundColor: calendar.color
                                 }}
                             />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Calendar: {calendar.name}
                             </Typography>
                         </Box>
@@ -192,7 +199,12 @@ export default function EventCard({
                 ) : (
                     Array.isArray(event.participants) && event.participants.length > 0 && (
                         <Box sx={{ mt: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: 'text.secondary',
+                                    mb: 1
+                                }}>
                                 Participants ({event.participants.length}):
                             </Typography>
                             <AvatarGroup

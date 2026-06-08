@@ -359,7 +359,12 @@ export default function ForgotPassword() {
                     <CardContent sx={{ p: 4 }}>
                         <Stack spacing={3}>
                             {/* Logo and Back Button */}
-                            <Stack direction="row" alignItems="center" justifyContent="space-between">
+                            <Stack
+                                direction="row"
+                                sx={{
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between'
+                                }}>
                                 {activeStep > 0 ? (
                                     <IconButton onClick={handleBack} size="small">
                                         <ArrowBackIcon />
@@ -382,7 +387,9 @@ export default function ForgotPassword() {
 
                             {/* Step Content */}
                             {activeStep === 0 && (
-                                <Stack spacing={3} alignItems="center">
+                                <Stack spacing={3} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <Box
                                         sx={{
                                             bgcolor: 'primary.main',
@@ -394,11 +401,20 @@ export default function ForgotPassword() {
                                         <EmailIcon sx={{ fontSize: 32, color: 'primary.contrastText' }} />
                                     </Box>
 
-                                    <Stack spacing={1} alignItems="center" textAlign="center">
-                                        <Typography variant="h5" fontWeight="bold">
+                                    <Stack
+                                        spacing={1}
+                                        sx={{
+                                            alignItems: 'center',
+                                            textAlign: 'center'
+                                        }}>
+                                        <Typography variant="h5" sx={{
+                                            fontWeight: 'bold'
+                                        }}>
                                             Forgot Password?
                                         </Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             Enter your email address and we&apos;ll send you a verification
                                             code to reset your password.
                                         </Typography>
@@ -446,7 +462,9 @@ export default function ForgotPassword() {
                             )}
 
                             {activeStep === 1 && (
-                                <Stack spacing={3} alignItems="center">
+                                <Stack spacing={3} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <Box
                                         sx={{
                                             bgcolor: 'primary.main',
@@ -458,11 +476,20 @@ export default function ForgotPassword() {
                                         <PinIcon sx={{ fontSize: 32, color: 'primary.contrastText' }} />
                                     </Box>
 
-                                    <Stack spacing={1} alignItems="center" textAlign="center">
-                                        <Typography variant="h5" fontWeight="bold">
+                                    <Stack
+                                        spacing={1}
+                                        sx={{
+                                            alignItems: 'center',
+                                            textAlign: 'center'
+                                        }}>
+                                        <Typography variant="h5" sx={{
+                                            fontWeight: 'bold'
+                                        }}>
                                             Enter Verification Code
                                         </Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             We sent a 6-digit code to <strong>{email}</strong>.
                                             Enter it below to continue.
                                         </Typography>
@@ -508,7 +535,9 @@ export default function ForgotPassword() {
                                         )}
                                     </Button>
 
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         Didn&apos;t receive the code?{' '}
                                         {resendCooldown > 0 ? (
                                             <span>Resend in {resendCooldown}s</span>
@@ -527,7 +556,9 @@ export default function ForgotPassword() {
                             )}
 
                             {activeStep === 2 && (
-                                <Stack spacing={3} alignItems="center">
+                                <Stack spacing={3} sx={{
+                                    alignItems: 'center'
+                                }}>
                                     <Box
                                         sx={{
                                             bgcolor: 'primary.main',
@@ -539,11 +570,20 @@ export default function ForgotPassword() {
                                         <LockIcon sx={{ fontSize: 32, color: 'primary.contrastText' }} />
                                     </Box>
 
-                                    <Stack spacing={1} alignItems="center" textAlign="center">
-                                        <Typography variant="h5" fontWeight="bold">
+                                    <Stack
+                                        spacing={1}
+                                        sx={{
+                                            alignItems: 'center',
+                                            textAlign: 'center'
+                                        }}>
+                                        <Typography variant="h5" sx={{
+                                            fontWeight: 'bold'
+                                        }}>
                                             Reset Password
                                         </Typography>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: 'text.secondary'
+                                        }}>
                                             Create a new password for your account.
                                         </Typography>
                                     </Stack>
@@ -587,9 +627,11 @@ export default function ForgotPassword() {
                                             <Box sx={{ pl: 1 }}>
                                                 <Typography
                                                     variant="caption"
-                                                    color="text.secondary"
-                                                    sx={{ mb: 0.5, display: 'block' }}
-                                                >
+                                                    sx={{
+                                                        color: 'text.secondary',
+                                                        mb: 0.5,
+                                                        display: 'block'
+                                                    }}>
                                                     Password requirements:
                                                 </Typography>
                                                 <Stack spacing={0.5}>
@@ -600,7 +642,9 @@ export default function ForgotPassword() {
                                                                 key={req.id}
                                                                 direction="row"
                                                                 spacing={1}
-                                                                alignItems="center"
+                                                                sx={{
+                                                                    alignItems: 'center'
+                                                                }}
                                                             >
                                                                 <CheckIcon
                                                                     sx={{
@@ -683,9 +727,11 @@ export default function ForgotPassword() {
                 {/* Footer */}
                 <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ mt: 3, textAlign: 'center' }}
-                >
+                    sx={{
+                        color: 'text.secondary',
+                        mt: 3,
+                        textAlign: 'center'
+                    }}>
                     ThesisFlow - Research Management System
                 </Typography>
             </Box>

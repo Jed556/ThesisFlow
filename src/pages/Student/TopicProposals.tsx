@@ -574,7 +574,9 @@ export default function StudentTopicProposalsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Draft up to {MAX_TOPIC_PROPOSALS} topics, collaborate with your group, and submit them for
                         moderator and head review.
                     </Typography>
@@ -608,7 +610,9 @@ export default function StudentTopicProposalsPage() {
                                     <CircularProgress size={32} />
                                 </Box>
                             ) : (
-                                <Stack spacing={2} alignItems="flex-start">
+                                <Stack spacing={2} sx={{
+                                    alignItems: 'flex-start'
+                                }}>
                                     <Typography variant="h6">No topic proposals yet</Typography>
                                     {isLeader && (
                                         <Button variant="contained" onClick={handleCreateSet} disabled={createSetLoading}>
@@ -625,12 +629,15 @@ export default function StudentTopicProposalsPage() {
                             <Stack
                                 spacing={1}
                                 direction={{ xs: 'column', sm: 'row' }}
-                                justifyContent="space-between"
-                                alignItems={{ xs: 'flex-start', sm: 'center' }}
-                            >
+                                sx={{
+                                    justifyContent: 'space-between',
+                                    alignItems: { xs: 'flex-start', sm: 'center' }
+                                }}>
                                 <Box>
                                     <Typography variant="h6">Batch #{activeSet.batch}</Typography>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {activeSetStatusLabel}
                                     </Typography>
                                 </Box>
@@ -670,7 +677,14 @@ export default function StudentTopicProposalsPage() {
                             )}
 
                             {activeSet.entries.length > 0 && (
-                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap" sx={{ mt: 3 }}>
+                                <Stack
+                                    direction={{ xs: 'column', md: 'row' }}
+                                    spacing={2}
+                                    useFlexGap
+                                    sx={{
+                                        flexWrap: 'wrap',
+                                        mt: 3
+                                    }}>
                                     {activeSet.entries.map((entry) => {
                                         const author = memberProfiles.get(entry.proposedBy);
                                         const isEntryInUse = entry.usedAsThesis === true;
@@ -719,7 +733,9 @@ export default function StudentTopicProposalsPage() {
                                         };
 
                                         const footer = moderatorAudit || headAudit ? (
-                                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                            <Stack direction="row" spacing={1} useFlexGap sx={{
+                                                flexWrap: 'wrap'
+                                            }}>
                                                 {moderatorAudit && (
                                                     <ApprovalStatusChip
                                                         roleLabel="Moderator"
@@ -783,10 +799,14 @@ export default function StudentTopicProposalsPage() {
                             return (
                                 <Card key={set.id} variant="outlined">
                                     <CardContent>
-                                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
+                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{
+                                            justifyContent: 'space-between'
+                                        }}>
                                             <Box>
                                                 <Typography variant="subtitle1">Batch #{set.batch}</Typography>
-                                                <Typography variant="body2" color="text.secondary">
+                                                <Typography variant="body2" sx={{
+                                                    color: 'text.secondary'
+                                                }}>
                                                     {set.entries.length} topic(s) • {statusLabel}
                                                 </Typography>
                                             </Box>
@@ -803,7 +823,6 @@ export default function StudentTopicProposalsPage() {
                     </Stack>
                 )}
             </Stack>
-
             <TopicProposalFormDialog
                 open={formOpen}
                 mode={formMode}
@@ -812,7 +831,6 @@ export default function StudentTopicProposalsPage() {
                 onClose={() => setFormOpen(false)}
                 onSubmit={(values) => handleSaveEntry(values)}
             />
-
             <Dialog open={Boolean(deleteDialog)} onClose={() => setDeleteDialog(null)}>
                 <DialogTitle>Remove topic proposal</DialogTitle>
                 <DialogContent>
@@ -825,7 +843,6 @@ export default function StudentTopicProposalsPage() {
                     <Button onClick={handleDeleteEntry} color="error">Remove</Button>
                 </DialogActions>
             </Dialog>
-
             <Dialog open={Boolean(useTopicDialog)} onClose={() => setUseTopicDialog(null)}>
                 <DialogTitle>Use this topic as your thesis</DialogTitle>
                 <DialogContent>

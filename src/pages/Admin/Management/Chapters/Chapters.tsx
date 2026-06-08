@@ -393,13 +393,17 @@ export default function AdminChapterManagementPage() {
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 10, gap: 2 }}>
                     {isSeeding ? (
                         <>
-                            <Typography variant="h6" color="text.secondary">
+                            <Typography variant="h6" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Pushing default chapters to database...
                             </Typography>
                             <Box sx={{ width: '100%', maxWidth: 400 }}>
                                 <LinearProgress />
                             </Box>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: 'text.secondary'
+                            }}>
                                 Setting up chapter templates for all courses
                             </Typography>
                         </>
@@ -427,16 +431,25 @@ export default function AdminChapterManagementPage() {
                 <Stack
                     direction={{ xs: 'column', md: 'row' }}
                     spacing={2}
-                    alignItems={{ md: 'center' }}
-                    justifyContent="space-between"
-                    sx={{ mb: 4 }}
-                >
+                    sx={{
+                        alignItems: { md: 'center' },
+                        justifyContent: 'space-between',
+                        mb: 4
+                    }}>
                     <Box>
-                        <Typography color="text.secondary">
+                        <Typography sx={{
+                            color: 'text.secondary'
+                        }}>
                             Define the thesis chapters each course must submit.
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            alignItems: 'center',
+                            flexWrap: 'wrap'
+                        }}>
                         <Autocomplete
                             options={departmentOptions}
                             value={selectedDepartment}
@@ -486,7 +499,9 @@ export default function AdminChapterManagementPage() {
                         <Typography variant="h6" gutterBottom>
                             {filtersApplied ? 'No chapter templates found' : 'Select filters to view templates'}
                         </Typography>
-                        <Typography color="text.secondary">
+                        <Typography sx={{
+                            color: 'text.secondary'
+                        }}>
                             {filtersApplied
                                 ? 'No chapter requirements match the selected filters.'
                                 : 'Choose a department and course to manage chapter requirements.'}

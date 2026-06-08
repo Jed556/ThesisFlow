@@ -104,7 +104,6 @@ export default function AccountMenu() {
                     </Avatar>
                 )}
             </IconButton>
-
             <Popover
                 id={popoverId}
                 open={open}
@@ -158,10 +157,17 @@ export default function AccountMenu() {
                                 </>
                             ) : (
                                 <>
-                                    <Typography variant="subtitle1" fontWeight={700} sx={{ wordBreak: 'break-word' }}>
+                                    <Typography
+                                        variant="subtitle1"
+                                        sx={{
+                                            fontWeight: 700,
+                                            wordBreak: 'break-word'
+                                        }}>
                                         {user?.name || user?.email || 'Signed in user'}
                                     </Typography>
-                                    <Typography variant="body2" color="text.secondary" noWrap>
+                                    <Typography variant="body2" noWrap sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {user?.email || 'No email available'}
                                     </Typography>
                                 </>
@@ -192,7 +198,12 @@ export default function AccountMenu() {
                             {isLoading ? (
                                 <Skeleton variant="text" width={120} />
                             ) : (
-                                <Typography variant="body2" fontWeight={600} color="text.primary">
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontWeight: 600,
+                                        color: 'text.primary'
+                                    }}>
                                     {user?.department || 'Not set'}
                                 </Typography>
                             )}
@@ -204,7 +215,12 @@ export default function AccountMenu() {
                             {isLoading ? (
                                 <Skeleton variant="text" width={120} />
                             ) : (
-                                <Typography variant="body2" fontWeight={600} color="text.primary">
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontWeight: 600,
+                                        color: 'text.primary'
+                                    }}>
                                     {user?.course || 'Not set'}
                                 </Typography>
                             )}

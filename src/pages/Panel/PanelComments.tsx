@@ -428,7 +428,9 @@ export default function PanelPanelCommentsPage() {
         <AnimatedPage variant="slideUp">
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: 'text.secondary'
+                    }}>
                         Select an assigned research group, pick the stage, and log your consolidated feedback.
                     </Typography>
                 </Box>
@@ -490,7 +492,12 @@ export default function PanelPanelCommentsPage() {
                                         >
                                             {readySaving ? 'Marking as Ready...' : 'Mark as Ready for Release'}
                                         </Button>
-                                        <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: 'text.secondary',
+                                                ml: 2
+                                            }}>
                                             This will notify the admin that your comments are ready to be sent to students.
                                         </Typography>
                                     </Box>
@@ -504,7 +511,9 @@ export default function PanelPanelCommentsPage() {
                         ) : manuscript && (
                             <Paper variant="outlined" sx={{ p: 2 }}>
                                 <Stack spacing={1.5}>
-                                    <Typography variant="subtitle1" fontWeight="medium">
+                                    <Typography variant="subtitle1" sx={{
+                                        fontWeight: 'medium'
+                                    }}>
                                         {manuscript.reviewRequested ? 'Manuscript for Review' : 'Manuscript Uploaded'}
                                     </Typography>
                                     {!manuscript.reviewRequested && (
@@ -516,27 +525,29 @@ export default function PanelPanelCommentsPage() {
                                     )}
                                     {manuscript.type === 'link' ? (
                                         /* Link mode - display link info */
-                                        <Stack
+                                        (<Stack
                                             direction="row"
                                             spacing={2}
-                                            alignItems="center"
                                             sx={{
+                                                alignItems: 'center',
                                                 p: 2,
                                                 bgcolor: 'action.hover',
-                                                borderRadius: 1,
-                                            }}
-                                        >
+                                                borderRadius: 1
+                                            }}>
                                             <LinkIcon color="primary" />
                                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                <Typography variant="body2" fontWeight="medium" noWrap>
+                                                <Typography variant="body2" noWrap sx={{
+                                                    fontWeight: 'medium'
+                                                }}>
                                                     {manuscript.linkLabel || 'Manuscript Link'}
                                                 </Typography>
                                                 <Typography
                                                     variant="caption"
-                                                    color="text.secondary"
                                                     noWrap
-                                                    sx={{ display: 'block' }}
-                                                >
+                                                    sx={{
+                                                        color: 'text.secondary',
+                                                        display: 'block'
+                                                    }}>
                                                     Submitted{' '}
                                                     {new Date(manuscript.uploadedAt).toLocaleDateString()}
                                                     {manuscript.reviewRequestedAt && (
@@ -554,10 +565,10 @@ export default function PanelPanelCommentsPage() {
                                             >
                                                 Open Link
                                             </Button>
-                                        </Stack>
+                                        </Stack>)
                                     ) : (
                                         /* File mode - display FileCard */
-                                        <FileCard
+                                        (<FileCard
                                             file={{
                                                 name: manuscript.fileName ?? 'Manuscript',
                                                 size: formatFileSize(manuscript.fileSize ?? 0),
@@ -579,7 +590,7 @@ export default function PanelPanelCommentsPage() {
                                             onDownload={() => window.open(manuscript.url, '_blank', 'noopener,noreferrer')}
                                             showDownloadButton
                                             showDeleteButton={false}
-                                        />
+                                        />)
                                     )}
                                 </Stack>
                             </Paper>
@@ -603,7 +614,6 @@ export default function PanelPanelCommentsPage() {
                     </>
                 )}
             </Stack>
-
             <PanelCommentEditorDialog
                 open={dialogOpen}
                 mode={dialogMode}
@@ -612,7 +622,6 @@ export default function PanelPanelCommentsPage() {
                 onSubmit={handleSubmitEditor}
                 submitting={saving}
             />
-
             {/* File Viewer Dialog - Only show for file type manuscripts */}
             {manuscript?.type !== 'link' && (
                 <Dialog

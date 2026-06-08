@@ -30,6 +30,7 @@ import {
 } from '../../../utils/firebase/firestore/groups';
 import { findUserById, findUsersByFilter } from '../../../utils/firebase/firestore/user';
 import { auditAndNotify } from '../../../utils/auditNotificationUtils';
+import { useSegmentViewed } from '../../../hooks';
 
 /** Filter options for student's groups view */
 type MyGroupsFilterStatus = 'all' | 'draft' | 'review' | 'active' | 'rejected';
@@ -56,6 +57,8 @@ export default function StudentGroupPage() {
     const navigate = useNavigate();
     const userUid = session?.user?.uid;
     const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
+
+    useSegmentViewed({ segment: 'group' });
 
     // My group state - the active/primary group
     const [myGroup, setMyGroup] = React.useState<ThesisGroup | null>(null);
@@ -879,16 +882,20 @@ export default function StudentGroupPage() {
 
     return (
         <AnimatedPage variant="slideUp">
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {/* Hide create/search controls when loading or when user has an established group */}
             {!loading && !hasEstablishedGroup && (
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={2}
+                    sx={{
+                        alignItems: 'center',
+                        mb: 3
+                    }}>
                     <Button startIcon={<AddIcon />} variant="contained" onClick={handleOpenCreateDialog}>
                         Create Group
                     </Button>
@@ -919,7 +926,6 @@ export default function StudentGroupPage() {
                     />
                 </Stack>
             )}
-
             <StudentGroupCard
                 loading={loading}
                 group={myGroup}
@@ -938,7 +944,6 @@ export default function StudentGroupPage() {
                 onRejectJoinRequest={handleRejectJoinRequest}
                 inviteActionsDisabled={myGroup ? isInviteLocked(myGroup.status) : false}
             />
-
             {/* My Groups History - shows all groups with filters */}
             {!loading && allMyGroups.length > 1 && (
                 <Box sx={{ mb: 3, mt: 3 }}>
@@ -998,16 +1003,17 @@ export default function StudentGroupPage() {
                         ) : (
                             <Typography
                                 variant="body2"
-                                color="text.secondary"
-                                sx={{ gridColumn: '1 / -1', textAlign: 'center' }}
-                            >
+                                sx={{
+                                    color: 'text.secondary',
+                                    gridColumn: '1 / -1',
+                                    textAlign: 'center'
+                                }}>
                                 No groups match the selected filter.
                             </Typography>
                         )}
                     </Box>
                 </Box>
             )}
-
             {/* My Invites - hidden when user has an established group */}
             {!loading && !hasEstablishedGroup && myInvites.length > 0 && (
                 <Box sx={{ mb: 3 }}>
@@ -1060,16 +1066,17 @@ export default function StudentGroupPage() {
                         ) : (
                             <Typography
                                 variant="body2"
-                                color="text.secondary"
-                                sx={{ gridColumn: '1 / -1', textAlign: 'center' }}
-                            >
+                                sx={{
+                                    color: 'text.secondary',
+                                    gridColumn: '1 / -1',
+                                    textAlign: 'center'
+                                }}>
                                 No invites match your search.
                             </Typography>
                         )}
                     </Box>
                 </Box>
             )}
-
             {/* Available Groups - only shown when user has no group */}
             {!loading && !myGroup && !hasEstablishedGroup && availableGroups.length > 0 && (
                 <Box sx={{ mb: 3 }}>
@@ -1102,16 +1109,17 @@ export default function StudentGroupPage() {
                         ) : (
                             <Typography
                                 variant="body2"
-                                color="text.secondary"
-                                sx={{ gridColumn: '1 / -1', textAlign: 'center' }}
-                            >
+                                sx={{
+                                    color: 'text.secondary',
+                                    gridColumn: '1 / -1',
+                                    textAlign: 'center'
+                                }}>
                                 No groups match your search.
                             </Typography>
                         )}
                     </Box>
                 </Box>
             )}
-
             {/* Create Group Dialog */}
             <GroupManageDialog
                 open={createDialogOpen}
@@ -1142,7 +1150,6 @@ export default function StudentGroupPage() {
                 formatUserLabel={formatParticipantLabel}
                 formatMemberOptionLabel={formatParticipantOptionLabel}
             />
-
             {/* Invite User Dialog */}
             <Dialog open={inviteDialogOpen} onClose={() => setInviteDialogOpen(false)}>
                 <DialogTitle>Invite User to Group</DialogTitle>
@@ -1170,7 +1177,6 @@ export default function StudentGroupPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Delete Group Dialog */}
             <GroupDeleteDialog
                 open={deleteDialogOpen}
@@ -1178,7 +1184,6 @@ export default function StudentGroupPage() {
                 onCancel={() => setDeleteDialogOpen(false)}
                 onConfirm={handleDeleteGroup}
             />
-
         </AnimatedPage>
     );
 }

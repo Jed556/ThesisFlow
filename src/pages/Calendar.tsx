@@ -327,7 +327,12 @@ export default function CalendarPage() {
                         session.user.uid,
                         session.user.role,
                         userContext,
-                        adminGroupIds,
+                        allGroups
+                            .filter(g =>
+                                g.members?.leader === session.user.uid ||
+                                g.members?.members?.includes(session.user.uid)
+                            )
+                            .map(g => ({ id: g.id, department: g.department, course: g.course })),
                         allUsers.map(u => ({ department: u.department, course: u.course })),
                         allGroups.map(g => ({ id: g.id, department: g.department, course: g.course }))
                     );
@@ -365,9 +370,11 @@ export default function CalendarPage() {
 
                 // Fetch user's groups from Firestore (session.user.groups is not populated)
                 let fetchedGroupIds: string[] = [];
+                let fetchedGroups: any[] = [];
                 try {
                     const userGroups = await getGroupsByMember(session.user.uid);
                     fetchedGroupIds = userGroups.map(g => g.id);
+                    fetchedGroups = userGroups.map(g => ({ id: g.id, department: g.department, course: g.course }));
                 } catch (error) {
                     console.error('Error fetching user groups:', error);
                 }
@@ -379,7 +386,7 @@ export default function CalendarPage() {
                     session.user.uid,
                     session.user.role,
                     userContext,
-                    fetchedGroupIds
+                    fetchedGroups
                 );
 
                 setCalendars(userCalendars);
@@ -891,7 +898,9 @@ export default function CalendarPage() {
                                                         && selectedCalendarIds.length < calendars.length}
                                                 />
                                             }
-                                            label={<Typography variant="body2" fontWeight={600}>Select All</Typography>}
+                                            label={<Typography variant="body2" sx={{
+                                                fontWeight: 600
+                                            }}>Select All</Typography>}
                                         />
                                     </MenuItem>
                                     <Divider />
@@ -1010,11 +1019,18 @@ export default function CalendarPage() {
                                     </Box>
                                 ) : (
                                     <Box>
-                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: 'text.secondary',
+                                                mb: 2
+                                            }}>
                                             Showing {filteredEvents.length} events
                                         </Typography>
                                         {loading ? (
-                                            <Typography variant="body2" color="text.secondary">Loading events...</Typography>
+                                            <Typography variant="body2" sx={{
+                                                color: 'text.secondary'
+                                            }}>Loading events...</Typography>
                                         ) : filteredEvents.length > 0 ? (
                                             <AnimatedList variant="slideUp" staggerDelay={40}>
                                                 {filteredEvents.map(event => {
@@ -1038,10 +1054,14 @@ export default function CalendarPage() {
                                         ) : (
                                             <Card>
                                                 <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                                                    <Typography variant="h6" color="text.secondary">
+                                                    <Typography variant="h6" sx={{
+                                                        color: 'text.secondary'
+                                                    }}>
                                                         No events found
                                                     </Typography>
-                                                    <Typography variant="body2" color="text.secondary">
+                                                    <Typography variant="body2" sx={{
+                                                        color: 'text.secondary'
+                                                    }}>
                                                         Try adjusting your filters or search terms
                                                     </Typography>
                                                 </CardContent>

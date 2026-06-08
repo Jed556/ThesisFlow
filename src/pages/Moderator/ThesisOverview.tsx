@@ -364,21 +364,23 @@ export default function ModeratorThesisOverviewPage() {
     return (
         <AnimatedPage variant="slideUp">
             <Box sx={{ mb: 3 }}>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     Choose a course, pick a group, and leave chapter-specific moderation notes.
                 </Typography>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {noCourses ? (
                 <Card>
                     <CardContent>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: 'text.secondary'
+                        }}>
                             Your profile does not list any courses to moderate yet.
                         </Typography>
                     </CardContent>

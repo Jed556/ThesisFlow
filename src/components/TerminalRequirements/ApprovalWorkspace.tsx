@@ -667,11 +667,12 @@ export function TerminalRequirementApprovalWorkspace({
     return (
         <Stack spacing={3}>
             <Box>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: 'text.secondary'
+                }}>
                     {description}
                 </Typography>
             </Box>
-
             <Autocomplete<AssignmentOption, false, false, false>
                 options={assignmentOptions}
                 value={selectedAssignment}
@@ -686,11 +687,9 @@ export function TerminalRequirementApprovalWorkspace({
                     />
                 )}
             />
-
             {!assignmentLoading && assignmentOptions.length === 0 && (
                 <Alert severity="info">{emptyStateMessage}</Alert>
             )}
-
             {selectedThesisId && (
                 thesisLoading ? (
                     <Card>
@@ -713,7 +712,9 @@ export function TerminalRequirementApprovalWorkspace({
                                     <Typography variant="h6" gutterBottom>
                                         {thesis?.title ?? 'Thesis'}
                                     </Typography>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: 'text.secondary'
+                                    }}>
                                         {groupMeta?.name
                                             ? `Group ${groupMeta.name}`
                                             : groupMeta?.id
@@ -784,7 +785,6 @@ export function TerminalRequirementApprovalWorkspace({
                     </Card>
                 )
             )}
-
             <Dialog open={returnDialogOpen} onClose={handleCloseReturnDialog} fullWidth maxWidth="sm">
                 <DialogTitle>Request changes</DialogTitle>
                 <DialogContent>
@@ -813,7 +813,6 @@ export function TerminalRequirementApprovalWorkspace({
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* File Viewer Dialog */}
             <Dialog
                 open={Boolean(viewingFile)}

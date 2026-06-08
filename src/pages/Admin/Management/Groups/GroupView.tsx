@@ -237,7 +237,9 @@ function PanelAssignmentManager({ groupId, onAssignmentsUpdated }: PanelAssignme
     return (
         <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
             <Stack spacing={2}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{
+                    alignItems: { xs: 'flex-start', md: 'center' }
+                }}>
                     <BoxHeading title="Panel assignments" description="Select which panelists are assigned to this group." />
                     <Button
                         variant="contained"
@@ -295,7 +297,9 @@ function BoxHeading({ title, description }: { title: string; description: string
     return (
         <Stack spacing={0.5} sx={{ flex: 1 }}>
             <Typography variant="h6">{title}</Typography>
-            <Typography variant="body2" color="text.secondary">{description}</Typography>
+            <Typography variant="body2" sx={{
+                color: 'text.secondary'
+            }}>{description}</Typography>
         </Stack>
     );
 }

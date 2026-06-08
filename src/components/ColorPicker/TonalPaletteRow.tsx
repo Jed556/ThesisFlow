@@ -18,7 +18,9 @@ interface TonalPaletteRowProps {
 export function TonalPaletteRow({ label, palette, onSelect }: TonalPaletteRowProps) {
     return (
         <Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+                color: 'text.secondary'
+            }}>
                 {label} tonal steps
             </Typography>
             <Stack

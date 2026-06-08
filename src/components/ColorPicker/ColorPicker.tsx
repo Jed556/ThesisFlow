@@ -135,17 +135,26 @@ export function ColorPicker({ value, onChange, onSelect }: ColorPickerProps) {
         <Box sx={{ width: '100%', maxWidth: 800 }}>
             {/* Header with large color preview and input */}
             <Paper elevation={0} sx={{ p: 3, mb: 2, bgcolor: 'background.default' }}>
-                <Typography variant="h6" gutterBottom fontWeight={600}>
+                <Typography variant="h6" gutterBottom sx={{
+                    fontWeight: 600
+                }}>
                     Source Color
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'text.secondary',
+                        mb: 3
+                    }}>
                     Pick a color to generate your Material 3 theme
                 </Typography>
 
                 <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={3}
-                    alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+                    sx={{
+                        alignItems: { xs: 'stretch', sm: 'flex-start' }
+                    }}
                 >
                     <ColorPickerInput
                         value={hexInput}
@@ -205,7 +214,6 @@ export function ColorPicker({ value, onChange, onSelect }: ColorPickerProps) {
                     </Box>
                 </Stack>
             </Paper>
-
             {/* Material 3 Theme Preview */}
             {materialTheme && (
                 <MaterialThemeSection theme={materialTheme} onSelect={handleColorSelect} />
