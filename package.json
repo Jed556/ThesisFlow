@@ -21,7 +21,7 @@
         "@vercel/speed-insights": "^2.0.0",
         "date-fns": "^4.4.0",
         "firebase": "^12.14.0",
-        "firebase-admin": "^13.10.0",
+        "firebase-admin": "^14.0.0",
         "nodemailer": "^8.0.10",
         "react": "^19.2.7",
         "react-colorful": "^5.7.0",
